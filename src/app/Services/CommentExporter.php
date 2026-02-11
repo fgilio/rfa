@@ -8,13 +8,13 @@ class CommentExporter
 {
     /**
      * @param  Comment[]  $comments
-     * @param  string  $globalComment
+     * @param  array<string, string>  $diffContext
      * @return array{json: string, md: string, clipboard: string}
      */
     public function export(string $repoPath, array $comments, string $globalComment = '', array $diffContext = []): array
     {
-        $hash = substr(md5(json_encode($comments) . $globalComment . time()), 0, 8);
-        $dir = $repoPath . '/rfa';
+        $hash = substr(md5(json_encode($comments).$globalComment.time()), 0, 8);
+        $dir = $repoPath.'/rfa';
 
         if (! is_dir($dir)) {
             mkdir($dir, 0755, true);
@@ -50,6 +50,7 @@ class CommentExporter
 
     /**
      * @param  Comment[]  $comments
+     * @param  array<string, string>  $diffContext
      */
     private function buildMarkdown(array $comments, string $globalComment, array $diffContext): string
     {
@@ -94,12 +95,12 @@ class CommentExporter
             }
         }
 
-        return rtrim($md) . "\n";
+        return rtrim($md)."\n";
     }
 
     private function atomicWrite(string $path, string $content): void
     {
-        $tmp = $path . '.tmp.' . getmypid();
+        $tmp = $path.'.tmp.'.getmypid();
         file_put_contents($tmp, $content);
         rename($tmp, $path);
     }

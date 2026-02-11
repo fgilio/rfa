@@ -36,7 +36,7 @@ class GitDiffService
                     continue;
                 }
 
-                $fullPath = $repoPath . '/' . $file;
+                $fullPath = $repoPath.'/'.$file;
                 if (! is_file($fullPath) || ! is_readable($fullPath)) {
                     continue;
                 }
@@ -46,6 +46,7 @@ class GitDiffService
                     $untrackedDiff .= "diff --git a/{$file} b/{$file}\n";
                     $untrackedDiff .= "new file mode 100644\n";
                     $untrackedDiff .= "Binary files /dev/null and b/{$file} differ\n";
+
                     continue;
                 }
 
@@ -56,10 +57,10 @@ class GitDiffService
                 $untrackedDiff .= "new file mode 100644\n";
                 $untrackedDiff .= "--- /dev/null\n";
                 $untrackedDiff .= "+++ b/{$file}\n";
-                $untrackedDiff .= "@@ -0,0 +1," . count($lines) . " @@\n";
+                $untrackedDiff .= '@@ -0,0 +1,'.count($lines)." @@\n";
 
                 foreach ($lines as $i => $line) {
-                    $untrackedDiff .= '+' . $line;
+                    $untrackedDiff .= '+'.$line;
                     if ($i < count($lines) - 1) {
                         $untrackedDiff .= "\n";
                     }
@@ -68,9 +69,10 @@ class GitDiffService
             }
         }
 
-        return trim($trackedDiff . "\n" . $untrackedDiff);
+        return trim($trackedDiff."\n".$untrackedDiff);
     }
 
+    /** @param array<int, string> $args */
     private function runGit(string $repoPath, array $args): string
     {
         $process = new Process(['git', '-C', $repoPath, ...$args]);
@@ -84,6 +86,7 @@ class GitDiffService
         return $process->getOutput();
     }
 
+    /** @param array<int, string> $excludePatterns */
     private function isExcluded(string $file, array $excludePatterns): bool
     {
         foreach ($excludePatterns as $pattern) {

@@ -12,15 +12,23 @@ use Livewire\Component;
 #[Layout('layouts.app')]
 class ReviewPage extends Component
 {
+    /** @var array<int, array<string, mixed>> */
     public array $files = [];
+
+    /** @var array<int, array<string, mixed>> */
     public array $comments = [];
+
     public string $globalComment = '';
+
     public string $repoPath = '';
+
     public ?string $exportResult = null;
+
     public bool $submitted = false;
+
     public ?string $activeFileId = null;
 
-    public function mount()
+    public function mount(): void
     {
         $repoPathFile = base_path('.rfa_repo_path');
         $this->repoPath = file_exists($repoPathFile)
@@ -36,7 +44,7 @@ class ReviewPage extends Component
         // Convert to serializable arrays
         $this->files = collect($fileDiffs)->map(function ($file, $index) {
             return [
-                'id' => 'file-' . $index,
+                'id' => 'file-'.$index,
                 'path' => $file->path,
                 'status' => $file->status,
                 'oldPath' => $file->oldPath,
@@ -58,7 +66,7 @@ class ReviewPage extends Component
         })->all();
     }
 
-    public function addComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body)
+    public function addComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body): void
     {
         if (trim($body) === '') {
             return;
@@ -68,7 +76,7 @@ class ReviewPage extends Component
         $filePath = $file['path'] ?? $fileId;
 
         $this->comments[] = [
-            'id' => 'c-' . uniqid(),
+            'id' => 'c-'.uniqid(),
             'fileId' => $fileId,
             'file' => $filePath,
             'side' => $side,
@@ -78,14 +86,14 @@ class ReviewPage extends Component
         ];
     }
 
-    public function deleteComment(string $commentId)
+    public function deleteComment(string $commentId): void
     {
         $this->comments = array_values(
             array_filter($this->comments, fn ($c) => $c['id'] !== $commentId)
         );
     }
 
-    public function submitReview()
+    public function submitReview(): void
     {
         $exporter = app(CommentExporter::class);
 
@@ -109,6 +117,7 @@ class ReviewPage extends Component
         $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
     }
 
+    /** @return array<string, string> */
     private function buildDiffContext(): array
     {
         $context = [];
@@ -136,7 +145,7 @@ class ReviewPage extends Component
                             'remove' => '-',
                             default => ' ',
                         };
-                        $lines[] = $prefix . $line['content'];
+                        $lines[] = $prefix.$line['content'];
                     }
                 }
             }
@@ -153,6 +162,7 @@ class ReviewPage extends Component
         return count($this->comments);
     }
 
+    /** @return array<int, array<string, mixed>> */
     public function getCommentsForFile(string $fileId): array
     {
         return array_values(
@@ -160,7 +170,7 @@ class ReviewPage extends Component
         );
     }
 
-    public function render()
+    public function render(): \Illuminate\Contracts\View\View
     {
         return view('livewire.review-page');
     }

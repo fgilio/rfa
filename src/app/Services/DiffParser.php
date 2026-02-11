@@ -115,8 +115,12 @@ class DiffParser
                     if ($hunk !== null) {
                         $hunks[] = $hunk;
                         foreach ($hunk->lines as $dl) {
-                            if ($dl->type === 'add') $additions++;
-                            if ($dl->type === 'remove') $deletions++;
+                            if ($dl->type === 'add') {
+                                $additions++;
+                            }
+                            if ($dl->type === 'remove') {
+                                $deletions++;
+                            }
                         }
                     }
                 }
@@ -133,8 +137,12 @@ class DiffParser
             if ($hunk !== null) {
                 $hunks[] = $hunk;
                 foreach ($hunk->lines as $dl) {
-                    if ($dl->type === 'add') $additions++;
-                    if ($dl->type === 'remove') $deletions++;
+                    if ($dl->type === 'add') {
+                        $additions++;
+                    }
+                    if ($dl->type === 'remove') {
+                        $deletions++;
+                    }
                 }
             }
         }
@@ -149,6 +157,7 @@ class DiffParser
         );
     }
 
+    /** @param array<int, string> $rawLines */
     private function parseHunk(string $header, array $rawLines): ?Hunk
     {
         // Parse @@ -old_start,old_count +new_start,new_count @@ optional context
@@ -157,9 +166,9 @@ class DiffParser
         }
 
         $oldStart = (int) $m[1];
-        $oldCount = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : 1;
+        $oldCount = $m[2] !== '' ? (int) $m[2] : 1;
         $newStart = (int) $m[3];
-        $newCount = isset($m[4]) && $m[4] !== '' ? (int) $m[4] : 1;
+        $newCount = $m[4] !== '' ? (int) $m[4] : 1;
 
         $oldLine = $oldStart;
         $newLine = $newStart;
@@ -175,6 +184,7 @@ class DiffParser
                 $diffLines[] = new DiffLine('context', '', $oldLine, $newLine);
                 $oldLine++;
                 $newLine++;
+
                 continue;
             }
 
@@ -199,7 +209,7 @@ class DiffParser
         }
 
         return new Hunk(
-            header: trim($m[5] ?? ''),
+            header: trim($m[5]),
             oldStart: $oldStart,
             oldCount: $oldCount,
             newStart: $newStart,

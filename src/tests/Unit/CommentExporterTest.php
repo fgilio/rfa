@@ -5,15 +5,15 @@ use App\Services\CommentExporter;
 
 beforeEach(function () {
     $this->exporter = new CommentExporter;
-    $this->tmpDir = sys_get_temp_dir() . '/rfa_test_' . getmypid();
+    $this->tmpDir = sys_get_temp_dir().'/rfa_test_'.getmypid();
     mkdir($this->tmpDir, 0755, true);
 });
 
 afterEach(function () {
     // Clean up
-    $rfaDir = $this->tmpDir . '/rfa';
+    $rfaDir = $this->tmpDir.'/rfa';
     if (is_dir($rfaDir)) {
-        array_map('unlink', glob($rfaDir . '/*'));
+        array_map('unlink', glob($rfaDir.'/*'));
         rmdir($rfaDir);
     }
     rmdir($this->tmpDir);
@@ -67,7 +67,7 @@ test('returns clipboard text', function () {
 test('creates rfa directory if missing', function () {
     $result = $this->exporter->export($this->tmpDir, [], '');
 
-    expect(is_dir($this->tmpDir . '/rfa'))->toBeTrue();
+    expect(is_dir($this->tmpDir.'/rfa'))->toBeTrue();
 });
 
 test('handles empty comments', function () {

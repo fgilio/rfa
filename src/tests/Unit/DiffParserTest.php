@@ -8,7 +8,7 @@ beforeEach(function () {
 
 function fixture(string $name): string
 {
-    return file_get_contents(__DIR__ . '/../fixtures/' . $name);
+    return file_get_contents(__DIR__.'/../fixtures/'.$name);
 }
 
 test('parses simple modification', function () {
@@ -91,7 +91,7 @@ test('returns empty for empty input', function () {
 });
 
 test('parses multiple files in one diff', function () {
-    $diff = fixture('simple.diff') . "\n" . fixture('new_file.diff');
+    $diff = fixture('simple.diff')."\n".fixture('new_file.diff');
     $files = $this->parser->parse($diff);
 
     expect($files)->toHaveCount(2);
