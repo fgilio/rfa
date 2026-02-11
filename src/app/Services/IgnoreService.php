@@ -11,11 +11,12 @@ class IgnoreService
         'composer.lock',
     ];
 
+    /** @return array<int, string> */
     public function getExcludePathspecs(string $repoPath): array
     {
         $patterns = self::ALWAYS_EXCLUDE;
 
-        $ignoreFile = $repoPath . '/.rfaignore';
+        $ignoreFile = $repoPath.'/.rfaignore';
         if (file_exists($ignoreFile)) {
             $lines = file($ignoreFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
             foreach ($lines as $line) {

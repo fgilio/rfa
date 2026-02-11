@@ -13,6 +13,7 @@ class Comment
         public readonly string $body,
     ) {}
 
+    /** @return array<string, mixed> */
     public function toArray(): array
     {
         return [
