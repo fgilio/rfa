@@ -1,0 +1,11 @@
+pre-commit:
+  commands:
+    lint:
+      root: src/
+      run: ./vendor/bin/pint --test
+
+pre-push:
+  commands:
+    types:
+      root: src/
+      run: ./vendor/bin/phpstan analyse
