@@ -1,3 +1,8 @@
+---
+name: rfa
+description: Local code review tool for AI agent changes. Opens a browser diff viewer, exports structured JSON + Markdown for agents.
+---
+
 # rfa - Review For Agent
 
 Local code review tool for AI agent changes.
