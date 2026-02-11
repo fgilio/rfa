@@ -1,0 +1,9 @@
+diff --git a/config.txt b/config.txt
+index abc1234..def5678 100644
+--- a/config.txt
++++ b/config.txt
+@@ -1,3 +1,3 @@
+ key=value
+-old=setting
++new=setting
+\ No newline at end of file

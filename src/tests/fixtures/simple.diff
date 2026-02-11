@@ -1,0 +1,13 @@
+diff --git a/src/hello.php b/src/hello.php
+index abc1234..def5678 100644
+--- a/src/hello.php
++++ b/src/hello.php
+@@ -1,5 +1,6 @@
+ <?php
+
+-function hello() {
+-    return 'hello';
++function hello(string $name = 'world'): string {
++    return "hello {$name}";
+ }
++

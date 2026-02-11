@@ -1,0 +1,8 @@
+diff --git a/src/new.php b/src/new.php
+new file mode 100644
+--- /dev/null
++++ b/src/new.php
+@@ -0,0 +1,3 @@
++<?php
++
++echo 'new file';

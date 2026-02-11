@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LINK_TARGET="$HOME/.local/bin/rfa"
+
+mkdir -p "$(dirname "$LINK_TARGET")"
+ln -sf "$SCRIPT_DIR/rfa" "$LINK_TARGET"
+echo "Installed: $LINK_TARGET -> $SCRIPT_DIR/rfa"

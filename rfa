@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+
+RFA_REPO_PATH="$(pwd)"
+
+# Validate git repo
+git -C "$RFA_REPO_PATH" rev-parse --show-toplevel >/dev/null 2>&1 || {
+    echo "Error: not a git repository" >&2
+    exit 1
+}
+
+# Find free port starting at 4000
+PORT=4000
+while lsof -i :"$PORT" >/dev/null 2>&1; do PORT=$((PORT + 1)); done
+
+SCRIPT="$(readlink -f "$0" 2>/dev/null || realpath "$0")"
+APP_DIR="$(cd "$(dirname "$SCRIPT")/src" && pwd)"
+
+# Write repo path to file (env vars don't survive artisan serve's process chain)
+echo "$RFA_REPO_PATH" > "$APP_DIR/.rfa_repo_path"
+trap "rm -f '$APP_DIR/.rfa_repo_path'; kill $SERVER_PID 2>/dev/null" EXIT INT TERM
+
+php "$APP_DIR/artisan" serve --host=127.0.0.1 --port="$PORT" &
+SERVER_PID=$!
+
+# Wait for server readiness
+until curl -s "http://127.0.0.1:$PORT" >/dev/null 2>&1; do sleep 0.2; done
+echo "Review server: http://127.0.0.1:$PORT"
+open "http://127.0.0.1:$PORT"
+
+wait $SERVER_PID

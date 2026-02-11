@@ -1,0 +1,16 @@
+diff --git a/app.php b/app.php
+index abc1234..def5678 100644
+--- a/app.php
++++ b/app.php
+@@ -1,5 +1,5 @@
+ <?php
+
+-$version = '1.0';
++$version = '2.0';
+
+ function boot() {
+@@ -20,4 +20,5 @@ function shutdown() {
+     cleanup();
+     log('done');
++    notify();
+ }
