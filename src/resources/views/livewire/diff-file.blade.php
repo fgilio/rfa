@@ -51,6 +51,7 @@
     }"
     @collapse-all-files.window="collapsed = true"
     @expand-all-files.window="collapsed = false"
+    @expand-file.window="if ($event.detail.id === '{{ $file['id'] }}') collapsed = false"
     class="group"
 >
     {{-- File header --}}

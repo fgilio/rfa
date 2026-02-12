@@ -3,6 +3,7 @@
         activeFile: null,
         scrollToFile(id) {
             this.activeFile = id;
+            this.$dispatch('expand-file', { id });
             document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }"
