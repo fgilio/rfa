@@ -6,6 +6,7 @@ use App\DTOs\Comment;
 use App\Services\CommentExporter;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
+use Flux;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -114,6 +115,7 @@ class ReviewPage extends Component
         $this->exportResult = $result['clipboard'];
         $this->submitted = true;
 
+        Flux::toast(variant: 'success', heading: 'Review submitted', text: $this->exportResult);
         $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
     }
 

@@ -3,40 +3,34 @@
     @if($submitted)
         <div class="px-4 py-3 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                <span class="text-sm text-gh-text">Review submitted</span>
-                <code class="text-xs text-gh-muted bg-gh-bg px-2 py-0.5 rounded">{{ $exportResult }}</code>
+                <flux:icon icon="check-circle" variant="mini" class="text-green-400" />
+                <flux:heading size="sm">Review submitted</flux:heading>
+                <flux:badge class="font-mono">{{ $exportResult }}</flux:badge>
             </div>
-            <span class="text-xs text-gh-muted">Copied to clipboard - Ctrl+C to exit</span>
+            <flux:text variant="subtle" size="sm">Copied to clipboard - Ctrl+C to exit</flux:text>
         </div>
     @else
         <div class="px-4 py-3 flex items-center gap-3">
             <div class="flex-1">
-                <textarea
+                <flux:textarea
                     wire:model="globalComment"
-                    class="w-full bg-gh-bg border border-gh-border rounded px-3 py-2 text-gh-text text-xs font-mono resize-none h-[38px] focus:outline-none focus:border-gh-accent"
                     placeholder="Overall review comment (optional)"
-                ></textarea>
+                    rows="1"
+                    resize="none"
+                    class="font-mono text-xs"
+                />
             </div>
             <div class="flex items-center gap-3 shrink-0">
                 @if(count($comments) > 0)
-                    <span class="text-xs text-gh-muted">
-                        {{ count($comments) }} {{ Str::plural('comment', count($comments)) }}
-                    </span>
+                    <flux:badge>{{ count($comments) }} {{ Str::plural('comment', count($comments)) }}</flux:badge>
                 @endif
-                <button
+                <flux:button
+                    variant="primary"
                     wire:click="submitReview"
-                    @class([
-                        'px-4 py-2 text-sm font-medium rounded transition-colors',
-                        'bg-green-700 hover:bg-green-600 text-white' => count($comments) > 0 || trim($globalComment) !== '',
-                        'bg-gh-border text-gh-muted cursor-not-allowed' => count($comments) === 0 && trim($globalComment) === '',
-                    ])
-                    @if(count($comments) === 0 && trim($globalComment) === '')
-                        disabled
-                    @endif
+                    :disabled="count($comments) === 0 && trim($globalComment) === ''"
                 >
                     Submit Review
-                </button>
+                </flux:button>
             </div>
         </div>
     @endif

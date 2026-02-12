@@ -34,7 +34,6 @@
         }
     </script>
     <style>
-        body { background: #0d1117; color: #e6edf3; }
         .diff-line:hover { background: rgba(136, 198, 255, 0.1) !important; }
         .diff-line-num { cursor: pointer; user-select: none; }
         .diff-line-num:hover { color: #58a6ff; }
@@ -55,10 +54,10 @@
         ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #484f58; }
     </style>
-    @livewireStyles
+    @fluxAppearance
 </head>
 <body class="min-h-screen font-mono text-sm">
     {{ $slot }}
-    @livewireScripts
+    @fluxScripts
 </body>
 </html>

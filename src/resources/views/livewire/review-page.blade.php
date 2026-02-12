@@ -13,13 +13,13 @@
     {{-- Header --}}
     <header class="sticky top-0 z-50 bg-gh-surface border-b border-gh-border px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <h1 class="text-gh-text font-semibold text-base">rfa</h1>
-            <span class="text-gh-muted text-xs">{{ basename($repoPath) }}</span>
+            <flux:heading size="lg">rfa</flux:heading>
+            <flux:text variant="subtle" size="sm">{{ basename($repoPath) }}</flux:text>
         </div>
-        <div class="flex items-center gap-3 text-xs text-gh-muted">
-            <span>{{ count($files) }} {{ Str::plural('file', count($files)) }}</span>
-            <span class="text-green-400">+{{ collect($files)->sum('additions') }}</span>
-            <span class="text-red-400">-{{ collect($files)->sum('deletions') }}</span>
+        <div class="flex items-center gap-3 text-xs">
+            <flux:text variant="subtle" size="sm" inline>{{ count($files) }} {{ Str::plural('file', count($files)) }}</flux:text>
+            <flux:badge color="green" size="sm">+{{ collect($files)->sum('additions') }}</flux:badge>
+            <flux:badge color="red" size="sm">-{{ collect($files)->sum('deletions') }}</flux:badge>
         </div>
     </header>
 
@@ -27,7 +27,7 @@
         {{-- Sidebar --}}
         <aside class="w-72 shrink-0 sticky top-[53px] h-[calc(100vh-53px)] overflow-y-auto border-r border-gh-border bg-gh-surface/50 hidden lg:block">
             <div class="p-3">
-                <h2 class="text-xs font-semibold text-gh-muted uppercase tracking-wide mb-2">Files</h2>
+                <flux:heading class="!text-xs uppercase tracking-wide mb-2">Files</flux:heading>
                 @foreach($files as $file)
                     <button
                         @click="scrollToFile('{{ $file['id'] }}')"
@@ -35,21 +35,21 @@
                         :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-border/50 text-gh-accent' : 'text-gh-text'"
                     >
                         @if($file['status'] === 'added')
-                            <span class="text-green-400 text-[10px] font-bold w-4 shrink-0">A</span>
+                            <flux:badge variant="solid" color="green" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0">A</flux:badge>
                         @elseif($file['status'] === 'deleted')
-                            <span class="text-red-400 text-[10px] font-bold w-4 shrink-0">D</span>
+                            <flux:badge variant="solid" color="red" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0">D</flux:badge>
                         @elseif($file['status'] === 'renamed')
-                            <span class="text-yellow-400 text-[10px] font-bold w-4 shrink-0">R</span>
+                            <flux:badge variant="solid" color="yellow" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0">R</flux:badge>
                         @else
-                            <span class="text-yellow-400 text-[10px] font-bold w-4 shrink-0">M</span>
+                            <flux:badge variant="solid" color="yellow" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0">M</flux:badge>
                         @endif
                         <span class="truncate">{{ $file['path'] }}</span>
                         <span class="ml-auto flex gap-1 shrink-0">
                             @if($file['additions'] > 0)
-                                <span class="text-green-400">+{{ $file['additions'] }}</span>
+                                <flux:badge color="green" size="sm">+{{ $file['additions'] }}</flux:badge>
                             @endif
                             @if($file['deletions'] > 0)
-                                <span class="text-red-400">-{{ $file['deletions'] }}</span>
+                                <flux:badge color="red" size="sm">-{{ $file['deletions'] }}</flux:badge>
                             @endif
                         </span>
                     </button>
@@ -60,10 +60,11 @@
         {{-- Main content --}}
         <main class="flex-1 min-w-0 pb-24">
             @if(empty($files))
-                <div class="flex items-center justify-center h-[60vh] text-gh-muted">
+                <div class="flex items-center justify-center h-[60vh]">
                     <div class="text-center">
-                        <p class="text-lg mb-2">No changes detected</p>
-                        <p class="text-xs">Make some changes and run rfa again</p>
+                        <flux:icon icon="document-magnifying-glass" variant="outline" class="mx-auto mb-3 text-gh-muted" />
+                        <flux:heading class="mb-2">No changes detected</flux:heading>
+                        <flux:text variant="subtle" size="sm">Make some changes and run rfa again</flux:text>
                     </div>
                 </div>
             @else
