@@ -157,11 +157,6 @@ class ReviewPage extends Component
         return $context;
     }
 
-    public function getCommentCountProperty(): int
-    {
-        return count($this->comments);
-    }
-
     /** @return array<int, array<string, mixed>> */
     public function getCommentsForFile(string $fileId): array
     {
