@@ -100,7 +100,7 @@
                     @foreach($file['hunks'] as $hunkIndex => $hunk)
                         {{-- Hunk header --}}
                         @if($hunkIndex > 0 || $hunk['header'] !== '')
-                            <tr class="bg-blue-900/10">
+                            <tr class="bg-gh-hunk-bg">
                                 <td colspan="4" class="px-4 py-1 text-gh-muted text-xs">
                                     @@ -{{ $hunk['oldStart'] }} +{{ $hunk['newStart'] }} @@
                                     @if($hunk['header'])
@@ -152,7 +152,7 @@
                                 </td>
 
                                 {{-- Prefix --}}
-                                <td class="w-[1px] px-1 text-center select-none {{ $line['type'] === 'add' ? 'text-green-400' : ($line['type'] === 'remove' ? 'text-red-400' : 'text-gh-muted/30') }}">
+                                <td class="w-[1px] px-1 text-center select-none {{ $line['type'] === 'add' ? 'text-gh-green' : ($line['type'] === 'remove' ? 'text-gh-red' : 'text-gh-muted/30') }}">
                                     {{ $prefix }}
                                 </td>
 

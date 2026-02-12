@@ -20,6 +20,10 @@
             <flux:text variant="subtle" size="sm" inline>{{ count($files) }} {{ Str::plural('file', count($files)) }}</flux:text>
             <flux:badge color="green" size="sm">+{{ collect($files)->sum('additions') }}</flux:badge>
             <flux:badge color="red" size="sm">-{{ collect($files)->sum('deletions') }}</flux:badge>
+            <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
+                icon="moon" x-show="! $flux.dark" x-cloak />
+            <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
+                icon="sun" x-show="$flux.dark" />
         </div>
     </header>
 
