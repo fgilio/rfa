@@ -21,10 +21,10 @@ This creates a `.rfa/` directory in your repo with the exported review files. Yo
 ## Output
 
 After submitting a review, creates:
-- `.rfa/comments_{hash}.json` - Structured comment data
-- `.rfa/comments_{hash}.md` - Agent-friendly markdown with diff context
+- `.rfa/{timestamp}_comments_{hash}.json` - Structured comment data
+- `.rfa/{timestamp}_comments_{hash}.md` - Agent-friendly markdown with diff context
 
-Copies to clipboard: `review my comments on these changes in @.rfa/comments_{hash}.md`
+Copies to clipboard: `review my comments on these changes in @.rfa/{timestamp}_comments_{hash}.md`
 
 ## Features
 

@@ -15,6 +15,8 @@ class CommentExporter
     public function export(string $repoPath, array $comments, string $globalComment = '', array $diffContext = []): array
     {
         $hash = substr(md5(json_encode($comments).$globalComment.time()), 0, 8);
+        $now = date('Ymd_His');
+        $basename = "{$now}_comments_{$hash}";
         $rfaDir = $repoPath.'/.rfa';
 
         $disk = Storage::build([
@@ -28,22 +30,22 @@ class CommentExporter
             'schema_version' => 1,
             'repo_path' => $repoPath,
             'created_at' => date('c'),
-            'markdown_file' => ".rfa/comments_{$hash}.md",
+            'markdown_file' => ".rfa/{$basename}.md",
             'global_comment' => $globalComment,
             'comments' => array_map(fn (Comment $c) => $c->toArray(), $comments),
         ];
 
         // Build Markdown
-        $md = "<!-- json: .rfa/comments_{$hash}.json -->\n"
+        $md = "<!-- json: .rfa/{$basename}.json -->\n"
             .$this->buildMarkdown($comments, $globalComment, $diffContext);
 
-        $disk->put("comments_{$hash}.json", json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-        $disk->put("comments_{$hash}.md", $md);
+        $disk->put("{$basename}.json", json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $disk->put("{$basename}.md", $md);
 
         return [
-            'json' => $disk->path("comments_{$hash}.json"),
-            'md' => $disk->path("comments_{$hash}.md"),
-            'clipboard' => "review my comments on these changes in @.rfa/comments_{$hash}.md",
+            'json' => $disk->path("{$basename}.json"),
+            'md' => $disk->path("{$basename}.md"),
+            'clipboard' => "review my comments on these changes in @.rfa/{$basename}.md",
         ];
     }
 
