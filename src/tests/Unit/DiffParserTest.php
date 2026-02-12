@@ -6,13 +6,8 @@ beforeEach(function () {
     $this->parser = new DiffParser;
 });
 
-function fixture(string $name): string
-{
-    return file_get_contents(__DIR__.'/../fixtures/'.$name);
-}
-
 test('parses simple modification', function () {
-    $files = $this->parser->parse(fixture('simple.diff'));
+    $files = $this->parser->parse(file_get_contents(fixture('simple.diff')));
 
     expect($files)->toHaveCount(1);
     expect($files[0]->path)->toBe('src/hello.php');
@@ -29,7 +24,7 @@ test('parses simple modification', function () {
 });
 
 test('parses new file', function () {
-    $files = $this->parser->parse(fixture('new_file.diff'));
+    $files = $this->parser->parse(file_get_contents(fixture('new_file.diff')));
 
     expect($files)->toHaveCount(1);
     expect($files[0]->path)->toBe('src/new.php');
@@ -39,7 +34,7 @@ test('parses new file', function () {
 });
 
 test('parses deleted file', function () {
-    $files = $this->parser->parse(fixture('deleted_file.diff'));
+    $files = $this->parser->parse(file_get_contents(fixture('deleted_file.diff')));
 
     expect($files)->toHaveCount(1);
     expect($files[0]->path)->toBe('old.txt');
@@ -49,7 +44,7 @@ test('parses deleted file', function () {
 });
 
 test('parses renamed file', function () {
-    $files = $this->parser->parse(fixture('renamed.diff'));
+    $files = $this->parser->parse(file_get_contents(fixture('renamed.diff')));
 
     expect($files)->toHaveCount(1);
     expect($files[0]->path)->toBe('new_name.php');
@@ -58,7 +53,7 @@ test('parses renamed file', function () {
 });
 
 test('parses binary file', function () {
-    $files = $this->parser->parse(fixture('binary.diff'));
+    $files = $this->parser->parse(file_get_contents(fixture('binary.diff')));
 
     expect($files)->toHaveCount(1);
     expect($files[0]->path)->toBe('image.png');
@@ -67,7 +62,7 @@ test('parses binary file', function () {
 });
 
 test('parses multiple hunks', function () {
-    $files = $this->parser->parse(fixture('multi_hunk.diff'));
+    $files = $this->parser->parse(file_get_contents(fixture('multi_hunk.diff')));
 
     expect($files)->toHaveCount(1);
     expect($files[0]->hunks)->toHaveCount(2);
@@ -76,7 +71,7 @@ test('parses multiple hunks', function () {
 });
 
 test('handles no newline at end of file', function () {
-    $files = $this->parser->parse(fixture('no_newline.diff'));
+    $files = $this->parser->parse(file_get_contents(fixture('no_newline.diff')));
 
     expect($files)->toHaveCount(1);
     // Should not include the marker as a diff line
@@ -91,7 +86,7 @@ test('returns empty for empty input', function () {
 });
 
 test('parses multiple files in one diff', function () {
-    $diff = fixture('simple.diff')."\n".fixture('new_file.diff');
+    $diff = file_get_contents(fixture('simple.diff'))."\n".file_get_contents(fixture('new_file.diff'));
     $files = $this->parser->parse($diff);
 
     expect($files)->toHaveCount(2);
