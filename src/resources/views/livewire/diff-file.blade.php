@@ -49,11 +49,13 @@
             return lineNum >= this.draftLine && lineNum <= (this.draftEndLine ?? this.draftLine);
         }
     }"
+    @collapse-all-files.window="collapsed = true"
+    @expand-all-files.window="collapsed = false"
     class="group"
 >
     {{-- File header --}}
     <div class="sticky top-[53px] z-10 bg-gh-surface border-b border-gh-border px-4 py-2 flex items-center gap-2">
-        <button @click="collapsed = !collapsed" class="text-gh-muted hover:text-gh-text transition-colors">
+        <button @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }" class="text-gh-muted hover:text-gh-text transition-colors">
             <flux:icon icon="chevron-down" variant="micro" x-show="!collapsed" />
             <flux:icon icon="chevron-right" variant="micro" x-show="collapsed" x-cloak />
         </button>

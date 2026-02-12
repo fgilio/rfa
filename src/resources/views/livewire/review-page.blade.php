@@ -9,6 +9,11 @@
     @copy-to-clipboard.window="
         navigator.clipboard.writeText($event.detail.text).catch(() => {});
     "
+    @keydown.window="
+        if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') return;
+        if ($event.shiftKey && $event.key === 'C') { $dispatch('collapse-all-files'); $event.preventDefault(); }
+        if ($event.shiftKey && $event.key === 'E') { $dispatch('expand-all-files'); $event.preventDefault(); }
+    "
 >
     {{-- Header --}}
     <header class="sticky top-0 z-50 bg-gh-surface border-b border-gh-border px-4 py-3 flex items-center justify-between">
@@ -20,6 +25,16 @@
             <flux:text variant="subtle" size="sm" inline>{{ count($files) }} {{ Str::plural('file', count($files)) }}</flux:text>
             <flux:badge color="green" size="sm">+{{ collect($files)->sum('additions') }}</flux:badge>
             <flux:badge color="red" size="sm">-{{ collect($files)->sum('deletions') }}</flux:badge>
+            <span class="w-px h-4 bg-gh-border"></span>
+            <flux:tooltip content="Collapse all (Shift+C)">
+                <flux:button variant="ghost" size="sm" icon="bars-arrow-up"
+                    @click="$dispatch('collapse-all-files')" />
+            </flux:tooltip>
+            <flux:tooltip content="Expand all (Shift+E)">
+                <flux:button variant="ghost" size="sm" icon="bars-arrow-down"
+                    @click="$dispatch('expand-all-files')" />
+            </flux:tooltip>
+            <span class="w-px h-4 bg-gh-border"></span>
             <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
                 icon="moon" x-show="! $flux.dark" x-cloak />
             <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
