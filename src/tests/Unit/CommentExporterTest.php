@@ -38,6 +38,7 @@ test('exports JSON with schema version', function () {
     expect($json['comments'][0]['file'])->toBe('app.php');
     expect($json['comments'][0]['start_line'])->toBe(10);
     expect($json['comments'][0]['body'])->toBe('Fix this');
+    expect($json['markdown_file'])->toStartWith('.rfa/comments_')->toEndWith('.md');
 });
 
 test('exports Markdown with file grouping', function () {
@@ -50,6 +51,7 @@ test('exports Markdown with file grouping', function () {
     $result = $this->exporter->export($this->tmpDir, $comments, 'Good work');
 
     $md = file_get_contents($result['md']);
+    expect($md)->toMatch('/^<!-- json: \.rfa\/comments_[a-f0-9]+\.json -->/');
     expect($md)->toContain('# Code Review Comments');
     expect($md)->toContain('## General');
     expect($md)->toContain('Good work');

@@ -28,12 +28,14 @@ class CommentExporter
             'schema_version' => 1,
             'repo_path' => $repoPath,
             'created_at' => date('c'),
+            'markdown_file' => ".rfa/comments_{$hash}.md",
             'global_comment' => $globalComment,
             'comments' => array_map(fn (Comment $c) => $c->toArray(), $comments),
         ];
 
         // Build Markdown
-        $md = $this->buildMarkdown($comments, $globalComment, $diffContext);
+        $md = "<!-- json: .rfa/comments_{$hash}.json -->\n"
+            .$this->buildMarkdown($comments, $globalComment, $diffContext);
 
         $disk->put("comments_{$hash}.json", json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         $disk->put("comments_{$hash}.md", $md);
