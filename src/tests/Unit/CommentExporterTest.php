@@ -3,6 +3,8 @@
 use App\DTOs\Comment;
 use App\Services\CommentExporter;
 
+uses(Tests\TestCase::class);
+
 beforeEach(function () {
     $this->exporter = new CommentExporter;
     $this->tmpDir = sys_get_temp_dir().'/rfa_test_'.getmypid();
@@ -11,7 +13,7 @@ beforeEach(function () {
 
 afterEach(function () {
     // Clean up
-    $rfaDir = $this->tmpDir.'/rfa';
+    $rfaDir = $this->tmpDir.'/.rfa';
     if (is_dir($rfaDir)) {
         array_map('unlink', glob($rfaDir.'/*'));
         rmdir($rfaDir);
@@ -26,7 +28,7 @@ test('exports JSON with schema version', function () {
 
     $result = $this->exporter->export($this->tmpDir, $comments, 'Overall looks good');
 
-    expect($result['json'])->toContain('/rfa/comments_');
+    expect($result['json'])->toContain('/.rfa/comments_');
     expect(file_exists($result['json']))->toBeTrue();
 
     $json = json_decode(file_get_contents($result['json']), true);
@@ -60,14 +62,14 @@ test('exports Markdown with file grouping', function () {
 test('returns clipboard text', function () {
     $result = $this->exporter->export($this->tmpDir, [], 'test');
 
-    expect($result['clipboard'])->toStartWith('review my comments on these changes in @rfa/comments_');
+    expect($result['clipboard'])->toStartWith('review my comments on these changes in @.rfa/comments_');
     expect($result['clipboard'])->toEndWith('.md');
 });
 
-test('creates rfa directory if missing', function () {
+test('creates .rfa directory if missing', function () {
     $result = $this->exporter->export($this->tmpDir, [], '');
 
-    expect(is_dir($this->tmpDir.'/rfa'))->toBeTrue();
+    expect(is_dir($this->tmpDir.'/.rfa'))->toBeTrue();
 });
 
 test('handles empty comments', function () {

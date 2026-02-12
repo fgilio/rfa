@@ -29,7 +29,7 @@ class GitDiffService
         $untrackedDiff = '';
         if (trim($untrackedOutput) !== '') {
             $untrackedFiles = array_filter(explode("\n", trim($untrackedOutput)));
-            $excludePatterns = $this->ignoreService->getExcludePathspecs($repoPath);
+            $excludePatterns = $excludes;
 
             foreach ($untrackedFiles as $file) {
                 if ($this->isExcluded($file, $excludePatterns)) {

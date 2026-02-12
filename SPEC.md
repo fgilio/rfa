@@ -2,7 +2,7 @@
 
 ## Why build our own?
 
-`review-for-agent` (Go binary by Waraq-Labs) is broken on macOS - both source build and pre-built binaries have frontend bugs. Full control with Laravel + Livewire.
+`review-for-agent` (Go binary by Waraq-Labs) had frontend issues on macOS with both source builds and pre-built binaries. Full control with Laravel + Livewire.
 
 ## Architecture
 

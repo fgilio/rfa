@@ -1,4 +1,6 @@
+.DS_Store
 analytics.jsonl
+src/.rfa_repo_path
 src/vendor/
 src/node_modules/
 src/.env

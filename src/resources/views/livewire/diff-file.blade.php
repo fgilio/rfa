@@ -168,9 +168,10 @@
                                                     x-ref="commentInput"
                                                     x-model="draftBody"
                                                     @keydown.meta.enter="saveDraft()"
+                                                    @keydown.ctrl.enter="saveDraft()"
                                                     @keydown.escape="cancelDraft()"
                                                     class="w-full bg-gh-bg border border-gh-border rounded px-3 py-2 text-gh-text text-xs font-mono resize-y min-h-[60px] focus:outline-none focus:border-gh-accent"
-                                                    placeholder="Write a comment... (Cmd+Enter to save, Esc to cancel)"
+                                                    placeholder="Write a comment... (Cmd/Ctrl+Enter to save, Esc to cancel)"
                                                 ></textarea>
                                                 <div class="flex justify-end gap-2 mt-2">
                                                     <button @click="cancelDraft()" class="px-3 py-1 text-xs text-gh-muted hover:text-gh-text border border-gh-border rounded transition-colors">Cancel</button>
@@ -219,9 +220,10 @@
                     x-ref="commentInput"
                     x-model="draftBody"
                     @keydown.meta.enter="saveFileComment()"
+                    @keydown.ctrl.enter="saveFileComment()"
                     @keydown.escape="cancelDraft()"
                     class="w-full bg-gh-bg border border-gh-border rounded px-3 py-2 text-gh-text text-xs font-mono resize-y min-h-[60px] focus:outline-none focus:border-gh-accent"
-                    placeholder="File comment... (Cmd+Enter to save, Esc to cancel)"
+                    placeholder="File comment... (Cmd/Ctrl+Enter to save, Esc to cancel)"
                 ></textarea>
                 <div class="flex justify-end gap-2 mt-2">
                     <button @click="cancelDraft()" class="px-3 py-1 text-xs text-gh-muted hover:text-gh-text border border-gh-border rounded transition-colors">Cancel</button>

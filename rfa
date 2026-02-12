@@ -18,14 +18,24 @@ APP_DIR="$(cd "$(dirname "$SCRIPT")/src" && pwd)"
 
 # Write repo path to file (env vars don't survive artisan serve's process chain)
 echo "$RFA_REPO_PATH" > "$APP_DIR/.rfa_repo_path"
-trap "rm -f '$APP_DIR/.rfa_repo_path'; kill $SERVER_PID 2>/dev/null" EXIT INT TERM
 
 php "$APP_DIR/artisan" serve --host=127.0.0.1 --port="$PORT" &
 SERVER_PID=$!
 
+trap 'rm -f "$APP_DIR/.rfa_repo_path"; kill $SERVER_PID 2>/dev/null' EXIT INT TERM
+
 # Wait for server readiness
 until curl -s "http://127.0.0.1:$PORT" >/dev/null 2>&1; do sleep 0.2; done
 echo "Review server: http://127.0.0.1:$PORT"
-open "http://127.0.0.1:$PORT"
+
+# Cross-platform open
+URL="http://127.0.0.1:$PORT"
+if command -v open >/dev/null 2>&1; then
+    open "$URL"
+elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$URL"
+else
+    echo "Open in browser: $URL"
+fi
 
 wait $SERVER_PID

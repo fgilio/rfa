@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\DTOs\Comment;
+use Illuminate\Support\Facades\Storage;
 
 class CommentExporter
 {
@@ -14,14 +15,13 @@ class CommentExporter
     public function export(string $repoPath, array $comments, string $globalComment = '', array $diffContext = []): array
     {
         $hash = substr(md5(json_encode($comments).$globalComment.time()), 0, 8);
-        $dir = $repoPath.'/rfa';
+        $rfaDir = $repoPath.'/.rfa';
 
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-
-        $jsonPath = "{$dir}/comments_{$hash}.json";
-        $mdPath = "{$dir}/comments_{$hash}.md";
+        $disk = Storage::build([
+            'driver' => 'local',
+            'root' => $rfaDir,
+            'throw' => true,
+        ]);
 
         // Build JSON
         $jsonData = [
@@ -35,16 +35,13 @@ class CommentExporter
         // Build Markdown
         $md = $this->buildMarkdown($comments, $globalComment, $diffContext);
 
-        // Atomic writes
-        $this->atomicWrite($jsonPath, json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-        $this->atomicWrite($mdPath, $md);
-
-        $clipboardText = "review my comments on these changes in @rfa/comments_{$hash}.md";
+        $disk->put("comments_{$hash}.json", json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $disk->put("comments_{$hash}.md", $md);
 
         return [
-            'json' => $jsonPath,
-            'md' => $mdPath,
-            'clipboard' => $clipboardText,
+            'json' => $disk->path("comments_{$hash}.json"),
+            'md' => $disk->path("comments_{$hash}.md"),
+            'clipboard' => "review my comments on these changes in @.rfa/comments_{$hash}.md",
         ];
     }
 
@@ -96,12 +93,5 @@ class CommentExporter
         }
 
         return rtrim($md)."\n";
-    }
-
-    private function atomicWrite(string $path, string $content): void
-    {
-        $tmp = $path.'.tmp.'.getmypid();
-        file_put_contents($tmp, $content);
-        rename($tmp, $path);
     }
 }

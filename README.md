@@ -16,13 +16,15 @@ cd ~/my-project
 rfa
 ```
 
+This creates a `.rfa/` directory in your repo with the exported review files. You may want to add `.rfa/` to your project's `.gitignore`.
+
 ## Output
 
 After submitting a review, creates:
-- `rfa/comments_{hash}.json` - Structured comment data
-- `rfa/comments_{hash}.md` - Agent-friendly markdown with diff context
+- `.rfa/comments_{hash}.json` - Structured comment data
+- `.rfa/comments_{hash}.md` - Agent-friendly markdown with diff context
 
-Copies to clipboard: `review my comments on these changes in @rfa/comments_{hash}.md`
+Copies to clipboard: `review my comments on these changes in @.rfa/comments_{hash}.md`
 
 ## Features
 
@@ -31,10 +33,12 @@ Copies to clipboard: `review my comments on these changes in @rfa/comments_{hash
 - Shift+click for range selection
 - File sidebar with +/- stats
 - Global review comment
-- `.rfaignore` support for excluding files
+- `.rfaignore` support for excluding files (same syntax as `.gitignore`)
 - Auto-excludes lock files
 
 ## Requirements
 
-- PHP 8.3+ (via Herd)
+- PHP 8.3+
 - Composer dependencies installed (`cd src && composer install`)
+
+Works on macOS and Linux.
