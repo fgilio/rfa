@@ -2,12 +2,15 @@
 
 use App\DTOs\Comment;
 use App\Services\CommentExporter;
+use Faker\Factory as Faker;
 
 uses(Tests\TestCase::class);
 
 beforeEach(function () {
+    $this->faker = Faker::create();
+    $this->faker->seed(crc32(static::class.$this->name()));
     $this->exporter = new CommentExporter;
-    $this->tmpDir = sys_get_temp_dir().'/rfa_test_'.getmypid();
+    $this->tmpDir = sys_get_temp_dir().'/rfa_test_'.uniqid();
     mkdir($this->tmpDir, 0755, true);
 });
 
@@ -22,43 +25,61 @@ afterEach(function () {
 });
 
 test('exports JSON with schema version', function () {
+    $file = $this->faker->word().'.php';
+    $line = $this->faker->numberBetween(1, 200);
+    $body = $this->faker->sentence();
+    $global = $this->faker->paragraph();
+
     $comments = [
-        new Comment('c1', 'app.php', 'right', 10, 10, 'Fix this'),
+        new Comment($this->faker->uuid(), $file, 'right', $line, $line, $body),
     ];
 
-    $result = $this->exporter->export($this->tmpDir, $comments, 'Overall looks good');
+    $result = $this->exporter->export($this->tmpDir, $comments, $global);
 
     expect($result['json'])->toMatch('/\/\.rfa\/\d{8}_\d{6}_comments_/');
     expect(file_exists($result['json']))->toBeTrue();
 
     $json = json_decode(file_get_contents($result['json']), true);
     expect($json['schema_version'])->toBe(1);
-    expect($json['global_comment'])->toBe('Overall looks good');
+    expect($json['global_comment'])->toBe($global);
     expect($json['comments'])->toHaveCount(1);
-    expect($json['comments'][0]['file'])->toBe('app.php');
-    expect($json['comments'][0]['start_line'])->toBe(10);
-    expect($json['comments'][0]['body'])->toBe('Fix this');
+    expect($json['comments'][0]['file'])->toBe($file);
+    expect($json['comments'][0]['start_line'])->toBe($line);
+    expect($json['comments'][0]['body'])->toBe($body);
     expect($json['markdown_file'])->toMatch('/^\.rfa\/\d{8}_\d{6}_comments_.*\.md$/');
 });
 
 test('exports Markdown with file grouping', function () {
+    $fileA = $this->faker->word().'.php';
+    do {
+        $fileB = $this->faker->word().'.php';
+    } while ($fileB === $fileA);
+    $bodyA = $this->faker->sentence();
+    $bodyB = $this->faker->sentence();
+    $bodyC = $this->faker->sentence();
+    $global = $this->faker->paragraph();
+    $lineA = $this->faker->numberBetween(1, 100);
+    $lineB1 = $this->faker->numberBetween(101, 200);
+    $lineB2 = $lineB1 + $this->faker->numberBetween(1, 20);
+    $lineC = $this->faker->numberBetween(1, 100);
+
     $comments = [
-        new Comment('c1', 'app.php', 'right', 10, 10, 'Fix this'),
-        new Comment('c2', 'app.php', 'right', 20, 25, 'Refactor this block'),
-        new Comment('c3', 'config.php', 'right', 5, 5, 'Wrong value'),
+        new Comment($this->faker->uuid(), $fileA, 'right', $lineA, $lineA, $bodyA),
+        new Comment($this->faker->uuid(), $fileA, 'right', $lineB1, $lineB2, $bodyB),
+        new Comment($this->faker->uuid(), $fileB, 'right', $lineC, $lineC, $bodyC),
     ];
 
-    $result = $this->exporter->export($this->tmpDir, $comments, 'Good work');
+    $result = $this->exporter->export($this->tmpDir, $comments, $global);
 
     $md = file_get_contents($result['md']);
     expect($md)->toMatch('/^<!-- json: \.rfa\/\d{8}_\d{6}_comments_[a-f0-9]+\.json -->/');
     expect($md)->toContain('# Code Review Comments');
     expect($md)->toContain('## General');
-    expect($md)->toContain('Good work');
-    expect($md)->toContain('## `app.php`');
-    expect($md)->toContain('## `config.php`');
-    expect($md)->toContain('**Line 10**');
-    expect($md)->toContain('**Lines 20-25**');
+    expect($md)->toContain($global);
+    expect($md)->toContain("## `{$fileA}`");
+    expect($md)->toContain("## `{$fileB}`");
+    expect($md)->toContain("**Line {$lineA}**");
+    expect($md)->toContain("**Lines {$lineB1}-{$lineB2}**");
 });
 
 test('returns clipboard text', function () {
