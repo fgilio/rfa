@@ -2,14 +2,14 @@
 
 namespace App\Livewire;
 
+use App\Actions\GetFileListAction;
+use App\Actions\LoadFileDiffAction;
+use App\Actions\ResolveRepoPathAction;
 use App\DTOs\Comment;
 use App\Models\ReviewSession;
 use App\Services\CommentExporter;
-use App\Services\DiffParser;
-use App\Services\GitDiffService;
 use Flux;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\File;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -38,29 +38,8 @@ class ReviewPage extends Component
 
     public function mount(): void
     {
-        $repoPathFile = base_path('.rfa_repo_path');
-        $this->repoPath = $_ENV['RFA_REPO_PATH']
-            ?? (File::exists($repoPathFile) ? trim(File::get($repoPathFile)) : getcwd());
-
-        $gitDiff = app(GitDiffService::class);
-        $fileList = $gitDiff->getFileList($this->repoPath);
-
-        $this->files = collect($fileList)->map(fn ($entry) => [
-            'id' => 'file-'.md5($entry->path),
-            'path' => $entry->path,
-            'status' => $entry->status,
-            'oldPath' => $entry->oldPath,
-            'additions' => $entry->additions,
-            'deletions' => $entry->deletions,
-            'isBinary' => $entry->isBinary,
-            'isUntracked' => $entry->isUntracked,
-        ])->all();
-
-        // Clear per-file cache keys from previous sessions
-        foreach ($this->files as $file) {
-            Cache::forget('rfa_diff_'.md5($this->repoPath.':'.$file['id']));
-        }
-
+        $this->repoPath = app(ResolveRepoPathAction::class)->handle();
+        $this->files = app(GetFileListAction::class)->handle($this->repoPath);
         $this->restoreSession();
     }
 
@@ -260,34 +239,11 @@ class ReviewPage extends Component
      */
     private function loadDiffDataForFile(array $file): ?array
     {
-        $gitDiff = app(GitDiffService::class);
-        $rawDiff = $gitDiff->getFileDiff($this->repoPath, $file['path'], $file['isUntracked'] ?? false);
-
-        if ($rawDiff === null || trim($rawDiff) === '') {
-            return null;
-        }
-
-        $parser = app(DiffParser::class);
-        $fileDiff = $parser->parseSingle($rawDiff);
-
-        if (! $fileDiff) {
-            return null;
-        }
-
-        return [
-            'hunks' => collect($fileDiff->hunks)->map(fn ($hunk) => [
-                'header' => $hunk->header,
-                'oldStart' => $hunk->oldStart,
-                'newStart' => $hunk->newStart,
-                'lines' => collect($hunk->lines)->map(fn ($line) => [
-                    'type' => $line->type,
-                    'content' => $line->content,
-                    'oldLineNum' => $line->oldLineNum,
-                    'newLineNum' => $line->newLineNum,
-                ])->all(),
-            ])->all(),
-            'tooLarge' => false,
-        ];
+        return app(LoadFileDiffAction::class)->handle(
+            $this->repoPath,
+            $file['path'],
+            $file['isUntracked'] ?? false,
+        );
     }
 
     public function render(): \Illuminate\Contracts\View\View

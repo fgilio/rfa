@@ -2,8 +2,7 @@
 
 namespace App\Livewire;
 
-use App\Services\DiffParser;
-use App\Services\GitDiffService;
+use App\Actions\LoadFileDiffAction;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Reactive;
@@ -49,36 +48,9 @@ class DiffFile extends Component
 
         $ttl = now()->addHours(config('rfa.cache_ttl_hours', 24));
 
-        $this->diffData = Cache::remember($this->diffCacheKey(), $ttl, function () {
-            $gitDiff = app(GitDiffService::class);
-            $rawDiff = $gitDiff->getFileDiff($this->repoPath, $this->file['path'], $this->file['isUntracked'] ?? false);
-
-            if ($rawDiff === null || trim($rawDiff) === '') {
-                return ['hunks' => [], 'tooLarge' => $rawDiff === null];
-            }
-
-            $parser = app(DiffParser::class);
-            $fileDiff = $parser->parseSingle($rawDiff);
-
-            if (! $fileDiff) {
-                return ['hunks' => [], 'tooLarge' => false];
-            }
-
-            return [
-                'hunks' => collect($fileDiff->hunks)->map(fn ($hunk) => [
-                    'header' => $hunk->header,
-                    'oldStart' => $hunk->oldStart,
-                    'newStart' => $hunk->newStart,
-                    'lines' => collect($hunk->lines)->map(fn ($line) => [
-                        'type' => $line->type,
-                        'content' => $line->content,
-                        'oldLineNum' => $line->oldLineNum,
-                        'newLineNum' => $line->newLineNum,
-                    ])->all(),
-                ])->all(),
-                'tooLarge' => false,
-            ];
-        });
+        $this->diffData = Cache::remember($this->diffCacheKey(), $ttl, fn () => app(LoadFileDiffAction::class)->handle($this->repoPath, $this->file['path'], $this->file['isUntracked'] ?? false)
+                ?? ['hunks' => [], 'tooLarge' => false]
+        );
     }
 
     private function diffCacheKey(): string
