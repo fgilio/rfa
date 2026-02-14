@@ -85,6 +85,16 @@ test('returns empty for empty input', function () {
     expect($this->parser->parse('  '))->toBeEmpty();
 });
 
+test('parses diff with non-standard git prefixes', function () {
+    $files = $this->parser->parse(file_get_contents(fixture('custom_prefix.diff')));
+
+    expect($files)->toHaveCount(1);
+    expect($files[0]->path)->toBe('src/hello.php');
+    expect($files[0]->status)->toBe('modified');
+    expect($files[0]->additions)->toBe(1);
+    expect($files[0]->deletions)->toBe(1);
+});
+
 test('parses multiple files in one diff', function () {
     $diff = file_get_contents(fixture('simple.diff'))."\n".file_get_contents(fixture('new_file.diff'));
     $files = $this->parser->parse($diff);

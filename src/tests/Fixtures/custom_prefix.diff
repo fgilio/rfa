@@ -1,0 +1,8 @@
+diff --git c/src/hello.php w/src/hello.php
+index abc1234..def5678 100644
+--- c/src/hello.php
++++ w/src/hello.php
+@@ -1,3 +1,3 @@
+ <?php
+-echo 'old';
++echo 'new';

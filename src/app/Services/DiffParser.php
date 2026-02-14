@@ -41,7 +41,7 @@ class DiffParser
         $headerLine = $lines[0]; // diff --git a/path b/path
 
         // Extract file path from header
-        if (! preg_match('#^diff --git a/(.+?) b/(.+)$#', $headerLine, $m)) {
+        if (! preg_match('#^diff --git [a-z]/(.+?) [a-z]/(.+)$#', $headerLine, $m)) {
             return null;
         }
 
