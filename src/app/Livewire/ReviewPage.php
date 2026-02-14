@@ -2,11 +2,15 @@
 
 namespace App\Livewire;
 
+use App\Actions\AddCommentAction;
+use App\Actions\DeleteCommentAction;
 use App\Actions\GetFileListAction;
 use App\Actions\LoadFileDiffAction;
 use App\Actions\ResolveRepoPathAction;
+use App\Actions\RestoreSessionAction;
+use App\Actions\SaveSessionAction;
+use App\Actions\ToggleViewedAction;
 use App\DTOs\Comment;
-use App\Models\ReviewSession;
 use App\Services\CommentExporter;
 use Flux;
 use Illuminate\Support\Facades\Cache;
@@ -40,45 +44,36 @@ class ReviewPage extends Component
     {
         $this->repoPath = app(ResolveRepoPathAction::class)->handle();
         $this->files = app(GetFileListAction::class)->handle($this->repoPath);
-        $this->restoreSession();
+
+        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files);
+        $this->comments = $session['comments'];
+        $this->viewedFiles = $session['viewedFiles'];
+        $this->globalComment = $session['globalComment'];
     }
 
     #[On('add-comment')]
     public function addComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body): void
     {
-        if (trim($body) === '') {
+        $comment = app(AddCommentAction::class)->handle($this->files, $fileId, $side, $startLine, $endLine, $body);
+
+        if (! $comment) {
             return;
         }
 
-        $file = collect($this->files)->firstWhere('id', $fileId);
-        if (! $file || ! in_array($side, ['left', 'right', 'file'])) {
-            return;
-        }
-
-        $this->comments[] = [
-            'id' => 'c-'.uniqid(),
-            'fileId' => $fileId,
-            'file' => $file['path'],
-            'side' => $side,
-            'startLine' => $startLine,
-            'endLine' => $endLine,
-            'body' => $body,
-        ];
-
+        $this->comments[] = $comment;
         $this->saveSession();
     }
 
     #[On('delete-comment')]
     public function deleteComment(string $commentId): void
     {
-        if (! str_starts_with($commentId, 'c-')) {
+        $result = app(DeleteCommentAction::class)->handle($this->comments, $commentId);
+
+        if ($result === null) {
             return;
         }
 
-        $this->comments = array_values(
-            array_filter($this->comments, fn ($c) => $c['id'] !== $commentId)
-        );
-
+        $this->comments = $result;
         $this->saveSession();
     }
 
@@ -86,16 +81,13 @@ class ReviewPage extends Component
     public function toggleViewed(string $filePath): void
     {
         $knownPaths = collect($this->files)->pluck('path')->all();
-        if (! in_array($filePath, $knownPaths)) {
+        $result = app(ToggleViewedAction::class)->handle($this->viewedFiles, $filePath, $knownPaths);
+
+        if ($result === null) {
             return;
         }
 
-        if (in_array($filePath, $this->viewedFiles)) {
-            $this->viewedFiles = array_values(array_diff($this->viewedFiles, [$filePath]));
-        } else {
-            $this->viewedFiles[] = $filePath;
-        }
-
+        $this->viewedFiles = $result;
         $this->saveSession();
     }
 
@@ -196,41 +188,9 @@ class ReviewPage extends Component
         return collect($this->comments)->groupBy('fileId')->map->values()->map->all()->all();
     }
 
-    private function restoreSession(): void
-    {
-        $session = ReviewSession::firstOrCreate(['repo_path' => $this->repoPath]);
-
-        $currentPaths = collect($this->files)->pluck('path')->all();
-        $fileIdMap = collect($this->files)->pluck('id', 'path')->all();
-
-        // Restore viewed files - prune removed files
-        /** @var array<int, string> $viewedFiles */
-        $viewedFiles = $session->viewed_files ?? [];
-        $this->viewedFiles = array_values(array_intersect($viewedFiles, $currentPaths));
-
-        // Restore comments - prune entries for files no longer in the diff, remap fileId
-        /** @var array<int, array<string, mixed>> $savedComments */
-        $savedComments = $session->comments ?? [];
-        $this->comments = collect($savedComments)
-            ->filter(fn (array $c) => isset($fileIdMap[$c['file'] ?? '']))
-            ->map(fn (array $c) => array_merge($c, ['fileId' => $fileIdMap[$c['file']]]))
-            ->values()
-            ->all();
-
-        // Restore global comment
-        $this->globalComment = $session->global_comment ?? '';
-    }
-
     private function saveSession(): void
     {
-        ReviewSession::updateOrCreate(
-            ['repo_path' => $this->repoPath],
-            [
-                'viewed_files' => $this->viewedFiles,
-                'comments' => $this->comments,
-                'global_comment' => $this->globalComment,
-            ]
-        );
+        app(SaveSessionAction::class)->handle($this->repoPath, $this->comments, $this->viewedFiles, $this->globalComment);
     }
 
     /**
