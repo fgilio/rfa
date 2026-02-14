@@ -19,6 +19,7 @@
 /storage/*.key
 /storage/pail
 /vendor
+/tests/Browser/screenshots
 .rfa_repo_path
 Homestead.json
 Homestead.yaml
