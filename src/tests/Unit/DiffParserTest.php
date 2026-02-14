@@ -3,6 +3,8 @@
 use App\Services\DiffParser;
 use Illuminate\Support\Facades\File;
 
+uses(Tests\TestCase::class);
+
 beforeEach(function () {
     $this->parser = new DiffParser;
 });
@@ -101,4 +103,19 @@ test('parses multiple files in one diff', function () {
     $files = $this->parser->parse($diff);
 
     expect($files)->toHaveCount(2);
+});
+
+// -- parseSingle tests --
+
+test('parseSingle returns FileDiff for single-file diff', function () {
+    $result = $this->parser->parseSingle(File::get(fixture('simple.diff')));
+
+    expect($result)->not->toBeNull();
+    expect($result->path)->toBe('src/hello.php');
+    expect($result->hunks)->toHaveCount(1);
+});
+
+test('parseSingle returns null for empty input', function () {
+    expect($this->parser->parseSingle(''))->toBeNull();
+    expect($this->parser->parseSingle('  '))->toBeNull();
 });

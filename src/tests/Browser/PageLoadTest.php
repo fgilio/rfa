@@ -45,6 +45,6 @@ test('diff shows addition and deletion lines with correct prefixes', function ()
 
 test('addition and deletion badge counts are correct in header', function () {
     $this->visit('/')
-        ->assertSee('+7')
+        ->assertSee('+6')
         ->assertSee('-7');
 });

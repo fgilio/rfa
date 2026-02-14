@@ -102,9 +102,15 @@
                     </div>
                 </div>
             @else
-                @foreach($files as $fileIndex => $file)
+                @foreach($files as $file)
                     <div id="{{ $file['id'] }}" class="border-b border-gh-border">
-                        @include('livewire.diff-file', ['file' => $file, 'fileIndex' => $fileIndex, 'isViewed' => in_array($file['path'], $viewedFiles)])
+                        <livewire:diff-file
+                            :key="$file['id']"
+                            :file="$file"
+                            :file-comments="$this->getFileComments($file['id'])"
+                            :is-viewed="in_array($file['path'], $viewedFiles)"
+                            :repo-path="$repoPath"
+                        />
                     </div>
                 @endforeach
             @endif

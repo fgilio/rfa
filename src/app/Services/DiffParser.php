@@ -8,6 +8,11 @@ use App\DTOs\Hunk;
 
 class DiffParser
 {
+    public function parseSingle(string $rawDiff): ?FileDiff
+    {
+        return $this->parse($rawDiff)[0] ?? null;
+    }
+
     /**
      * @return FileDiff[]
      */

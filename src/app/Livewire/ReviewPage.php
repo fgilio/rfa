@@ -8,9 +8,10 @@ use App\Services\CommentExporter;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
 use Flux;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Livewire\Attributes\Layout;
-use Livewire\Attributes\Renderless;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 #[Layout('layouts.app')]
@@ -42,38 +43,28 @@ class ReviewPage extends Component
             ?? (File::exists($repoPathFile) ? trim(File::get($repoPathFile)) : getcwd());
 
         $gitDiff = app(GitDiffService::class);
-        $parser = app(DiffParser::class);
+        $fileList = $gitDiff->getFileList($this->repoPath);
 
-        $rawDiff = $gitDiff->getDiff($this->repoPath);
-        $fileDiffs = $parser->parse($rawDiff);
+        $this->files = collect($fileList)->map(fn ($entry) => [
+            'id' => 'file-'.md5($entry->path),
+            'path' => $entry->path,
+            'status' => $entry->status,
+            'oldPath' => $entry->oldPath,
+            'additions' => $entry->additions,
+            'deletions' => $entry->deletions,
+            'isBinary' => $entry->isBinary,
+            'isUntracked' => $entry->isUntracked,
+        ])->all();
 
-        // Convert to serializable arrays
-        $this->files = collect($fileDiffs)->map(function ($file) {
-            return [
-                'id' => 'file-'.md5($file->path),
-                'path' => $file->path,
-                'status' => $file->status,
-                'oldPath' => $file->oldPath,
-                'additions' => $file->additions,
-                'deletions' => $file->deletions,
-                'isBinary' => $file->isBinary,
-                'hunks' => collect($file->hunks)->map(fn ($hunk) => [
-                    'header' => $hunk->header,
-                    'oldStart' => $hunk->oldStart,
-                    'newStart' => $hunk->newStart,
-                    'lines' => collect($hunk->lines)->map(fn ($line) => [
-                        'type' => $line->type,
-                        'content' => $line->content,
-                        'oldLineNum' => $line->oldLineNum,
-                        'newLineNum' => $line->newLineNum,
-                    ])->all(),
-                ])->all(),
-            ];
-        })->all();
+        // Clear per-file cache keys from previous sessions
+        foreach ($this->files as $file) {
+            Cache::forget('rfa_diff_'.md5($this->repoPath.':'.$file['id']));
+        }
 
         $this->restoreSession();
     }
 
+    #[On('add-comment')]
     public function addComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body): void
     {
         if (trim($body) === '') {
@@ -81,12 +72,14 @@ class ReviewPage extends Component
         }
 
         $file = collect($this->files)->firstWhere('id', $fileId);
-        $filePath = $file['path'] ?? $fileId;
+        if (! $file || ! in_array($side, ['left', 'right', 'file'])) {
+            return;
+        }
 
         $this->comments[] = [
             'id' => 'c-'.uniqid(),
             'fileId' => $fileId,
-            'file' => $filePath,
+            'file' => $file['path'],
             'side' => $side,
             'startLine' => $startLine,
             'endLine' => $endLine,
@@ -96,8 +89,13 @@ class ReviewPage extends Component
         $this->saveSession();
     }
 
+    #[On('delete-comment')]
     public function deleteComment(string $commentId): void
     {
+        if (! str_starts_with($commentId, 'c-')) {
+            return;
+        }
+
         $this->comments = array_values(
             array_filter($this->comments, fn ($c) => $c['id'] !== $commentId)
         );
@@ -105,9 +103,14 @@ class ReviewPage extends Component
         $this->saveSession();
     }
 
-    #[Renderless]
+    #[On('toggle-viewed')]
     public function toggleViewed(string $filePath): void
     {
+        $knownPaths = collect($this->files)->pluck('path')->all();
+        if (! in_array($filePath, $knownPaths)) {
+            return;
+        }
+
         if (in_array($filePath, $this->viewedFiles)) {
             $this->viewedFiles = array_values(array_diff($this->viewedFiles, [$filePath]));
         } else {
@@ -135,7 +138,6 @@ class ReviewPage extends Component
             body: $c['body'],
         ), $this->comments);
 
-        // Build diff context for markdown
         $diffContext = $this->buildDiffContext();
 
         $result = $exporter->export($this->repoPath, $commentDTOs, $this->globalComment, $diffContext);
@@ -151,6 +153,7 @@ class ReviewPage extends Component
     private function buildDiffContext(): array
     {
         $context = [];
+        $loaded = [];
 
         foreach ($this->comments as $comment) {
             if ($comment['startLine'] === null) {
@@ -162,10 +165,25 @@ class ReviewPage extends Component
                 continue;
             }
 
+            $fileId = $file['id'];
+
+            if (! isset($loaded[$fileId])) {
+                $cacheKey = 'rfa_diff_'.md5($this->repoPath.':'.$fileId);
+                $loaded[$fileId] = Cache::get($cacheKey) ?? $this->loadDiffDataForFile($file);
+            }
+
+            $diffData = $loaded[$fileId];
+            if (! $diffData) {
+                continue;
+            }
+
+            $useOld = $comment['side'] === 'left';
             $lines = [];
-            foreach ($file['hunks'] as $hunk) {
+            foreach ($diffData['hunks'] as $hunk) {
                 foreach ($hunk['lines'] as $line) {
-                    $lineNum = $line['newLineNum'] ?? $line['oldLineNum'];
+                    $lineNum = $useOld
+                        ? ($line['oldLineNum'] ?? $line['newLineNum'])
+                        : ($line['newLineNum'] ?? $line['oldLineNum']);
                     if ($lineNum === null) {
                         continue;
                     }
@@ -188,11 +206,15 @@ class ReviewPage extends Component
     }
 
     /** @return array<int, array<string, mixed>> */
-    public function getCommentsForFile(string $fileId): array
+    public function getFileComments(string $fileId): array
     {
-        return array_values(
-            array_filter($this->comments, fn ($c) => $c['fileId'] === $fileId)
-        );
+        return $this->groupedComments()[$fileId] ?? [];
+    }
+
+    /** @return array<string, array<int, array<string, mixed>>> */
+    private function groupedComments(): array
+    {
+        return collect($this->comments)->groupBy('fileId')->map->values()->map->all()->all();
     }
 
     private function restoreSession(): void
@@ -230,6 +252,39 @@ class ReviewPage extends Component
                 'global_comment' => $this->globalComment,
             ]
         );
+    }
+
+    /** @return array<string, mixed>|null */
+    private function loadDiffDataForFile(array $file): ?array
+    {
+        $gitDiff = app(GitDiffService::class);
+        $rawDiff = $gitDiff->getFileDiff($this->repoPath, $file['path'], $file['isUntracked'] ?? false);
+
+        if ($rawDiff === null || trim($rawDiff) === '') {
+            return null;
+        }
+
+        $parser = app(DiffParser::class);
+        $fileDiff = $parser->parseSingle($rawDiff);
+
+        if (! $fileDiff) {
+            return null;
+        }
+
+        return [
+            'hunks' => collect($fileDiff->hunks)->map(fn ($hunk) => [
+                'header' => $hunk->header,
+                'oldStart' => $hunk->oldStart,
+                'newStart' => $hunk->newStart,
+                'lines' => collect($hunk->lines)->map(fn ($line) => [
+                    'type' => $line->type,
+                    'content' => $line->content,
+                    'oldLineNum' => $line->oldLineNum,
+                    'newLineNum' => $line->newLineNum,
+                ])->all(),
+            ])->all(),
+            'tooLarge' => false,
+        ];
     }
 
     public function render(): \Illuminate\Contracts\View\View

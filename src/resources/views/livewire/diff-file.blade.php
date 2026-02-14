@@ -1,6 +1,8 @@
 {{-- Single file diff rendering --}}
 <div
     x-data="{
+        fileId: {{ Js::from($file['id']) }},
+        filePath: {{ Js::from($file['path']) }},
         collapsed: @js($isViewed ?? false),
         viewed: @js($isViewed ?? false),
         draftLine: null,
@@ -35,13 +37,13 @@
 
         saveDraft() {
             if (this.draftBody.trim() === '') return;
-            $wire.call('addComment', '{{ $file['id'] }}', this.draftSide, this.draftLine, this.draftEndLine, this.draftBody);
+            $wire.dispatch('add-comment', { fileId: this.fileId, side: this.draftSide, startLine: this.draftLine, endLine: this.draftEndLine, body: this.draftBody });
             this.cancelDraft();
         },
 
         saveFileComment() {
             if (this.draftBody.trim() === '') return;
-            $wire.call('addComment', '{{ $file['id'] }}', 'file', null, null, this.draftBody);
+            $wire.dispatch('add-comment', { fileId: this.fileId, side: 'file', startLine: null, endLine: null, body: this.draftBody });
             this.cancelDraft();
         },
 
@@ -52,13 +54,13 @@
 
         onViewedChange() {
             this.collapsed = this.viewed;
-            $dispatch('file-viewed-changed', { id: '{{ $file['id'] }}', viewed: this.viewed });
-            $wire.toggleViewed('{{ $file['path'] }}');
+            $dispatch('file-viewed-changed', { id: this.fileId, viewed: this.viewed });
+            $wire.dispatch('toggle-viewed', { filePath: this.filePath });
         }
     }"
     @collapse-all-files.window="collapsed = true"
     @expand-all-files.window="collapsed = false"
-    @expand-file.window="if ($event.detail.id === '{{ $file['id'] }}') collapsed = false"
+    @expand-file.window="if ($event.detail.id === fileId) collapsed = false"
     class="group"
 >
     {{-- File header --}}
@@ -80,7 +82,7 @@
                 icon="square-2-stack"
                 variant="ghost"
                 size="sm"
-                @click="$dispatch('copy-to-clipboard', { text: '{{ $file['path'] }}' })"
+                @click="$dispatch('copy-to-clipboard', { text: filePath })"
             />
         </flux:tooltip>
 
@@ -110,14 +112,33 @@
             <div class="px-4 py-8 text-center">
                 <flux:text variant="subtle" size="sm">Binary file not shown</flux:text>
             </div>
-        @elseif(empty($file['hunks']))
+        @elseif($diffData === null)
+            {{-- Loading state: trigger lazy load via x-intersect --}}
+            <div
+                x-intersect="$wire.loadFileDiff()"
+                class="px-4 py-8 text-center"
+            >
+                <div wire:loading wire:target="loadFileDiff">
+                    <flux:icon icon="arrow-path" variant="micro" class="animate-spin inline-block text-gh-muted mr-1" />
+                    <flux:text variant="subtle" size="sm" inline>Loading diff...</flux:text>
+                </div>
+                <div wire:loading.remove wire:target="loadFileDiff">
+                    <flux:text variant="subtle" size="sm">Waiting to load...</flux:text>
+                </div>
+            </div>
+        @elseif($diffData['tooLarge'] ?? false)
             <div class="px-4 py-8 text-center">
-                <flux:text variant="subtle" size="sm">File renamed (no content changes)</flux:text>
+                <flux:icon icon="exclamation-triangle" variant="micro" class="inline-block text-gh-muted mr-1" />
+                <flux:text variant="subtle" size="sm" inline>File diff too large to display</flux:text>
+            </div>
+        @elseif(empty($diffData['hunks']))
+            <div class="px-4 py-8 text-center">
+                <flux:text variant="subtle" size="sm">No content changes</flux:text>
             </div>
         @else
             <div class="overflow-x-auto">
                 <table class="w-full border-collapse font-mono text-xs leading-5">
-                    @foreach($file['hunks'] as $hunkIndex => $hunk)
+                    @foreach($diffData['hunks'] as $hunkIndex => $hunk)
                         {{-- Hunk header --}}
                         @if($hunkIndex > 0 || $hunk['header'] !== '')
                             <tr class="bg-gh-hunk-bg">
@@ -208,7 +229,7 @@
                             @endif
 
                             {{-- Show saved comments inline --}}
-                            @foreach($this->getCommentsForFile($file['id']) as $comment)
+                            @foreach($fileComments as $comment)
                                 @if($comment['endLine'] === ($lineNum ?? -1) && $comment['side'] !== 'file')
                                     <tr>
                                         <td colspan="4" class="p-0">
@@ -220,7 +241,7 @@
                                                             icon="x-mark"
                                                             variant="ghost"
                                                             size="xs"
-                                                            wire:click="deleteComment('{{ $comment['id'] }}')"
+                                                            @click="$wire.dispatch('delete-comment', { commentId: '{{ $comment['id'] }}' })"
                                                             class="shrink-0 hover:!text-red-400"
                                                         />
                                                     </flux:tooltip>
@@ -261,7 +282,7 @@
         </template>
 
         {{-- File-level saved comments --}}
-        @foreach($this->getCommentsForFile($file['id']) as $comment)
+        @foreach($fileComments as $comment)
             @if($comment['side'] === 'file')
                 <div class="comment-indicator bg-gh-surface/80 border-t border-gh-border px-4 py-2">
                     <div class="flex items-start justify-between gap-2">
@@ -271,7 +292,7 @@
                                 icon="x-mark"
                                 variant="ghost"
                                 size="xs"
-                                wire:click="deleteComment('{{ $comment['id'] }}')"
+                                @click="$wire.dispatch('delete-comment', { commentId: '{{ $comment['id'] }}' })"
                                 class="shrink-0 hover:!text-red-400"
                             />
                         </flux:tooltip>
