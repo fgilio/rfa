@@ -4,16 +4,13 @@ namespace App\Livewire;
 
 use App\Actions\AddCommentAction;
 use App\Actions\DeleteCommentAction;
+use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
-use App\Actions\LoadFileDiffAction;
 use App\Actions\ResolveRepoPathAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\Actions\ToggleViewedAction;
-use App\DTOs\Comment;
-use App\Services\CommentExporter;
 use Flux;
-use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -98,82 +95,13 @@ class ReviewPage extends Component
 
     public function submitReview(): void
     {
-        $exporter = app(CommentExporter::class);
-
-        $commentDTOs = array_map(fn ($c) => new Comment(
-            id: $c['id'],
-            file: $c['file'],
-            side: $c['side'],
-            startLine: $c['startLine'],
-            endLine: $c['endLine'],
-            body: $c['body'],
-        ), $this->comments);
-
-        $diffContext = $this->buildDiffContext();
-
-        $result = $exporter->export($this->repoPath, $commentDTOs, $this->globalComment, $diffContext);
+        $result = app(ExportReviewAction::class)->handle($this->repoPath, $this->comments, $this->globalComment, $this->files);
 
         $this->exportResult = $result['clipboard'];
         $this->submitted = true;
 
         Flux::toast(variant: 'success', heading: 'Review submitted', text: $this->exportResult);
         $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
-    }
-
-    /** @return array<string, string> */
-    private function buildDiffContext(): array
-    {
-        $context = [];
-        $loaded = [];
-
-        foreach ($this->comments as $comment) {
-            if ($comment['startLine'] === null) {
-                continue;
-            }
-
-            $file = collect($this->files)->firstWhere('id', $comment['fileId']);
-            if (! $file) {
-                continue;
-            }
-
-            $fileId = $file['id'];
-
-            if (! isset($loaded[$fileId])) {
-                $cacheKey = 'rfa_diff_'.md5($this->repoPath.':'.$fileId);
-                $loaded[$fileId] = Cache::get($cacheKey) ?? $this->loadDiffDataForFile($file);
-            }
-
-            $diffData = $loaded[$fileId];
-            if (! $diffData) {
-                continue;
-            }
-
-            $useOld = $comment['side'] === 'left';
-            $lines = [];
-            foreach ($diffData['hunks'] as $hunk) {
-                foreach ($hunk['lines'] as $line) {
-                    $lineNum = $useOld
-                        ? ($line['oldLineNum'] ?? $line['newLineNum'])
-                        : ($line['newLineNum'] ?? $line['oldLineNum']);
-                    if ($lineNum === null) {
-                        continue;
-                    }
-                    if ($lineNum >= $comment['startLine'] && $lineNum <= ($comment['endLine'] ?? $comment['startLine'])) {
-                        $prefix = match ($line['type']) {
-                            'add' => '+',
-                            'remove' => '-',
-                            default => ' ',
-                        };
-                        $lines[] = $prefix.$line['content'];
-                    }
-                }
-            }
-
-            $key = "{$comment['file']}:{$comment['startLine']}:{$comment['endLine']}";
-            $context[$key] = implode("\n", $lines);
-        }
-
-        return $context;
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -191,19 +119,6 @@ class ReviewPage extends Component
     private function saveSession(): void
     {
         app(SaveSessionAction::class)->handle($this->repoPath, $this->comments, $this->viewedFiles, $this->globalComment);
-    }
-
-    /**
-     * @param  array<string, mixed>  $file
-     * @return array<string, mixed>|null
-     */
-    private function loadDiffDataForFile(array $file): ?array
-    {
-        return app(LoadFileDiffAction::class)->handle(
-            $this->repoPath,
-            $file['path'],
-            $file['isUntracked'] ?? false,
-        );
     }
 
     public function render(): \Illuminate\Contracts\View\View

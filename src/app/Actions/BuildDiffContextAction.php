@@ -1,0 +1,75 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Actions;
+
+use Illuminate\Support\Facades\Cache;
+
+final readonly class BuildDiffContextAction
+{
+    public function __construct(
+        private LoadFileDiffAction $loadFileDiffAction,
+    ) {}
+
+    /**
+     * @param  array<int, array<string, mixed>>  $comments
+     * @param  array<int, array<string, mixed>>  $files
+     * @return array<string, string>
+     */
+    public function handle(string $repoPath, array $comments, array $files): array
+    {
+        $context = [];
+        $loaded = [];
+
+        foreach ($comments as $comment) {
+            if ($comment['startLine'] === null) {
+                continue;
+            }
+
+            $file = collect($files)->firstWhere('id', $comment['fileId']);
+            if (! $file) {
+                continue;
+            }
+
+            $fileId = $file['id'];
+
+            if (! isset($loaded[$fileId])) {
+                $cacheKey = 'rfa_diff_'.md5($repoPath.':'.$fileId);
+                $loaded[$fileId] = Cache::get($cacheKey)
+                    ?? $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false);
+            }
+
+            $diffData = $loaded[$fileId];
+            if (! $diffData) {
+                continue;
+            }
+
+            $useOld = $comment['side'] === 'left';
+            $lines = [];
+            foreach ($diffData['hunks'] as $hunk) {
+                foreach ($hunk['lines'] as $line) {
+                    $lineNum = $useOld
+                        ? ($line['oldLineNum'] ?? $line['newLineNum'])
+                        : ($line['newLineNum'] ?? $line['oldLineNum']);
+                    if ($lineNum === null) {
+                        continue;
+                    }
+                    if ($lineNum >= $comment['startLine'] && $lineNum <= ($comment['endLine'] ?? $comment['startLine'])) {
+                        $prefix = match ($line['type']) {
+                            'add' => '+',
+                            'remove' => '-',
+                            default => ' ',
+                        };
+                        $lines[] = $prefix.$line['content'];
+                    }
+                }
+            }
+
+            $key = "{$comment['file']}:{$comment['startLine']}:{$comment['endLine']}";
+            $context[$key] = implode("\n", $lines);
+        }
+
+        return $context;
+    }
+}
