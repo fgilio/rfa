@@ -203,12 +203,16 @@ class ReviewPage extends Component
         $fileIdMap = collect($this->files)->pluck('id', 'path')->all();
 
         // Restore viewed files - prune removed files
-        $this->viewedFiles = array_values(array_intersect($session->viewed_files ?? [], $currentPaths));
+        /** @var array<int, string> $viewedFiles */
+        $viewedFiles = $session->viewed_files ?? [];
+        $this->viewedFiles = array_values(array_intersect($viewedFiles, $currentPaths));
 
         // Restore comments - prune entries for files no longer in the diff, remap fileId
-        $this->comments = collect($session->comments ?? [])
-            ->filter(fn ($c) => isset($fileIdMap[$c['file'] ?? '']))
-            ->map(fn ($c) => array_merge($c, ['fileId' => $fileIdMap[$c['file']]]))
+        /** @var array<int, array<string, mixed>> $savedComments */
+        $savedComments = $session->comments ?? [];
+        $this->comments = collect($savedComments)
+            ->filter(fn (array $c) => isset($fileIdMap[$c['file'] ?? '']))
+            ->map(fn (array $c) => array_merge($c, ['fileId' => $fileIdMap[$c['file']]]))
             ->values()
             ->all();
 
