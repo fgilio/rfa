@@ -3,11 +3,13 @@
 namespace App\Livewire;
 
 use App\DTOs\Comment;
+use App\Models\ReviewSession;
 use App\Services\CommentExporter;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
 use Flux;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Renderless;
 use Livewire\Component;
 
 #[Layout('layouts.app')]
@@ -27,6 +29,9 @@ class ReviewPage extends Component
 
     public bool $submitted = false;
 
+    /** @var array<int, string> */
+    public array $viewedFiles = [];
+
     public ?string $activeFileId = null;
 
     public function mount(): void
@@ -43,9 +48,9 @@ class ReviewPage extends Component
         $fileDiffs = $parser->parse($rawDiff);
 
         // Convert to serializable arrays
-        $this->files = collect($fileDiffs)->map(function ($file, $index) {
+        $this->files = collect($fileDiffs)->map(function ($file) {
             return [
-                'id' => 'file-'.$index,
+                'id' => 'file-'.md5($file->path),
                 'path' => $file->path,
                 'status' => $file->status,
                 'oldPath' => $file->oldPath,
@@ -65,6 +70,8 @@ class ReviewPage extends Component
                 ])->all(),
             ];
         })->all();
+
+        $this->restoreSession();
     }
 
     public function addComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body): void
@@ -85,6 +92,8 @@ class ReviewPage extends Component
             'endLine' => $endLine,
             'body' => $body,
         ];
+
+        $this->saveSession();
     }
 
     public function deleteComment(string $commentId): void
@@ -92,6 +101,25 @@ class ReviewPage extends Component
         $this->comments = array_values(
             array_filter($this->comments, fn ($c) => $c['id'] !== $commentId)
         );
+
+        $this->saveSession();
+    }
+
+    #[Renderless]
+    public function toggleViewed(string $filePath): void
+    {
+        if (in_array($filePath, $this->viewedFiles)) {
+            $this->viewedFiles = array_values(array_diff($this->viewedFiles, [$filePath]));
+        } else {
+            $this->viewedFiles[] = $filePath;
+        }
+
+        $this->saveSession();
+    }
+
+    public function updatedGlobalComment(): void
+    {
+        $this->saveSession();
     }
 
     public function submitReview(): void
@@ -164,6 +192,39 @@ class ReviewPage extends Component
     {
         return array_values(
             array_filter($this->comments, fn ($c) => $c['fileId'] === $fileId)
+        );
+    }
+
+    private function restoreSession(): void
+    {
+        $session = ReviewSession::firstOrCreate(['repo_path' => $this->repoPath]);
+
+        $currentPaths = collect($this->files)->pluck('path')->all();
+        $fileIdMap = collect($this->files)->pluck('id', 'path')->all();
+
+        // Restore viewed files - prune removed files
+        $this->viewedFiles = array_values(array_intersect($session->viewed_files ?? [], $currentPaths));
+
+        // Restore comments - prune entries for files no longer in the diff, remap fileId
+        $this->comments = collect($session->comments ?? [])
+            ->filter(fn ($c) => isset($fileIdMap[$c['file'] ?? '']))
+            ->map(fn ($c) => array_merge($c, ['fileId' => $fileIdMap[$c['file']]]))
+            ->values()
+            ->all();
+
+        // Restore global comment
+        $this->globalComment = $session->global_comment ?? '';
+    }
+
+    private function saveSession(): void
+    {
+        ReviewSession::updateOrCreate(
+            ['repo_path' => $this->repoPath],
+            [
+                'viewed_files' => $this->viewedFiles,
+                'comments' => $this->comments,
+                'global_comment' => $this->globalComment,
+            ]
         );
     }
 
