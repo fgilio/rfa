@@ -254,7 +254,10 @@ class ReviewPage extends Component
         );
     }
 
-    /** @return array<string, mixed>|null */
+    /**
+     * @param  array<string, mixed>  $file
+     * @return array<string, mixed>|null
+     */
     private function loadDiffDataForFile(array $file): ?array
     {
         $gitDiff = app(GitDiffService::class);

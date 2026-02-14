@@ -49,6 +49,9 @@ test('shift+c collapses all files', function () {
 test('shift+e expands all files', function () {
     $page = $this->visit('/');
 
+    // Wait for lazy-loaded diff to appear before collapsing
+    $page->assertSee('function greet');
+
     // Collapse all first
     $page->script("
         document.dispatchEvent(new KeyboardEvent('keydown', {

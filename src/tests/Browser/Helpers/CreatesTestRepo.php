@@ -95,6 +95,11 @@ trait CreatesTestRepo
         $_ENV['RFA_REPO_PATH'] = $this->testRepoPath;
     }
 
+    protected function addLargeFile(string $name = 'large.txt', int $bytes = 600_000): void
+    {
+        File::put($this->testRepoPath.'/'.$name, str_repeat("line of content for large file\n", (int) ceil($bytes / 30)));
+    }
+
     protected function tearDownTestRepo(): void
     {
         unset($_ENV['RFA_REPO_PATH']);
