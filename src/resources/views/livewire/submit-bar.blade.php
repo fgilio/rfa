@@ -13,7 +13,7 @@
         <div class="px-4 py-3 flex items-center gap-3">
             <div class="flex-1">
                 <flux:textarea
-                    wire:model="globalComment"
+                    wire:model.blur="globalComment"
                     placeholder="Overall review comment (optional)"
                     rows="1"
                     resize="none"

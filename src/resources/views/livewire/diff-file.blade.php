@@ -1,7 +1,8 @@
 {{-- Single file diff rendering --}}
 <div
     x-data="{
-        collapsed: false,
+        collapsed: @js($isViewed ?? false),
+        viewed: @js($isViewed ?? false),
         draftLine: null,
         draftEndLine: null,
         draftSide: 'right',
@@ -47,6 +48,12 @@
         isLineInDraft(lineNum) {
             if (!this.showDraft || this.draftLine === null) return false;
             return lineNum >= this.draftLine && lineNum <= (this.draftEndLine ?? this.draftLine);
+        },
+
+        onViewedChange() {
+            this.collapsed = this.viewed;
+            $dispatch('file-viewed-changed', { id: '{{ $file['id'] }}', viewed: this.viewed });
+            $wire.toggleViewed('{{ $file['path'] }}');
         }
     }"
     @collapse-all-files.window="collapsed = true"
@@ -75,6 +82,7 @@
             @if($file['deletions'] > 0)
                 <flux:badge color="red" size="sm">-{{ $file['deletions'] }}</flux:badge>
             @endif
+            <flux:checkbox x-model="viewed" @change="onViewedChange()" label="Viewed" class="text-xs" />
             <flux:tooltip content="Add file comment">
                 <flux:button
                     icon="chat-bubble-left"

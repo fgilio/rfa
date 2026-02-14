@@ -1,12 +1,20 @@
 <div
     x-data="{
         activeFile: null,
+        viewedFiles: {
+            @foreach($files as $f)
+                @if(in_array($f['path'], $viewedFiles))
+                    '{{ $f['id'] }}': true,
+                @endif
+            @endforeach
+        },
         scrollToFile(id) {
             this.activeFile = id;
             this.$dispatch('expand-file', { id });
             document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }"
+    @file-viewed-changed.window="viewedFiles[$event.detail.id] = $event.detail.viewed"
     @copy-to-clipboard.window="
         navigator.clipboard.writeText($event.detail.text).catch(() => {});
     "
@@ -24,6 +32,10 @@
         </div>
         <div class="flex items-center gap-3 text-xs">
             <flux:text variant="subtle" size="sm" inline>{{ count($files) }} {{ Str::plural('file', count($files)) }}</flux:text>
+            <flux:text variant="subtle" size="sm" inline
+                x-show="Object.values(viewedFiles).filter(Boolean).length > 0"
+                x-text="Object.values(viewedFiles).filter(Boolean).length + '/{{ count($files) }} viewed'"
+                x-cloak />
             <flux:badge color="green" size="sm">+{{ collect($files)->sum('additions') }}</flux:badge>
             <flux:badge color="red" size="sm">-{{ collect($files)->sum('deletions') }}</flux:badge>
             <span class="w-px h-4 bg-gh-border"></span>
@@ -64,6 +76,8 @@
                             <flux:badge variant="solid" color="yellow" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0">M</flux:badge>
                         @endif
                         <span class="truncate">{{ $file['path'] }}</span>
+                        <flux:icon icon="check" variant="micro" x-show="viewedFiles['{{ $file['id'] }}']"
+                            class="text-gh-green shrink-0" x-cloak />
                         <span class="ml-auto flex gap-1 shrink-0">
                             @if($file['additions'] > 0)
                                 <flux:badge color="green" size="sm">+{{ $file['additions'] }}</flux:badge>
@@ -90,7 +104,7 @@
             @else
                 @foreach($files as $fileIndex => $file)
                     <div id="{{ $file['id'] }}" class="border-b border-gh-border">
-                        @include('livewire.diff-file', ['file' => $file, 'fileIndex' => $fileIndex])
+                        @include('livewire.diff-file', ['file' => $file, 'fileIndex' => $fileIndex, 'isViewed' => in_array($file['path'], $viewedFiles)])
                     </div>
                 @endforeach
             @endif
