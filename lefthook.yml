@@ -8,4 +8,4 @@ pre-push:
   commands:
     types:
       root: src/
-      run: ./vendor/bin/phpstan analyse
+      run: php -d memory_limit=512M ./vendor/bin/phpstan analyse
