@@ -43,8 +43,12 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
       - run: composer install --no-interaction --prefer-dist
+      - run: npm install playwright && npx playwright install chromium --with-deps
       - run: cp .env.example .env
       - run: php artisan key:generate
       - run: touch database/database.sqlite
-      - run: php artisan test --testsuite=Unit
+      - run: php artisan test
