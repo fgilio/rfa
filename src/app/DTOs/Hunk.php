@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\DTOs;
 
 class Hunk
@@ -13,4 +15,15 @@ class Hunk
         /** @var DiffLine[] */
         public readonly array $lines,
     ) {}
+
+    /** @return array<string, mixed> */
+    public function toArray(): array
+    {
+        return [
+            'header' => $this->header,
+            'oldStart' => $this->oldStart,
+            'newStart' => $this->newStart,
+            'lines' => array_map(fn (DiffLine $line) => $line->toArray(), $this->lines),
+        ];
+    }
 }

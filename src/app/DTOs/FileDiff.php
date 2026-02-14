@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\DTOs;
 
 class FileDiff
@@ -14,4 +16,13 @@ class FileDiff
         public readonly int $deletions,
         public readonly bool $isBinary = false,
     ) {}
+
+    /** @return array{hunks: array<int, array<string, mixed>>, tooLarge: bool} */
+    public function toViewArray(): array
+    {
+        return [
+            'hunks' => array_map(fn (Hunk $hunk) => $hunk->toArray(), $this->hunks),
+            'tooLarge' => false,
+        ];
+    }
 }
