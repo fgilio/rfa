@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\File;
 use Tests\Browser\Helpers\CreatesTestRepo;
 
 uses(CreatesTestRepo::class);
@@ -68,9 +69,9 @@ test('export creates rfa directory with json and md files on disk', function () 
 
     // Verify .rfa directory was created with export files
     $rfaDir = $this->testRepoPath.'/.rfa';
-    expect(is_dir($rfaDir))->toBeTrue();
+    expect(File::isDirectory($rfaDir))->toBeTrue();
 
-    $files = glob($rfaDir.'/*');
+    $files = File::glob($rfaDir.'/*');
     expect($files)->toHaveCount(2);
 
     $jsonFile = collect($files)->first(fn ($f) => str_ends_with($f, '.json'));

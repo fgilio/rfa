@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\File;
 use Symfony\Component\Process\Process;
 
 class GitDiffService
@@ -37,7 +38,7 @@ class GitDiffService
                 }
 
                 $fullPath = $repoPath.'/'.$file;
-                if (! is_file($fullPath) || ! is_readable($fullPath)) {
+                if (! File::isFile($fullPath)) {
                     continue;
                 }
 
@@ -50,7 +51,7 @@ class GitDiffService
                     continue;
                 }
 
-                $content = file_get_contents($fullPath);
+                $content = File::get($fullPath);
                 $lines = explode("\n", $content);
 
                 $untrackedDiff .= "diff --git a/{$file} b/{$file}\n";
@@ -102,8 +103,8 @@ class GitDiffService
 
     private function isBinary(string $path): bool
     {
-        $chunk = file_get_contents($path, false, null, 0, 8192);
+        $chunk = substr(File::get($path), 0, 8192);
 
-        return $chunk !== false && str_contains($chunk, "\0");
+        return str_contains($chunk, "\0");
     }
 }

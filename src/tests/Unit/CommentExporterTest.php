@@ -3,6 +3,7 @@
 use App\DTOs\Comment;
 use App\Services\CommentExporter;
 use Faker\Factory as Faker;
+use Illuminate\Support\Facades\File;
 
 uses(Tests\TestCase::class);
 
@@ -11,17 +12,11 @@ beforeEach(function () {
     $this->faker->seed(crc32(static::class.$this->name()));
     $this->exporter = new CommentExporter;
     $this->tmpDir = sys_get_temp_dir().'/rfa_test_'.uniqid();
-    mkdir($this->tmpDir, 0755, true);
+    File::makeDirectory($this->tmpDir, 0755, true);
 });
 
 afterEach(function () {
-    // Clean up
-    $rfaDir = $this->tmpDir.'/.rfa';
-    if (is_dir($rfaDir)) {
-        array_map('unlink', glob($rfaDir.'/*'));
-        rmdir($rfaDir);
-    }
-    rmdir($this->tmpDir);
+    File::deleteDirectory($this->tmpDir);
 });
 
 test('exports JSON with schema version', function () {
@@ -37,9 +32,9 @@ test('exports JSON with schema version', function () {
     $result = $this->exporter->export($this->tmpDir, $comments, $global);
 
     expect($result['json'])->toMatch('/\/\.rfa\/\d{8}_\d{6}_comments_/');
-    expect(file_exists($result['json']))->toBeTrue();
+    expect(File::exists($result['json']))->toBeTrue();
 
-    $json = json_decode(file_get_contents($result['json']), true);
+    $json = json_decode(File::get($result['json']), true);
     expect($json['schema_version'])->toBe(1);
     expect($json['global_comment'])->toBe($global);
     expect($json['comments'])->toHaveCount(1);
@@ -71,7 +66,7 @@ test('exports Markdown with file grouping', function () {
 
     $result = $this->exporter->export($this->tmpDir, $comments, $global);
 
-    $md = file_get_contents($result['md']);
+    $md = File::get($result['md']);
     expect($md)->toMatch('/^<!-- json: \.rfa\/\d{8}_\d{6}_comments_[a-f0-9]+\.json -->/');
     expect($md)->toContain('# Code Review Comments');
     expect($md)->toContain('## General');
@@ -91,13 +86,13 @@ test('returns clipboard text', function () {
 test('creates .rfa directory if missing', function () {
     $result = $this->exporter->export($this->tmpDir, [], '');
 
-    expect(is_dir($this->tmpDir.'/.rfa'))->toBeTrue();
+    expect(File::isDirectory($this->tmpDir.'/.rfa'))->toBeTrue();
 });
 
 test('handles empty comments', function () {
     $result = $this->exporter->export($this->tmpDir, [], '');
 
-    $md = file_get_contents($result['md']);
+    $md = File::get($result['md']);
     expect($md)->toContain('# Code Review Comments');
     expect($md)->not->toContain('## `');
 });
@@ -112,10 +107,10 @@ test('uses timestamp prefix in filenames', function () {
 test('cross-references are consistent between files', function () {
     $result = $this->exporter->export($this->tmpDir, [], 'test');
 
-    $json = json_decode(file_get_contents($result['json']), true);
+    $json = json_decode(File::get($result['json']), true);
     expect($json['markdown_file'])->toBe('.rfa/'.basename($result['md']));
 
-    $md = file_get_contents($result['md']);
+    $md = File::get($result['md']);
     $firstLine = strtok($md, "\n");
     preg_match('/<!-- json: (.+?) -->/', $firstLine, $matches);
     expect($matches[1])->toBe('.rfa/'.basename($result['json']));

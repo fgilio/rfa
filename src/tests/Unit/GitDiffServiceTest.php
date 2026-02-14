@@ -3,6 +3,7 @@
 use App\Services\GitDiffService;
 use App\Services\IgnoreService;
 use Faker\Factory as Faker;
+use Illuminate\Support\Facades\File;
 
 beforeEach(function () {
     $this->faker = Faker::create();
@@ -18,12 +19,11 @@ beforeEach(function () {
     $this->isBinary->setAccessible(true);
 
     $this->tmpDir = sys_get_temp_dir().'/rfa_git_test_'.uniqid();
-    mkdir($this->tmpDir, 0755, true);
+    File::makeDirectory($this->tmpDir, 0755, true);
 });
 
 afterEach(function () {
-    array_map('unlink', array_filter(glob($this->tmpDir.'/{,.}*', GLOB_BRACE), 'is_file'));
-    rmdir($this->tmpDir);
+    File::deleteDirectory($this->tmpDir);
 });
 
 // -- isExcluded tests --
@@ -67,14 +67,14 @@ test('isExcluded returns false when no pattern matches', function () {
 test('isBinary detects null bytes', function () {
     $path = $this->tmpDir.'/binary.bin';
     $content = $this->faker->sentence()."\0".$this->faker->sentence();
-    file_put_contents($path, $content);
+    File::put($path, $content);
 
     expect($this->isBinary->invoke($this->service, $path))->toBeTrue();
 });
 
 test('isBinary returns false for plain text', function () {
     $path = $this->tmpDir.'/text.txt';
-    file_put_contents($path, $this->faker->paragraphs(3, true));
+    File::put($path, $this->faker->paragraphs(3, true));
 
     expect($this->isBinary->invoke($this->service, $path))->toBeFalse();
 });

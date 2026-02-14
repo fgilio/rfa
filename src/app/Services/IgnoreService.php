@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\File;
+
 class IgnoreService
 {
     private const ALWAYS_EXCLUDE = [
@@ -18,8 +20,8 @@ class IgnoreService
         $patterns = self::ALWAYS_EXCLUDE;
 
         $ignoreFile = $repoPath.'/.rfaignore';
-        if (file_exists($ignoreFile)) {
-            $lines = file($ignoreFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if (File::exists($ignoreFile)) {
+            $lines = explode("\n", File::get($ignoreFile));
             foreach ($lines as $line) {
                 $line = trim($line);
                 if ($line === '' || str_starts_with($line, '#')) {

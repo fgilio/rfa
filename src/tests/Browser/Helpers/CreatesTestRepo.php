@@ -2,6 +2,8 @@
 
 namespace Tests\Browser\Helpers;
 
+use Illuminate\Support\Facades\File;
+
 trait CreatesTestRepo
 {
     protected string $testRepoPath = '';
@@ -9,10 +11,10 @@ trait CreatesTestRepo
     protected function setUpTestRepo(): void
     {
         $this->testRepoPath = sys_get_temp_dir().'/rfa_browser_'.uniqid();
-        mkdir($this->testRepoPath, 0755, true);
+        File::makeDirectory($this->testRepoPath, 0755, true);
 
         // Initial tracked files
-        file_put_contents($this->testRepoPath.'/hello.php', implode("\n", [
+        File::put($this->testRepoPath.'/hello.php', implode("\n", [
             '<?php',
             'function greet($name) {',
             '    return "Hello, " . $name;',
@@ -20,7 +22,7 @@ trait CreatesTestRepo
             '',
         ]));
 
-        file_put_contents($this->testRepoPath.'/config.php', implode("\n", [
+        File::put($this->testRepoPath.'/config.php', implode("\n", [
             '<?php',
             'return [',
             "    'debug' => false,",
@@ -45,7 +47,7 @@ trait CreatesTestRepo
         }
 
         // Modify hello.php
-        file_put_contents($this->testRepoPath.'/hello.php', implode("\n", [
+        File::put($this->testRepoPath.'/hello.php', implode("\n", [
             '<?php',
             'function greet(string $name): string {',
             '    return "Hello, {$name}!";',
@@ -54,7 +56,7 @@ trait CreatesTestRepo
         ]));
 
         // Add new untracked file
-        file_put_contents($this->testRepoPath.'/utils.php', implode("\n", [
+        File::put($this->testRepoPath.'/utils.php', implode("\n", [
             '<?php',
             'function formatDate($date) {',
             "    return date('Y-m-d', strtotime(\$date));",
@@ -63,7 +65,7 @@ trait CreatesTestRepo
         ]));
 
         // Delete config.php
-        unlink($this->testRepoPath.'/config.php');
+        File::delete($this->testRepoPath.'/config.php');
 
         // Point app at this repo via env var (shared process with amphp server)
         $_ENV['RFA_REPO_PATH'] = $this->testRepoPath;
@@ -72,9 +74,9 @@ trait CreatesTestRepo
     protected function setUpEmptyTestRepo(): void
     {
         $this->testRepoPath = sys_get_temp_dir().'/rfa_browser_'.uniqid();
-        mkdir($this->testRepoPath, 0755, true);
+        File::makeDirectory($this->testRepoPath, 0755, true);
 
-        file_put_contents($this->testRepoPath.'/README.md', "# Test\n");
+        File::put($this->testRepoPath.'/README.md', "# Test\n");
 
         $this->runShell(implode(' && ', [
             'git init',
@@ -97,7 +99,7 @@ trait CreatesTestRepo
     {
         unset($_ENV['RFA_REPO_PATH']);
 
-        if ($this->testRepoPath !== '' && is_dir($this->testRepoPath)) {
+        if ($this->testRepoPath !== '' && File::isDirectory($this->testRepoPath)) {
             $this->removeDir($this->testRepoPath);
         }
     }
@@ -117,15 +119,6 @@ trait CreatesTestRepo
 
     private function removeDir(string $dir): void
     {
-        $items = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-
-        foreach ($items as $item) {
-            $item->isDir() ? rmdir($item->getRealPath()) : unlink($item->getRealPath());
-        }
-
-        rmdir($dir);
+        File::deleteDirectory($dir);
     }
 }

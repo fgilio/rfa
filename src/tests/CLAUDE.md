@@ -36,7 +36,7 @@
 
 - Directory: `tests/Fixtures/` (capital F - Pest 4 convention)
 - Use Pest 4's native `fixture('name.ext')` - returns the **file path**, not contents
-- Wrap with `file_get_contents(fixture('name.ext'))` when you need the content
+- Wrap with `File::get(fixture('name.ext'))` when you need the content
 
 ## Reflection
 

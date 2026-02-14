@@ -2,21 +2,18 @@
 
 use App\Services\IgnoreService;
 use Faker\Factory as Faker;
+use Illuminate\Support\Facades\File;
 
 beforeEach(function () {
     $this->faker = Faker::create();
     $this->faker->seed(crc32(static::class.$this->name()));
     $this->service = new IgnoreService;
     $this->tmpDir = sys_get_temp_dir().'/rfa_ignore_test_'.uniqid();
-    mkdir($this->tmpDir, 0755, true);
+    File::makeDirectory($this->tmpDir, 0755, true);
 });
 
 afterEach(function () {
-    $ignoreFile = $this->tmpDir.'/.rfaignore';
-    if (file_exists($ignoreFile)) {
-        unlink($ignoreFile);
-    }
-    rmdir($this->tmpDir);
+    File::deleteDirectory($this->tmpDir);
 });
 
 test('always excludes lock files without rfaignore', function () {
@@ -46,7 +43,7 @@ test('reads custom patterns from rfaignore', function () {
         $patterns[] = $this->faker->word().'.'.$this->faker->fileExtension();
     }
 
-    file_put_contents($this->tmpDir.'/.rfaignore', implode("\n", $patterns));
+    File::put($this->tmpDir.'/.rfaignore', implode("\n", $patterns));
 
     $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
 
@@ -60,7 +57,7 @@ test('ignores comments and blank lines in rfaignore', function () {
     $validPattern = $this->faker->word().'.log';
     $content = "# This is a comment\n\n{$validPattern}\n   \n# Another comment\n";
 
-    file_put_contents($this->tmpDir.'/.rfaignore', $content);
+    File::put($this->tmpDir.'/.rfaignore', $content);
 
     $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
 
@@ -72,7 +69,7 @@ test('handles glob patterns in rfaignore', function () {
     $ext = $this->faker->fileExtension();
     $globPattern = "*.{$ext}";
 
-    file_put_contents($this->tmpDir.'/.rfaignore', $globPattern);
+    File::put($this->tmpDir.'/.rfaignore', $globPattern);
 
     $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
 
