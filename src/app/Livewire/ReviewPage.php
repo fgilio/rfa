@@ -8,6 +8,7 @@ use App\Services\CommentExporter;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
 use Flux;
+use Illuminate\Support\Facades\File;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
@@ -37,9 +38,8 @@ class ReviewPage extends Component
     public function mount(): void
     {
         $repoPathFile = base_path('.rfa_repo_path');
-        $this->repoPath = file_exists($repoPathFile)
-            ? trim(file_get_contents($repoPathFile))
-            : getcwd();
+        $this->repoPath = $_ENV['RFA_REPO_PATH']
+            ?? (File::exists($repoPathFile) ? trim(File::get($repoPathFile)) : getcwd());
 
         $gitDiff = app(GitDiffService::class);
         $parser = app(DiffParser::class);
