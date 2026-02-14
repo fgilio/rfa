@@ -14,6 +14,20 @@ class IgnoreService
         'composer.lock',
     ];
 
+    /** @param array<int, string> $excludePatterns */
+    public function isPathExcluded(string $path, array $excludePatterns): bool
+    {
+        foreach ($excludePatterns as $pattern) {
+            // Strip pathspec prefix: :(exclude) or :(glob,exclude)**/
+            $glob = preg_replace('/^:\([^)]+\)(\*\*\/)?/', '', $pattern);
+            if (fnmatch($glob, $path) || fnmatch($glob, basename($path))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** @return array<int, string> */
     public function getExcludePathspecs(string $repoPath): array
     {

@@ -14,9 +14,6 @@ beforeEach(function () {
 
     $ref = new ReflectionClass($this->service);
 
-    $this->isExcluded = $ref->getMethod('isExcluded');
-    $this->isExcluded->setAccessible(true);
-
     $this->isBinary = $ref->getMethod('isBinary');
     $this->isBinary->setAccessible(true);
 
@@ -26,42 +23,6 @@ beforeEach(function () {
 
 afterEach(function () {
     File::deleteDirectory($this->tmpDir);
-});
-
-// -- isExcluded tests --
-
-test('isExcluded matches exact filename', function () {
-    $name = $this->faker->word().'.'.$this->faker->fileExtension();
-    $patterns = [":(exclude){$name}"];
-
-    expect($this->isExcluded->invoke($this->service, $name, $patterns))->toBeTrue();
-});
-
-test('isExcluded matches glob wildcard', function () {
-    $ext = $this->faker->fileExtension();
-    $patterns = [":(exclude)*.{$ext}"];
-
-    $file = $this->faker->word().'.'.$ext;
-
-    expect($this->isExcluded->invoke($this->service, $file, $patterns))->toBeTrue();
-});
-
-test('isExcluded matches basename in nested path', function () {
-    $name = $this->faker->word().'.'.$this->faker->fileExtension();
-    $patterns = [":(exclude){$name}"];
-    $nested = 'src/deep/nested/'.$name;
-
-    expect($this->isExcluded->invoke($this->service, $nested, $patterns))->toBeTrue();
-});
-
-test('isExcluded returns false when no pattern matches', function () {
-    $file = $this->faker->word().'.'.$this->faker->fileExtension();
-    $patterns = [
-        ':(exclude)unrelated.txt',
-        ':(exclude)*.zzz',
-    ];
-
-    expect($this->isExcluded->invoke($this->service, $file, $patterns))->toBeFalse();
 });
 
 // -- isBinary tests --

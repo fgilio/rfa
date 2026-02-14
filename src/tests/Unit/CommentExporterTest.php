@@ -2,6 +2,7 @@
 
 use App\DTOs\Comment;
 use App\Services\CommentExporter;
+use App\Services\MarkdownFormatter;
 use Faker\Factory as Faker;
 use Illuminate\Support\Facades\File;
 
@@ -10,7 +11,7 @@ uses(Tests\TestCase::class);
 beforeEach(function () {
     $this->faker = Faker::create();
     $this->faker->seed(crc32(static::class.$this->name()));
-    $this->exporter = new CommentExporter;
+    $this->exporter = new CommentExporter(new MarkdownFormatter);
     $this->tmpDir = sys_get_temp_dir().'/rfa_test_'.uniqid();
     File::makeDirectory($this->tmpDir, 0755, true);
 });

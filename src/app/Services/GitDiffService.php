@@ -107,7 +107,7 @@ class GitDiffService
             $untrackedFiles = array_filter(explode("\n", trim($untrackedOutput)));
 
             foreach ($untrackedFiles as $file) {
-                if ($this->isExcluded($file, $excludes)) {
+                if ($this->ignoreService->isPathExcluded($file, $excludes)) {
                     continue;
                 }
 
@@ -234,20 +234,6 @@ class GitDiffService
         }
 
         return $process->getOutput();
-    }
-
-    /** @param array<int, string> $excludePatterns */
-    private function isExcluded(string $file, array $excludePatterns): bool
-    {
-        foreach ($excludePatterns as $pattern) {
-            // Strip :(exclude) prefix
-            $glob = str_replace(':(exclude)', '', $pattern);
-            if (fnmatch($glob, $file) || fnmatch($glob, basename($file))) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function isBinary(string $path): bool

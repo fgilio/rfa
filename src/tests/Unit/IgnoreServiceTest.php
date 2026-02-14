@@ -75,3 +75,40 @@ test('handles glob patterns in rfaignore', function () {
 
     expect($pathspecs)->toContain(":(exclude){$globPattern}");
 });
+
+// -- isPathExcluded tests --
+
+test('isPathExcluded matches exact filename with exclude prefix', function () {
+    $name = $this->faker->word().'.'.$this->faker->fileExtension();
+
+    expect($this->service->isPathExcluded($name, [":(exclude){$name}"]))->toBeTrue();
+});
+
+test('isPathExcluded matches glob wildcard', function () {
+    $ext = $this->faker->fileExtension();
+    $file = $this->faker->word().'.'.$ext;
+
+    expect($this->service->isPathExcluded($file, [":(exclude)*.{$ext}"]))->toBeTrue();
+});
+
+test('isPathExcluded matches basename in nested path', function () {
+    $name = $this->faker->word().'.'.$this->faker->fileExtension();
+    $nested = 'src/deep/nested/'.$name;
+
+    expect($this->service->isPathExcluded($nested, [":(exclude){$name}"]))->toBeTrue();
+});
+
+test('isPathExcluded handles glob,exclude prefix with **/', function () {
+    $name = $this->faker->word().'.'.$this->faker->fileExtension();
+
+    expect($this->service->isPathExcluded($name, [":(glob,exclude)**/{$name}"]))->toBeTrue();
+});
+
+test('isPathExcluded returns false when no pattern matches', function () {
+    $file = $this->faker->word().'.'.$this->faker->fileExtension();
+
+    expect($this->service->isPathExcluded($file, [
+        ':(exclude)unrelated.txt',
+        ':(exclude)*.zzz',
+    ]))->toBeFalse();
+});
