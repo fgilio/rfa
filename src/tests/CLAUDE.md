@@ -53,3 +53,7 @@
 
 - When test logic depends on distinct random values, use a `do { ... } while` loop
 - Example: `do { $b = $faker->word(); } while ($b === $a);`
+
+## Browser Tests
+
+- See `tests/Browser/CLAUDE.md` for details
