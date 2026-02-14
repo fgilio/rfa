@@ -75,6 +75,15 @@
             {{ $file['path'] }}
         </flux:text>
 
+        <flux:tooltip content="Copy file name">
+            <flux:button
+                icon="square-2-stack"
+                variant="ghost"
+                size="sm"
+                @click="$dispatch('copy-to-clipboard', { text: '{{ $file['path'] }}' })"
+            />
+        </flux:tooltip>
+
         <span class="ml-auto flex items-center gap-2 text-xs shrink-0">
             @if($file['additions'] > 0)
                 <flux:badge color="green" size="sm">+{{ $file['additions'] }}</flux:badge>
