@@ -22,19 +22,20 @@ afterEach(function () {
 test('always excludes lock files without rfaignore', function () {
     $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
 
-    expect($pathspecs)->toContain(':(exclude)package-lock.json');
-    expect($pathspecs)->toContain(':(exclude)pnpm-lock.yaml');
-    expect($pathspecs)->toContain(':(exclude)yarn.lock');
-    expect($pathspecs)->toContain(':(exclude)composer.lock');
-    expect($pathspecs)->toHaveCount(4);
+    expect($pathspecs)->toContain(':(glob,exclude)**/package-lock.json');
+    expect($pathspecs)->toContain(':(glob,exclude)**/pnpm-lock.yaml');
+    expect($pathspecs)->toContain(':(glob,exclude)**/yarn.lock');
+    expect($pathspecs)->toContain(':(glob,exclude)**/bun.lock');
+    expect($pathspecs)->toContain(':(glob,exclude)**/composer.lock');
+    expect($pathspecs)->toHaveCount(5);
 });
 
 test('returns only defaults when no rfaignore exists', function () {
     $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
 
-    expect($pathspecs)->toHaveCount(4);
+    expect($pathspecs)->toHaveCount(5);
     foreach ($pathspecs as $ps) {
-        expect($ps)->toStartWith(':(exclude)');
+        expect($ps)->toStartWith(':(glob,exclude)**/');
     }
 });
 
@@ -49,9 +50,9 @@ test('reads custom patterns from rfaignore', function () {
 
     $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
 
-    expect($pathspecs)->toHaveCount(4 + $count);
+    expect($pathspecs)->toHaveCount(5 + $count);
     foreach ($patterns as $pattern) {
-        expect($pathspecs)->toContain(":(exclude){$pattern}");
+        expect($pathspecs)->toContain(":(glob,exclude)**/{$pattern}");
     }
 });
 
@@ -63,8 +64,8 @@ test('ignores comments and blank lines in rfaignore', function () {
 
     $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
 
-    expect($pathspecs)->toHaveCount(5); // 4 defaults + 1 valid
-    expect($pathspecs)->toContain(":(exclude){$validPattern}");
+    expect($pathspecs)->toHaveCount(6); // 5 defaults + 1 valid
+    expect($pathspecs)->toContain(":(glob,exclude)**/{$validPattern}");
 });
 
 test('handles glob patterns in rfaignore', function () {

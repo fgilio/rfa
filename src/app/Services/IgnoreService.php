@@ -8,6 +8,7 @@ class IgnoreService
         'package-lock.json',
         'pnpm-lock.yaml',
         'yarn.lock',
+        'bun.lock',
         'composer.lock',
     ];
 
@@ -29,6 +30,13 @@ class IgnoreService
         }
 
         // Convert to git pathspec exclude format
-        return array_map(fn ($p) => ":(exclude){$p}", $patterns);
+        // Bare filenames need **/ prefix to match in subdirectories
+        return array_map(function (string $p): string {
+            $needsGlob = ! str_contains($p, '/') && ! str_contains($p, '*');
+
+            return $needsGlob
+                ? ":(glob,exclude)**/{$p}"
+                : ":(exclude){$p}";
+        }, $patterns);
     }
 }
