@@ -95,6 +95,8 @@ class ReviewPage extends Component
 
     public function submitReview(): void
     {
+        $this->saveSession();
+
         $result = app(ExportReviewAction::class)->handle($this->repoPath, $this->comments, $this->globalComment, $this->files);
 
         $this->exportResult = $result['clipboard'];
