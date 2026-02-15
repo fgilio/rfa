@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Actions\DiffCacheKey;
 use App\Actions\LoadFileDiffAction;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
@@ -55,7 +56,7 @@ class DiffFile extends Component
 
     private function diffCacheKey(): string
     {
-        return 'rfa_diff_'.md5($this->repoPath.':'.$this->file['id']);
+        return DiffCacheKey::for($this->repoPath, $this->file['id']);
     }
 
     public function render(): \Illuminate\Contracts\View\View

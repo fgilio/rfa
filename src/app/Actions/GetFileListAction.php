@@ -24,7 +24,7 @@ final readonly class GetFileListAction
 
         if ($clearCache) {
             foreach ($files as $file) {
-                Cache::forget('rfa_diff_'.md5($repoPath.':'.$file['id']));
+                Cache::forget(DiffCacheKey::for($repoPath, $file['id']));
             }
         }
 
