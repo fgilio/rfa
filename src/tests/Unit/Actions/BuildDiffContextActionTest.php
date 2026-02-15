@@ -65,6 +65,29 @@ test('skips file-level comments (null startLine)', function () {
     expect($context)->toBeEmpty();
 });
 
+test('skips tooLarge files gracefully', function () {
+    File::put($this->tmpDir.'/hello.php', str_repeat("long line\n", 500));
+
+    config(['rfa.diff_max_bytes' => 100]);
+
+    $fileId = 'file-'.md5('hello.php');
+    $files = [['id' => $fileId, 'path' => 'hello.php', 'isUntracked' => false]];
+    $comments = [[
+        'id' => 'c-1',
+        'fileId' => $fileId,
+        'file' => 'hello.php',
+        'side' => 'right',
+        'startLine' => 1,
+        'endLine' => 1,
+        'body' => 'test',
+    ]];
+
+    $action = app(BuildDiffContextAction::class);
+    $context = $action->handle($this->tmpDir, $comments, $files);
+
+    expect($context)->not->toHaveKey('hello.php:1:1');
+});
+
 test('skips comments for unknown file ids', function () {
     $comments = [[
         'id' => 'c-1',

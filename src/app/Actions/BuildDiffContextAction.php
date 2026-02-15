@@ -34,14 +34,14 @@ final readonly class BuildDiffContextAction
 
             $fileId = $file['id'];
 
-            if (! isset($loaded[$fileId])) {
-                $cacheKey = 'rfa_diff_'.md5($repoPath.':'.$fileId);
+            if (! array_key_exists($fileId, $loaded)) {
+                $cacheKey = DiffCacheKey::for($repoPath, $fileId);
                 $loaded[$fileId] = Cache::get($cacheKey)
                     ?? $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false);
             }
 
             $diffData = $loaded[$fileId];
-            if (! $diffData) {
+            if (! $diffData || ($diffData['tooLarge'] ?? false)) {
                 continue;
             }
 
