@@ -21,7 +21,7 @@
 4. Add unit test in `tests/Unit/Actions/`
 
 ### Key Patterns
-- Actions read state from DB internally (simple signatures for callers)
+- Actions that need DB state (e.g. `RestoreSessionAction`, `SaveSessionAction`) read/write internally. Stateless actions receive data via parameters for reuse across interfaces.
 - Actions use constructor injection for service dependencies
-- Caching is the caller's responsibility, not the Action's
+- Caching is the caller's responsibility, not the Action's. Use `DiffCacheKey::for()` for diff cache keys.
 - DTOs provide `toArray()`/`toViewArray()` for serialization
