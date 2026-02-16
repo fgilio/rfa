@@ -30,13 +30,4 @@ class FileDiff
             'isBinary' => $this->isBinary,
         ];
     }
-
-    /** @return array{hunks: array<int, array<string, mixed>>, tooLarge: bool} */
-    public function toViewArray(): array
-    {
-        return [
-            'hunks' => array_map(fn (Hunk $hunk) => $hunk->toArray(), $this->hunks),
-            'tooLarge' => false,
-        ];
-    }
 }

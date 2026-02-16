@@ -33,6 +33,6 @@ final readonly class LoadFileDiffAction
             return null;
         }
 
-        return $fileDiff->toViewArray();
+        return ['hunks' => $fileDiff->toArray()['hunks'], 'tooLarge' => false];
     }
 }
