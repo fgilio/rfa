@@ -6,7 +6,7 @@
  * - Livewire components must be classes
  * - Livewire components must have a render() method
  * - Livewire components must not use Services directly (delegate to Actions)
- * - Livewire components must not use Eloquent Models directly (delegate to Actions)
+ * - Livewire components must not use Models directly (delegate to Actions)
  */
 arch('livewire components are classes')
     ->expect('App\Livewire')
@@ -22,8 +22,7 @@ arch('livewire components have a render method')
 
 arch('livewire components do not use services directly')
     ->expect('App\Livewire')
-    ->not->toUse('App\Services')
-    ->ignoring('App\Livewire\DiffFile');
+    ->not->toUse('App\Services');
 
 arch('livewire components do not use eloquent models directly')
     ->expect('App\Livewire')

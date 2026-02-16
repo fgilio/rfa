@@ -48,11 +48,10 @@ arch('models are only used in actions')
     ->expect('App\Models')
     ->toOnlyBeUsedIn('App\Actions');
 
-arch('services are only used in actions and livewire')
+arch('services are only used in actions and services')
     ->expect('App\Services')
     ->toOnlyBeUsedIn([
         'App\Actions',
-        'App\Livewire',
         'App\Services',
     ]);
 
