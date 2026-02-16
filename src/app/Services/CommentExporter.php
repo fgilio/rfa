@@ -20,7 +20,7 @@ class CommentExporter
      */
     public function export(string $repoPath, array $comments, string $globalComment = '', array $diffContext = []): array
     {
-        $hash = substr(md5(json_encode($comments).$globalComment.time()), 0, 8);
+        $hash = substr(hash('xxh128', json_encode($comments).$globalComment), 0, 8);
         $now = date('Ymd_His');
         $basename = "{$now}_comments_{$hash}";
         $rfaDir = $repoPath.'/.rfa';
