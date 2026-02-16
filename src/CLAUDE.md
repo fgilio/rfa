@@ -32,7 +32,7 @@ All generated artifacts during Claude Code sessions (research, analysis, plans, 
 
 ```
 agents/
-├── code-highlighting-research.md
-├── performance-analysis.md
+├── 20260216-architecture-audit.md
+├── CLAUDE.md
 └── ...
 ```
