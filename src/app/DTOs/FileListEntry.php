@@ -18,7 +18,7 @@ class FileListEntry
 
     public function getId(): string
     {
-        return 'file-'.md5($this->path);
+        return 'file-'.hash('xxh128', $this->path);
     }
 
     /** @return array<string, mixed> */
