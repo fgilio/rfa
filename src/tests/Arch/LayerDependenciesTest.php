@@ -13,7 +13,6 @@
  * - Models must not depend on any other app layer
  * - Only Actions should use Models (persistence boundary)
  */
-
 arch('dtos are standalone and do not depend on other app layers')
     ->expect('App\DTOs')
     ->not->toUse([

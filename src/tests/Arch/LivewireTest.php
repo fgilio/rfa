@@ -8,7 +8,6 @@
  * - Livewire components must not use Services directly (delegate to Actions)
  * - Livewire components must not use Eloquent Models directly (delegate to Actions)
  */
-
 arch('livewire components are classes')
     ->expect('App\Livewire')
     ->toBeClasses();

@@ -7,7 +7,6 @@
  * - Models must not depend on Livewire
  * - Models must not depend on Actions or Services (no business logic)
  */
-
 arch('models are classes')
     ->expect('App\Models')
     ->toBeClasses();

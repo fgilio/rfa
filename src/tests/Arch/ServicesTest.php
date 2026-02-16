@@ -8,7 +8,6 @@
  * - Services must not depend on Eloquent Models directly
  * - Services must not depend on the Http layer
  */
-
 arch('services are classes')
     ->expect('App\Services')
     ->toBeClasses();

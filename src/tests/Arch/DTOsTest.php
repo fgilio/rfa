@@ -10,7 +10,6 @@
  * - DTOs must implement nothing
  * - DTOs must use strict types
  */
-
 arch('dtos are classes')
     ->expect('App\DTOs')
     ->toBeClasses();

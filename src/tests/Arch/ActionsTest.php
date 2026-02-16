@@ -8,7 +8,6 @@
  * - Actions must not depend on Livewire
  * - Actions must not depend on Illuminate\Http
  */
-
 arch('actions are final readonly classes')
     ->expect('App\Actions')
     ->classes()

@@ -7,7 +7,6 @@
  * - Laravel preset conventions
  * - No suspicious characters in source files
  */
-
 arch('no debug functions in app code')
     ->expect(['dd', 'dump', 'ray', 'var_dump', 'print_r'])
     ->not->toBeUsed();
