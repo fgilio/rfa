@@ -27,3 +27,17 @@ arch('services do not use eloquent models directly')
 arch('services use strict types')
     ->expect('App\Services')
     ->toUseStrictTypes();
+
+test('services have a conventional suffix', function () {
+    $allowed = ['Service', 'Parser', 'Formatter', 'Exporter'];
+    $dir = dirname(__DIR__, 2).'/app/Services';
+    $files = glob($dir.'/*.php');
+
+    expect($files)->not->toBeEmpty();
+
+    foreach ($files as $file) {
+        $name = pathinfo($file, PATHINFO_FILENAME);
+        $valid = collect($allowed)->contains(fn ($s) => str_ends_with($name, $s));
+        expect($valid)->toBeTrue("{$name} must end with: ".implode(', ', $allowed));
+    }
+});
