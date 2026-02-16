@@ -27,7 +27,7 @@ afterEach(function () {
 test('exports JSON, markdown, and clipboard text', function () {
     File::put($this->tmpDir.'/hello.php', "<?php\necho 'changed';\n");
 
-    $fileId = 'file-'.md5('hello.php');
+    $fileId = 'file-'.hash('xxh128', 'hello.php');
     $files = [['id' => $fileId, 'path' => 'hello.php', 'isUntracked' => false]];
     $comments = [[
         'id' => 'c-1',

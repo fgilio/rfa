@@ -27,7 +27,7 @@ afterEach(function () {
 test('builds context snippets for commented lines', function () {
     File::put($this->tmpDir.'/hello.php', "<?php\necho 'changed';\necho 'world';\n");
 
-    $fileId = 'file-'.md5('hello.php');
+    $fileId = 'file-'.hash('xxh128', 'hello.php');
     $files = [['id' => $fileId, 'path' => 'hello.php', 'isUntracked' => false]];
     $comments = [[
         'id' => 'c-1',
@@ -47,7 +47,7 @@ test('builds context snippets for commented lines', function () {
 });
 
 test('skips file-level comments (null startLine)', function () {
-    $fileId = 'file-'.md5('hello.php');
+    $fileId = 'file-'.hash('xxh128', 'hello.php');
     $files = [['id' => $fileId, 'path' => 'hello.php', 'isUntracked' => false]];
     $comments = [[
         'id' => 'c-1',
@@ -70,7 +70,7 @@ test('skips tooLarge files gracefully', function () {
 
     config(['rfa.diff_max_bytes' => 100]);
 
-    $fileId = 'file-'.md5('hello.php');
+    $fileId = 'file-'.hash('xxh128', 'hello.php');
     $files = [['id' => $fileId, 'path' => 'hello.php', 'isUntracked' => false]];
     $comments = [[
         'id' => 'c-1',

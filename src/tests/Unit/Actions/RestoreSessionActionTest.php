@@ -58,7 +58,7 @@ test('remaps fileId to current file list', function () {
         'global_comment' => '',
     ]);
 
-    $currentId = 'file-'.md5('f.php');
+    $currentId = 'file-'.hash('xxh128', 'f.php');
     $files = [['id' => $currentId, 'path' => 'f.php']];
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
