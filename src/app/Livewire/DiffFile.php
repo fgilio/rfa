@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Livewire;
 
-use App\Actions\DiffCacheKey;
 use App\Actions\LoadFileDiffAction;
+use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Reactive;
