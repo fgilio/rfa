@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\DTOs\Comment;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class CommentExporter
 {
@@ -20,7 +21,7 @@ class CommentExporter
      */
     public function export(string $repoPath, array $comments, string $globalComment = '', array $diffContext = []): array
     {
-        $hash = substr(md5(json_encode($comments).$globalComment.time()), 0, 8);
+        $hash = Str::random(8);
         $now = date('Ymd_His');
         $basename = "{$now}_comments_{$hash}";
         $rfaDir = $repoPath.'/.rfa';

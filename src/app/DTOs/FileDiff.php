@@ -17,12 +17,17 @@ class FileDiff
         public readonly bool $isBinary = false,
     ) {}
 
-    /** @return array{hunks: array<int, array<string, mixed>>, tooLarge: bool} */
-    public function toViewArray(): array
+    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool} */
+    public function toArray(): array
     {
         return [
+            'path' => $this->path,
+            'status' => $this->status,
+            'oldPath' => $this->oldPath,
             'hunks' => array_map(fn (Hunk $hunk) => $hunk->toArray(), $this->hunks),
-            'tooLarge' => false,
+            'additions' => $this->additions,
+            'deletions' => $this->deletions,
+            'isBinary' => $this->isBinary,
         ];
     }
 }

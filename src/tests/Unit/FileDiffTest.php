@@ -10,16 +10,17 @@ beforeEach(function () {
     $this->faker->seed(crc32(static::class.$this->name()));
 });
 
-test('toViewArray returns hunks and tooLarge false', function () {
+test('toArray returns all expected keys', function () {
     $lines = [
         new DiffLine('context', $this->faker->sentence(), 1, 1),
         new DiffLine('add', $this->faker->sentence(), null, 2),
     ];
 
     $hunk = new Hunk('fn()', 1, 1, 1, 2, $lines);
+    $path = $this->faker->word().'.php';
 
     $fileDiff = new FileDiff(
-        path: $this->faker->word().'.php',
+        path: $path,
         status: 'modified',
         oldPath: null,
         hunks: [$hunk],
@@ -27,21 +28,27 @@ test('toViewArray returns hunks and tooLarge false', function () {
         deletions: 0,
     );
 
-    $view = $fileDiff->toViewArray();
+    $result = $fileDiff->toArray();
 
-    expect($view)->toHaveKeys(['hunks', 'tooLarge']);
-    expect($view['tooLarge'])->toBeFalse();
-    expect($view['hunks'])->toHaveCount(1);
-    expect($view['hunks'][0]['header'])->toBe('fn()');
-    expect($view['hunks'][0]['lines'])->toHaveCount(2);
-    expect($view['hunks'][0]['lines'][0])->toBe($lines[0]->toArray());
+    expect($result)->toHaveKeys(['path', 'status', 'oldPath', 'hunks', 'additions', 'deletions', 'isBinary'])
+        ->and($result['path'])->toBe($path)
+        ->and($result['status'])->toBe('modified')
+        ->and($result['oldPath'])->toBeNull()
+        ->and($result['hunks'])->toHaveCount(1)
+        ->and($result['hunks'][0]['header'])->toBe('fn()')
+        ->and($result['hunks'][0]['lines'])->toHaveCount(2)
+        ->and($result['hunks'][0]['lines'][0])->toBe($lines[0]->toArray())
+        ->and($result['additions'])->toBe(1)
+        ->and($result['deletions'])->toBe(0)
+        ->and($result['isBinary'])->toBeFalse();
 });
 
-test('toViewArray handles empty hunks', function () {
+test('toArray handles empty hunks', function () {
     $fileDiff = new FileDiff('f.php', 'added', null, [], 0, 0);
 
-    expect($fileDiff->toViewArray())->toBe([
-        'hunks' => [],
-        'tooLarge' => false,
-    ]);
+    $result = $fileDiff->toArray();
+
+    expect($result['hunks'])->toBe([])
+        ->and($result['path'])->toBe('f.php')
+        ->and($result['status'])->toBe('added');
 });

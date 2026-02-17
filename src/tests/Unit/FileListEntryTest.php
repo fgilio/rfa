@@ -8,12 +8,12 @@ beforeEach(function () {
     $this->faker->seed(crc32(static::class.$this->name()));
 });
 
-test('getId returns file- prefixed md5 of path', function () {
+test('getId returns file- prefixed hash of path', function () {
     $path = 'src/'.$this->faker->word().'/'.$this->faker->word().'.php';
 
     $entry = new FileListEntry($path, 'modified', null, 5, 2, false, false);
 
-    expect($entry->getId())->toBe('file-'.md5($path));
+    expect($entry->getId())->toBe('file-'.hash('xxh128', $path));
 });
 
 test('getId is deterministic', function () {
@@ -39,7 +39,7 @@ test('toArray includes all properties and computed id', function () {
     );
 
     expect($entry->toArray())->toBe([
-        'id' => 'file-'.md5($path),
+        'id' => 'file-'.hash('xxh128', $path),
         'path' => $path,
         'status' => 'modified',
         'oldPath' => null,

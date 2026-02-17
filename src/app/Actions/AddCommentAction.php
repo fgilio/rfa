@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use Illuminate\Support\Str;
+
 final readonly class AddCommentAction
 {
     /**
@@ -22,7 +24,7 @@ final readonly class AddCommentAction
         }
 
         return [
-            'id' => 'c-'.uniqid(),
+            'id' => 'c-'.Str::ulid(),
             'fileId' => $fileId,
             'file' => $file['path'],
             'side' => $side,

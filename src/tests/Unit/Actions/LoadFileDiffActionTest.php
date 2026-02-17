@@ -27,16 +27,17 @@ afterEach(function () {
     File::deleteDirectory($this->tmpDir);
 });
 
-test('returns view array for modified file', function () {
+test('returns full DTO array for modified file', function () {
     File::put($this->tmpDir.'/hello.txt', "line1\nline2\n");
 
     $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser);
     $result = $action->handle($this->tmpDir, 'hello.txt');
 
-    expect($result)->toHaveKeys(['hunks', 'tooLarge']);
-    expect($result['tooLarge'])->toBeFalse();
-    expect($result['hunks'])->toHaveCount(1);
-    expect($result['hunks'][0])->toHaveKeys(['header', 'oldStart', 'newStart', 'lines']);
+    expect($result)->toHaveKeys(['path', 'status', 'hunks', 'additions', 'deletions', 'isBinary', 'tooLarge'])
+        ->and($result['tooLarge'])->toBeFalse()
+        ->and($result['path'])->toBe('hello.txt')
+        ->and($result['hunks'])->toHaveCount(1)
+        ->and($result['hunks'][0])->toHaveKeys(['header', 'oldStart', 'newStart', 'lines']);
 });
 
 test('returns tooLarge true when diff exceeds limit', function () {
@@ -48,7 +49,13 @@ test('returns tooLarge true when diff exceeds limit', function () {
     $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser);
     $result = $action->handle($this->tmpDir, 'hello.txt');
 
-    expect($result)->toBe(['hunks' => [], 'tooLarge' => true]);
+    expect($result)->toHaveKeys(['path', 'status', 'oldPath', 'hunks', 'additions', 'deletions', 'isBinary', 'tooLarge'])
+        ->and($result['tooLarge'])->toBeTrue()
+        ->and($result['hunks'])->toBe([])
+        ->and($result['path'])->toBe('hello.txt')
+        ->and($result['additions'])->toBe(0)
+        ->and($result['deletions'])->toBe(0)
+        ->and($result['isBinary'])->toBeFalse();
 });
 
 test('returns null for empty diff', function () {
@@ -64,7 +71,8 @@ test('handles untracked file', function () {
     $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser);
     $result = $action->handle($this->tmpDir, 'newfile.txt', isUntracked: true);
 
-    expect($result)->not->toBeNull();
-    expect($result['hunks'])->toHaveCount(1);
-    expect($result['tooLarge'])->toBeFalse();
+    expect($result)->not->toBeNull()
+        ->and($result['hunks'])->toHaveCount(1)
+        ->and($result['tooLarge'])->toBeFalse()
+        ->and($result['path'])->toBe('newfile.txt');
 });

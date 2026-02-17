@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Services\GitDiffService;
+use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 
 final readonly class GetFileListAction

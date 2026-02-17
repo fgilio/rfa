@@ -14,13 +14,13 @@ final readonly class LoadFileDiffAction
         private DiffParser $diffParser,
     ) {}
 
-    /** @return array{hunks: array<int, array<string, mixed>>, tooLarge: bool}|null */
+    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool}|null */
     public function handle(string $repoPath, string $path, bool $isUntracked = false): ?array
     {
         $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked);
 
         if ($rawDiff === null) {
-            return ['hunks' => [], 'tooLarge' => true];
+            return ['path' => $path, 'status' => 'modified', 'oldPath' => null, 'hunks' => [], 'additions' => 0, 'deletions' => 0, 'isBinary' => false, 'tooLarge' => true];
         }
 
         if (trim($rawDiff) === '') {
@@ -33,6 +33,6 @@ final readonly class LoadFileDiffAction
             return null;
         }
 
-        return $fileDiff->toViewArray();
+        return $fileDiff->toArray() + ['tooLarge' => false];
     }
 }
