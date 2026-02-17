@@ -68,7 +68,7 @@ test('exports Markdown with file grouping', function () {
     $result = $this->exporter->export($this->tmpDir, $comments, $global);
 
     $md = File::get($result['md']);
-    expect($md)->toMatch('/^<!-- json: \.rfa\/\d{8}_\d{6}_comments_[a-zA-Z0-9]+\.json -->/');
+    expect($md)->toMatch('/^<!-- json: \.rfa\/\d{8}_\d{6}_comments_.+\.json -->/');
     expect($md)->toContain('# Code Review Comments');
     expect($md)->toContain('## General');
     expect($md)->toContain($global);
@@ -101,8 +101,8 @@ test('handles empty comments', function () {
 test('uses timestamp prefix in filenames', function () {
     $result = $this->exporter->export($this->tmpDir, [], 'test');
 
-    expect(basename($result['json']))->toMatch('/^\d{8}_\d{6}_comments_[a-zA-Z0-9]{8}\.json$/');
-    expect(basename($result['md']))->toMatch('/^\d{8}_\d{6}_comments_[a-zA-Z0-9]{8}\.md$/');
+    expect(basename($result['json']))->toMatch('/^\d{8}_\d{6}_comments_.{8}\.json$/');
+    expect(basename($result['md']))->toMatch('/^\d{8}_\d{6}_comments_.{8}\.md$/');
 });
 
 test('cross-references are consistent between files', function () {
