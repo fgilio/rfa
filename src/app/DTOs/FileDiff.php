@@ -17,7 +17,7 @@ class FileDiff
         public readonly bool $isBinary = false,
     ) {}
 
-    /** @return array<string, mixed> */
+    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool} */
     public function toArray(): array
     {
         return [

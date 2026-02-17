@@ -52,7 +52,7 @@ class DiffFile extends Component
         $ttl = now()->addHours(config('rfa.cache_ttl_hours', 24));
 
         $this->diffData = Cache::remember($this->diffCacheKey(), $ttl, fn () => app(LoadFileDiffAction::class)->handle($this->repoPath, $this->file['path'], $this->file['isUntracked'] ?? false)
-                ?? ['hunks' => [], 'tooLarge' => false]
+                ?? ['path' => $this->file['path'], 'status' => $this->file['status'] ?? 'modified', 'oldPath' => null, 'hunks' => [], 'additions' => 0, 'deletions' => 0, 'isBinary' => false, 'tooLarge' => false]
         );
     }
 

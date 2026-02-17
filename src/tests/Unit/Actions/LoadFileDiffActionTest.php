@@ -49,7 +49,13 @@ test('returns tooLarge true when diff exceeds limit', function () {
     $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser);
     $result = $action->handle($this->tmpDir, 'hello.txt');
 
-    expect($result)->toBe(['hunks' => [], 'tooLarge' => true]);
+    expect($result)->toHaveKeys(['path', 'status', 'oldPath', 'hunks', 'additions', 'deletions', 'isBinary', 'tooLarge'])
+        ->and($result['tooLarge'])->toBeTrue()
+        ->and($result['hunks'])->toBe([])
+        ->and($result['path'])->toBe('hello.txt')
+        ->and($result['additions'])->toBe(0)
+        ->and($result['deletions'])->toBe(0)
+        ->and($result['isBinary'])->toBeFalse();
 });
 
 test('returns null for empty diff', function () {
