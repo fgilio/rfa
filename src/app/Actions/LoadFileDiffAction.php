@@ -14,7 +14,7 @@ final readonly class LoadFileDiffAction
         private DiffParser $diffParser,
     ) {}
 
-    /** @return array{hunks: array<int, array<string, mixed>>, tooLarge: bool}|null */
+    /** @return array<string, mixed>|null */
     public function handle(string $repoPath, string $path, bool $isUntracked = false): ?array
     {
         $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked);
@@ -33,6 +33,6 @@ final readonly class LoadFileDiffAction
             return null;
         }
 
-        return ['hunks' => $fileDiff->toArray()['hunks'], 'tooLarge' => false];
+        return $fileDiff->toArray() + ['tooLarge' => false];
     }
 }
