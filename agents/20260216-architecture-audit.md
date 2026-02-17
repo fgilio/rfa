@@ -88,6 +88,8 @@ Option (a) would eliminate the DTO→array→DTO round-trip in `ExportReviewActi
 
 **Recommendation**: Move to `app/Services/` or a dedicated `app/Support/` namespace, since it's a shared utility.
 
+**Status**: Fixed - moved to `App\Support\DiffCacheKey`. Also replaced `md5` with `xxh128` for cache keys and file IDs. **Note**: this is a cache-breaking change - existing `ReviewSession` records referencing old `file-<md5>` IDs will have their comments pruned on next restore. Acceptable for a local dev tool with ephemeral sessions.
+
 ### 3.3 [Medium] Silent Git Failures
 
 **Problem**: `GitDiffService::runGit()` returns an empty string on failure (`GitDiffService.php:232-234`):
