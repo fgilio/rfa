@@ -29,15 +29,8 @@ arch('services use strict types')
     ->toUseStrictTypes();
 
 test('services have a conventional suffix', function () {
-    $allowed = ['Service', 'Parser', 'Formatter', 'Exporter'];
     $dir = dirname(__DIR__, 2).'/app/Services';
-    $files = glob($dir.'/*.php');
 
-    expect($files)->not->toBeEmpty();
-
-    foreach ($files as $file) {
-        $name = pathinfo($file, PATHINFO_FILENAME);
-        $valid = collect($allowed)->contains(fn ($s) => str_ends_with($name, $s));
-        expect($valid)->toBeTrue("{$name} must end with: ".implode(', ', $allowed));
-    }
+    expect(glob($dir.'/*.php'))->not->toBeEmpty()
+        ->each(fn ($file) => $file->toMatch('/(Service|Parser|Formatter|Exporter)\.php$/'));
 });
