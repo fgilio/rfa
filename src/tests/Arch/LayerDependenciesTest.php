@@ -5,6 +5,7 @@
  *
  *   Livewire → Actions → Services/DTOs → (nothing app-level)
  *                      → Models
+ *   Support ← (any layer, standalone utilities)
  *
  * Key rules:
  * - DTOs must not depend on any other app layer
@@ -21,6 +22,7 @@ arch('dtos are standalone and do not depend on other app layers')
         'App\Models',
         'App\Livewire',
         'App\Providers',
+        'App\Support',
     ]);
 
 arch('services do not depend on actions')
@@ -61,4 +63,14 @@ arch('dtos are only used in services and actions')
         'App\Services',
         'App\Actions',
         'App\DTOs',
+    ]);
+
+arch('support does not depend on other app layers')
+    ->expect('App\Support')
+    ->not->toUse([
+        'App\Actions',
+        'App\Services',
+        'App\Models',
+        'App\Livewire',
+        'App\Providers',
     ]);
