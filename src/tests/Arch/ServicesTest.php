@@ -28,6 +28,8 @@ arch('services use strict types')
     ->expect('App\Services')
     ->toUseStrictTypes();
 
+// Pest's toHaveSuffix() only accepts a single string, so we use glob + regex
+// to validate against multiple allowed suffixes.
 test('services have a conventional suffix', function () {
     $dir = dirname(__DIR__, 2).'/app/Services';
 
