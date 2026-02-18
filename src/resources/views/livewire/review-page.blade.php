@@ -1,13 +1,7 @@
 <div
     x-data="{
         activeFile: null,
-        viewedFiles: {
-            @foreach($files as $f)
-                @if(in_array($f['path'], $viewedFiles))
-                    '{{ $f['id'] }}': true,
-                @endif
-            @endforeach
-        },
+        viewedFiles: {{ Js::from((object) collect($files)->filter(fn($f) => in_array($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()) }},
         scrollToFile(id) {
             this.activeFile = id;
             this.$dispatch('expand-file', { id });
@@ -57,24 +51,24 @@
 
     <div class="flex">
         {{-- Sidebar --}}
-        <aside class="w-72 shrink-0 sticky top-[53px] h-[calc(100vh-53px)] overflow-y-auto border-r border-gh-border bg-gh-surface/50 hidden lg:block">
+        <aside class="w-72 shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-surface/50 hidden lg:block">
             <div class="p-3">
                 <flux:heading class="!text-xs uppercase tracking-wide mb-2">Files</flux:heading>
                 @foreach($files as $file)
+                    @php
+                        [$badgeColor, $badgeLabel] = match($file['status']) {
+                            'added' => ['green', 'A'],
+                            'deleted' => ['red', 'D'],
+                            'renamed' => ['yellow', 'R'],
+                            default => ['yellow', 'M'],
+                        };
+                    @endphp
                     <button
                         @click="scrollToFile('{{ $file['id'] }}')"
                         class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-gh-border/50 flex items-center gap-2 group transition-colors"
                         :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-border/50 text-gh-accent' : 'text-gh-text'"
                     >
-                        @if($file['status'] === 'added')
-                            <flux:badge variant="solid" color="green" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0">A</flux:badge>
-                        @elseif($file['status'] === 'deleted')
-                            <flux:badge variant="solid" color="red" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0">D</flux:badge>
-                        @elseif($file['status'] === 'renamed')
-                            <flux:badge variant="solid" color="yellow" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0">R</flux:badge>
-                        @else
-                            <flux:badge variant="solid" color="yellow" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0">M</flux:badge>
-                        @endif
+                        <flux:badge variant="solid" :color="$badgeColor" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0">{{ $badgeLabel }}</flux:badge>
                         <span class="truncate">{{ $file['path'] }}</span>
                         <flux:icon icon="check" variant="micro" x-show="viewedFiles['{{ $file['id'] }}']"
                             class="text-gh-green shrink-0" x-cloak />

@@ -64,7 +64,7 @@
     class="group"
 >
     {{-- File header --}}
-    <div class="sticky top-[53px] z-10 bg-gh-surface border-b border-gh-border px-4 py-2 flex items-center gap-2">
+    <div class="sticky top-[var(--header-h)] z-10 bg-gh-surface border-b border-gh-border px-4 py-2 flex items-center gap-2">
         <button @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }" class="text-gh-muted hover:text-gh-text transition-colors">
             <flux:icon icon="chevron-down" variant="micro" x-show="!collapsed" />
             <flux:icon icon="chevron-right" variant="micro" x-show="collapsed" x-cloak />
@@ -136,6 +136,7 @@
                 <flux:text variant="subtle" size="sm">No content changes</flux:text>
             </div>
         @else
+            @php $commentsByLine = collect($fileComments)->where('side', '!=', 'file')->groupBy('endLine'); @endphp
             <div class="overflow-x-auto">
                 <table class="w-full border-collapse font-mono text-xs leading-5">
                     @foreach($diffData['hunks'] as $hunkIndex => $hunk)
@@ -229,30 +230,28 @@
                             @endif
 
                             {{-- Show saved comments inline --}}
-                            @foreach($fileComments as $comment)
-                                @if($comment['endLine'] === ($lineNum ?? -1) && $comment['side'] !== 'file')
-                                    <tr>
-                                        <td colspan="4" class="p-0">
-                                            <div class="comment-indicator bg-gh-surface/80 border-y border-gh-border px-4 py-2">
-                                                <div class="flex items-start justify-between gap-2">
-                                                    <flux:text size="sm" class="whitespace-pre-wrap">{{ $comment['body'] }}</flux:text>
-                                                    <flux:tooltip content="Delete comment">
-                                                        <flux:button
-                                                            icon="x-mark"
-                                                            variant="ghost"
-                                                            size="xs"
-                                                            @click="$wire.dispatch('delete-comment', { commentId: '{{ $comment['id'] }}' })"
-                                                            class="shrink-0 hover:!text-red-400"
-                                                        />
-                                                    </flux:tooltip>
-                                                </div>
-                                                @if($comment['startLine'] !== $comment['endLine'] && $comment['endLine'] !== null)
-                                                    <flux:text variant="subtle" size="sm" class="!text-[10px] mt-1">Lines {{ $comment['startLine'] }}-{{ $comment['endLine'] }}</flux:text>
-                                                @endif
+                            @foreach(($commentsByLine[$lineNum] ?? collect()) as $comment)
+                                <tr>
+                                    <td colspan="4" class="p-0">
+                                        <div class="comment-indicator bg-gh-surface/80 border-y border-gh-border px-4 py-2">
+                                            <div class="flex items-start justify-between gap-2">
+                                                <flux:text size="sm" class="whitespace-pre-wrap">{{ $comment['body'] }}</flux:text>
+                                                <flux:tooltip content="Delete comment">
+                                                    <flux:button
+                                                        icon="x-mark"
+                                                        variant="ghost"
+                                                        size="xs"
+                                                        @click="$wire.dispatch('delete-comment', { commentId: '{{ $comment['id'] }}' })"
+                                                        class="shrink-0 hover:!text-red-400"
+                                                    />
+                                                </flux:tooltip>
                                             </div>
-                                        </td>
-                                    </tr>
-                                @endif
+                                            @if($comment['startLine'] !== $comment['endLine'] && $comment['endLine'] !== null)
+                                                <flux:text variant="subtle" size="sm" class="!text-[10px] mt-1">Lines {{ $comment['startLine'] }}-{{ $comment['endLine'] }}</flux:text>
+                                            @endif
+                                        </div>
+                                    </td>
+                                </tr>
                             @endforeach
                         @endforeach
                     @endforeach

@@ -45,6 +45,7 @@
         @endphp
 
         :root {
+            --header-h: 53px;
             @foreach($lightColors as $key => $value)
             --gh-{{ $key }}: {{ $value }};
             @endforeach
