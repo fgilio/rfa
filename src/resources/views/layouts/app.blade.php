@@ -76,6 +76,13 @@
             width: 3px;
             background: rgb(var(--gh-accent));
         }
+        /* Phiki syntax highlighting */
+        .diff-line td span[style] { background-color: transparent !important; }
+        .dark .diff-line td span[style] {
+            color: var(--phiki-dark-color, inherit) !important;
+            font-style: var(--phiki-dark-font-style) !important;
+        }
+
         /* Scrollbar styling */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: var(--gh-scrollbar-track); }

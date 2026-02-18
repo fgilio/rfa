@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Livewire;
 
 use App\Actions\LoadFileDiffAction;
+use App\DTOs\FileDiff;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
@@ -51,8 +52,11 @@ class DiffFile extends Component
 
         $ttl = now()->addHours(config('rfa.cache_ttl_hours', 24));
 
-        $this->diffData = Cache::remember($this->diffCacheKey(), $ttl, fn () => app(LoadFileDiffAction::class)->handle($this->repoPath, $this->file['path'], $this->file['isUntracked'] ?? false)
-                ?? ['path' => $this->file['path'], 'status' => $this->file['status'] ?? 'modified', 'oldPath' => null, 'hunks' => [], 'additions' => 0, 'deletions' => 0, 'isBinary' => false, 'tooLarge' => false]
+        $this->diffData = Cache::remember(
+            $this->diffCacheKey(),
+            $ttl,
+            fn () => app(LoadFileDiffAction::class)->handle($this->repoPath, $this->file['path'], $this->file['isUntracked'] ?? false)
+                ?? FileDiff::emptyArray($this->file['path'], $this->file['status'] ?? 'modified', tooLarge: false),
         );
     }
 

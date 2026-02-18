@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\FileDiff;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
+use App\Services\SyntaxHighlightService;
 
 final readonly class LoadFileDiffAction
 {
     public function __construct(
         private GitDiffService $gitDiffService,
         private DiffParser $diffParser,
+        private SyntaxHighlightService $syntaxHighlightService,
     ) {}
 
     /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool}|null */
@@ -20,7 +23,7 @@ final readonly class LoadFileDiffAction
         $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked);
 
         if ($rawDiff === null) {
-            return ['path' => $path, 'status' => 'modified', 'oldPath' => null, 'hunks' => [], 'additions' => 0, 'deletions' => 0, 'isBinary' => false, 'tooLarge' => true];
+            return FileDiff::emptyArray($path, 'modified', tooLarge: true);
         }
 
         if (trim($rawDiff) === '') {
@@ -33,6 +36,8 @@ final readonly class LoadFileDiffAction
             return null;
         }
 
-        return $fileDiff->toArray() + ['tooLarge' => false];
+        $highlightedHunks = $this->syntaxHighlightService->highlightHunks($fileDiff->hunks, $fileDiff->path);
+
+        return $fileDiff->withHunks($highlightedHunks)->toArray() + ['tooLarge' => false];
     }
 }

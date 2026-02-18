@@ -57,12 +57,13 @@ arch('services are only used in actions and services')
         'App\Services',
     ]);
 
-arch('dtos are only used in services and actions')
+arch('dtos are only used in services, actions, and livewire')
     ->expect('App\DTOs')
     ->toOnlyBeUsedIn([
         'App\Services',
         'App\Actions',
         'App\DTOs',
+        'App\Livewire',
     ]);
 
 arch('support does not depend on other app layers')

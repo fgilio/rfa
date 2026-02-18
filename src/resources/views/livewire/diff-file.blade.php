@@ -198,7 +198,7 @@
                                 </td>
 
                                 {{-- Content --}}
-                                <td class="px-2 whitespace-pre-wrap break-all">{{ $line['content'] }}</td>
+                                <td class="px-2 whitespace-pre-wrap break-all">{!! $line['highlightedContent'] ?? e($line['content']) !!}</td>
                             </tr>
 
                             {{-- Inline comment form (shows after the target line) --}}

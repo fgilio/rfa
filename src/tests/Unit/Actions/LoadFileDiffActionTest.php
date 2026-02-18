@@ -4,6 +4,7 @@ use App\Actions\LoadFileDiffAction;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
 use App\Services\IgnoreService;
+use App\Services\SyntaxHighlightService;
 use Illuminate\Support\Facades\File;
 
 uses(Tests\TestCase::class);
@@ -30,7 +31,7 @@ afterEach(function () {
 test('returns full DTO array for modified file', function () {
     File::put($this->tmpDir.'/hello.txt', "line1\nline2\n");
 
-    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser);
+    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
     $result = $action->handle($this->tmpDir, 'hello.txt');
 
     expect($result)->toHaveKeys(['path', 'status', 'hunks', 'additions', 'deletions', 'isBinary', 'tooLarge'])
@@ -46,7 +47,7 @@ test('returns tooLarge true when diff exceeds limit', function () {
     // Use a very low maxBytes config
     config(['rfa.diff_max_bytes' => 100]);
 
-    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser);
+    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
     $result = $action->handle($this->tmpDir, 'hello.txt');
 
     expect($result)->toHaveKeys(['path', 'status', 'oldPath', 'hunks', 'additions', 'deletions', 'isBinary', 'tooLarge'])
@@ -59,7 +60,7 @@ test('returns tooLarge true when diff exceeds limit', function () {
 });
 
 test('returns null for empty diff', function () {
-    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser);
+    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
     $result = $action->handle($this->tmpDir, 'nonexistent.txt', isUntracked: true);
 
     expect($result)->toBeNull();
@@ -68,11 +69,46 @@ test('returns null for empty diff', function () {
 test('handles untracked file', function () {
     File::put($this->tmpDir.'/newfile.txt', "hello\nworld\n");
 
-    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser);
+    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
     $result = $action->handle($this->tmpDir, 'newfile.txt', isUntracked: true);
 
     expect($result)->not->toBeNull()
         ->and($result['hunks'])->toHaveCount(1)
         ->and($result['tooLarge'])->toBeFalse()
         ->and($result['path'])->toBe('newfile.txt');
+});
+
+// -- syntax highlighting --
+
+test('adds highlightedContent for known file types', function () {
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'hi';\n");
+    exec('cd '.escapeshellarg($this->tmpDir).' && git add -A && git commit -m "add php"');
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'hello';\n");
+
+    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
+    $result = $action->handle($this->tmpDir, 'hello.php');
+
+    expect($result)->not->toBeNull()
+        ->and($result['hunks'])->toHaveCount(1);
+
+    $hasHighlighted = collect($result['hunks'][0]['lines'])
+        ->contains(fn ($line) => isset($line['highlightedContent']));
+
+    expect($hasHighlighted)->toBeTrue();
+});
+
+test('no highlightedContent for unknown file types', function () {
+    File::put($this->tmpDir.'/data.xyz', "some content\n");
+    exec('cd '.escapeshellarg($this->tmpDir).' && git add -A && git commit -m "add xyz"');
+    File::put($this->tmpDir.'/data.xyz', "updated content\n");
+
+    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
+    $result = $action->handle($this->tmpDir, 'data.xyz');
+
+    expect($result)->not->toBeNull();
+
+    $hasHighlighted = collect($result['hunks'][0]['lines'])
+        ->contains(fn ($line) => isset($line['highlightedContent']));
+
+    expect($hasHighlighted)->toBeFalse();
 });
