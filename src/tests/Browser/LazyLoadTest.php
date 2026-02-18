@@ -40,12 +40,7 @@ test('expanding collapsed file triggers diff load', function () {
     $page->assertDontSee('function greet');
 
     // Expand just the hello.php file via sidebar click
-    $page->script("
-        const buttons = document.querySelectorAll('aside button');
-        // Find the button containing 'hello.php'
-        const btn = [...buttons].find(b => b.textContent.includes('hello.php'));
-        if (btn) btn.click();
-    ");
+    $page->page()->getByRole('button', ['name' => 'hello.php'])->click();
 
     // Diff content should load after expand triggers x-intersect
     $page->assertSee('function greet');
@@ -71,8 +66,8 @@ test('export works with lazily loaded diffs', function () {
     $page->assertSee('function greet');
 
     // Click first line number to open comment form
-    $page->script("document.querySelectorAll('td.diff-line-num')[0].click()");
-    $page->type('[placeholder*="Write a comment"]', 'Lazy load export test');
+    $page->page()->getByTestId('diff-line-number')->first()->click();
+    $page->page()->getByPlaceholder('Write a comment', false)->fill('Lazy load export test');
     $page->press('Save');
     $page->assertSee('Lazy load export test');
 

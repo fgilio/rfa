@@ -13,8 +13,6 @@ afterEach(function () {
     $this->tearDownTestRepo();
 });
 
-const CLICK_LINE_SUBMIT = "document.querySelectorAll('td.diff-line-num')[0].click()";
-
 test('submit button disabled when no comments and no global comment', function () {
     $this->visit('/')
         ->assertButtonDisabled('Submit Review');
@@ -23,8 +21,8 @@ test('submit button disabled when no comments and no global comment', function (
 test('submit button enables after adding a comment', function () {
     $page = $this->visit('/');
 
-    $page->script(CLICK_LINE_SUBMIT);
-    $page->type('[placeholder*="Write a comment"]', 'Review comment');
+    $page->page()->getByTestId('diff-line-number')->first()->click();
+    $page->page()->getByPlaceholder('Write a comment', false)->fill('Review comment');
     $page->press('Save');
 
     $page->assertButtonEnabled('Submit Review');
@@ -33,8 +31,8 @@ test('submit button enables after adding a comment', function () {
 test('submitting shows success state with review submitted', function () {
     $page = $this->visit('/');
 
-    $page->script(CLICK_LINE_SUBMIT);
-    $page->type('[placeholder*="Write a comment"]', 'Looks good');
+    $page->page()->getByTestId('diff-line-number')->first()->click();
+    $page->page()->getByPlaceholder('Write a comment', false)->fill('Looks good');
     $page->press('Save');
 
     $page->pressAndWaitFor('Submit Review', 3);
@@ -47,7 +45,7 @@ test('submitting with only global comment works', function () {
 
     // Set global comment directly via Livewire JS API (bypasses wire:model.blur timing issues)
     $page->script("
-        const wireId = document.querySelector('[wire\\\\:id]').getAttribute('wire:id');
+        const wireId = document.querySelector('[data-testid=\"review-component\"]').getAttribute('wire:id');
         Livewire.find(wireId).set('globalComment', 'Overall LGTM');
     ");
     // Wait for Livewire to process (assertButtonEnabled auto-retries ~5s)
@@ -60,8 +58,8 @@ test('submitting with only global comment works', function () {
 test('export creates rfa directory with json and md files on disk', function () {
     $page = $this->visit('/');
 
-    $page->script(CLICK_LINE_SUBMIT);
-    $page->type('[placeholder*="Write a comment"]', 'Export test comment');
+    $page->page()->getByTestId('diff-line-number')->first()->click();
+    $page->page()->getByPlaceholder('Write a comment', false)->fill('Export test comment');
     $page->press('Save');
     $page->pressAndWaitFor('Submit Review', 3);
 
