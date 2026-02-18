@@ -9,7 +9,7 @@ beforeEach(function () {
     $this->faker->seed(crc32(static::class.$this->name()));
 });
 
-test('toArray serializes header, starts, and lines', function () {
+test('toArray serializes header, starts, counts, and lines', function () {
     $header = 'function '.$this->faker->word().'()';
     $oldStart = $this->faker->numberBetween(1, 100);
     $newStart = $this->faker->numberBetween(1, 100);
@@ -26,7 +26,9 @@ test('toArray serializes header, starts, and lines', function () {
 
     expect($array['header'])->toBe($header);
     expect($array['oldStart'])->toBe($oldStart);
+    expect($array['oldCount'])->toBe(2);
     expect($array['newStart'])->toBe($newStart);
+    expect($array['newCount'])->toBe(2);
     expect($array['lines'])->toHaveCount(3);
     expect($array['lines'][0])->toBe($lines[0]->toArray());
     expect($array['lines'][1]['type'])->toBe('remove');
@@ -37,4 +39,14 @@ test('toArray handles empty lines', function () {
     $hunk = new Hunk('', 1, 0, 1, 0, []);
 
     expect($hunk->toArray()['lines'])->toBeEmpty();
+});
+
+test('toArray includes oldCount and newCount', function () {
+    $hunk = new Hunk('fn()', 10, 5, 10, 7, []);
+
+    $array = $hunk->toArray();
+
+    expect($array)->toHaveKeys(['oldCount', 'newCount'])
+        ->and($array['oldCount'])->toBe(5)
+        ->and($array['newCount'])->toBe(7);
 });

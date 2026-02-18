@@ -22,7 +22,9 @@ class Hunk
         return [
             'header' => $this->header,
             'oldStart' => $this->oldStart,
+            'oldCount' => $this->oldCount,
             'newStart' => $this->newStart,
+            'newCount' => $this->newCount,
             'lines' => array_map(fn (DiffLine $line) => $line->toArray(), $this->lines),
         ];
     }
