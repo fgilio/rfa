@@ -65,7 +65,7 @@
 >
     {{-- File header --}}
     <div data-testid="file-header" class="sticky top-[var(--header-h)] z-10 bg-gh-surface border-b border-gh-border px-4 py-2 flex items-center gap-2">
-        <button aria-label="Collapse file" @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }" class="text-gh-muted hover:text-gh-text transition-colors">
+        <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'" @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }" class="text-gh-muted hover:text-gh-text transition-colors">
             <flux:icon icon="chevron-down" variant="micro" x-show="!collapsed" />
             <flux:icon icon="chevron-right" variant="micro" x-show="collapsed" x-cloak />
         </button>

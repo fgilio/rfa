@@ -24,7 +24,7 @@ test('clicking chevron collapses and expands file diff', function () {
     $page->assertDontSee("'debug'");
 
     // Expand again
-    $page->page()->getByLabel('Collapse file')->first()->click();
+    $page->page()->getByLabel('Expand file')->first()->click();
 
     $page->assertSee("'debug'");
 });
