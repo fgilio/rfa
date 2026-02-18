@@ -1,4 +1,5 @@
 <div
+    data-testid="review-component"
     x-data="{
         activeFile: null,
         viewedFiles: {{ Js::from((object) collect($files)->filter(fn($f) => in_array($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()) }},

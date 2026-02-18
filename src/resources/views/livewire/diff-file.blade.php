@@ -64,8 +64,8 @@
     class="group"
 >
     {{-- File header --}}
-    <div class="sticky top-[var(--header-h)] z-10 bg-gh-surface border-b border-gh-border px-4 py-2 flex items-center gap-2">
-        <button @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }" class="text-gh-muted hover:text-gh-text transition-colors">
+    <div data-testid="file-header" class="sticky top-[var(--header-h)] z-10 bg-gh-surface border-b border-gh-border px-4 py-2 flex items-center gap-2">
+        <button aria-label="Collapse file" @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }" class="text-gh-muted hover:text-gh-text transition-colors">
             <flux:icon icon="chevron-down" variant="micro" x-show="!collapsed" />
             <flux:icon icon="chevron-right" variant="micro" x-show="collapsed" x-cloak />
         </button>
@@ -99,6 +99,7 @@
                     icon="chat-bubble-left"
                     variant="ghost"
                     size="sm"
+                    aria-label="Add file comment"
                     @click="draftLine = null; draftEndLine = null; draftSide = 'file'; showDraft = true; $nextTick(() => $refs.commentInput?.focus())"
                     class="ml-2"
                 />
@@ -176,7 +177,7 @@
                                 :class="isLineInDraft({{ $lineNum ?? 'null' }}) ? 'line-selected' : ''"
                             >
                                 {{-- Old line number --}}
-                                <td class="diff-line-num w-[1px] px-2 text-right text-gh-muted/50 select-none {{ $numBgClass }}"
+                                <td data-testid="diff-line-number" class="diff-line-num w-[1px] px-2 text-right text-gh-muted/50 select-none {{ $numBgClass }}"
                                     @if($line['oldLineNum'])
                                         @click="selectLine({{ $line['oldLineNum'] }}, 'left', $event)"
                                     @endif
@@ -185,7 +186,7 @@
                                 </td>
 
                                 {{-- New line number --}}
-                                <td class="diff-line-num w-[1px] px-2 text-right text-gh-muted/50 select-none {{ $numBgClass }}"
+                                <td data-testid="diff-line-number" class="diff-line-num w-[1px] px-2 text-right text-gh-muted/50 select-none {{ $numBgClass }}"
                                     @if($line['newLineNum'])
                                         @click="selectLine({{ $line['newLineNum'] }}, 'right', $event)"
                                     @endif
@@ -241,6 +242,7 @@
                                                         icon="x-mark"
                                                         variant="ghost"
                                                         size="xs"
+                                                        aria-label="Delete comment"
                                                         @click="$wire.dispatch('delete-comment', { commentId: '{{ $comment['id'] }}' })"
                                                         class="shrink-0 hover:!text-red-400"
                                                     />
@@ -291,6 +293,7 @@
                                 icon="x-mark"
                                 variant="ghost"
                                 size="xs"
+                                aria-label="Delete comment"
                                 @click="$wire.dispatch('delete-comment', { commentId: '{{ $comment['id'] }}' })"
                                 class="shrink-0 hover:!text-red-400"
                             />
