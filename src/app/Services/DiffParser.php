@@ -96,9 +96,6 @@ class DiffParser
         $hunks = [];
         $additions = 0;
         $deletions = 0;
-        $hunkContent = '';
-        $inHunk = false;
-
         // Find where hunks start (after --- and +++ lines)
         $hunkStartIndex = $headerEnd;
         for ($i = $headerEnd; $i < count($lines); $i++) {
