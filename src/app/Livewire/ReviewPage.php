@@ -13,6 +13,7 @@ use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\Actions\ToggleViewedAction;
 use Flux;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -108,14 +109,9 @@ class ReviewPage extends Component
         $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
     }
 
-    /** @return array<int, array<string, mixed>> */
-    public function getFileComments(string $fileId): array
-    {
-        return $this->groupedComments()[$fileId] ?? [];
-    }
-
     /** @return array<string, array<int, array<string, mixed>>> */
-    private function groupedComments(): array
+    #[Computed]
+    public function groupedComments(): array
     {
         return collect($this->comments)->groupBy('fileId')->map->values()->map->all()->all();
     }

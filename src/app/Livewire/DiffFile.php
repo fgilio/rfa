@@ -21,7 +21,6 @@ class DiffFile extends Component
     #[Locked]
     public string $repoPath = '';
 
-    #[Reactive]
     public bool $isViewed = false;
 
     /** @var array<int, array<string, mixed>> */

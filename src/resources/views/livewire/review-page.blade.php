@@ -107,7 +107,7 @@
                         <livewire:diff-file
                             :key="$file['id']"
                             :file="$file"
-                            :file-comments="$this->getFileComments($file['id'])"
+                            :file-comments="$this->groupedComments[$file['id']] ?? []"
                             :is-viewed="in_array($file['path'], $viewedFiles)"
                             :repo-path="$repoPath"
                         />
