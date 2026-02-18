@@ -39,7 +39,7 @@ class CommentExporter
             'created_at' => date('c'),
             'markdown_file' => ".rfa/{$basename}.md",
             'global_comment' => $globalComment,
-            'comments' => array_map(fn (Comment $c) => $c->toArray(), $comments),
+            'comments' => array_map(fn (Comment $c) => $c->toExportArray(), $comments),
         ];
 
         // Build Markdown

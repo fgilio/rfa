@@ -1,6 +1,7 @@
 <?php
 
 use App\DTOs\Comment;
+use App\Enums\DiffSide;
 use App\Services\MarkdownFormatter;
 use Faker\Factory as Faker;
 
@@ -32,8 +33,8 @@ test('groups comments by file', function () {
     } while ($fileB === $fileA);
 
     $comments = [
-        new Comment($this->faker->uuid(), $fileA, 'right', 1, 1, 'comment A'),
-        new Comment($this->faker->uuid(), $fileB, 'right', 5, 5, 'comment B'),
+        new Comment($this->faker->uuid(), 'file-1', $fileA, DiffSide::Right, 1, 1, 'comment A'),
+        new Comment($this->faker->uuid(), 'file-2', $fileB, DiffSide::Right, 5, 5, 'comment B'),
     ];
 
     $md = $this->formatter->format($comments, '', []);
@@ -47,7 +48,7 @@ test('groups comments by file', function () {
 test('formats single line reference', function () {
     $line = $this->faker->numberBetween(1, 100);
     $comments = [
-        new Comment($this->faker->uuid(), 'f.php', 'right', $line, $line, 'body'),
+        new Comment($this->faker->uuid(), 'file-abc', 'f.php', DiffSide::Right, $line, $line, 'body'),
     ];
 
     $md = $this->formatter->format($comments, '', []);
@@ -59,7 +60,7 @@ test('formats multi-line range', function () {
     $start = $this->faker->numberBetween(1, 50);
     $end = $start + $this->faker->numberBetween(1, 20);
     $comments = [
-        new Comment($this->faker->uuid(), 'f.php', 'right', $start, $end, 'body'),
+        new Comment($this->faker->uuid(), 'file-abc', 'f.php', DiffSide::Right, $start, $end, 'body'),
     ];
 
     $md = $this->formatter->format($comments, '', []);
@@ -70,7 +71,7 @@ test('formats multi-line range', function () {
 test('includes diff context snippet when available', function () {
     $snippet = '+added line';
     $comments = [
-        new Comment('id', 'f.php', 'right', 10, 10, 'body'),
+        new Comment('id', 'file-abc', 'f.php', DiffSide::Right, 10, 10, 'body'),
     ];
 
     $md = $this->formatter->format($comments, '', ['f.php:10:10' => $snippet]);
@@ -81,7 +82,7 @@ test('includes diff context snippet when available', function () {
 test('handles file-level comment without line reference', function () {
     $body = $this->faker->sentence();
     $comments = [
-        new Comment($this->faker->uuid(), 'f.php', 'file', null, null, $body),
+        new Comment($this->faker->uuid(), 'file-abc', 'f.php', DiffSide::File, null, null, $body),
     ];
 
     $md = $this->formatter->format($comments, '', []);

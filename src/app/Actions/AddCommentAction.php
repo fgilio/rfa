@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Enums\DiffSide;
 use Illuminate\Support\Str;
 
 final readonly class AddCommentAction
@@ -18,8 +19,8 @@ final readonly class AddCommentAction
             return null;
         }
 
-        $file = collect($files)->firstWhere('id', $fileId);
-        if (! $file || ! in_array($side, ['left', 'right', 'file'])) {
+        $file = collect($files)->keyBy('id')->get($fileId);
+        if (! $file || DiffSide::tryFrom($side) === null) {
             return null;
         }
 

@@ -21,14 +21,7 @@ final readonly class ExportReviewAction
      */
     public function handle(string $repoPath, array $comments, string $globalComment, array $files): array
     {
-        $commentDTOs = array_map(fn ($c) => new Comment(
-            id: $c['id'],
-            file: $c['file'],
-            side: $c['side'],
-            startLine: $c['startLine'],
-            endLine: $c['endLine'],
-            body: $c['body'],
-        ), $comments);
+        $commentDTOs = array_map(fn ($c) => Comment::fromArray($c), $comments);
 
         $diffContext = $this->buildDiffContextAction->handle($repoPath, $comments, $files);
 

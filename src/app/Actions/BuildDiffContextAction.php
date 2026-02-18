@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Enums\DiffSide;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 
@@ -22,13 +23,14 @@ final readonly class BuildDiffContextAction
     {
         $context = [];
         $loaded = [];
+        $filesById = collect($files)->keyBy('id');
 
         foreach ($comments as $comment) {
             if ($comment['startLine'] === null) {
                 continue;
             }
 
-            $file = collect($files)->firstWhere('id', $comment['fileId']);
+            $file = $filesById->get($comment['fileId']);
             if (! $file) {
                 continue;
             }
@@ -46,7 +48,7 @@ final readonly class BuildDiffContextAction
                 continue;
             }
 
-            $useOld = $comment['side'] === 'left';
+            $useOld = $comment['side'] === DiffSide::Left->value;
             $lines = [];
             foreach ($diffData['hunks'] as $hunk) {
                 foreach ($hunk['lines'] as $line) {

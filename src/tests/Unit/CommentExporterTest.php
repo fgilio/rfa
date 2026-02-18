@@ -1,6 +1,7 @@
 <?php
 
 use App\DTOs\Comment;
+use App\Enums\DiffSide;
 use App\Services\CommentExporter;
 use App\Services\MarkdownFormatter;
 use Faker\Factory as Faker;
@@ -20,14 +21,14 @@ afterEach(function () {
     File::deleteDirectory($this->tmpDir);
 });
 
-test('exports JSON with schema version', function () {
+test('exports JSON with schema version and snake_case keys', function () {
     $file = $this->faker->word().'.php';
     $line = $this->faker->numberBetween(1, 200);
     $body = $this->faker->sentence();
     $global = $this->faker->paragraph();
 
     $comments = [
-        new Comment($this->faker->uuid(), $file, 'right', $line, $line, $body),
+        new Comment($this->faker->uuid(), 'file-abc', $file, DiffSide::Right, $line, $line, $body),
     ];
 
     $result = $this->exporter->export($this->tmpDir, $comments, $global);
@@ -42,6 +43,7 @@ test('exports JSON with schema version', function () {
     expect($json['comments'][0]['file'])->toBe($file);
     expect($json['comments'][0]['start_line'])->toBe($line);
     expect($json['comments'][0]['body'])->toBe($body);
+    expect($json['comments'][0])->not->toHaveKey('fileId');
     expect($json['markdown_file'])->toMatch('/^\.rfa\/\d{8}_\d{6}_comments_.*\.md$/');
 });
 
@@ -60,9 +62,9 @@ test('exports Markdown with file grouping', function () {
     $lineC = $this->faker->numberBetween(1, 100);
 
     $comments = [
-        new Comment($this->faker->uuid(), $fileA, 'right', $lineA, $lineA, $bodyA),
-        new Comment($this->faker->uuid(), $fileA, 'right', $lineB1, $lineB2, $bodyB),
-        new Comment($this->faker->uuid(), $fileB, 'right', $lineC, $lineC, $bodyC),
+        new Comment($this->faker->uuid(), 'file-1', $fileA, DiffSide::Right, $lineA, $lineA, $bodyA),
+        new Comment($this->faker->uuid(), 'file-1', $fileA, DiffSide::Right, $lineB1, $lineB2, $bodyB),
+        new Comment($this->faker->uuid(), 'file-2', $fileB, DiffSide::Right, $lineC, $lineC, $bodyC),
     ];
 
     $result = $this->exporter->export($this->tmpDir, $comments, $global);
