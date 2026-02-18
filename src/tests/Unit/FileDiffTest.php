@@ -52,3 +52,37 @@ test('toArray handles empty hunks', function () {
         ->and($result['path'])->toBe('f.php')
         ->and($result['status'])->toBe('added');
 });
+
+test('withHunks returns new instance with replaced hunks', function () {
+    $original = new FileDiff('f.php', 'modified', null, [], 1, 0);
+    $newHunks = [new Hunk('fn()', 1, 1, 1, 1, [new DiffLine('add', 'new', null, 1)])];
+
+    $updated = $original->withHunks($newHunks);
+
+    expect($updated)->not->toBe($original)
+        ->and($updated->hunks)->toBe($newHunks)
+        ->and($updated->path)->toBe('f.php')
+        ->and($updated->additions)->toBe(1);
+});
+
+test('emptyArray returns tooLarge array structure', function () {
+    $result = FileDiff::emptyArray('big.php', 'modified', tooLarge: true);
+
+    expect($result)->toBe([
+        'path' => 'big.php',
+        'status' => 'modified',
+        'oldPath' => null,
+        'hunks' => [],
+        'additions' => 0,
+        'deletions' => 0,
+        'isBinary' => false,
+        'tooLarge' => true,
+    ]);
+});
+
+test('emptyArray returns non-tooLarge array structure', function () {
+    $result = FileDiff::emptyArray('empty.php', 'added', tooLarge: false);
+
+    expect($result['tooLarge'])->toBeFalse()
+        ->and($result['status'])->toBe('added');
+});

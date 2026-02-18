@@ -11,16 +11,23 @@ class DiffLine
         public readonly string $content,
         public readonly ?int $oldLineNum,
         public readonly ?int $newLineNum,
+        public readonly ?string $highlightedContent = null,
     ) {}
 
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return [
+        $array = [
             'type' => $this->type,
             'content' => $this->content,
             'oldLineNum' => $this->oldLineNum,
             'newLineNum' => $this->newLineNum,
         ];
+
+        if ($this->highlightedContent !== null) {
+            $array['highlightedContent'] = $this->highlightedContent;
+        }
+
+        return $array;
     }
 }

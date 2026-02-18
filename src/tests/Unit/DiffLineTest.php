@@ -32,3 +32,20 @@ test('toArray handles null line numbers', function () {
     expect($array['oldLineNum'])->toBeNull();
     expect($array['newLineNum'])->toBeInt();
 });
+
+test('toArray includes highlightedContent when set', function () {
+    $highlighted = '<span style="color:#000">code</span>';
+
+    $line = new DiffLine('add', 'code', null, 1, $highlighted);
+
+    $array = $line->toArray();
+
+    expect($array)->toHaveKey('highlightedContent')
+        ->and($array['highlightedContent'])->toBe($highlighted);
+});
+
+test('toArray omits highlightedContent when null', function () {
+    $line = new DiffLine('context', 'code', 1, 1);
+
+    expect($line->toArray())->not->toHaveKey('highlightedContent');
+});
