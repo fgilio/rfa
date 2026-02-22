@@ -89,6 +89,7 @@ class ReviewPage extends Component
 
         $this->viewedFiles = $result;
         $this->saveSession();
+        $this->skipRender();
     }
 
     public function updatedGlobalComment(): void
