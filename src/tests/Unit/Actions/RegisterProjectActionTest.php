@@ -12,7 +12,7 @@ beforeEach(function () {
     File::makeDirectory($this->testRepoPath, 0755, true);
 
     File::put($this->testRepoPath.'/file.txt', 'hello');
-    exec('cd '.escapeshellarg($this->testRepoPath).' && git init && git config user.email "t@t" && git config user.name "T" && git add -A && git commit -m "init" 2>&1');
+    exec('cd '.escapeshellarg($this->testRepoPath).' && git init -b main && git config user.email "t@t" && git config user.name "T" && git add -A && git commit -m "init" 2>&1');
 });
 
 afterEach(function () {
@@ -55,7 +55,7 @@ test('handles slug collisions with suffix', function () {
     File::makeDirectory($path2.'/'.basename($this->testRepoPath), 0755, true);
     $duplicatePath = $path2.'/'.basename($this->testRepoPath);
     File::put($duplicatePath.'/file.txt', 'world');
-    exec('cd '.escapeshellarg($duplicatePath).' && git init && git config user.email "t@t" && git config user.name "T" && git add -A && git commit -m "init" 2>&1');
+    exec('cd '.escapeshellarg($duplicatePath).' && git init -b main && git config user.email "t@t" && git config user.name "T" && git add -A && git commit -m "init" 2>&1');
 
     $first = app(RegisterProjectAction::class)->handle($this->testRepoPath);
     $second = app(RegisterProjectAction::class)->handle($duplicatePath);

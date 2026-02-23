@@ -36,7 +36,7 @@ trait CreatesTestRepo
 
         // Init + config + commit in a single shell to avoid any exec isolation issues
         $this->runShell(implode(' && ', [
-            'git init',
+            'git init -b main',
             "git config user.email 'test@rfa.test'",
             "git config user.name 'RFA Test'",
             'git add -A',
@@ -82,7 +82,7 @@ trait CreatesTestRepo
         File::put($this->testRepoPath.'/README.md', "# Test\n");
 
         $this->runShell(implode(' && ', [
-            'git init',
+            'git init -b main',
             "git config user.email 'test@rfa.test'",
             "git config user.name 'RFA Test'",
             'git add -A',

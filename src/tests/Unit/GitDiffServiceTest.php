@@ -48,7 +48,7 @@ function initRepo(string $dir): void
 {
     exec(implode(' && ', [
         'cd '.escapeshellarg($dir),
-        'git init',
+        'git init -b main',
         "git config user.email 'test@rfa.test'",
         "git config user.name 'RFA Test'",
     ]));
