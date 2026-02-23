@@ -15,7 +15,7 @@
         >
             <div class="flex-1">
                 <flux:textarea
-                    wire:model.blur="globalComment"
+                    wire:model.live.debounce.500ms="globalComment"
                     placeholder="Overall review comment (optional)"
                     rows="1"
                     resize="none"

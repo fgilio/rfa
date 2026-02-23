@@ -43,12 +43,7 @@ test('submitting shows success state with review submitted', function () {
 test('submitting with only global comment works', function () {
     $page = $this->visit($this->projectUrl());
 
-    // Set global comment directly via Livewire JS API (bypasses wire:model.blur timing issues)
-    $page->script("
-        const wireId = document.querySelector('[data-testid=\"review-component\"]').getAttribute('wire:id');
-        Livewire.find(wireId).set('globalComment', 'Overall LGTM');
-    ");
-    // Wait for Livewire to process (assertButtonEnabled auto-retries ~5s)
+    $page->page()->getByPlaceholder('Overall review comment', false)->fill('Overall LGTM');
     $page->assertButtonEnabled('Submit Review');
     $page->pressAndWaitFor('Submit Review', 3);
 
