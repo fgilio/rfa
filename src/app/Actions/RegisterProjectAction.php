@@ -39,7 +39,7 @@ final readonly class RegisterProjectAction
         }
 
         $gitDir = $this->git->getGitDir($directory);
-        $isWorktree = $gitDir !== '' && $gitCommonDir !== '' && $gitDir !== $gitCommonDir;
+        $isWorktree = $gitDir !== '' && $gitDir !== $gitCommonDir;
 
         $branch = $this->git->getCurrentBranch($directory);
         $name = basename($path);
