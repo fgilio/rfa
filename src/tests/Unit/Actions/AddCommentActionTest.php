@@ -51,3 +51,20 @@ test('accepts file-level comments with null lines', function () {
     expect($result['startLine'])->toBeNull();
     expect($result['endLine'])->toBeNull();
 });
+
+// -- impossible-state guards --
+
+test('returns null for file-level comment with line numbers', function () {
+    expect($this->action->handle($this->files, 'file-abc', 'file', 1, 5, 'body'))->toBeNull();
+    expect($this->action->handle($this->files, 'file-abc', 'file', 1, null, 'body'))->toBeNull();
+    expect($this->action->handle($this->files, 'file-abc', 'file', null, 5, 'body'))->toBeNull();
+});
+
+test('returns null for line comment with null startLine', function () {
+    expect($this->action->handle($this->files, 'file-abc', 'right', null, 5, 'body'))->toBeNull();
+    expect($this->action->handle($this->files, 'file-abc', 'left', null, null, 'body'))->toBeNull();
+});
+
+test('returns null when startLine exceeds endLine', function () {
+    expect($this->action->handle($this->files, 'file-abc', 'right', 10, 5, 'body'))->toBeNull();
+});

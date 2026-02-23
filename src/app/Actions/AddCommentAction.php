@@ -24,6 +24,18 @@ final readonly class AddCommentAction
             return null;
         }
 
+        if ($side === 'file' && ($startLine !== null || $endLine !== null)) {
+            return null;
+        }
+
+        if ($side !== 'file' && $startLine === null) {
+            return null;
+        }
+
+        if ($startLine !== null && $endLine !== null && $startLine > $endLine) {
+            return null;
+        }
+
         return [
             'id' => 'c-'.Str::ulid(),
             'fileId' => $fileId,
