@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ReviewSession extends Model
 {
-    protected $fillable = ['repo_path', 'viewed_files', 'comments', 'global_comment'];
+    protected $fillable = ['repo_path', 'project_id', 'viewed_files', 'comments', 'global_comment'];
 
     protected function casts(): array
     {

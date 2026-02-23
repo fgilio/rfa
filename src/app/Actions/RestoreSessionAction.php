@@ -12,9 +12,11 @@ final readonly class RestoreSessionAction
      * @param  array<int, array<string, mixed>>  $currentFiles
      * @return array{comments: array<int, array<string, mixed>>, viewedFiles: array<int, string>, globalComment: string}
      */
-    public function handle(string $repoPath, array $currentFiles): array
+    public function handle(string $repoPath, array $currentFiles, ?int $projectId = null): array
     {
-        $session = ReviewSession::firstOrCreate(['repo_path' => $repoPath]);
+        $key = $projectId ? ['project_id' => $projectId] : ['repo_path' => $repoPath];
+
+        $session = ReviewSession::firstOrCreate($key, ['repo_path' => $repoPath]);
 
         $currentPaths = collect($currentFiles)->pluck('path')->all();
         $fileIdMap = collect($currentFiles)->pluck('id', 'path')->all();

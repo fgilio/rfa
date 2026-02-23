@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\RestoreSessionAction;
+use App\Models\Project;
 use App\Models\ReviewSession;
 use Faker\Factory as Faker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -64,4 +65,29 @@ test('remaps fileId to current file list', function () {
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
 
     expect($result['comments'][0]['fileId'])->toBe($currentId);
+});
+
+test('keys by project_id when provided', function () {
+    $project = Project::create([
+        'slug' => 'test-proj',
+        'name' => 'test-proj',
+        'path' => '/tmp/test-proj',
+        'git_common_dir' => '/tmp/test-proj/.git',
+        'is_worktree' => false,
+    ]);
+
+    ReviewSession::create([
+        'repo_path' => '/tmp/test-proj',
+        'project_id' => $project->id,
+        'comments' => [['id' => 'c-1', 'file' => 'f.php', 'fileId' => 'x']],
+        'viewed_files' => [],
+        'global_comment' => 'from project',
+    ]);
+
+    $files = [['id' => 'file-new', 'path' => 'f.php']];
+
+    $result = app(RestoreSessionAction::class)->handle('/tmp/test-proj', $files, $project->id);
+
+    expect($result['globalComment'])->toBe('from project');
+    expect($result['comments'])->toHaveCount(1);
 });

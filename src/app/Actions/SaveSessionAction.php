@@ -12,11 +12,14 @@ final readonly class SaveSessionAction
      * @param  array<int, array<string, mixed>>  $comments
      * @param  array<int, string>  $viewedFiles
      */
-    public function handle(string $repoPath, array $comments, array $viewedFiles, string $globalComment): void
+    public function handle(string $repoPath, array $comments, array $viewedFiles, string $globalComment, ?int $projectId = null): void
     {
+        $key = $projectId ? ['project_id' => $projectId] : ['repo_path' => $repoPath];
+
         ReviewSession::updateOrCreate(
-            ['repo_path' => $repoPath],
+            $key,
             [
+                'repo_path' => $repoPath,
                 'viewed_files' => $viewedFiles,
                 'comments' => $comments,
                 'global_comment' => $globalComment,
