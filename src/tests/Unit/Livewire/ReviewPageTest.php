@@ -4,7 +4,6 @@ use App\Actions\GetFileListAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
-use App\Livewire\ReviewPage;
 use Livewire\Livewire;
 
 uses(Tests\TestCase::class);
@@ -56,14 +55,14 @@ beforeEach(function () {
 });
 
 test('toggleViewed updates viewedFiles state', function () {
-    $component = Livewire::test(ReviewPage::class, ['slug' => 'test-project'])
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->dispatch('toggle-viewed', filePath: 'src/Foo.php');
 
     expect($component->get('viewedFiles'))->toBe(['src/Foo.php']);
 });
 
 test('toggleViewed skips parent re-render', function () {
-    $component = Livewire::test(ReviewPage::class, ['slug' => 'test-project'])
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->dispatch('toggle-viewed', filePath: 'src/Foo.php');
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();

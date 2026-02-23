@@ -1,3 +1,20 @@
+<?php
+
+use App\Actions\ListProjectsAction;
+use Livewire\Attributes\Layout;
+use Livewire\Component;
+
+new #[Layout('layouts.app')] class extends Component {
+    /** @var array<string, array<int, array<string, mixed>>> */
+    public array $projectGroups = [];
+
+    public function mount(): void
+    {
+        $this->projectGroups = app(ListProjectsAction::class)->handle();
+    }
+};
+?>
+
 <div class="min-h-screen">
     <header class="sticky top-0 z-50 bg-gh-surface border-b border-gh-border px-4 py-3 flex items-center justify-between">
         <flux:heading size="lg">rfa</flux:heading>

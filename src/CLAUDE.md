@@ -11,7 +11,7 @@
 - **Actions** (`app/Actions/`) - Business logic. Each action is a single use-case callable from any interface (Livewire, CLI, API). Convention: `final readonly class`, `handle()` method, `Action` suffix.
 - **Services** (`app/Services/`) - Domain operations. Stateless classes that handle specific technical concerns (git ops, diff parsing, markdown formatting, file ignoring). Injected into Actions.
 - **DTOs** (`app/DTOs/`) - Immutable data containers with `readonly` properties and `toArray()` serialization. Carry data between layers.
-- **Livewire** (`app/Livewire/`) - Thin UI adapters. Handle events, manage component state, delegate to Actions. No business logic.
+- **Livewire SFCs** (`resources/views/pages/`, `resources/views/livewire/`) - Thin UI adapters as single-file components. Handle events, manage component state, delegate to Actions. No business logic. Pages use `pages::` namespace; non-page components use default namespace.
 - **Models** (`app/Models/`) - Eloquent persistence. Minimal - no business logic.
 
 ### Adding New Features

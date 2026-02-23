@@ -1,3 +1,72 @@
+<?php
+
+use App\Actions\LoadFileDiffAction;
+use App\Support\DiffCacheKey;
+use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\Locked;
+use Livewire\Component;
+
+new class extends Component {
+    /** @var array<string, mixed> */
+    #[Locked]
+    public array $file = [];
+
+    #[Locked]
+    public string $repoPath = '';
+
+    #[Locked]
+    public int $projectId = 0;
+
+    #[Locked]
+    public int $loadDelay = 0;
+
+    public bool $isViewed = false;
+
+    /** @var array<int, array<string, mixed>> */
+    public array $fileComments = [];
+
+    /** @var array<string, mixed>|null */
+    protected ?array $diffData = null;
+
+    public function hydrate(): void
+    {
+        $this->diffData = Cache::get($this->diffCacheKey());
+    }
+
+    /** @param array<int, array<string, mixed>> $comments */
+    public function updateComments(array $comments): void
+    {
+        $this->fileComments = $comments;
+    }
+
+    public function loadFileDiff(): void
+    {
+        if ($this->diffData !== null) {
+            return;
+        }
+
+        $this->diffData = app(LoadFileDiffAction::class)->handle(
+            $this->repoPath,
+            $this->file['path'],
+            $this->file['isUntracked'] ?? false,
+            cacheKey: $this->diffCacheKey(),
+        );
+    }
+
+    private function diffCacheKey(): string
+    {
+        $key = $this->projectId > 0 ? $this->projectId : $this->repoPath;
+
+        return DiffCacheKey::for($key, $this->file['id']);
+    }
+
+    public function render(): \Illuminate\Contracts\View\View
+    {
+        return $this->view(['diffData' => $this->diffData]);
+    }
+};
+?>
+
 {{-- Single file diff rendering --}}
 <div
     x-data="{
@@ -157,20 +226,10 @@
                         @foreach($hunk['lines'] as $lineIndex => $line)
                             @php
                                 $lineNum = $line['newLineNum'] ?? $line['oldLineNum'];
-                                $bgClass = match($line['type']) {
-                                    'add' => 'bg-gh-add-bg',
-                                    'remove' => 'bg-gh-del-bg',
-                                    default => '',
-                                };
-                                $numBgClass = match($line['type']) {
-                                    'add' => 'bg-gh-add-line',
-                                    'remove' => 'bg-gh-del-line',
-                                    default => '',
-                                };
-                                $prefix = match($line['type']) {
-                                    'add' => '+',
-                                    'remove' => '-',
-                                    default => ' ',
+                                [$bgClass, $numBgClass, $prefix] = match($line['type']) {
+                                    'add' => ['bg-gh-add-bg', 'bg-gh-add-line', '+'],
+                                    'remove' => ['bg-gh-del-bg', 'bg-gh-del-line', '-'],
+                                    default => ['', '', ' '],
                                 };
                             @endphp
                             <tr
