@@ -17,15 +17,16 @@ final readonly class GetFileListAction
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function handle(string $repoPath, bool $clearCache = true): array
+    public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null): array
     {
         $fileList = $this->gitDiffService->getFileList($repoPath);
 
         $files = array_map(fn ($entry) => $entry->toArray(), $fileList);
 
         if ($clearCache) {
+            $cacheKey = $projectId ?? $repoPath;
             foreach ($files as $file) {
-                Cache::forget(DiffCacheKey::for($repoPath, $file['id']));
+                Cache::forget(DiffCacheKey::for($cacheKey, $file['id']));
             }
         }
 

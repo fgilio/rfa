@@ -6,8 +6,8 @@ namespace App\Support;
 
 final class DiffCacheKey
 {
-    public static function for(string $repoPath, string $fileId): string
+    public static function for(int|string $projectIdOrRepoPath, string $fileId): string
     {
-        return 'rfa_diff_v2_'.hash('xxh128', $repoPath.':'.$fileId);
+        return 'rfa_diff_v3_'.hash('xxh128', $projectIdOrRepoPath.':'.$fileId);
     }
 }

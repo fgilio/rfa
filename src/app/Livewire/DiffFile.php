@@ -21,6 +21,9 @@ class DiffFile extends Component
     public string $repoPath = '';
 
     #[Locked]
+    public int $projectId = 0;
+
+    #[Locked]
     public int $loadDelay = 0;
 
     public bool $isViewed = false;
@@ -68,7 +71,9 @@ class DiffFile extends Component
 
     private function diffCacheKey(): string
     {
-        return DiffCacheKey::for($this->repoPath, $this->file['id']);
+        $key = $this->projectId > 0 ? $this->projectId : $this->repoPath;
+
+        return DiffCacheKey::for($key, $this->file['id']);
     }
 
     public function render(): \Illuminate\Contracts\View\View
