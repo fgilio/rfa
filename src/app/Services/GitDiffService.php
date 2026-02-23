@@ -224,6 +224,47 @@ class GitDiffService
         return $diff;
     }
 
+    public function getTopLevel(string $directory): string
+    {
+        return trim($this->runGit($directory, ['rev-parse', '--show-toplevel']));
+    }
+
+    public function getGitCommonDir(string $directory): string
+    {
+        $raw = trim($this->runGit($directory, ['rev-parse', '--git-common-dir']));
+
+        if ($raw === '' || $raw === '.git') {
+            return '';
+        }
+
+        // git may return relative path - resolve it
+        if (! str_starts_with($raw, '/')) {
+            $raw = $directory.'/'.$raw;
+        }
+
+        return (string) realpath($raw);
+    }
+
+    public function getGitDir(string $directory): string
+    {
+        $raw = trim($this->runGit($directory, ['rev-parse', '--git-dir']));
+
+        if ($raw === '') {
+            return '';
+        }
+
+        if (! str_starts_with($raw, '/')) {
+            $raw = $directory.'/'.$raw;
+        }
+
+        return (string) realpath($raw);
+    }
+
+    public function getCurrentBranch(string $directory): string
+    {
+        return trim($this->runGit($directory, ['rev-parse', '--abbrev-ref', 'HEAD']));
+    }
+
     /** @param array<int, string> $args */
     private function runGit(string $repoPath, array $args): string
     {
