@@ -14,7 +14,7 @@ afterEach(function () {
 });
 
 test('file list loads immediately and diffs load lazily', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     // Sidebar file names render immediately from metadata
     $page->assertSee('hello.php');
@@ -26,7 +26,7 @@ test('file list loads immediately and diffs load lazily', function () {
 });
 
 test('expanding collapsed file triggers diff load', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     // Wait for diffs to load before collapsing (prevents race with child Livewire round-trips)
     $page->assertSee('function greet');
@@ -53,14 +53,14 @@ test('file too large shows warning instead of diff', function () {
     // Set a low threshold so the file is considered too large
     config(['rfa.diff_max_bytes' => 500_000]);
 
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->assertSee('huge.txt');
     $page->assertSee('File diff too large to display');
 });
 
 test('export works with lazily loaded diffs', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     // Wait for diff to load (auto-retry)
     $page->assertSee('function greet');

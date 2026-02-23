@@ -3,10 +3,13 @@
 namespace Tests\Browser\Helpers;
 
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 
 trait CreatesTestRepo
 {
     protected string $testRepoPath = '';
+
+    protected string $testProjectSlug = '';
 
     protected function setUpTestRepo(): void
     {
@@ -67,8 +70,11 @@ trait CreatesTestRepo
         // Delete config.php
         File::delete($this->testRepoPath.'/config.php');
 
-        // Point app at this repo via env var (shared process with amphp server)
+        // Set env var (shared with amphp server process - auto-registers via AppServiceProvider)
         $_ENV['RFA_REPO_PATH'] = $this->testRepoPath;
+
+        // Predict slug (matches RegisterProjectAction's slug generation)
+        $this->testProjectSlug = Str::slug(basename($this->testRepoPath));
     }
 
     protected function setUpEmptyTestRepo(): void
@@ -92,7 +98,11 @@ trait CreatesTestRepo
             throw new \RuntimeException("Git setup failed: HEAD not established. Output: {$head}");
         }
 
+        // Set env var (shared with amphp server process - auto-registers via AppServiceProvider)
         $_ENV['RFA_REPO_PATH'] = $this->testRepoPath;
+
+        // Predict slug (matches RegisterProjectAction's slug generation)
+        $this->testProjectSlug = Str::slug(basename($this->testRepoPath));
     }
 
     protected function addLargeFile(string $name = 'large.txt', int $bytes = 600_000): void
@@ -107,6 +117,11 @@ trait CreatesTestRepo
         if ($this->testRepoPath !== '' && File::isDirectory($this->testRepoPath)) {
             $this->removeDir($this->testRepoPath);
         }
+    }
+
+    protected function projectUrl(): string
+    {
+        return '/p/'.$this->testProjectSlug;
     }
 
     private function runShell(string $command): string

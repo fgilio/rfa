@@ -13,7 +13,7 @@ afterEach(function () {
 });
 
 test('clicking chevron collapses and expands file diff', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->assertSee('return [');
 
@@ -30,7 +30,7 @@ test('clicking chevron collapses and expands file diff', function () {
 });
 
 test('shift+c collapses all files', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->assertSee('function greet');
 
@@ -45,7 +45,7 @@ test('shift+c collapses all files', function () {
 });
 
 test('shift+e expands all files', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     // Wait for lazy-loaded diff to appear before collapsing
     $page->assertSee('function greet');
@@ -71,7 +71,7 @@ test('shift+e expands all files', function () {
 });
 
 test('checking viewed updates sidebar indicator', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->page()->getByLabel('Viewed')->first()->click();
 
@@ -79,7 +79,7 @@ test('checking viewed updates sidebar indicator', function () {
 });
 
 test('clicking sidebar file scrolls to it', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     // Click the last sidebar button (utils.php)
     $page->page()->getByRole('button', ['name' => 'utils.php'])->click();
@@ -89,7 +89,7 @@ test('clicking sidebar file scrolls to it', function () {
 });
 
 test('file comment button opens form and save displays comment', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     // Click file comment button
     $page->page()->getByLabel('Add file comment')->first()->click();
@@ -104,7 +104,7 @@ test('file comment button opens form and save displays comment', function () {
 });
 
 test('clicking delete x removes a comment', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Delete me');

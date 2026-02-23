@@ -13,7 +13,7 @@ afterEach(function () {
 });
 
 test('clicking line number opens comment form with focused textarea', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
 
@@ -22,7 +22,7 @@ test('clicking line number opens comment form with focused textarea', function (
 });
 
 test('saving comment displays it inline below the target line', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('This needs refactoring');
@@ -32,7 +32,7 @@ test('saving comment displays it inline below the target line', function () {
 });
 
 test('canceling comment form clears the draft', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->assertSee('Cancel');
@@ -43,7 +43,7 @@ test('canceling comment form clears the draft', function () {
 });
 
 test('cmd+enter keyboard shortcut saves comment', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Keyboard shortcut test');
@@ -55,7 +55,7 @@ test('cmd+enter keyboard shortcut saves comment', function () {
 });
 
 test('escape keyboard shortcut cancels comment', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->assertSee('Cancel');
@@ -66,7 +66,7 @@ test('escape keyboard shortcut cancels comment', function () {
 });
 
 test('shift+click selects a line range', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     // Click first line number
     $page->page()->getByTestId('diff-line-number')->first()->click();

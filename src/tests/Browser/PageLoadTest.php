@@ -15,14 +15,14 @@ afterEach(function () {
 test('page loads with header showing repo name and file count', function () {
     $repoName = basename($this->testRepoPath);
 
-    $this->visit('/')
+    $this->visit($this->projectUrl())
         ->assertSee('rfa')
         ->assertSee($repoName)
         ->assertSee('3 files');
 });
 
 test('sidebar lists all changed files with correct status badges', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->assertSee('config.php');
     $page->assertSee('hello.php');
@@ -38,13 +38,13 @@ test('sidebar lists all changed files with correct status badges', function () {
 });
 
 test('diff shows addition and deletion lines with correct prefixes', function () {
-    $this->visit('/')
+    $this->visit($this->projectUrl())
         ->assertSee('function greet(string $name): string {')
         ->assertSee('function greet($name) {');
 });
 
 test('addition and deletion badge counts are correct in header', function () {
-    $this->visit('/')
+    $this->visit($this->projectUrl())
         ->assertSee('+6')
         ->assertSee('-7');
 });

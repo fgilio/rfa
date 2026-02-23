@@ -13,7 +13,7 @@ afterEach(function () {
 });
 
 test('inline comments persist after page reload', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Persistent comment');
@@ -25,7 +25,7 @@ test('inline comments persist after page reload', function () {
 });
 
 test('global comment persists after page reload', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     // Set global comment directly via Livewire JS API (bypasses wire:model.blur timing issues)
     $page->script("
@@ -42,7 +42,7 @@ test('global comment persists after page reload', function () {
 });
 
 test('viewed files persist after page reload', function () {
-    $page = $this->visit('/');
+    $page = $this->visit($this->projectUrl());
 
     $page->page()->getByLabel('Viewed')->first()->click();
     // Wait for Livewire round-trip to complete before refreshing
