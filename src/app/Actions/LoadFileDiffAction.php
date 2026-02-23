@@ -8,6 +8,7 @@ use App\DTOs\FileDiff;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
 use App\Services\SyntaxHighlightService;
+use Illuminate\Support\Facades\Cache;
 
 final readonly class LoadFileDiffAction
 {
@@ -17,27 +18,35 @@ final readonly class LoadFileDiffAction
         private SyntaxHighlightService $syntaxHighlightService,
     ) {}
 
-    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool}|null */
-    public function handle(string $repoPath, string $path, bool $isUntracked = false): ?array
+    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool} */
+    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null): array
     {
-        $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked);
+        $compute = function () use ($repoPath, $path, $isUntracked): array {
+            $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked);
 
-        if ($rawDiff === null) {
-            return FileDiff::emptyArray($path, 'modified', tooLarge: true);
+            if ($rawDiff === null) {
+                return FileDiff::emptyArray($path, 'modified', tooLarge: true);
+            }
+
+            if (trim($rawDiff) === '') {
+                return FileDiff::emptyArray($path, 'modified', tooLarge: false);
+            }
+
+            $fileDiff = $this->diffParser->parseSingle($rawDiff);
+
+            if (! $fileDiff) {
+                return FileDiff::emptyArray($path, 'modified', tooLarge: false);
+            }
+
+            $highlightedHunks = $this->syntaxHighlightService->highlightHunks($fileDiff->hunks, $fileDiff->path);
+
+            return $fileDiff->withHunks($highlightedHunks)->toArray() + ['tooLarge' => false];
+        };
+
+        if ($cacheKey) {
+            return Cache::remember($cacheKey, now()->addHours(config('rfa.cache_ttl_hours', 24)), $compute);
         }
 
-        if (trim($rawDiff) === '') {
-            return null;
-        }
-
-        $fileDiff = $this->diffParser->parseSingle($rawDiff);
-
-        if (! $fileDiff) {
-            return null;
-        }
-
-        $highlightedHunks = $this->syntaxHighlightService->highlightHunks($fileDiff->hunks, $fileDiff->path);
-
-        return $fileDiff->withHunks($highlightedHunks)->toArray() + ['tooLarge' => false];
+        return $compute();
     }
 }

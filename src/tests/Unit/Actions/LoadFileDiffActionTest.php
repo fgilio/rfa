@@ -59,11 +59,12 @@ test('returns tooLarge true when diff exceeds limit', function () {
         ->and($result['isBinary'])->toBeFalse();
 });
 
-test('returns null for empty diff', function () {
+test('returns empty array for empty diff', function () {
     $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
     $result = $action->handle($this->tmpDir, 'nonexistent.txt', isUntracked: true);
 
-    expect($result)->toBeNull();
+    expect($result['hunks'])->toBe([])
+        ->and($result['tooLarge'])->toBeFalse();
 });
 
 test('handles untracked file', function () {
