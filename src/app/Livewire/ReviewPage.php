@@ -8,7 +8,7 @@ use App\Actions\AddCommentAction;
 use App\Actions\DeleteCommentAction;
 use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
-use App\Actions\ResolveRepoPathAction;
+use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\Actions\ToggleViewedAction;
@@ -31,6 +31,14 @@ class ReviewPage extends Component
 
     public string $repoPath = '';
 
+    public int $projectId = 0;
+
+    public string $projectName = '';
+
+    public string $projectBranch = '';
+
+    public string $projectSlug = '';
+
     public ?string $exportResult = null;
 
     public bool $submitted = false;
@@ -40,12 +48,18 @@ class ReviewPage extends Component
 
     public ?string $activeFileId = null;
 
-    public function mount(): void
+    public function mount(string $slug): void
     {
-        $this->repoPath = app(ResolveRepoPathAction::class)->handle();
-        $this->files = app(GetFileListAction::class)->handle($this->repoPath);
+        $project = app(ResolveProjectAction::class)->handle($slug);
+        $this->repoPath = $project['path'];
+        $this->projectId = $project['id'];
+        $this->projectName = $project['name'];
+        $this->projectBranch = $project['branch'] ?? '';
+        $this->projectSlug = $project['slug'];
 
-        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files);
+        $this->files = app(GetFileListAction::class)->handle($this->repoPath, projectId: $this->projectId);
+
+        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId);
         $this->comments = $session['comments'];
         $this->viewedFiles = $session['viewedFiles'];
         $this->globalComment = $session['globalComment'];
@@ -136,7 +150,7 @@ class ReviewPage extends Component
 
     private function saveSession(): void
     {
-        app(SaveSessionAction::class)->handle($this->repoPath, $this->comments, $this->viewedFiles, $this->globalComment);
+        app(SaveSessionAction::class)->handle($this->repoPath, $this->comments, $this->viewedFiles, $this->globalComment, $this->projectId);
     }
 
     public function render(): \Illuminate\Contracts\View\View

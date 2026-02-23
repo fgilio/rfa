@@ -22,8 +22,11 @@
     {{-- Header --}}
     <header class="sticky top-0 z-50 bg-gh-surface border-b border-gh-border px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <flux:heading size="lg">rfa</flux:heading>
-            <flux:text variant="subtle" size="sm">{{ basename($repoPath) }}</flux:text>
+            <a href="/" class="hover:opacity-80 transition-opacity"><flux:heading size="lg">rfa</flux:heading></a>
+            <flux:text variant="subtle" size="sm">{{ $projectName }}</flux:text>
+            @if($projectBranch)
+                <flux:badge size="sm" variant="outline">{{ $projectBranch }}</flux:badge>
+            @endif
         </div>
         <div class="flex items-center gap-3 text-xs">
             <flux:text variant="subtle" size="sm" inline>{{ count($files) }} {{ Str::plural('file', count($files)) }}</flux:text>
@@ -106,6 +109,7 @@
                             :file-comments="$this->groupedComments[$file['id']] ?? []"
                             :is-viewed="in_array($file['path'], $viewedFiles)"
                             :repo-path="$repoPath"
+                            :project-id="$projectId"
                         />
                     </div>
                 @endforeach

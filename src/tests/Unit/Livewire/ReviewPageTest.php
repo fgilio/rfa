@@ -1,7 +1,7 @@
 <?php
 
 use App\Actions\GetFileListAction;
-use App\Actions\ResolveRepoPathAction;
+use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\Livewire\ReviewPage;
@@ -17,11 +17,17 @@ beforeEach(function () {
 
     $files = $this->files;
 
-    app()->bind(ResolveRepoPathAction::class, fn () => new class
+    app()->bind(ResolveProjectAction::class, fn () => new class
     {
-        public function handle(): string
+        public function handle(string $slug): array
         {
-            return '/tmp/repo';
+            return [
+                'path' => '/tmp/repo',
+                'id' => 1,
+                'name' => 'Test Project',
+                'branch' => 'main',
+                'slug' => 'test-project',
+            ];
         }
     });
 
@@ -50,14 +56,14 @@ beforeEach(function () {
 });
 
 test('toggleViewed updates viewedFiles state', function () {
-    $component = Livewire::test(ReviewPage::class)
+    $component = Livewire::test(ReviewPage::class, ['slug' => 'test-project'])
         ->dispatch('toggle-viewed', filePath: 'src/Foo.php');
 
     expect($component->get('viewedFiles'))->toBe(['src/Foo.php']);
 });
 
 test('toggleViewed skips parent re-render', function () {
-    $component = Livewire::test(ReviewPage::class)
+    $component = Livewire::test(ReviewPage::class, ['slug' => 'test-project'])
         ->dispatch('toggle-viewed', filePath: 'src/Foo.php');
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
