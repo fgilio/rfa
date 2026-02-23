@@ -45,3 +45,17 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `updatedGlobalComment` | Yes | No UI change needed server-side |
 | `toggleViewed` | Yes | Sidebar state managed client-side via Alpine |
 | `submitReview` | No | Replaces entire submit bar UI (submitted state) |
+
+### Event Schema
+
+| Event | Dispatched by | Received by | Payload |
+|---|---|---|---|
+| `add-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{fileId, side, startLine, endLine, body}` |
+| `delete-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{commentId}` |
+| `toggle-viewed` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{filePath}` |
+| `comment-updated` | ReviewPage PHP dispatch | DiffFile Alpine `@window` | `{fileId, comments}` |
+| `copy-to-clipboard` | ReviewPage PHP dispatch | ReviewPage Alpine `@window` | `{text}` |
+| `file-viewed-changed` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{id, viewed}` |
+| `collapse-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
+| `expand-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
+| `expand-file` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | `{id}` |

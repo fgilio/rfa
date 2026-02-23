@@ -23,5 +23,5 @@
 ### Key Patterns
 - Actions that need DB state (e.g. `RestoreSessionAction`, `SaveSessionAction`) read/write internally. Stateless actions receive data via parameters for reuse across interfaces.
 - Actions use constructor injection for service dependencies
-- Caching is the caller's responsibility, not the Action's. Use `DiffCacheKey::for()` for diff cache keys.
+- Actions may accept an optional `cacheKey` param for opt-in caching (e.g. `LoadFileDiffAction`). Use `DiffCacheKey::for()` for diff cache keys.
 - DTOs provide `toArray()` for serialization
