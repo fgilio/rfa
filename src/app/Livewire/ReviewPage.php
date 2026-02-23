@@ -62,11 +62,15 @@ class ReviewPage extends Component
 
         $this->comments[] = $comment;
         $this->saveSession();
+        $this->dispatchFileComments($fileId);
+        $this->skipRender();
     }
 
     #[On('delete-comment')]
     public function deleteComment(string $commentId): void
     {
+        $fileId = collect($this->comments)->firstWhere('id', $commentId)['fileId'] ?? null;
+
         $result = app(DeleteCommentAction::class)->handle($this->comments, $commentId);
 
         if ($result === null) {
@@ -75,6 +79,12 @@ class ReviewPage extends Component
 
         $this->comments = $result;
         $this->saveSession();
+
+        if ($fileId) {
+            $this->dispatchFileComments($fileId);
+        }
+
+        $this->skipRender();
     }
 
     #[On('toggle-viewed')]
@@ -95,6 +105,7 @@ class ReviewPage extends Component
     public function updatedGlobalComment(): void
     {
         $this->saveSession();
+        $this->skipRender();
     }
 
     public function submitReview(): void
@@ -115,6 +126,12 @@ class ReviewPage extends Component
     public function groupedComments(): array
     {
         return collect($this->comments)->groupBy('fileId')->map->values()->map->all()->all();
+    }
+
+    private function dispatchFileComments(string $fileId): void
+    {
+        $fileComments = collect($this->comments)->where('fileId', $fileId)->values()->all();
+        $this->dispatch('comment-updated', fileId: $fileId, comments: $fileComments);
     }
 
     private function saveSession(): void

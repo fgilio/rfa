@@ -58,6 +58,7 @@
             $wire.dispatch('toggle-viewed', { filePath: this.filePath });
         }
     }"
+    @comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"
     @collapse-all-files.window="collapsed = true"
     @expand-all-files.window="collapsed = false"
     @expand-file.window="if ($event.detail.id === fileId) collapsed = false"
@@ -116,7 +117,7 @@
         @elseif($diffData === null)
             {{-- Loading state: trigger lazy load via x-intersect --}}
             <div
-                x-intersect="$wire.loadFileDiff()"
+                x-intersect.once="setTimeout(() => $wire.loadFileDiff(), {{ $loadDelay }})"
                 class="px-4 py-8 text-center"
             >
                 <div wire:loading wire:target="loadFileDiff">

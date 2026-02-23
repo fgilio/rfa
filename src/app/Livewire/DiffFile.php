@@ -9,7 +9,6 @@ use App\DTOs\FileDiff;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
-use Livewire\Attributes\Reactive;
 use Livewire\Component;
 
 class DiffFile extends Component
@@ -21,10 +20,12 @@ class DiffFile extends Component
     #[Locked]
     public string $repoPath = '';
 
+    #[Locked]
+    public int $loadDelay = 0;
+
     public bool $isViewed = false;
 
     /** @var array<int, array<string, mixed>> */
-    #[Reactive]
     public array $fileComments = [];
 
     /** @var array<string, mixed>|null */
@@ -41,6 +42,12 @@ class DiffFile extends Component
             $ttl = now()->addHours(config('rfa.cache_ttl_hours', 24));
             Cache::put($this->diffCacheKey(), $this->diffData, $ttl);
         }
+    }
+
+    /** @param array<int, array<string, mixed>> $comments */
+    public function updateComments(array $comments): void
+    {
+        $this->fileComments = $comments;
     }
 
     public function loadFileDiff(): void

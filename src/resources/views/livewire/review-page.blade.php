@@ -102,6 +102,7 @@
                         <livewire:diff-file
                             :key="$file['id']"
                             :file="$file"
+                            :load-delay="(int) (floor($loop->index / 15) * 100)"
                             :file-comments="$this->groupedComments[$file['id']] ?? []"
                             :is-viewed="in_array($file['path'], $viewedFiles)"
                             :repo-path="$repoPath"
