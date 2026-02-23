@@ -1,6 +1,149 @@
 #!/bin/bash
 set -e
 
+SCRIPT="$(readlink -f "$0" 2>/dev/null || realpath "$0")"
+APP_DIR="$(cd "$(dirname "$SCRIPT")/src" && pwd)"
+PID_FILE="$APP_DIR/storage/rfa.pid"
+PORT_FILE="$APP_DIR/storage/rfa.port"
+LOCK_FILE="$APP_DIR/storage/rfa.lock"
+
+# -- Subcommands --
+
+cmd_stop() {
+    if [ -f "$PID_FILE" ]; then
+        PID=$(cat "$PID_FILE")
+        if kill -0 "$PID" 2>/dev/null; then
+            kill "$PID" 2>/dev/null
+            echo "Stopped rfa daemon (PID $PID)"
+        else
+            echo "Stale PID file (process $PID not running)"
+        fi
+    else
+        echo "No rfa daemon running"
+    fi
+    rm -f "$PID_FILE" "$PORT_FILE"
+    rm -rf "$LOCK_FILE"
+}
+
+cmd_status() {
+    if [ -f "$PID_FILE" ] && [ -f "$PORT_FILE" ]; then
+        PID=$(cat "$PID_FILE")
+        PORT=$(cat "$PORT_FILE")
+        if kill -0 "$PID" 2>/dev/null; then
+            echo "rfa daemon running (PID $PID) at http://127.0.0.1:$PORT"
+            echo ""
+            php "$APP_DIR/artisan" tinker --execute="
+                \$projects = \App\Models\Project::orderBy('name')->get();
+                if (\$projects->isEmpty()) { echo 'No projects registered'; return; }
+                foreach (\$projects as \$p) {
+                    echo \$p->name . ' (' . \$p->branch . ') -> /p/' . \$p->slug . PHP_EOL;
+                }
+            " 2>/dev/null
+            return 0
+        fi
+    fi
+    echo "No rfa daemon running"
+    return 1
+}
+
+is_daemon_alive() {
+    [ -f "$PID_FILE" ] || return 1
+    PID=$(cat "$PID_FILE")
+    kill -0 "$PID" 2>/dev/null || return 1
+
+    # Verify it's actually an artisan serve process
+    ps -p "$PID" -o args= 2>/dev/null | grep -q "artisan serve" || return 1
+
+    # Verify port responds
+    [ -f "$PORT_FILE" ] || return 1
+    PORT=$(cat "$PORT_FILE")
+    curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$PORT" 2>/dev/null || return 1
+
+    return 0
+}
+
+start_daemon() {
+    # Acquire lock via mkdir (atomic on all POSIX systems including macOS)
+    if ! mkdir "$LOCK_FILE" 2>/dev/null; then
+        # Another instance is starting - wait briefly and check again
+        sleep 1
+        if is_daemon_alive; then
+            return 0
+        fi
+        # Stale lock - remove and retry once
+        rm -rf "$LOCK_FILE"
+        if ! mkdir "$LOCK_FILE" 2>/dev/null; then
+            echo "Error: could not acquire lock" >&2
+            exit 1
+        fi
+    fi
+
+    # Double-check after acquiring lock
+    if is_daemon_alive; then
+        rm -rf "$LOCK_FILE"
+        return 0
+    fi
+
+    # Clean stale files
+    rm -f "$PID_FILE" "$PORT_FILE"
+
+    # Find free port starting at 4000
+    PORT=4000
+    while lsof -i :"$PORT" >/dev/null 2>&1; do PORT=$((PORT + 1)); done
+
+    # Run migrations
+    php "$APP_DIR/artisan" migrate --force --quiet 2>/dev/null || true
+
+    # Start server with nohup (survives terminal close)
+    nohup php "$APP_DIR/artisan" serve --host=127.0.0.1 --port="$PORT" >/dev/null 2>&1 &
+    SERVER_PID=$!
+
+    echo "$SERVER_PID" > "$PID_FILE"
+    echo "$PORT" > "$PORT_FILE"
+
+    # Release lock
+    rm -rf "$LOCK_FILE"
+
+    # Wait for server readiness
+    for i in $(seq 1 50); do
+        if curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$PORT" 2>/dev/null; then
+            echo "rfa daemon started (PID $SERVER_PID) at http://127.0.0.1:$PORT"
+            return 0
+        fi
+        sleep 0.2
+    done
+
+    echo "Error: server failed to start" >&2
+    kill "$SERVER_PID" 2>/dev/null
+    rm -f "$PID_FILE" "$PORT_FILE"
+    exit 1
+}
+
+open_browser() {
+    local URL="$1"
+    if command -v open >/dev/null 2>&1; then
+        open "$URL"
+    elif command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$URL"
+    else
+        echo "Open in browser: $URL"
+    fi
+}
+
+# -- Main --
+
+case "${1:-}" in
+    stop)
+        cmd_stop
+        exit 0
+        ;;
+    status)
+        cmd_status
+        exit $?
+        ;;
+esac
+
+# Default: register + open
 RFA_REPO_PATH="$(pwd)"
 
 # Validate git repo
@@ -9,33 +152,24 @@ git -C "$RFA_REPO_PATH" rev-parse --show-toplevel >/dev/null 2>&1 || {
     exit 1
 }
 
-# Find free port starting at 4000
-PORT=4000
-while lsof -i :"$PORT" >/dev/null 2>&1; do PORT=$((PORT + 1)); done
+# Ensure storage directory exists
+mkdir -p "$APP_DIR/storage"
 
-SCRIPT="$(readlink -f "$0" 2>/dev/null || realpath "$0")"
-APP_DIR="$(cd "$(dirname "$SCRIPT")/src" && pwd)"
-
-# Write repo path to file (env vars don't survive artisan serve's process chain)
-echo "$RFA_REPO_PATH" > "$APP_DIR/.rfa_repo_path"
-
-php "$APP_DIR/artisan" serve --host=127.0.0.1 --port="$PORT" &
-SERVER_PID=$!
-
-trap 'rm -f "$APP_DIR/.rfa_repo_path"; kill $SERVER_PID 2>/dev/null' EXIT INT TERM
-
-# Wait for server readiness
-until curl -s "http://127.0.0.1:$PORT" >/dev/null 2>&1; do sleep 0.2; done
-echo "Review server: http://127.0.0.1:$PORT"
-
-# Cross-platform open
-URL="http://127.0.0.1:$PORT"
-if command -v open >/dev/null 2>&1; then
-    open "$URL"
-elif command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$URL"
-else
-    echo "Open in browser: $URL"
+# Start daemon if not running
+if ! is_daemon_alive; then
+    start_daemon
 fi
 
-wait $SERVER_PID
+PORT=$(cat "$PORT_FILE")
+
+# Register project
+SLUG=$(php "$APP_DIR/artisan" rfa:register "$RFA_REPO_PATH" 2>/dev/null)
+if [ -z "$SLUG" ]; then
+    echo "Error: failed to register project" >&2
+    exit 1
+fi
+
+# Open browser
+URL="http://127.0.0.1:$PORT/p/$SLUG"
+echo "$URL"
+open_browser "$URL"
