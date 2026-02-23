@@ -10,7 +10,9 @@
             <flux:text variant="subtle" size="sm">Copied to clipboard - Ctrl+C to exit</flux:text>
         </div>
     @else
-        <div class="px-4 py-3 flex items-center gap-3">
+        <div class="px-4 py-3 flex items-center gap-3"
+            x-data="{ get commentCount() { return $wire.comments.length }, get hasGlobal() { return ($wire.globalComment || '').trim().length > 0 } }"
+        >
             <div class="flex-1">
                 <flux:textarea
                     wire:model.blur="globalComment"
@@ -21,13 +23,13 @@
                 />
             </div>
             <div class="flex items-center gap-3 shrink-0">
-                @if(count($comments) > 0)
-                    <flux:badge>{{ count($comments) }} {{ Str::plural('comment', count($comments)) }}</flux:badge>
-                @endif
+                <template x-if="commentCount > 0">
+                    <flux:badge x-text="commentCount + ' ' + (commentCount === 1 ? 'comment' : 'comments')" />
+                </template>
                 <flux:button
                     variant="primary"
                     wire:click="submitReview"
-                    :disabled="count($comments) === 0 && trim($globalComment) === ''"
+                    x-bind:disabled="commentCount === 0 && !hasGlobal"
                 >
                     Submit Review
                 </flux:button>
