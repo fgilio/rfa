@@ -63,7 +63,19 @@ jobs:
         with:
           node-version: '20'
       - run: composer install --no-interaction --prefer-dist
-      - run: npm install playwright && npx playwright install chromium --with-deps
+      - run: npm install playwright
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright-version.outputs.version }}-chromium
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
       - run: cp .env.example .env
       - run: php artisan key:generate
       - run: touch database/database.sqlite
