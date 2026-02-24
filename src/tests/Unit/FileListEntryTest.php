@@ -47,6 +47,7 @@ test('toArray includes all properties and computed id', function () {
         'deletions' => $deletions,
         'isBinary' => false,
         'isUntracked' => false,
+        'isImage' => false,
     ]);
 });
 
@@ -59,4 +60,32 @@ test('toArray includes oldPath for renames', function () {
     $entry = new FileListEntry($newPath, 'renamed', $oldPath, 0, 0, false, false);
 
     expect($entry->toArray()['oldPath'])->toBe($oldPath);
+});
+
+// -- isImage tests --
+
+test('isImage returns true for image extensions', function () {
+    foreach (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif', 'ico'] as $ext) {
+        $entry = new FileListEntry("photo.{$ext}", 'added', null, 0, 0, true, true);
+
+        expect($entry->isImage())->toBeTrue("Expected .{$ext} to be detected as image");
+    }
+});
+
+test('isImage returns false for non-image binary', function () {
+    $entry = new FileListEntry('data.bin', 'added', null, 0, 0, true, true);
+
+    expect($entry->isImage())->toBeFalse();
+});
+
+test('isImage is case insensitive', function () {
+    $entry = new FileListEntry('photo.PNG', 'added', null, 0, 0, true, true);
+
+    expect($entry->isImage())->toBeTrue();
+});
+
+test('toArray includes isImage', function () {
+    $entry = new FileListEntry('logo.png', 'added', null, 0, 0, true, true);
+
+    expect($entry->toArray()['isImage'])->toBeTrue();
 });

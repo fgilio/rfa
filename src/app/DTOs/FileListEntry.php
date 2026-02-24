@@ -6,6 +6,9 @@ namespace App\DTOs;
 
 class FileListEntry
 {
+    /** @var list<string> */
+    private const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'bmp', 'avif'];
+
     public function __construct(
         public readonly string $path,
         public readonly string $status, // added, deleted, modified, renamed, binary
@@ -21,6 +24,13 @@ class FileListEntry
         return 'file-'.hash('xxh128', $this->path);
     }
 
+    public function isImage(): bool
+    {
+        $ext = strtolower(pathinfo($this->path, PATHINFO_EXTENSION));
+
+        return in_array($ext, self::IMAGE_EXTENSIONS, true);
+    }
+
     /** @return array<string, mixed> */
     public function toArray(): array
     {
@@ -33,6 +43,7 @@ class FileListEntry
             'deletions' => $this->deletions,
             'isBinary' => $this->isBinary,
             'isUntracked' => $this->isUntracked,
+            'isImage' => $this->isImage(),
         ];
     }
 }
