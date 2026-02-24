@@ -265,6 +265,48 @@ test('getFileList throws GitCommandException for non-git directory', function ()
     $this->service->getFileList($this->tmpDir);
 })->throws(GitCommandException::class);
 
+// -- getFileContent tests --
+
+test('getFileContent returns working directory content', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    commitAll($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/data.txt', 'hello world');
+
+    expect($this->service->getFileContent($this->tmpDir, 'data.txt'))->toBe('hello world');
+});
+
+test('getFileContent returns HEAD content via git show', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', 'original');
+    commitAll($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/file.txt', 'modified');
+
+    expect($this->service->getFileContent($this->tmpDir, 'file.txt', 'head'))->toBe('original');
+});
+
+test('getFileContent returns null for missing working file', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    commitAll($this->tmpDir, 'initial');
+
+    expect($this->service->getFileContent($this->tmpDir, 'nonexistent.txt'))->toBeNull();
+});
+
+test('getFileContent returns null for file not in HEAD', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    commitAll($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/untracked.txt', 'new');
+
+    expect($this->service->getFileContent($this->tmpDir, 'untracked.txt', 'head'))->toBeNull();
+});
+
+// -- GitCommandException tests --
+
 test('GitCommandException carries stderr and exit code', function () {
     try {
         $this->service->getFileList($this->tmpDir);

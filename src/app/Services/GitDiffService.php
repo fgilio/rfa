@@ -266,6 +266,25 @@ class GitDiffService
         return trim($this->runGit($directory, ['rev-parse', '--abbrev-ref', 'HEAD']));
     }
 
+    public function getFileContent(string $repoPath, string $path, string $ref = 'working'): ?string
+    {
+        if ($ref === 'working') {
+            $fullPath = $repoPath.'/'.$path;
+
+            if (! File::isFile($fullPath)) {
+                return null;
+            }
+
+            return File::get($fullPath);
+        }
+
+        try {
+            return $this->runGit($repoPath, ['show', 'HEAD:'.$path]);
+        } catch (GitCommandException) {
+            return null;
+        }
+    }
+
     /** @param array<int, string> $args */
     private function runGit(string $repoPath, array $args): string
     {
