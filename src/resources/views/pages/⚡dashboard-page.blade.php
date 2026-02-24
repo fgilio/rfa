@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\ListProjectsAction;
+use App\Actions\RemoveProjectAction;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -10,6 +11,13 @@ new #[Layout('layouts.app')] class extends Component {
 
     public function mount(): void
     {
+        $this->projectGroups = app(ListProjectsAction::class)->handle();
+    }
+
+    public function removeProject(int $projectId): void
+    {
+        app(RemoveProjectAction::class)->handle($projectId);
+
         $this->projectGroups = app(ListProjectsAction::class)->handle();
     }
 };
@@ -58,7 +66,17 @@ new #[Layout('layouts.app')] class extends Component {
                                             <flux:badge size="sm" variant="outline">{{ $project['branch'] }}</flux:badge>
                                         @endif
                                     </div>
-                                    <flux:icon icon="chevron-right" variant="micro" class="text-gh-muted shrink-0" />
+                                    <div class="flex items-center gap-1 shrink-0">
+                                        <flux:button
+                                            variant="ghost"
+                                            size="sm"
+                                            icon="trash"
+                                            wire:click.prevent.stop="removeProject({{ $project['id'] }})"
+                                            wire:confirm="Remove this project from the list?"
+                                            class="text-gh-muted hover:text-red-500"
+                                        />
+                                        <flux:icon icon="chevron-right" variant="micro" class="text-gh-muted" />
+                                    </div>
                                 </div>
                                 <flux:text variant="subtle" size="sm" class="mt-1 font-mono truncate">{{ $project['path'] }}</flux:text>
                             </a>
