@@ -5,7 +5,7 @@ Local code review tool for AI agent changes. Run `rfa` in any git repo with unco
 ## Quick Start
 
 ```bash
-cd ~/.claude/skills/rfa
+cd ~/dev/rfa
 ./install
 ```
 

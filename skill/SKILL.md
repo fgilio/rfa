@@ -1,6 +1,8 @@
 ---
 name: rfa
 description: Local code review tool for AI agent changes. Opens a browser diff viewer, exports structured JSON + Markdown for agents.
+user-invocable: true
+disable-model-invocation: true
 ---
 
 # rfa - Review For Agent
@@ -39,4 +41,4 @@ Copies to clipboard: `review my comments on these changes in @.rfa/{timestamp}_c
 ## Requirements
 
 - PHP 8.3+ (via Herd)
-- Composer dependencies installed (`cd src && composer install`)
+- Composer dependencies installed (see SETUP.md)

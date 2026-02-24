@@ -9,14 +9,11 @@
 
 ```bash
 # Install PHP dependencies
-cd ~/.claude/skills/rfa/src
+cd ~/dev/rfa/src
 composer install
 
-# Make the wrapper executable
-chmod +x ~/.claude/skills/rfa/rfa
-
 # Symlink to PATH
-~/.claude/skills/rfa/install
+~/dev/rfa/install
 ```
 
 ## Verify
