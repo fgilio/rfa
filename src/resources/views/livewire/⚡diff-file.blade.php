@@ -179,9 +179,46 @@ new class extends Component {
 
     {{-- File body --}}
     <div x-show="!collapsed" x-collapse.duration.150ms>
-        @if($file['isBinary'])
+        @if($file['isBinary'] && !($file['isImage'] ?? false))
             <div class="px-4 py-8 text-center">
                 <flux:text variant="subtle" size="sm">Binary file not shown</flux:text>
+            </div>
+        @elseif($file['isBinary'] && ($file['isImage'] ?? false))
+            @php
+                $status = $file['status'];
+                $hasBeforeImage = in_array($status, ['modified', 'binary', 'renamed', 'deleted']);
+                $hasAfterImage = in_array($status, ['modified', 'binary', 'renamed', 'added']);
+                $beforePath = $file['oldPath'] ?? $file['path'];
+            @endphp
+            <div class="px-4 py-6 flex items-start justify-center gap-6">
+                @if($hasBeforeImage)
+                    <div class="flex flex-col items-center gap-2 {{ $hasAfterImage ? 'max-w-[50%]' : '' }}">
+                        <flux:badge color="red" size="sm">{{ $status === 'deleted' ? 'Deleted' : 'Before' }}</flux:badge>
+                        <div class="border border-gh-border rounded-lg p-1" style="background: repeating-conic-gradient(rgb(128 128 128 / 0.15) 0% 25%, transparent 0% 50%) 50% / 16px 16px;">
+                            <img
+                                src="/api/image/{{ $projectId }}/head/{{ $beforePath }}"
+                                alt="{{ $beforePath }}"
+                                class="max-h-96 object-contain"
+                                loading="lazy"
+                                onerror="this.closest('[class*=flex-col]').style.display='none'"
+                            >
+                        </div>
+                    </div>
+                @endif
+                @if($hasAfterImage)
+                    <div class="flex flex-col items-center gap-2 {{ $hasBeforeImage ? 'max-w-[50%]' : '' }}">
+                        <flux:badge color="green" size="sm">{{ $status === 'added' ? 'New' : 'After' }}</flux:badge>
+                        <div class="border border-gh-border rounded-lg p-1" style="background: repeating-conic-gradient(rgb(128 128 128 / 0.15) 0% 25%, transparent 0% 50%) 50% / 16px 16px;">
+                            <img
+                                src="/api/image/{{ $projectId }}/working/{{ $file['path'] }}"
+                                alt="{{ $file['path'] }}"
+                                class="max-h-96 object-contain"
+                                loading="lazy"
+                                onerror="this.closest('[class*=flex-col]').style.display='none'"
+                            >
+                        </div>
+                    </div>
+                @endif
             </div>
         @elseif($diffData === null)
             {{-- Loading state: trigger lazy load via x-intersect --}}
