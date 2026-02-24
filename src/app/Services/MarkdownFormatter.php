@@ -43,7 +43,7 @@ class MarkdownFormatter
                 }
 
                 // Include diff context snippet if available
-                $contextKey = "{$comment->file}:{$comment->startLine}:{$comment->endLine}";
+                $contextKey = "{$comment->file}:{$comment->side->value}:{$comment->startLine}:{$comment->endLine}";
                 if (isset($diffContext[$contextKey]) && $diffContext[$contextKey] !== '') {
                     $md .= "{$lineRef}\n\n";
                     $md .= "```\n{$diffContext[$contextKey]}\n```\n\n";

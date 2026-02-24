@@ -42,8 +42,8 @@ test('builds context snippets for commented lines', function () {
     $action = app(BuildDiffContextAction::class);
     $context = $action->handle($this->tmpDir, $comments, $files);
 
-    expect($context)->toHaveKey('hello.php:2:2');
-    expect($context['hello.php:2:2'])->toContain("echo 'changed'");
+    expect($context)->toHaveKey('hello.php:right:2:2');
+    expect($context['hello.php:right:2:2'])->toContain("echo 'changed'");
 });
 
 test('skips file-level comments (null startLine)', function () {
@@ -85,7 +85,7 @@ test('skips tooLarge files gracefully', function () {
     $action = app(BuildDiffContextAction::class);
     $context = $action->handle($this->tmpDir, $comments, $files);
 
-    expect($context)->not->toHaveKey('hello.php:1:1');
+    expect($context)->not->toHaveKey('hello.php:right:1:1');
 });
 
 test('skips comments for unknown file ids', function () {

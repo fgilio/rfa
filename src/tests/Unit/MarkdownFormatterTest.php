@@ -74,7 +74,7 @@ test('includes diff context snippet when available', function () {
         new Comment('id', 'file-abc', 'f.php', DiffSide::Right, 10, 10, 'body'),
     ];
 
-    $md = $this->formatter->format($comments, '', ['f.php:10:10' => $snippet]);
+    $md = $this->formatter->format($comments, '', ['f.php:right:10:10' => $snippet]);
 
     expect($md)->toContain("```\n{$snippet}\n```");
 });

@@ -212,7 +212,7 @@ new class extends Component {
                 <flux:text variant="subtle" size="sm">No content changes</flux:text>
             </div>
         @else
-            @php $commentsByLine = collect($fileComments)->where('side', '!=', 'file')->groupBy('endLine'); @endphp
+            @php $commentsByLine = collect($fileComments)->where('side', '!=', 'file')->groupBy(fn($c) => $c['side'] . ':' . $c['endLine']); @endphp
             <div class="overflow-x-auto">
                 <table class="w-full border-collapse font-mono text-xs leading-5">
                     @foreach($diffData['hunks'] as $hunkIndex => $hunk)
@@ -235,6 +235,11 @@ new class extends Component {
                                     'add' => ['bg-gh-add-bg', 'bg-gh-add-line', '+'],
                                     'remove' => ['bg-gh-del-bg', 'bg-gh-del-line', '-'],
                                     default => ['', '', ' '],
+                                };
+                                $lineSide = match($line['type']) {
+                                    'remove' => 'left',
+                                    'add' => 'right',
+                                    default => 'context',
                                 };
                             @endphp
                             <tr
@@ -296,7 +301,17 @@ new class extends Component {
                             @endif
 
                             {{-- Show saved comments inline --}}
-                            @foreach(($commentsByLine[$lineNum] ?? collect()) as $comment)
+                            @php
+                                $lineComments = collect();
+                                if ($lineSide === 'context') {
+                                    $lineComments = collect()
+                                        ->merge($commentsByLine["left:{$line['oldLineNum']}"] ?? collect())
+                                        ->merge($commentsByLine["right:{$line['newLineNum']}"] ?? collect());
+                                } elseif ($lineNum !== null) {
+                                    $lineComments = $commentsByLine["{$lineSide}:{$lineNum}"] ?? collect();
+                                }
+                            @endphp
+                            @foreach($lineComments as $comment)
                                 <tr>
                                     <td colspan="4" class="p-0">
                                         <div class="comment-indicator bg-gh-surface/80 border-y border-gh-border px-4 py-2">

@@ -69,7 +69,7 @@ final readonly class BuildDiffContextAction
                 }
             }
 
-            $key = "{$comment['file']}:{$comment['startLine']}:{$comment['endLine']}";
+            $key = "{$comment['file']}:{$comment['side']}:{$comment['startLine']}:{$comment['endLine']}";
             $context[$key] = implode("\n", $lines);
         }
 
