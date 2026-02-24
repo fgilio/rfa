@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\LoadFileDiffAction;
+use App\Exceptions\GitCommandException;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
 use App\Services\IgnoreService;
@@ -112,4 +113,19 @@ test('no highlightedContent for unknown file types', function () {
         ->contains(fn ($line) => isset($line['highlightedContent']));
 
     expect($hasHighlighted)->toBeFalse();
+});
+
+// -- git error propagation --
+
+test('returns error field when git command fails', function () {
+    $gitService = Mockery::mock(GitDiffService::class);
+    $gitService->shouldReceive('getFileDiff')
+        ->andThrow(new GitCommandException('git diff', 'fatal: bad revision', 128));
+
+    $action = new LoadFileDiffAction($gitService, new DiffParser, new SyntaxHighlightService);
+    $result = $action->handle($this->tmpDir, 'hello.txt');
+
+    expect($result['error'])->toBe('fatal: bad revision')
+        ->and($result['hunks'])->toBe([])
+        ->and($result['tooLarge'])->toBeFalse();
 });

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\FileDiff;
+use App\Exceptions\GitCommandException;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
 use App\Services\SyntaxHighlightService;
@@ -22,7 +23,12 @@ final readonly class LoadFileDiffAction
     public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null): array
     {
         $compute = function () use ($repoPath, $path, $isUntracked): array {
-            $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked);
+            try {
+                $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked);
+            } catch (GitCommandException $e) {
+                return FileDiff::emptyArray($path, 'modified', tooLarge: false)
+                    + ['error' => $e->stderr ?: $e->getMessage()];
+            }
 
             if ($rawDiff === null) {
                 return FileDiff::emptyArray($path, 'modified', tooLarge: true);
