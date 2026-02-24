@@ -89,6 +89,14 @@
         ::-webkit-scrollbar-track { background: var(--gh-scrollbar-track); }
         ::-webkit-scrollbar-thumb { background: var(--gh-scrollbar-thumb); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--gh-scrollbar-hover); }
+
+        /* Fix checkbox visibility in dark mode */
+        .dark [data-flux-checkbox-indicator] {
+            border-color: rgb(var(--gh-border));
+        }
+        .dark [data-flux-checkbox-indicator] svg {
+            color: white;
+        }
     </style>
     @fluxAppearance
 </head>
