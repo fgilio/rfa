@@ -161,6 +161,11 @@ new #[Layout('layouts.app')] class extends Component {
     x-data="{
         activeFile: null,
         viewedFiles: {{ Js::from((object) collect($files)->filter(fn($f) => in_array($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()) }},
+        fileFilter: '',
+        filePaths: {{ Js::from(collect($files)->pluck('path')->all()) }},
+        fileMatchesFilter(path) {
+            return this.fileFilter === '' || path.toLowerCase().includes(this.fileFilter.toLowerCase());
+        },
         scrollToFile(id) {
             this.activeFile = id;
             this.$dispatch('expand-file', { id });
@@ -172,7 +177,11 @@ new #[Layout('layouts.app')] class extends Component {
         navigator.clipboard.writeText($event.detail.text).catch(() => {});
     "
     @keydown.window="
-        if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') return;
+        if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {
+            if ($event.key === 'Escape') { fileFilter = ''; $event.target.blur(); $event.preventDefault(); }
+            return;
+        }
+        if ($event.key === '/') { $refs.fileFilterInput?.focus(); $event.preventDefault(); }
         if ($event.shiftKey && $event.key === 'C') { $dispatch('collapse-all-files'); $event.preventDefault(); }
         if ($event.shiftKey && $event.key === 'E') { $dispatch('expand-all-files'); $event.preventDefault(); }
     "
@@ -187,7 +196,11 @@ new #[Layout('layouts.app')] class extends Component {
             @endif
         </div>
         <div class="flex items-center gap-3 text-xs">
-            <flux:text variant="subtle" size="sm" inline>{{ count($files) }} {{ Str::plural('file', count($files)) }}</flux:text>
+            <flux:text variant="subtle" size="sm" inline
+                x-text="fileFilter === ''
+                    ? '{{ count($files) }} {{ Str::plural('file', count($files)) }}'
+                    : filePaths.filter(p => fileMatchesFilter(p)).length + '/{{ count($files) }} files'"
+            >{{ count($files) }} {{ Str::plural('file', count($files)) }}</flux:text>
             <flux:text variant="subtle" size="sm" inline
                 x-show="Object.values(viewedFiles).filter(Boolean).length > 0"
                 x-text="Object.values(viewedFiles).filter(Boolean).length + '/{{ count($files) }} viewed'"
@@ -216,6 +229,18 @@ new #[Layout('layouts.app')] class extends Component {
         <aside class="w-72 shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-surface/50 hidden lg:block">
             <div class="p-3">
                 <flux:heading class="!text-xs uppercase tracking-wide mb-2">Files</flux:heading>
+                <flux:input
+                    x-model.debounce.150ms="fileFilter"
+                    placeholder="Filter files..."
+                    icon="magnifying-glass"
+                    clearable
+                    kbd="/"
+                    size="sm"
+                    variant="filled"
+                    class="mb-2"
+                    x-ref="fileFilterInput"
+                    @keydown.escape="fileFilter = ''; $el.blur()"
+                />
                 @foreach($files as $file)
                     @php
                         [$badgeColor, $badgeLabel] = match($file['status']) {
@@ -226,6 +251,7 @@ new #[Layout('layouts.app')] class extends Component {
                         };
                     @endphp
                     <button
+                        x-show="fileMatchesFilter({{ Js::from($file['path']) }})"
                         @click="scrollToFile('{{ $file['id'] }}')"
                         class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-gh-border/50 flex items-center gap-2 group transition-colors"
                         :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-border/50 text-gh-accent' : 'text-gh-text'"
@@ -267,7 +293,7 @@ new #[Layout('layouts.app')] class extends Component {
                 </div>
             @else
                 @foreach($files as $file)
-                    <div id="{{ $file['id'] }}" class="border-b border-gh-border">
+                    <div id="{{ $file['id'] }}" class="border-b border-gh-border" x-show="fileMatchesFilter({{ Js::from($file['path']) }})">
                         <livewire:diff-file
                             :key="$file['id']"
                             :file="$file"
