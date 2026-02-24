@@ -44,7 +44,7 @@ final readonly class BuildDiffContextAction
             }
 
             $diffData = $loaded[$fileId];
-            if (! $diffData || ($diffData['tooLarge'] ?? false)) {
+            if (! $diffData || ($diffData['tooLarge'] ?? false) || array_key_exists('error', $diffData)) {
                 continue;
             }
 
