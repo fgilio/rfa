@@ -13,8 +13,19 @@ cmd_stop() {
     if [ -f "$PID_FILE" ]; then
         PID=$(cat "$PID_FILE")
         if kill -0 "$PID" 2>/dev/null; then
-            kill "$PID" 2>/dev/null
-            echo "Stopped rfa daemon (PID $PID)"
+            if [ ! -f "$PORT_FILE" ]; then
+                echo "Warning: no port file - cannot verify PID $PID belongs to this instance (stale PID file)"
+            else
+                EXPECTED_PORT=$(cat "$PORT_FILE")
+                PROC_ARGS=$(ps -p "$PID" -o args= 2>/dev/null || true)
+                if echo "$PROC_ARGS" | grep -qF "$APP_DIR/artisan" && \
+                   echo "$PROC_ARGS" | grep -qF -- "--port=$EXPECTED_PORT"; then
+                    kill "$PID" 2>/dev/null
+                    echo "Stopped rfa daemon (PID $PID)"
+                else
+                    echo "Warning: PID $PID is not this rfa instance (stale PID file)"
+                fi
+            fi
         else
             echo "Stale PID file (process $PID not running)"
         fi
