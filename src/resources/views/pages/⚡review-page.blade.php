@@ -8,6 +8,7 @@ use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\Actions\ToggleViewedAction;
+use App\Exceptions\GitCommandException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
@@ -36,6 +37,8 @@ new #[Layout('layouts.app')] class extends Component {
 
     public bool $submitted = false;
 
+    public ?string $gitError = null;
+
     /** @var array<int, string> */
     public array $viewedFiles = [];
 
@@ -50,7 +53,12 @@ new #[Layout('layouts.app')] class extends Component {
         $this->projectBranch = $project['branch'] ?? '';
         $this->projectSlug = $project['slug'];
 
-        $this->files = app(GetFileListAction::class)->handle($this->repoPath, projectId: $this->projectId);
+        try {
+            $this->files = app(GetFileListAction::class)->handle($this->repoPath, projectId: $this->projectId);
+        } catch (GitCommandException $e) {
+            $this->gitError = $e->stderr ?: $e->getMessage();
+            $this->files = [];
+        }
 
         $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId);
         $this->comments = $session['comments'];
@@ -241,7 +249,15 @@ new #[Layout('layouts.app')] class extends Component {
 
         {{-- Main content --}}
         <main class="flex-1 min-w-0 pb-24">
-            @if(empty($files))
+            @if($gitError)
+                <div class="flex items-center justify-center h-[60vh]">
+                    <div class="text-center">
+                        <flux:icon icon="exclamation-triangle" variant="outline" class="mx-auto mb-3 text-red-400" />
+                        <flux:heading class="mb-2">Git error</flux:heading>
+                        <flux:text variant="subtle" size="sm" class="font-mono max-w-lg">{{ $gitError }}</flux:text>
+                    </div>
+                </div>
+            @elseif(empty($files))
                 <div class="flex items-center justify-center h-[60vh]">
                     <div class="text-center">
                         <flux:icon icon="document-magnifying-glass" variant="outline" class="mx-auto mb-3 text-gh-muted" />

@@ -202,6 +202,11 @@ new class extends Component {
                 <flux:icon icon="exclamation-triangle" variant="micro" class="inline-block text-gh-muted mr-1" />
                 <flux:text variant="subtle" size="sm" inline>File diff too large to display</flux:text>
             </div>
+        @elseif($diffData['error'] ?? false)
+            <div class="px-4 py-8 text-center">
+                <flux:icon icon="exclamation-triangle" variant="micro" class="inline-block text-red-400 mr-1" />
+                <flux:text variant="subtle" size="sm" inline>Git error: {{ $diffData['error'] }}</flux:text>
+            </div>
         @elseif(empty($diffData['hunks']))
             <div class="px-4 py-8 text-center">
                 <flux:text variant="subtle" size="sm">No content changes</flux:text>
