@@ -130,6 +130,32 @@ start_daemon() {
     exit 1
 }
 
+cmd_dump() {
+    DB="$APP_DIR/database/database.sqlite"
+    if [ ! -f "$DB" ]; then
+        echo "No database found"
+        return
+    fi
+    DUMP_DIR="$APP_DIR/storage/dumps/$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$DUMP_DIR"
+    sqlite3 "$DB" \
+        ".headers on" ".mode csv" ".output $DUMP_DIR/projects.csv" "SELECT * FROM projects;" \
+        ".output $DUMP_DIR/review_sessions.csv" "SELECT * FROM review_sessions;"
+    echo "Dumped to $DUMP_DIR"
+}
+
+cmd_flush() {
+    DB="$APP_DIR/database/database.sqlite"
+    if [ ! -f "$DB" ]; then
+        echo "No database found"
+        return
+    fi
+    PROJECTS=$(sqlite3 "$DB" "SELECT COUNT(*) FROM projects;")
+    SESSIONS=$(sqlite3 "$DB" "SELECT COUNT(*) FROM review_sessions;")
+    sqlite3 "$DB" "DELETE FROM review_sessions; DELETE FROM projects;"
+    echo "Flushed $PROJECTS projects and $SESSIONS sessions"
+}
+
 open_browser() {
     local URL="$1"
     if command -v open >/dev/null 2>&1; then
@@ -144,14 +170,10 @@ open_browser() {
 # -- Main --
 
 case "${1:-}" in
-    stop)
-        cmd_stop
-        exit 0
-        ;;
-    status)
-        cmd_status
-        exit $?
-        ;;
+    stop)   cmd_stop;  exit 0 ;;
+    status) cmd_status; exit $? ;;
+    dump)   cmd_dump;  exit 0 ;;
+    flush)  cmd_flush; exit 0 ;;
 esac
 
 # Default: register + open

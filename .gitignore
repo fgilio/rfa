@@ -5,6 +5,7 @@ src/vendor/
 src/node_modules/
 src/.env
 src/database.sqlite
+src/storage/dumps/
 src/storage/logs/*
 src/storage/framework/cache/*
 src/storage/framework/sessions/*
