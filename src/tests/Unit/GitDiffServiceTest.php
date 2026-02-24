@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\GitCommandException;
 use App\Services\GitDiffService;
 use App\Services\IgnoreService;
 use Faker\Factory as Faker;
@@ -255,4 +256,25 @@ test('getFileDiff handles empty untracked file', function () {
 
     expect($diff)->toContain('new file mode');
     expect($diff)->not->toContain('@@ ');
+});
+
+// -- GitCommandException tests --
+
+test('getFileList throws GitCommandException for non-git directory', function () {
+    // tmpDir is not a git repo (no initRepo call)
+    $this->service->getFileList($this->tmpDir);
+})->throws(GitCommandException::class);
+
+test('GitCommandException carries stderr and exit code', function () {
+    try {
+        $this->service->getFileList($this->tmpDir);
+    } catch (GitCommandException $e) {
+        expect($e->exitCode)->toBeGreaterThan(0)
+            ->and($e->stderr)->not->toBeEmpty()
+            ->and($e->command)->toContain('diff');
+
+        return;
+    }
+
+    test()->fail('Expected GitCommandException');
 });

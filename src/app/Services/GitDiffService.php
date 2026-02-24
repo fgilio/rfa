@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\DTOs\FileListEntry;
+use App\Exceptions\GitCommandException;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Process\Process;
 
@@ -273,7 +274,11 @@ class GitDiffService
         $process->run();
 
         if (! $process->isSuccessful()) {
-            return '';
+            throw new GitCommandException(
+                command: 'git '.implode(' ', $args),
+                stderr: trim($process->getErrorOutput()),
+                exitCode: $process->getExitCode() ?? 1,
+            );
         }
 
         return $process->getOutput();
