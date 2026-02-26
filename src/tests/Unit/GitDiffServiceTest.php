@@ -158,6 +158,37 @@ test('getFileList excludes rfaignore patterns', function () {
     expect($paths)->not->toContain('debug.log');
 });
 
+test('getFileList excludes untracked files matching globalGitignorePath', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/tracked.txt', "ok\n");
+    commitAll($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/data.rfa_test_ext', "test data\n");
+    File::put($this->tmpDir.'/newfile.txt', "hello\n");
+
+    $excludeFile = $this->tmpDir.'/.test_excludes';
+    File::put($excludeFile, "*.rfa_test_ext\n");
+
+    $entries = $this->service->getFileList($this->tmpDir, $excludeFile);
+    $paths = collect($entries)->pluck('path')->all();
+
+    expect($paths)->toContain('newfile.txt')
+        ->and($paths)->not->toContain('data.rfa_test_ext');
+});
+
+test('getFileList ignores globalGitignorePath when file does not exist', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/tracked.txt', "ok\n");
+    commitAll($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/data.rfa_test_ext', "test data\n");
+
+    $entries = $this->service->getFileList($this->tmpDir, '/nonexistent/path');
+    $paths = collect($entries)->pluck('path')->all();
+
+    expect($paths)->toContain('data.rfa_test_ext');
+});
+
 test('getFileList returns empty for clean repo', function () {
     initRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
