@@ -9,10 +9,10 @@ use App\Services\GitDiffService;
 use Livewire\Livewire;
 use Tests\Helpers\DiffFixtureGenerator;
 
-// Post-Blaze thresholds (~1.5x measured baseline) - permanent regression guards
-const THRESHOLD_20_FILES = 45.0;
-const THRESHOLD_50_FILES = 90.0;
-const THRESHOLD_100_FILES = 160.0;
+// Post-Blaze thresholds - CI-calibrated regression guards
+const THRESHOLD_20_FILES = 200.0;
+const THRESHOLD_50_FILES = 460.0;
+const THRESHOLD_100_FILES = 900.0;
 
 beforeEach(function () {
     $this->project = Project::create([

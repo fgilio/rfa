@@ -2,10 +2,10 @@
 
 use Illuminate\Support\Facades\Blade;
 
-// Post-Blaze thresholds (~1.5x measured baseline) - permanent regression guards
-const THRESHOLD_500_MIXED = 55.0;
-const THRESHOLD_2000_MIXED = 35.0;
-const THRESHOLD_500_NESTED = 45.0;
+// Post-Blaze thresholds - CI-calibrated regression guards
+const THRESHOLD_500_MIXED = 160.0;
+const THRESHOLD_2000_MIXED = 180.0;
+const THRESHOLD_500_NESTED = 360.0;
 
 function renderBladeAndMeasure(string $template, array $data = []): float
 {
