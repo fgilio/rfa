@@ -99,6 +99,37 @@ trait CreatesTestRepo
         $this->testProjectSlug = $project->slug;
     }
 
+    protected function setUpMultiHunkTestRepo(): void
+    {
+        $this->testRepoPath = sys_get_temp_dir().'/rfa_browser_'.uniqid();
+        File::makeDirectory($this->testRepoPath, 0755, true);
+
+        // Create a 30-line file so modifying lines 1 and 30 produces 2 hunks with default context (3)
+        $lines = array_map(fn ($i) => "line{$i}", range(1, 30));
+        File::put($this->testRepoPath.'/multi.txt', implode("\n", $lines)."\n");
+
+        $this->runShell(implode(' && ', [
+            'git init -b main',
+            "git config user.email 'test@rfa.test'",
+            "git config user.name 'RFA Test'",
+            'git add -A',
+            "git commit -m 'Initial commit'",
+        ]));
+
+        $head = trim($this->runShell('git rev-parse HEAD'));
+        if ($head === '' || str_contains($head, 'fatal')) {
+            throw new \RuntimeException("Git setup failed: HEAD not established. Output: {$head}");
+        }
+
+        // Modify first and last lines to create 2 distant hunks
+        $lines[0] = 'changed1';
+        $lines[29] = 'changed30';
+        File::put($this->testRepoPath.'/multi.txt', implode("\n", $lines)."\n");
+
+        $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
+        $this->testProjectSlug = $project->slug;
+    }
+
     protected function addLargeFile(string $name = 'large.txt', int $bytes = 600_000): void
     {
         File::put($this->testRepoPath.'/'.$name, str_repeat("line of content for large file\n", (int) ceil($bytes / 30)));

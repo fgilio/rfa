@@ -115,6 +115,30 @@ test('no highlightedContent for unknown file types', function () {
     expect($hasHighlighted)->toBeFalse();
 });
 
+test('contextLines parameter produces single hunk for full context', function () {
+    // Create file with 20 lines, modify first and last to produce 2 hunks
+    $lines = array_map(fn ($i) => "line{$i}", range(1, 20));
+    File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
+    exec('cd '.escapeshellarg($this->tmpDir).' && git add -A && git commit -m "add many"');
+
+    $lines[0] = 'changed1';
+    $lines[19] = 'changed20';
+    File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
+
+    $action = new LoadFileDiffAction(
+        new GitDiffService(new IgnoreService),
+        new DiffParser,
+        new SyntaxHighlightService,
+    );
+
+    $default = $action->handle($this->tmpDir, 'many.txt');
+    $full = $action->handle($this->tmpDir, 'many.txt', contextLines: 99999);
+
+    expect($default['hunks'])->toHaveCount(2);
+    expect($full['hunks'])->toHaveCount(1);
+    expect($full['hunks'][0]['newStart'])->toBe(1);
+});
+
 // -- git error propagation --
 
 test('returns error field when git command fails', function () {

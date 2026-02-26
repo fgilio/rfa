@@ -185,7 +185,7 @@ class GitDiffService
         return $entries;
     }
 
-    public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null): ?string
+    public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3): ?string
     {
         $maxBytes ??= config('rfa.diff_max_bytes', 512_000);
 
@@ -197,7 +197,7 @@ class GitDiffService
 
         $raw = $this->runGit($repoPath, [
             'diff', 'HEAD',
-            '--no-color', '--no-ext-diff', '--unified=3', '--text', '--find-renames',
+            '--no-color', '--no-ext-diff', "--unified={$contextLines}", '--text', '--find-renames',
             '--', $path, ...$excludes,
         ]);
 

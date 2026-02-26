@@ -289,6 +289,28 @@ test('getFileDiff handles empty untracked file', function () {
     expect($diff)->not->toContain('@@ ');
 });
 
+test('getFileDiff respects contextLines parameter', function () {
+    initRepo($this->tmpDir);
+    // 20-line file, modify line 1 and line 20 to create 2 hunks with default context
+    $lines = array_map(fn ($i) => "line{$i}", range(1, 20));
+    File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
+    commitAll($this->tmpDir, 'initial');
+
+    $lines[0] = 'changed1';
+    $lines[19] = 'changed20';
+    File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
+
+    $diff3 = $this->service->getFileDiff($this->tmpDir, 'many.txt');
+    $diffFull = $this->service->getFileDiff($this->tmpDir, 'many.txt', contextLines: 99999);
+
+    // Default (3 context lines) should produce 2 hunks
+    expect(preg_match_all('/^@@ -/m', $diff3))->toBe(2);
+
+    // Full context should produce 1 hunk starting at line 1
+    expect(preg_match_all('/^@@ -/m', $diffFull))->toBe(1);
+    expect($diffFull)->toContain('@@ -1,');
+});
+
 // -- GitCommandException tests --
 
 test('getFileList throws GitCommandException for non-git directory', function () {

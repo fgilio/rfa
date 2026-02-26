@@ -53,6 +53,99 @@ new class extends Component {
         );
     }
 
+    public function expandContext(): void
+    {
+        $cacheKey = $this->diffCacheKey();
+        Cache::forget($cacheKey);
+
+        $this->diffData = app(LoadFileDiffAction::class)->handle(
+            $this->repoPath,
+            $this->file['path'],
+            $this->file['isUntracked'] ?? false,
+            cacheKey: $cacheKey,
+            contextLines: 99999,
+        );
+    }
+
+    public function expandGap(int $hunkIndex): void
+    {
+        if ($this->diffData === null || empty($this->diffData['hunks'])) {
+            return;
+        }
+
+        $hunks = $this->diffData['hunks'];
+
+        // Determine the new-line range for this gap
+        if ($hunkIndex === 0) {
+            $gapNewStart = 1;
+            $gapNewEnd = $hunks[0]['newStart'] - 1;
+        } else {
+            $prev = $hunks[$hunkIndex - 1];
+            $gapNewStart = $prev['newStart'] + $prev['newCount'];
+            $gapNewEnd = $hunks[$hunkIndex]['newStart'] - 1;
+        }
+
+        if ($gapNewStart > $gapNewEnd) {
+            return;
+        }
+
+        // Fetch full-context diff to get the hidden lines with syntax highlighting
+        $fullDiff = app(LoadFileDiffAction::class)->handle(
+            $this->repoPath,
+            $this->file['path'],
+            $this->file['isUntracked'] ?? false,
+            contextLines: 99999,
+        );
+
+        if (empty($fullDiff['hunks'])) {
+            return;
+        }
+
+        // Extract gap lines from the full diff's single hunk by newLineNum
+        $gapLines = [];
+        foreach ($fullDiff['hunks'][0]['lines'] as $line) {
+            $num = $line['newLineNum'] ?? null;
+            if ($num !== null && $num >= $gapNewStart && $num <= $gapNewEnd && $line['type'] === 'context') {
+                $gapLines[] = $line;
+            }
+        }
+
+        if (empty($gapLines)) {
+            return;
+        }
+
+        $gapSize = count($gapLines);
+
+        if ($hunkIndex === 0) {
+            // Prepend gap lines to first hunk
+            $hunks[0]['lines'] = array_merge($gapLines, $hunks[0]['lines']);
+            $hunks[0]['oldStart'] -= $gapSize;
+            $hunks[0]['oldCount'] += $gapSize;
+            $hunks[0]['newStart'] = 1;
+            $hunks[0]['newCount'] += $gapSize;
+        } else {
+            // Merge: prevHunk + gapLines + currentHunk -> single hunk
+            $prev = $hunks[$hunkIndex - 1];
+            $curr = $hunks[$hunkIndex];
+
+            $merged = [
+                'header' => $prev['header'],
+                'oldStart' => $prev['oldStart'],
+                'oldCount' => $prev['oldCount'] + $gapSize + $curr['oldCount'],
+                'newStart' => $prev['newStart'],
+                'newCount' => $prev['newCount'] + $gapSize + $curr['newCount'],
+                'lines' => array_merge($prev['lines'], $gapLines, $curr['lines']),
+            ];
+
+            array_splice($hunks, $hunkIndex - 1, 2, [$merged]);
+        }
+
+        $this->diffData['hunks'] = $hunks;
+
+        // Update cache with expanded state
+        Cache::put($this->diffCacheKey(), $this->diffData, now()->addHours(config('rfa.cache_ttl_hours', 24)));
+    }
+
     private function diffCacheKey(): string
     {
         $key = $this->projectId > 0 ? $this->projectId : $this->repoPath;
@@ -249,15 +342,64 @@ new class extends Component {
                 <flux:text variant="subtle" size="sm">No content changes</flux:text>
             </div>
         @else
-            @php $commentsByLine = collect($fileComments)->where('side', '!=', 'file')->groupBy(fn($c) => $c['side'] . ':' . $c['endLine']); @endphp
+            @php
+                $commentsByLine = collect($fileComments)->where('side', '!=', 'file')->groupBy(fn($c) => $c['side'] . ':' . $c['endLine']);
+                $hunks = $diffData['hunks'];
+                $hasGaps = count($hunks) > 1 || (count($hunks) === 1 && $hunks[0]['newStart'] > 1);
+            @endphp
             <div class="overflow-x-auto">
                 <table class="w-full border-collapse font-mono text-xs leading-5">
+                    @if($hasGaps)
+                        <tr class="bg-gh-hunk-bg">
+                            <td colspan="4" class="px-4 py-1 text-center">
+                                <button
+                                    wire:click="expandContext"
+                                    wire:loading.attr="disabled"
+                                    wire:target="expandContext"
+                                    class="text-gh-accent text-xs hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                                >
+                                    <flux:icon wire:loading wire:target="expandContext" icon="arrow-path" variant="micro" class="animate-spin" />
+                                    Show full file
+                                </button>
+                            </td>
+                        </tr>
+                    @endif
+
                     @foreach($diffData['hunks'] as $hunkIndex => $hunk)
-                        {{-- Hunk header --}}
+                        {{-- Hunk separator with expand button --}}
                         @if($hunkIndex > 0 || $hunk['header'] !== '')
                             <tr class="bg-gh-hunk-bg">
                                 <td colspan="4" class="px-4 py-1 text-gh-muted text-xs">
-                                    @@ -{{ $hunk['oldStart'] }} +{{ $hunk['newStart'] }} @@
+                                    @if($hunkIndex > 0)
+                                        @php
+                                            $prevHunk = $hunks[$hunkIndex - 1];
+                                            $hiddenCount = $hunk['newStart'] - ($prevHunk['newStart'] + $prevHunk['newCount']);
+                                        @endphp
+                                        <button
+                                            wire:click="expandGap({{ $hunkIndex }})"
+                                            wire:loading.attr="disabled"
+                                            wire:target="expandGap"
+                                            class="text-gh-accent hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                                        >
+                                            <flux:icon wire:loading wire:target="expandGap" icon="arrow-path" variant="micro" class="animate-spin" />
+                                            <span wire:loading.remove wire:target="expandGap">Expand {{ $hiddenCount }} hidden lines</span>
+                                            <span wire:loading wire:target="expandGap">Expanding...</span>
+                                        </button>
+                                    @elseif($hunk['newStart'] > 1)
+                                        @php $hiddenCount = $hunk['newStart'] - 1; @endphp
+                                        <button
+                                            wire:click="expandGap(0)"
+                                            wire:loading.attr="disabled"
+                                            wire:target="expandGap"
+                                            class="text-gh-accent hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                                        >
+                                            <flux:icon wire:loading wire:target="expandGap" icon="arrow-path" variant="micro" class="animate-spin" />
+                                            <span wire:loading.remove wire:target="expandGap">Expand {{ $hiddenCount }} hidden lines</span>
+                                            <span wire:loading wire:target="expandGap">Expanding...</span>
+                                        </button>
+                                    @else
+                                        @@ -{{ $hunk['oldStart'] }} +{{ $hunk['newStart'] }} @@
+                                    @endif
                                     @if($hunk['header'])
                                         <span class="text-gh-muted/60">{{ $hunk['header'] }}</span>
                                     @endif

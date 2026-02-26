@@ -20,11 +20,11 @@ final readonly class LoadFileDiffAction
     ) {}
 
     /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool} */
-    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null): array
+    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3): array
     {
-        $compute = function () use ($repoPath, $path, $isUntracked): array {
+        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines): array {
             try {
-                $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked);
+                $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, contextLines: $contextLines);
             } catch (GitCommandException $e) {
                 return FileDiff::emptyArray($path, 'modified', tooLarge: false)
                     + ['error' => $e->stderr ?: $e->getMessage()];
