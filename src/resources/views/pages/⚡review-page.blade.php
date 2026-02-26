@@ -2,8 +2,10 @@
 
 use App\Actions\AddCommentAction;
 use App\Actions\DeleteCommentAction;
+use App\Actions\DeleteReviewFilesAction;
 use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
+use App\Actions\GroupReviewFilesAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
@@ -18,6 +20,12 @@ use Livewire\Component;
 new #[Layout('layouts.app')] class extends Component {
     /** @var array<int, array<string, mixed>> */
     public array $files = [];
+
+    /** @var array<int, array<string, mixed>> */
+    public array $reviewPairs = [];
+
+    /** @var array<int, array<string, mixed>> */
+    public array $sourceFiles = [];
 
     /** @var array<int, array<string, mixed>> */
     public array $comments = [];
@@ -82,6 +90,8 @@ new #[Layout('layouts.app')] class extends Component {
             $this->files = [];
         }
 
+        $this->groupFiles();
+
         $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId);
         $this->comments = $session['comments'];
         $this->viewedFiles = $session['viewedFiles'];
@@ -104,6 +114,8 @@ new #[Layout('layouts.app')] class extends Component {
             $this->gitError = $e->stderr ?: $e->getMessage();
             $this->files = [];
         }
+
+        $this->groupFiles();
 
         $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId);
         $this->comments = $session['comments'];
@@ -187,6 +199,51 @@ new #[Layout('layouts.app')] class extends Component {
         return collect($this->comments)->groupBy('fileId')->map(fn ($group) => $group->values()->all())->all();
     }
 
+    public function deleteReviewPair(string $basename): void
+    {
+        app(DeleteReviewFilesAction::class)->handle($this->repoPath, $basename);
+
+        $this->reviewPairs = array_values(
+            array_filter($this->reviewPairs, fn ($p) => $p['basename'] !== $basename)
+        );
+
+        $this->files = array_values(
+            array_filter($this->files, function ($f) use ($basename) {
+                return \App\DTOs\ReviewFilePair::extractBasename($f['path']) !== $basename;
+            })
+        );
+
+        Flux::toast(variant: 'success', heading: 'Review deleted');
+    }
+
+    public function deleteAllReviewPairs(): void
+    {
+        $basenames = array_column($this->reviewPairs, 'basename');
+
+        if (empty($basenames)) {
+            return;
+        }
+
+        app(DeleteReviewFilesAction::class)->handle($this->repoPath, $basenames);
+
+        $this->files = array_values(
+            array_filter($this->files, function ($f) {
+                return \App\DTOs\ReviewFilePair::extractBasename($f['path']) === null;
+            })
+        );
+
+        $this->reviewPairs = [];
+
+        Flux::toast(variant: 'success', heading: 'All reviews deleted');
+    }
+
+    private function groupFiles(): void
+    {
+        $grouped = app(GroupReviewFilesAction::class)->handle($this->files);
+        $this->reviewPairs = $grouped['reviewPairs'];
+        $this->sourceFiles = $grouped['sourceFiles'];
+    }
+
     private function dispatchFileComments(string $fileId): void
     {
         $fileComments = collect($this->comments)->where('fileId', $fileId)->values()->all();
@@ -204,9 +261,9 @@ new #[Layout('layouts.app')] class extends Component {
     data-testid="review-component"
     x-data="{
         activeFile: null,
-        viewedFiles: {{ Js::from((object) collect($files)->filter(fn($f) => in_array($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()) }},
+        viewedFiles: {{ Js::from((object) collect($sourceFiles)->filter(fn($f) => in_array($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()) }},
         fileFilter: '',
-        filePaths: {{ Js::from(collect($files)->pluck('path')->all()) }},
+        filePaths: {{ Js::from(collect($sourceFiles)->pluck('path')->all()) }},
         sidebarWidth: parseInt(localStorage.getItem('rfa-sidebar-width') || 288),
         resizing: false,
         fileMatchesFilter(path) {
@@ -287,15 +344,18 @@ new #[Layout('layouts.app')] class extends Component {
         <div class="flex items-center gap-3 text-xs">
             <flux:text variant="subtle" size="sm" inline
                 x-text="fileFilter === ''
-                    ? '{{ count($files) }} {{ Str::plural('file', count($files)) }}'
-                    : filePaths.filter(p => fileMatchesFilter(p)).length + '/{{ count($files) }} files'"
-            >{{ count($files) }} {{ Str::plural('file', count($files)) }}</flux:text>
+                    ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
+                    : filePaths.filter(p => fileMatchesFilter(p)).length + '/{{ count($sourceFiles) }} files'"
+            >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</flux:text>
             <flux:text variant="subtle" size="sm" inline
                 x-show="Object.values(viewedFiles).filter(Boolean).length > 0"
-                x-text="Object.values(viewedFiles).filter(Boolean).length + '/{{ count($files) }} viewed'"
+                x-text="Object.values(viewedFiles).filter(Boolean).length + '/{{ count($sourceFiles) }} viewed'"
                 x-cloak />
-            <flux:badge color="green" size="sm">+{{ collect($files)->sum('additions') }}</flux:badge>
-            <flux:badge color="red" size="sm">-{{ collect($files)->sum('deletions') }}</flux:badge>
+            @if(count($reviewPairs) > 0)
+                <flux:badge color="purple" size="sm">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</flux:badge>
+            @endif
+            <flux:badge color="green" size="sm">+{{ collect($sourceFiles)->sum('additions') }}</flux:badge>
+            <flux:badge color="red" size="sm">-{{ collect($sourceFiles)->sum('deletions') }}</flux:badge>
             <span class="w-px h-4 bg-gh-border"></span>
             <flux:checkbox wire:model.live="respectGlobalGitignore"
                 label="Global .gitignore" class="text-xs" />
@@ -320,6 +380,30 @@ new #[Layout('layouts.app')] class extends Component {
         {{-- Sidebar --}}
         <aside class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-surface hidden lg:block relative" :style="{ width: sidebarWidth + 'px' }" x-ref="sidebar">
             <div class="p-3">
+                @if(count($reviewPairs) > 0)
+                    <div class="flex items-center justify-between mb-2">
+                        <flux:heading class="!text-xs uppercase tracking-wide">Previous Reviews</flux:heading>
+                        <flux:button variant="ghost" size="sm" class="!text-[10px] !px-1.5 !py-0.5 text-red-400 hover:text-red-300"
+                            @click="if (confirm('Delete all review files?')) $wire.deleteAllReviewPairs()">
+                            Delete All
+                        </flux:button>
+                    </div>
+                    @foreach($reviewPairs as $pair)
+                        <div class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-gh-border/50 flex items-center gap-2 group transition-colors text-gh-text">
+                            <flux:badge variant="solid" color="purple" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0 justify-center">R</flux:badge>
+                            <button @click="scrollToFile('{{ $pair['id'] }}')" class="truncate text-left" title="{{ $pair['basename'] }}">
+                                {{ $pair['basename'] }}
+                            </button>
+                            <flux:text variant="subtle" size="sm" class="shrink-0 ml-auto">{{ $pair['createdAtHuman'] }}</flux:text>
+                            <button class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0"
+                                @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')">
+                                <flux:icon icon="trash" variant="micro" />
+                            </button>
+                        </div>
+                    @endforeach
+                    <div class="border-b border-gh-border my-2"></div>
+                @endif
+
                 <flux:heading class="!text-xs uppercase tracking-wide mb-2">Files</flux:heading>
                 <flux:input
                     x-model.debounce.150ms="fileFilter"
@@ -333,7 +417,7 @@ new #[Layout('layouts.app')] class extends Component {
                     x-ref="fileFilterInput"
                     @keydown.escape="fileFilter = ''; $el.blur()"
                 />
-                @foreach($files as $file)
+                @foreach($sourceFiles as $file)
                     @php
                         [$badgeColor, $badgeLabel] = match($file['status']) {
                             'added' => ['green', 'A'],
@@ -388,7 +472,71 @@ new #[Layout('layouts.app')] class extends Component {
                     </div>
                 </div>
             @else
-                @foreach($files as $file)
+                {{-- Previous Reviews --}}
+                @if(count($reviewPairs) > 0)
+                    <div class="border-b border-gh-border">
+                        <div class="px-4 py-2 flex items-center justify-between bg-gh-surface/50">
+                            <div class="flex items-center gap-2">
+                                <flux:badge variant="solid" color="purple" size="sm">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</flux:badge>
+                                <flux:heading size="sm">Previous Reviews</flux:heading>
+                            </div>
+                            <flux:button variant="ghost" size="sm" class="text-red-400 hover:text-red-300"
+                                @click="if (confirm('Delete all review files?')) $wire.deleteAllReviewPairs()">
+                                Delete All
+                            </flux:button>
+                        </div>
+                        @foreach($reviewPairs as $pair)
+                            <div id="{{ $pair['id'] }}" class="border-t border-gh-border" x-data="{ collapsed: true }">
+                                <button @click="collapsed = !collapsed"
+                                    class="w-full px-4 py-2 flex items-center gap-2 text-sm hover:bg-gh-border/30 transition-colors group">
+                                    <flux:icon icon="chevron-right" variant="micro" class="shrink-0 transition-transform" ::class="!collapsed && 'rotate-90'" />
+                                    <flux:badge variant="solid" color="purple" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0 justify-center">R</flux:badge>
+                                    <span class="font-mono text-xs truncate">{{ $pair['basename'] }}</span>
+                                    <flux:text variant="subtle" size="sm" class="shrink-0">{{ $pair['createdAtHuman'] }}</flux:text>
+                                    @if($pair['jsonFile'])
+                                        <flux:badge size="sm" variant="outline">.json</flux:badge>
+                                    @endif
+                                    @if($pair['mdFile'])
+                                        <flux:badge size="sm" variant="outline">.md</flux:badge>
+                                    @endif
+                                    <span class="ml-auto">
+                                        <button class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 p-1"
+                                            @click.stop="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')">
+                                            <flux:icon icon="trash" variant="micro" />
+                                        </button>
+                                    </span>
+                                </button>
+                                <div x-show="!collapsed" x-collapse>
+                                    @if($pair['jsonFile'])
+                                        <livewire:diff-file
+                                            :key="$pair['jsonFile']['id']"
+                                            :file="$pair['jsonFile']"
+                                            :load-delay="0"
+                                            :file-comments="$this->groupedComments[$pair['jsonFile']['id']] ?? []"
+                                            :is-viewed="in_array($pair['jsonFile']['path'], $viewedFiles)"
+                                            :repo-path="$repoPath"
+                                            :project-id="$projectId"
+                                        />
+                                    @endif
+                                    @if($pair['mdFile'])
+                                        <livewire:diff-file
+                                            :key="$pair['mdFile']['id']"
+                                            :file="$pair['mdFile']"
+                                            :load-delay="0"
+                                            :file-comments="$this->groupedComments[$pair['mdFile']['id']] ?? []"
+                                            :is-viewed="in_array($pair['mdFile']['path'], $viewedFiles)"
+                                            :repo-path="$repoPath"
+                                            :project-id="$projectId"
+                                        />
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
+                {{-- Source Files --}}
+                @foreach($sourceFiles as $file)
                     <div id="{{ $file['id'] }}" class="border-b border-gh-border" x-show="fileMatchesFilter({{ Js::from($file['path']) }})">
                         <livewire:diff-file
                             :key="$file['id']"
