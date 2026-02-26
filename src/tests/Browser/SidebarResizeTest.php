@@ -163,3 +163,41 @@ test('main content gets pointer-events-none during drag', function () {
         "!document.querySelector('main').classList.contains('pointer-events-none')"
     );
 });
+
+test('double-clicking resize handle resets sidebar to default width', function () {
+    $page = $this->visit($this->projectUrl());
+
+    // First drag sidebar wider
+    $page->script("
+        const handle = document.querySelector('aside .cursor-col-resize');
+        const rect = handle.getBoundingClientRect();
+        const startX = rect.left + rect.width / 2;
+        const startY = rect.top + rect.height / 2;
+
+        handle.dispatchEvent(new MouseEvent('mousedown', {
+            clientX: startX, clientY: startY, bubbles: true
+        }));
+        document.dispatchEvent(new MouseEvent('mousemove', {
+            clientX: startX + 100, clientY: startY, bubbles: true
+        }));
+        document.dispatchEvent(new MouseEvent('mouseup', {
+            clientX: startX + 100, clientY: startY, bubbles: true
+        }));
+    ");
+
+    $page->page()->waitForFunction("document.querySelector('aside').offsetWidth > 300");
+
+    // Double-click the handle
+    $page->script("
+        const handle = document.querySelector('aside .cursor-col-resize');
+        handle.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    ");
+
+    $page->page()->waitForFunction("document.querySelector('aside').offsetWidth === 288");
+
+    $width = $page->page()->evaluate("document.querySelector('aside').offsetWidth");
+    expect($width)->toBe(288);
+
+    $stored = $page->page()->evaluate("parseInt(localStorage.getItem('rfa-sidebar-width'))");
+    expect($stored)->toBe(288);
+});
