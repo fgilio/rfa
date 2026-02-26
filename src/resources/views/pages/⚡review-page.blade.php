@@ -177,15 +177,38 @@ new #[Layout('layouts.app')] class extends Component {
             this.resizing = true;
             const startX = e.clientX;
             const startWidth = this.sidebarWidth;
+            const aside = this.$refs.sidebar;
+            const main = aside.parentElement.querySelector('main');
+            let raf = null;
+            let currentWidth = startWidth;
+
+            // Float sidebar above main so diff DOM never reflows during drag
+            aside.style.position = 'fixed';
+            aside.style.left = '0';
+            aside.style.zIndex = '40';
+            aside.style.willChange = 'width';
+            main.style.marginLeft = startWidth + 'px';
             document.body.classList.add('cursor-col-resize', 'select-none');
 
             const onMove = (e) => {
-                this.sidebarWidth = Math.min(600, Math.max(200, startWidth + e.clientX - startX));
+                currentWidth = Math.min(600, Math.max(200, startWidth + e.clientX - startX));
+                if (raf) return;
+                raf = requestAnimationFrame(() => {
+                    aside.style.width = currentWidth + 'px';
+                    raf = null;
+                });
             };
             const onUp = () => {
+                if (raf) { cancelAnimationFrame(raf); raf = null; }
+                aside.style.position = '';
+                aside.style.left = '';
+                aside.style.zIndex = '';
+                aside.style.willChange = '';
+                main.style.marginLeft = '';
                 this.resizing = false;
+                this.sidebarWidth = currentWidth;
                 document.body.classList.remove('cursor-col-resize', 'select-none');
-                localStorage.setItem('rfa-sidebar-width', this.sidebarWidth);
+                localStorage.setItem('rfa-sidebar-width', currentWidth);
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup', onUp);
             };
@@ -248,7 +271,7 @@ new #[Layout('layouts.app')] class extends Component {
 
     <div class="flex">
         {{-- Sidebar --}}
-        <aside class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-surface/50 hidden lg:block relative" :style="{ width: sidebarWidth + 'px' }">
+        <aside class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-surface hidden lg:block relative" :style="{ width: sidebarWidth + 'px' }" x-ref="sidebar">
             <div class="p-3">
                 <flux:heading class="!text-xs uppercase tracking-wide mb-2">Files</flux:heading>
                 <flux:input
@@ -299,7 +322,7 @@ new #[Layout('layouts.app')] class extends Component {
         </aside>
 
         {{-- Main content --}}
-        <main class="flex-1 min-w-0 pb-24">
+        <main class="flex-1 min-w-0 pb-24" :class="resizing && 'pointer-events-none'" style="contain: inline-size layout style">
             @if($gitError)
                 <div class="flex items-center justify-center h-[60vh]">
                     <div class="text-center">
