@@ -9,6 +9,7 @@ use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\Actions\ToggleViewedAction;
 use App\Exceptions\GitCommandException;
+use App\Models\Project;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
@@ -44,6 +45,10 @@ new #[Layout('layouts.app')] class extends Component {
 
     public ?string $activeFileId = null;
 
+    public bool $respectGlobalGitignore = true;
+
+    public ?string $globalGitignorePath = null;
+
     public function mount(string $slug): void
     {
         $project = app(ResolveProjectAction::class)->handle($slug);
@@ -52,9 +57,26 @@ new #[Layout('layouts.app')] class extends Component {
         $this->projectName = $project['name'];
         $this->projectBranch = $project['branch'] ?? '';
         $this->projectSlug = $project['slug'];
+        $this->respectGlobalGitignore = $project['respect_global_gitignore'] ?? true;
+        $this->globalGitignorePath = $project['global_gitignore_path'] ?: null;
+
+        // Backfill path for projects registered before the migration
+        if ($this->globalGitignorePath === null) {
+            $this->globalGitignorePath = app(\App\Services\GitDiffService::class)
+                ->resolveGlobalExcludesFile($this->repoPath);
+
+            if ($this->globalGitignorePath !== null) {
+                Project::where('id', $this->projectId)
+                    ->update(['global_gitignore_path' => $this->globalGitignorePath]);
+            }
+        }
 
         try {
-            $this->files = app(GetFileListAction::class)->handle($this->repoPath, projectId: $this->projectId);
+            $this->files = app(GetFileListAction::class)->handle(
+                $this->repoPath,
+                projectId: $this->projectId,
+                globalGitignorePath: $this->respectGlobalGitignore ? $this->globalGitignorePath : null,
+            );
         } catch (GitCommandException $e) {
             $this->gitError = $e->stderr ?: $e->getMessage();
             $this->files = [];
@@ -64,6 +86,28 @@ new #[Layout('layouts.app')] class extends Component {
         $this->comments = $session['comments'];
         $this->viewedFiles = $session['viewedFiles'];
         $this->globalComment = $session['globalComment'];
+    }
+
+    public function updatedRespectGlobalGitignore(): void
+    {
+        Project::where('id', $this->projectId)->update([
+            'respect_global_gitignore' => $this->respectGlobalGitignore,
+        ]);
+
+        try {
+            $this->files = app(GetFileListAction::class)->handle(
+                $this->repoPath,
+                projectId: $this->projectId,
+                globalGitignorePath: $this->respectGlobalGitignore ? $this->globalGitignorePath : null,
+            );
+        } catch (GitCommandException $e) {
+            $this->gitError = $e->stderr ?: $e->getMessage();
+            $this->files = [];
+        }
+
+        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId);
+        $this->comments = $session['comments'];
+        $this->viewedFiles = $session['viewedFiles'];
     }
 
     #[On('add-comment')]
@@ -252,6 +296,9 @@ new #[Layout('layouts.app')] class extends Component {
                 x-cloak />
             <flux:badge color="green" size="sm">+{{ collect($files)->sum('additions') }}</flux:badge>
             <flux:badge color="red" size="sm">-{{ collect($files)->sum('deletions') }}</flux:badge>
+            <span class="w-px h-4 bg-gh-border"></span>
+            <flux:checkbox wire:model.live="respectGlobalGitignore"
+                label="Global .gitignore" class="text-xs" />
             <span class="w-px h-4 bg-gh-border"></span>
             <flux:tooltip content="Collapse all (Shift+C)">
                 <flux:button variant="ghost" size="sm" icon="collapse-all"

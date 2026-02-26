@@ -28,7 +28,10 @@ final readonly class RegisterProjectAction
         $existing = Project::where('path', $path)->first();
 
         if ($existing) {
-            $existing->update(['branch' => $this->git->getCurrentBranch($directory)]);
+            $existing->update([
+                'branch' => $this->git->getCurrentBranch($directory),
+                'global_gitignore_path' => $this->git->resolveGlobalExcludesFile($path),
+            ]);
 
             return $existing;
         }
@@ -52,6 +55,7 @@ final readonly class RegisterProjectAction
             'git_common_dir' => $gitCommonDir,
             'is_worktree' => $isWorktree,
             'branch' => $branch,
+            'global_gitignore_path' => $this->git->resolveGlobalExcludesFile($path),
         ]);
     }
 

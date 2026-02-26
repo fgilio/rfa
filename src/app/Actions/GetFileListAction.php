@@ -17,9 +17,9 @@ final readonly class GetFileListAction
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null): array
+    public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null): array
     {
-        $fileList = $this->gitDiffService->getFileList($repoPath);
+        $fileList = $this->gitDiffService->getFileList($repoPath, $globalGitignorePath);
 
         $files = array_map(fn ($entry) => $entry->toArray(), $fileList);
 
