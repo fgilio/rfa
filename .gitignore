@@ -16,3 +16,4 @@ src/bootstrap/cache/*
 !src/storage/framework/sessions/.gitkeep
 !src/storage/framework/views/.gitkeep
 !src/bootstrap/cache/.gitkeep
+src/.perf/
