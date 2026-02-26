@@ -254,11 +254,11 @@ new #[Layout('layouts.app')] class extends Component {
             <flux:badge color="red" size="sm">-{{ collect($files)->sum('deletions') }}</flux:badge>
             <span class="w-px h-4 bg-gh-border"></span>
             <flux:tooltip content="Collapse all (Shift+C)">
-                <flux:button variant="ghost" size="sm" icon="bars-arrow-up"
+                <flux:button variant="ghost" size="sm" icon="collapse-all"
                     @click="$dispatch('collapse-all-files')" />
             </flux:tooltip>
             <flux:tooltip content="Expand all (Shift+E)">
-                <flux:button variant="ghost" size="sm" icon="bars-arrow-down"
+                <flux:button variant="ghost" size="sm" icon="expand-all"
                     @click="$dispatch('expand-all-files')" />
             </flux:tooltip>
             <span class="w-px h-4 bg-gh-border"></span>
