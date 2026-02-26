@@ -318,7 +318,8 @@ new #[Layout('layouts.app')] class extends Component {
             </div>
             <div class="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-gh-accent/40 transition-colors"
                 style="padding-left: 3px; padding-right: 3px; margin-left: -3px; margin-right: -3px; background-clip: content-box;"
-                @mousedown="startResize($event)"></div>
+                @mousedown="startResize($event)"
+                @dblclick="sidebarWidth = 288; localStorage.setItem('rfa-sidebar-width', 288)"></div>
         </aside>
 
         {{-- Main content --}}
