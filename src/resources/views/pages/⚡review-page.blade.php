@@ -279,7 +279,7 @@ new #[Layout('layouts.app')] class extends Component {
                         :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-border/50 text-gh-accent' : 'text-gh-text'"
                     >
                         <flux:badge variant="solid" :color="$badgeColor" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0">{{ $badgeLabel }}</flux:badge>
-                        <span class="truncate">{{ $file['path'] }}</span>
+                        <span class="truncate" title="{{ $file['path'] }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
                         <flux:icon icon="check" variant="micro" x-show="viewedFiles['{{ $file['id'] }}']"
                             class="text-gh-green shrink-0" x-cloak />
                         <span class="ml-auto flex gap-1 shrink-0">
