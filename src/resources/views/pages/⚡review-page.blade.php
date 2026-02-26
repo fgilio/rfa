@@ -163,6 +163,8 @@ new #[Layout('layouts.app')] class extends Component {
         viewedFiles: {{ Js::from((object) collect($files)->filter(fn($f) => in_array($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()) }},
         fileFilter: '',
         filePaths: {{ Js::from(collect($files)->pluck('path')->all()) }},
+        sidebarWidth: parseInt(localStorage.getItem('rfa-sidebar-width') || 288),
+        resizing: false,
         fileMatchesFilter(path) {
             return this.fileFilter === '' || path.toLowerCase().includes(this.fileFilter.toLowerCase());
         },
@@ -170,6 +172,26 @@ new #[Layout('layouts.app')] class extends Component {
             this.activeFile = id;
             this.$dispatch('expand-file', { id });
             document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+        startResize(e) {
+            this.resizing = true;
+            const startX = e.clientX;
+            const startWidth = this.sidebarWidth;
+            document.body.classList.add('cursor-col-resize', 'select-none');
+
+            const onMove = (e) => {
+                this.sidebarWidth = Math.min(600, Math.max(200, startWidth + e.clientX - startX));
+            };
+            const onUp = () => {
+                this.resizing = false;
+                document.body.classList.remove('cursor-col-resize', 'select-none');
+                localStorage.setItem('rfa-sidebar-width', this.sidebarWidth);
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            };
+
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
         }
     }"
     @file-viewed-changed.window="viewedFiles[$event.detail.id] = $event.detail.viewed"
@@ -226,7 +248,7 @@ new #[Layout('layouts.app')] class extends Component {
 
     <div class="flex">
         {{-- Sidebar --}}
-        <aside class="w-72 shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-surface/50 hidden lg:block">
+        <aside class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-surface/50 hidden lg:block relative" :style="{ width: sidebarWidth + 'px' }">
             <div class="p-3">
                 <flux:heading class="!text-xs uppercase tracking-wide mb-2">Files</flux:heading>
                 <flux:input
@@ -271,6 +293,9 @@ new #[Layout('layouts.app')] class extends Component {
                     </button>
                 @endforeach
             </div>
+            <div class="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-gh-accent/40 transition-colors"
+                style="padding-left: 3px; padding-right: 3px; margin-left: -3px; margin-right: -3px; background-clip: content-box;"
+                @mousedown="startResize($event)"></div>
         </aside>
 
         {{-- Main content --}}
