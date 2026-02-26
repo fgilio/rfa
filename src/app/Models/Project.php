@@ -15,12 +15,15 @@ class Project extends Model
         'git_common_dir',
         'is_worktree',
         'branch',
+        'global_gitignore_path',
+        'respect_global_gitignore',
     ];
 
     protected function casts(): array
     {
         return [
             'is_worktree' => 'boolean',
+            'respect_global_gitignore' => 'boolean',
         ];
     }
 }
