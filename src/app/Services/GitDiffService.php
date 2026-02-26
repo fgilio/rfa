@@ -16,8 +16,34 @@ class GitDiffService
         private readonly IgnoreService $ignoreService,
     ) {}
 
+    public function resolveGlobalExcludesFile(string $repoPath): ?string
+    {
+        try {
+            $raw = trim($this->runGit($repoPath, ['config', '--global', 'core.excludesFile']));
+        } catch (GitCommandException) {
+            return null;
+        }
+
+        if ($raw === '') {
+            return null;
+        }
+
+        // Expand ~ to HOME
+        if (str_starts_with($raw, '~/')) {
+            $home = $_SERVER['HOME'] ?? getenv('HOME');
+            if ($home === false || $home === '') {
+                return null;
+            }
+            $raw = $home.substr($raw, 1);
+        }
+
+        $resolved = realpath($raw);
+
+        return $resolved !== false && is_file($resolved) ? $resolved : null;
+    }
+
     /** @return FileListEntry[] */
-    public function getFileList(string $repoPath): array
+    public function getFileList(string $repoPath, ?string $globalGitignorePath = null): array
     {
         $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
 
@@ -104,9 +130,11 @@ class GitDiffService
         }
 
         // Get untracked files
-        $untrackedOutput = $this->runGit($repoPath, [
-            'ls-files', '--others', '--exclude-standard',
-        ]);
+        $lsFilesArgs = ['ls-files', '--others', '--exclude-standard'];
+        if ($globalGitignorePath !== null && is_file($globalGitignorePath)) {
+            $lsFilesArgs[] = '--exclude-from='.$globalGitignorePath;
+        }
+        $untrackedOutput = $this->runGit($repoPath, $lsFilesArgs);
 
         if (trim($untrackedOutput) !== '') {
             $untrackedFiles = array_filter(explode("\n", trim($untrackedOutput)));
