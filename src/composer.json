@@ -8,7 +8,8 @@
     "require": {
         "php": "^8.3",
         "laravel/framework": "^12.0",
-        "livewire/flux": "^2.12",
+        "livewire/blaze": "^1.0",
+        "livewire/flux": "^2.12.1",
         "livewire/livewire": "^4.1",
         "phiki/phiki": "^2.1"
     },
@@ -52,6 +53,7 @@
             "@php artisan config:clear --ansi",
             "@php artisan test"
         ],
+        "test:perf": "@php artisan test --group=perf",
         "test:browser": "@php artisan test --testsuite=Browser",
         "test:browser:headed": "@php artisan test --testsuite=Browser --headed",
         "post-autoload-dump": [
