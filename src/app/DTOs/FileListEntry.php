@@ -17,6 +17,7 @@ class FileListEntry
         public readonly int $deletions,
         public readonly bool $isBinary,
         public readonly bool $isUntracked,
+        public readonly ?string $lastModified = null,
     ) {}
 
     public function getId(): string
@@ -44,6 +45,7 @@ class FileListEntry
             'isBinary' => $this->isBinary,
             'isUntracked' => $this->isUntracked,
             'isImage' => $this->isImage(),
+            'lastModified' => $this->lastModified,
         ];
     }
 }

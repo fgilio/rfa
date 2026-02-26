@@ -48,6 +48,7 @@ test('toArray includes all properties and computed id', function () {
         'isBinary' => false,
         'isUntracked' => false,
         'isImage' => false,
+        'lastModified' => null,
     ]);
 });
 

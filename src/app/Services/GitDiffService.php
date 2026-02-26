@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\DTOs\FileListEntry;
 use App\Exceptions\GitCommandException;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Process\Process;
 
@@ -98,6 +99,7 @@ class GitDiffService
                 deletions: $stats['deletions'],
                 isBinary: $isBinary,
                 isUntracked: false,
+                lastModified: $this->getLastModified($repoPath, $path),
             );
         }
 
@@ -130,6 +132,7 @@ class GitDiffService
                         deletions: 0,
                         isBinary: true,
                         isUntracked: true,
+                        lastModified: $this->getLastModified($repoPath, $file),
                     );
 
                     continue;
@@ -146,6 +149,7 @@ class GitDiffService
                     deletions: 0,
                     isBinary: false,
                     isUntracked: true,
+                    lastModified: $this->getLastModified($repoPath, $file),
                 );
             }
         }
@@ -283,6 +287,17 @@ class GitDiffService
         } catch (GitCommandException) {
             return null;
         }
+    }
+
+    private function getLastModified(string $repoPath, string $path): ?string
+    {
+        $fullPath = $repoPath.'/'.$path;
+
+        if (! File::isFile($fullPath)) {
+            return null;
+        }
+
+        return Carbon::createFromTimestamp(File::lastModified($fullPath))->diffForHumans(short: true);
     }
 
     /** @param array<int, string> $args */
