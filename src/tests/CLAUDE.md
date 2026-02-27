@@ -23,7 +23,6 @@
 
 ## Assertions
 
-- `expect()` chains only - no PHPUnit `assert*()` methods
 - Chain multiple expectations on the same subject when readable
 
 ## Test Naming

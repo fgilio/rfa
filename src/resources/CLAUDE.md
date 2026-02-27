@@ -5,7 +5,7 @@
 - Check fluxui.dev docs for component API before building custom markup
 
 ## Colors
-- Use `gh-*` color tokens from CSS variables, never hardcode hex colors
+- Use `gh-*` color tokens from CSS variables
 - RGB-based tokens (bg, surface, border, text, muted, accent, green, red) support Tailwind opacity modifiers: `bg-gh-bg/50`
 - Raw tokens (add-bg, del-bg, hunk-bg, etc.) are used directly: `bg-gh-add-bg`
 - Theme colors defined in `config/theme.php`
@@ -25,7 +25,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 
 ### Rules
 
-1. **Never use `#[Reactive]` on child props** when parent has many children. Data pushed via reactive props causes 1+N hydration on every parent action.
+1. **Avoid `#[Reactive]` on child props when parent has many children.** Data pushed via reactive props causes 1+N hydration on every parent action. Use event dispatch for targeted updates instead.
 
 2. **Always `skipRender()` on parent actions** that don't need to re-execute the Blade template. If the UI update is handled client-side (Alpine) or via targeted child calls, skip the parent render.
 
