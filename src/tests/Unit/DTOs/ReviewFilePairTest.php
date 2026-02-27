@@ -102,3 +102,27 @@ test('handles null createdAt in toArray', function () {
     expect($array['createdAt'])->toBeNull()
         ->and($array['createdAtHuman'])->toBeNull();
 });
+
+// -- displayName --
+
+test('displayName formats timestamp as friendly date', function () {
+    $pair = new ReviewFilePair(
+        basename: '20250226_231521_comments_aA06ntL4',
+        jsonFile: null,
+        mdFile: null,
+        createdAt: Carbon::parse('2025-02-26 23:15:21'),
+    );
+
+    expect($pair->toArray()['displayName'])->toBe('Feb 26, 11:15 PM');
+});
+
+test('displayName falls back to basename when createdAt is null', function () {
+    $pair = new ReviewFilePair(
+        basename: '20250226_231521_comments_aA06ntL4',
+        jsonFile: null,
+        mdFile: null,
+        createdAt: null,
+    );
+
+    expect($pair->toArray()['displayName'])->toBe('20250226_231521_comments_aA06ntL4');
+});

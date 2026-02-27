@@ -63,6 +63,7 @@ class ReviewFilePair
         return [
             'id' => 'review-'.hash('xxh128', $this->basename),
             'basename' => $this->basename,
+            'displayName' => $this->createdAt?->format('M j, g:i A') ?? $this->basename,
             'jsonFile' => $this->jsonFile,
             'mdFile' => $this->mdFile,
             'createdAt' => $this->createdAt?->toIso8601String(),
