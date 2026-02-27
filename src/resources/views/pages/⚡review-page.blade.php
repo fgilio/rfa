@@ -213,7 +213,7 @@ new #[Layout('layouts.app')] class extends Component {
             })
         );
 
-        Flux::toast(variant: 'success', heading: 'Review deleted');
+        Flux::toast(text: 'Review deleted', variant: 'success');
     }
 
     public function deleteAllReviewPairs(): void
@@ -234,7 +234,7 @@ new #[Layout('layouts.app')] class extends Component {
 
         $this->reviewPairs = [];
 
-        Flux::toast(variant: 'success', heading: 'All reviews deleted');
+        Flux::toast(text: 'All reviews deleted', variant: 'success');
     }
 
     private function groupFiles(): void
