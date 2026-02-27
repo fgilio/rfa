@@ -358,6 +358,50 @@ test('getFileContent returns null for file not in HEAD', function () {
     expect($this->service->getFileContent($this->tmpDir, 'untracked.txt', 'head'))->toBeNull();
 });
 
+// -- Unicode/emoji file path tests --
+
+test('getFileList returns correct path for modified file with unicode name', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/⚡show.blade.php', "original\n");
+    commitAll($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/⚡show.blade.php', "changed\n");
+
+    $entries = $this->service->getFileList($this->tmpDir);
+
+    expect($entries)->toHaveCount(1)
+        ->and($entries[0]->path)->toBe('⚡show.blade.php')
+        ->and($entries[0]->status)->toBe('modified');
+});
+
+test('getFileList returns correct path for untracked file with emoji name', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    commitAll($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/🚀launch.txt', "hello\n");
+
+    $entries = $this->service->getFileList($this->tmpDir);
+
+    expect($entries)->toHaveCount(1)
+        ->and($entries[0]->path)->toBe('🚀launch.txt')
+        ->and($entries[0]->isUntracked)->toBeTrue();
+});
+
+test('getFileDiff returns valid diff for unicode-named file', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/⚡show.blade.php', "line1\n");
+    commitAll($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/⚡show.blade.php', "line1\nline2\n");
+
+    $diff = $this->service->getFileDiff($this->tmpDir, '⚡show.blade.php');
+
+    expect($diff)->toStartWith('diff --git')
+        ->and($diff)->toContain('⚡show.blade.php')
+        ->and($diff)->toContain('+line2');
+});
+
 // -- GitCommandException tests --
 
 test('GitCommandException carries stderr and exit code', function () {
