@@ -84,7 +84,6 @@ test('comments on left and right sides at same line render independently', funct
 
     // Click left-side line number on a removed row (old line column)
     $helloFile->locator('tr.bg-gh-del-bg > td[data-testid="diff-line-number"]:first-child')->first()->click();
-    // Two textareas may render (removed + added rows share the same $lineNum); they share Alpine state
     $helloFile->getByPlaceholder('Write a comment', false)->first()->fill('Left side comment');
     $helloFile->getByRole('button', ['name' => 'Save'])->first()->click();
     $page->assertSee('Left side comment');
@@ -97,4 +96,16 @@ test('comments on left and right sides at same line render independently', funct
     // Both comments should be visible independently
     $page->assertSee('Left side comment');
     $page->assertSee('Right side comment');
+});
+
+test('clicking line on removal row opens exactly one comment form', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $helloFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("hello.php"))');
+
+    // Click left-side line number on a removed row - line exists on both sides
+    $helloFile->locator('tr.bg-gh-del-bg > td[data-testid="diff-line-number"]:first-child')->first()->click();
+
+    // Only one comment form should render, not two
+    expect($helloFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
 });
