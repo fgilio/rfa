@@ -454,7 +454,7 @@ new class extends Component {
 
                             {{-- Inline comment form (shows after the target line) --}}
                             @if($lineNum !== null)
-                                <template x-if="showDraft && draftEndLine === {{ $lineNum }} && draftSide !== 'file'">
+                                <template x-if="showDraft && draftEndLine === {{ $lineNum }} && draftSide !== 'file' && ({{ Js::from($lineSide) }} === 'context' || draftSide === {{ Js::from($lineSide) }})">
                                     <tr>
                                         <td colspan="4" class="p-0">
                                             <flux:card size="sm" class="!rounded-none border-y border-gh-border">
