@@ -331,7 +331,7 @@ class GitDiffService
     /** @param array<int, string> $args */
     private function runGit(string $repoPath, array $args): string
     {
-        $process = new Process(['git', '-C', $repoPath, ...$args]);
+        $process = new Process(['git', '-c', 'core.quotepath=false', '-C', $repoPath, ...$args]);
         $process->setTimeout(30);
         $process->run();
 
