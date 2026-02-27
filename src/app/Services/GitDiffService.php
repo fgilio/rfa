@@ -39,7 +39,7 @@ class GitDiffService
 
         $resolved = realpath($raw);
 
-        return $resolved !== false && is_file($resolved) ? $resolved : null;
+        return $resolved !== false && File::isFile($resolved) ? $resolved : null;
     }
 
     /** @return FileListEntry[] */
@@ -131,7 +131,7 @@ class GitDiffService
 
         // Get untracked files
         $lsFilesArgs = ['ls-files', '--others', '--exclude-standard'];
-        if ($globalGitignorePath !== null && is_file($globalGitignorePath)) {
+        if ($globalGitignorePath !== null && File::isFile($globalGitignorePath)) {
             $lsFilesArgs[] = '--exclude-from='.$globalGitignorePath;
         }
         $untrackedOutput = $this->runGit($repoPath, $lsFilesArgs);

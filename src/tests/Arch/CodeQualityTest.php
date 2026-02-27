@@ -22,3 +22,7 @@ arch('app code has no suspicious characters')
 arch()->preset()->php();
 
 arch()->preset()->security();
+
+arch('app code uses File facade instead of raw file functions')
+    ->expect(['file_exists', 'file_get_contents', 'file_put_contents', 'is_file', 'is_dir', 'unlink', 'mkdir', 'rmdir'])
+    ->not->toBeUsedIn('App');
