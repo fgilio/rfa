@@ -12,6 +12,87 @@ afterEach(function () {
     $this->tearDownTestRepo();
 });
 
+test('clicking file name collapses and expands file diff', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $page->assertSee("'debug'");
+
+    // Click the file name text to collapse
+    $page->page()->getByTestId('file-header')->first()->getByText('config.php')->click();
+
+    $page->assertDontSee("'debug'");
+
+    // Click again to expand
+    $page->page()->getByTestId('file-header')->first()->getByText('config.php')->click();
+
+    $page->assertSee("'debug'");
+});
+
+test('alt+click chevron collapses all files', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $page->assertSee('function greet');
+
+    $page->page()->getByLabel('Collapse file')->first()->click(['modifiers' => ['Alt']]);
+
+    $page->assertDontSee('function greet');
+});
+
+test('alt+click chevron expands all files', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $page->assertSee('function greet');
+
+    // Collapse all first
+    $page->page()->getByLabel('Collapse file')->first()->click(['modifiers' => ['Alt']]);
+    $page->assertDontSee('function greet');
+
+    // Alt+click collapsed chevron to expand ALL
+    $page->page()->getByLabel('Expand file')->first()->click(['modifiers' => ['Alt']]);
+
+    $page->assertSee('function greet');
+});
+
+test('alt+click file name collapses all files', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $page->assertSee('function greet');
+
+    $page->page()->getByTestId('file-header')->first()->getByText('config.php')->click(['modifiers' => ['Alt']]);
+
+    $page->assertDontSee('function greet');
+});
+
+test('alt+click file name expands all files', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $page->assertSee('function greet');
+
+    // Collapse all first
+    $page->page()->getByTestId('file-header')->first()->getByText('config.php')->click(['modifiers' => ['Alt']]);
+    $page->assertDontSee('function greet');
+
+    // Alt+click again to expand ALL
+    $page->page()->getByTestId('file-header')->first()->getByText('config.php')->click(['modifiers' => ['Alt']]);
+
+    $page->assertSee('function greet');
+});
+
+test('copy file name button dispatches copy event', function () {
+    $page = $this->visit($this->projectUrl());
+
+    // Listen for the copy-to-clipboard event
+    $page->script("
+        window.__copiedText = null;
+        window.addEventListener('copy-to-clipboard', e => window.__copiedText = e.detail.text);
+    ");
+
+    $page->page()->getByLabel('Copy file name')->first()->click();
+
+    $result = $page->script('window.__copiedText');
+    expect($result)->not->toBeNull();
+});
+
 test('clicking chevron collapses and expands file diff', function () {
     $page = $this->visit($this->projectUrl());
 
