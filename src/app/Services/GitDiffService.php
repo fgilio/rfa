@@ -185,6 +185,43 @@ class GitDiffService
         return $entries;
     }
 
+    public function getWorkingDirectoryFingerprint(string $repoPath, ?string $globalGitignorePath = null): string
+    {
+        $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
+
+        $nameStatus = $this->runGit($repoPath, [
+            'diff', 'HEAD', '--name-status', '--find-renames',
+            '--', '.', ...$excludes,
+        ]);
+
+        $lsFilesArgs = ['ls-files', '--others', '--exclude-standard'];
+        if ($globalGitignorePath !== null && File::isFile($globalGitignorePath)) {
+            $lsFilesArgs[] = '--exclude-from='.$globalGitignorePath;
+        }
+        $untrackedOutput = $this->runGit($repoPath, $lsFilesArgs);
+
+        $lines = array_filter([
+            ...explode("\n", trim($nameStatus)),
+            ...array_map(
+                fn (string $f) => "?\t".$f,
+                array_filter(explode("\n", trim($untrackedOutput))),
+            ),
+        ]);
+
+        // Filter untracked files through the same excludes as getFileList
+        $lines = array_filter($lines, function (string $line) use ($excludes) {
+            if (! str_starts_with($line, "?\t")) {
+                return true;
+            }
+
+            return ! $this->ignoreService->isPathExcluded(substr($line, 2), $excludes);
+        });
+
+        sort($lines);
+
+        return hash('xxh128', implode("\n", $lines));
+    }
+
     public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3): ?string
     {
         $maxBytes ??= config('rfa.diff_max_bytes', 512_000);

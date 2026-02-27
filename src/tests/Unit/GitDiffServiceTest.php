@@ -417,3 +417,45 @@ test('GitCommandException carries stderr and exit code', function () {
 
     test()->fail('Expected GitCommandException');
 });
+
+// -- getWorkingDirectoryFingerprint tests --
+
+test('getWorkingDirectoryFingerprint changes when tracked file modified', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "line1\n");
+    commitAll($this->tmpDir, 'initial');
+
+    $before = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
+
+    File::put($this->tmpDir.'/hello.txt', "changed\n");
+    $after = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
+
+    expect($after)->not->toBe($before);
+});
+
+test('getWorkingDirectoryFingerprint changes when untracked file added', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "line1\n");
+    commitAll($this->tmpDir, 'initial');
+
+    $before = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
+
+    File::put($this->tmpDir.'/newfile.txt', "hello\n");
+    $after = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
+
+    expect($after)->not->toBe($before);
+});
+
+test('getWorkingDirectoryFingerprint is deterministic for same state', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "line1\n");
+    commitAll($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/hello.txt', "changed\n");
+    File::put($this->tmpDir.'/newfile.txt', "hello\n");
+
+    $hash1 = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
+    $hash2 = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
+
+    expect($hash1)->toBe($hash2);
+});
