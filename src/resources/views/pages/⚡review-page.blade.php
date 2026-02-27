@@ -382,20 +382,21 @@ new #[Layout('layouts.app')] class extends Component {
             <div class="p-3">
                 @if(count($reviewPairs) > 0)
                     <div class="flex items-center justify-between mb-2">
-                        <flux:heading class="!text-xs uppercase tracking-wide">Previous Reviews</flux:heading>
-                        <flux:button variant="ghost" size="sm" class="!text-[10px] !px-1.5 !py-0.5 text-red-400 hover:text-red-300"
-                            @click="if (confirm('Delete all review files?')) $wire.deleteAllReviewPairs()">
-                            Delete All
-                        </flux:button>
+                        <flux:heading class="!text-xs uppercase tracking-wide">Reviews</flux:heading>
+                        @if(count($reviewPairs) > 1)
+                            <button class="text-gh-muted hover:text-red-400 transition-colors"
+                                @click="if (confirm('Delete all review files?')) $wire.deleteAllReviewPairs()">
+                                <flux:icon icon="trash" variant="micro" />
+                            </button>
+                        @endif
                     </div>
                     @foreach($reviewPairs as $pair)
                         <div class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-gh-border/50 flex items-center gap-2 group transition-colors text-gh-text">
                             <flux:badge variant="solid" color="purple" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0 justify-center">R</flux:badge>
                             <button @click="scrollToFile('{{ $pair['id'] }}')" class="truncate text-left" title="{{ $pair['basename'] }}">
-                                {{ $pair['basename'] }}
+                                {{ $pair['displayName'] }}
                             </button>
-                            <flux:text variant="subtle" size="sm" class="shrink-0 ml-auto">{{ $pair['createdAtHuman'] }}</flux:text>
-                            <button class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0"
+                            <button class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0 ml-auto"
                                 @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')">
                                 <flux:icon icon="trash" variant="micro" />
                             </button>
@@ -472,68 +473,53 @@ new #[Layout('layouts.app')] class extends Component {
                     </div>
                 </div>
             @else
-                {{-- Previous Reviews --}}
-                @if(count($reviewPairs) > 0)
-                    <div class="border-b border-gh-border">
-                        <div class="px-4 py-2 flex items-center justify-between bg-gh-surface/50">
-                            <div class="flex items-center gap-2">
-                                <flux:badge variant="solid" color="purple" size="sm">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</flux:badge>
-                                <flux:heading size="sm">Previous Reviews</flux:heading>
-                            </div>
-                            <flux:button variant="ghost" size="sm" class="text-red-400 hover:text-red-300"
-                                @click="if (confirm('Delete all review files?')) $wire.deleteAllReviewPairs()">
-                                Delete All
-                            </flux:button>
+                {{-- Review Pairs --}}
+                @foreach($reviewPairs as $pair)
+                    <div id="{{ $pair['id'] }}" class="border-b border-gh-border" x-data="{ collapsed: true }">
+                        <div class="sticky top-[var(--header-h)] z-10 bg-gh-surface border-b border-gh-border px-4 py-2 flex items-center gap-2">
+                            <button @click="collapsed = !collapsed" class="text-gh-muted hover:text-gh-text transition-colors">
+                                <flux:icon icon="chevron-down" variant="micro" x-show="!collapsed" />
+                                <flux:icon icon="chevron-right" variant="micro" x-show="collapsed" x-cloak />
+                            </button>
+                            <flux:badge variant="solid" color="purple" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0 justify-center">R</flux:badge>
+                            <span class="font-mono text-sm truncate">{{ $pair['displayName'] }}</span>
+                            @if($pair['jsonFile'])
+                                <flux:badge size="sm" variant="outline">.json</flux:badge>
+                            @endif
+                            @if($pair['mdFile'])
+                                <flux:badge size="sm" variant="outline">.md</flux:badge>
+                            @endif
+                            <span class="ml-auto">
+                                <flux:button variant="ghost" size="sm" icon="trash"
+                                    @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')" />
+                            </span>
                         </div>
-                        @foreach($reviewPairs as $pair)
-                            <div id="{{ $pair['id'] }}" class="border-t border-gh-border" x-data="{ collapsed: true }">
-                                <button @click="collapsed = !collapsed"
-                                    class="w-full px-4 py-2 flex items-center gap-2 text-sm hover:bg-gh-border/30 transition-colors group">
-                                    <flux:icon icon="chevron-right" variant="micro" class="shrink-0 transition-transform" ::class="!collapsed && 'rotate-90'" />
-                                    <flux:badge variant="solid" color="purple" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0 justify-center">R</flux:badge>
-                                    <span class="font-mono text-xs truncate">{{ $pair['basename'] }}</span>
-                                    <flux:text variant="subtle" size="sm" class="shrink-0">{{ $pair['createdAtHuman'] }}</flux:text>
-                                    @if($pair['jsonFile'])
-                                        <flux:badge size="sm" variant="outline">.json</flux:badge>
-                                    @endif
-                                    @if($pair['mdFile'])
-                                        <flux:badge size="sm" variant="outline">.md</flux:badge>
-                                    @endif
-                                    <span class="ml-auto">
-                                        <button class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 p-1"
-                                            @click.stop="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')">
-                                            <flux:icon icon="trash" variant="micro" />
-                                        </button>
-                                    </span>
-                                </button>
-                                <div x-show="!collapsed" x-collapse>
-                                    @if($pair['jsonFile'])
-                                        <livewire:diff-file
-                                            :key="$pair['jsonFile']['id']"
-                                            :file="$pair['jsonFile']"
-                                            :load-delay="0"
-                                            :file-comments="$this->groupedComments[$pair['jsonFile']['id']] ?? []"
-                                            :is-viewed="in_array($pair['jsonFile']['path'], $viewedFiles)"
-                                            :repo-path="$repoPath"
-                                            :project-id="$projectId"
-                                        />
-                                    @endif
-                                    @if($pair['mdFile'])
-                                        <livewire:diff-file
-                                            :key="$pair['mdFile']['id']"
-                                            :file="$pair['mdFile']"
-                                            :load-delay="0"
-                                            :file-comments="$this->groupedComments[$pair['mdFile']['id']] ?? []"
-                                            :is-viewed="in_array($pair['mdFile']['path'], $viewedFiles)"
-                                            :repo-path="$repoPath"
-                                            :project-id="$projectId"
-                                        />
-                                    @endif
-                                </div>
-                            </div>
-                        @endforeach
+                        <div x-show="!collapsed" x-collapse.duration.150ms>
+                            @if($pair['jsonFile'])
+                                <livewire:diff-file
+                                    :key="$pair['jsonFile']['id']"
+                                    :file="$pair['jsonFile']"
+                                    :load-delay="0"
+                                    :file-comments="$this->groupedComments[$pair['jsonFile']['id']] ?? []"
+                                    :is-viewed="in_array($pair['jsonFile']['path'], $viewedFiles)"
+                                    :repo-path="$repoPath"
+                                    :project-id="$projectId"
+                                />
+                            @endif
+                            @if($pair['mdFile'])
+                                <livewire:diff-file
+                                    :key="$pair['mdFile']['id']"
+                                    :file="$pair['mdFile']"
+                                    :load-delay="0"
+                                    :file-comments="$this->groupedComments[$pair['mdFile']['id']] ?? []"
+                                    :is-viewed="in_array($pair['mdFile']['path'], $viewedFiles)"
+                                    :repo-path="$repoPath"
+                                    :project-id="$projectId"
+                                />
+                            @endif
+                        </div>
                     </div>
-                @endif
+                @endforeach
 
                 {{-- Source Files --}}
                 @foreach($sourceFiles as $file)
