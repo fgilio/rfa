@@ -105,6 +105,7 @@
     @fluxAppearance
 </head>
 <body class="bg-gh-bg text-gh-text min-h-screen font-mono text-sm">
+    <livewire:update-checker />
     {{ $slot }}
     @fluxScripts
 </body>
