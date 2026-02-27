@@ -233,7 +233,7 @@ new class extends Component {
             <flux:icon icon="chevron-right" variant="micro" x-show="collapsed" x-cloak />
         </button>
 
-        <flux:text size="sm" inline class="font-mono truncate">
+        <flux:text size="sm" inline class="font-mono truncate cursor-pointer" @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }">
             @if($file['oldPath'])
                 <flux:text variant="subtle" size="sm" inline>{{ $file['oldPath'] }} &rarr;</flux:text>
             @endif
