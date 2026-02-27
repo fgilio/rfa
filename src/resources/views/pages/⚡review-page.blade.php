@@ -188,6 +188,15 @@ new #[Layout('layouts.app')] class extends Component {
         $this->exportResult = $result['clipboard'];
         $this->submitted = true;
 
+        // Refresh file list to include newly created review files
+        $this->files = app(GetFileListAction::class)->handle(
+            $this->repoPath,
+            clearCache: false,
+            projectId: $this->projectId,
+            globalGitignorePath: $this->respectGlobalGitignore ? $this->globalGitignorePath : null,
+        );
+        $this->groupFiles();
+
         Flux::toast(variant: 'success', heading: 'Review submitted', text: $this->exportResult);
         $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
     }
