@@ -369,13 +369,13 @@ new #[Layout('layouts.app')] class extends Component {
             <flux:checkbox wire:model.live="respectGlobalGitignore"
                 label="Global .gitignore" class="text-xs" />
             <span class="w-px h-4 bg-gh-border"></span>
-            <flux:tooltip content="Collapse all (Shift+C)">
-                <flux:button variant="ghost" size="sm" icon="collapse-all"
-                    @click="$dispatch('collapse-all-files')" />
-            </flux:tooltip>
             <flux:tooltip content="Expand all (Shift+E)">
                 <flux:button variant="ghost" size="sm" icon="expand-all"
                     @click="$dispatch('expand-all-files')" />
+            </flux:tooltip>
+            <flux:tooltip content="Collapse all (Shift+C)">
+                <flux:button variant="ghost" size="sm" icon="collapse-all"
+                    @click="$dispatch('collapse-all-files')" />
             </flux:tooltip>
             <span class="w-px h-4 bg-gh-border"></span>
             <div x-data="{
