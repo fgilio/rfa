@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreSessionAction;
@@ -177,4 +178,51 @@ test('mount backfills empty string gitignore path from git config', function () 
 
     expect($component->get('globalGitignorePath'))->toBe($resolvedPath);
     expect($this->project->fresh()->global_gitignore_path)->toBe($resolvedPath);
+});
+
+// -- Submit review refreshes file list --
+
+test('submitReview refreshes file list and populates reviewPairs', function () {
+    $sourceFiles = $this->files;
+
+    $reviewFiles = [
+        ['id' => 'rev-json', 'path' => '.rfa/20260227_173000_comments_abcd1234.json', 'status' => 'added', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false],
+        ['id' => 'rev-md', 'path' => '.rfa/20260227_173000_comments_abcd1234.md', 'status' => 'added', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false],
+    ];
+
+    $counter = (object) ['value' => 0];
+    app()->bind(GetFileListAction::class, function () use ($sourceFiles, $reviewFiles, $counter) {
+        return new class($sourceFiles, $reviewFiles, $counter)
+        {
+            public function __construct(private array $sourceFiles, private array $reviewFiles, private object $counter) {}
+
+            public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null): array
+            {
+                $this->counter->value++;
+
+                // First call (mount): source files only. Subsequent calls: source + review files.
+                return $this->counter->value <= 1
+                    ? $this->sourceFiles
+                    : array_merge($this->sourceFiles, $this->reviewFiles);
+            }
+        };
+    });
+
+    app()->bind(ExportReviewAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, array $comments, string $globalComment, array $files): array
+        {
+            return ['json' => '/tmp/review.json', 'md' => '/tmp/review.md', 'clipboard' => 'review exported'];
+        }
+    });
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project']);
+    expect($component->get('reviewPairs'))->toBeEmpty();
+
+    $component
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Test comment')
+        ->call('submitReview');
+
+    expect($component->get('reviewPairs'))->toHaveCount(1);
+    expect($component->get('submitted'))->toBeTrue();
 });
