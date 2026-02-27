@@ -378,6 +378,42 @@ new #[Layout('layouts.app')] class extends Component {
                     @click="$dispatch('expand-all-files')" />
             </flux:tooltip>
             <span class="w-px h-4 bg-gh-border"></span>
+            <div x-data="{
+                hasChanges: false,
+                fingerprint: null,
+                polling: null,
+                async check() {
+                    try {
+                        const res = await fetch('/api/changes/{{ $projectId }}');
+                        const data = await res.json();
+                        if (this.fingerprint === null) {
+                            this.fingerprint = data.fingerprint;
+                        } else if (data.fingerprint !== this.fingerprint) {
+                            this.hasChanges = true;
+                        }
+                    } catch {}
+                },
+                startPolling() {
+                    this.check();
+                    this.polling = setInterval(() => {
+                        if (!document.hidden) this.check();
+                    }, 60000);
+                },
+                refresh() {
+                    window.location.reload();
+                }
+            }" x-init="startPolling()" class="relative flex items-center">
+                <flux:tooltip content="Refresh page">
+                    <flux:button variant="ghost" size="sm" icon="arrow-path"
+                        @click="refresh()" />
+                </flux:tooltip>
+                <span x-show="hasChanges" x-cloak
+                    class="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                </span>
+            </div>
+            <span class="w-px h-4 bg-gh-border"></span>
             <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
                 icon="moon" x-show="! $flux.dark" x-cloak />
             <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
