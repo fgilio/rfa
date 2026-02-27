@@ -61,3 +61,35 @@ test('blade files do not hardcode hex colors', function () use ($srcRoot) {
 
     expect($violations)->toBeEmpty();
 });
+
+test('Flux::toast() calls always pass the required text argument', function () use ($srcRoot) {
+    // Valid: Flux::toast('msg'), Flux::toast(text: 'msg'), Flux::toast('msg', variant: 'success')
+    // Invalid: Flux::toast(variant: 'success', heading: 'x') - missing $text
+    $pattern = '/Flux::toast\((.+?)\)/s';
+
+    $violations = [];
+
+    foreach (glob($srcRoot.'/resources/views/**/*.blade.php') as $file) {
+        $content = file_get_contents($file);
+        $relative = str_replace($srcRoot.'/', '', $file);
+
+        if (preg_match_all($pattern, $content, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) {
+            foreach ($matches as $match) {
+                $args = $match[1][0];
+                $offset = $match[0][1];
+                $line = substr_count(substr($content, 0, $offset), "\n") + 1;
+
+                // $text is satisfied if: first arg is positional (no `name:` prefix),
+                // or `text:` is passed as a named argument
+                $hasPositionalFirst = ! preg_match('/^\s*\w+\s*:/', $args);
+                $hasNamedText = preg_match('/\btext\s*:/', $args);
+
+                if (! $hasPositionalFirst && ! $hasNamedText) {
+                    $violations[] = "{$relative}:{$line} — Flux::toast() missing required \$text argument";
+                }
+            }
+        }
+    }
+
+    expect($violations)->toBeEmpty();
+});
