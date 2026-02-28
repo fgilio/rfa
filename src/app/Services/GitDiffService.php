@@ -414,7 +414,7 @@ class GitDiffService
     {
         $args = ['log', "--format=%H\x1e%h\x1e%s\x1e%an\x1e%ar\x1e%aI", "--skip={$offset}", '-n', (string) $limit];
 
-        if ($branch !== null && $branch !== '') {
+        if ($branch !== null && $branch !== '' && ! str_starts_with($branch, '-')) {
             $args[] = $branch;
         }
 
