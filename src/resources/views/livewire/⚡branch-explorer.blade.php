@@ -54,8 +54,7 @@ new class extends Component {
         selectedIndex: 0,
         selectedBranch: @js($currentBranch),
         allBranches: @js($branches),
-        localLabel: 'Local',
-        remoteLabel: 'Remote',
+        _loadId: 0,
 
         get filteredLocal() {
             if (this.search === '') return this.allBranches.local || [];
@@ -79,7 +78,6 @@ new class extends Component {
             this.selectedIndex = 0;
             await $wire.loadBranches();
             this.allBranches = $wire.branches;
-            // Select current branch and load its commits
             const currentIdx = this.allFiltered.findIndex(b => b.name === this.selectedBranch);
             if (currentIdx >= 0) this.selectedIndex = currentIdx;
             this.selectCurrentBranch();
@@ -91,14 +89,14 @@ new class extends Component {
             this.open = false;
         },
 
-        selectCurrentBranch() {
+        async selectCurrentBranch() {
             const branch = this.allFiltered[this.selectedIndex];
-            if (branch && branch.name !== this.selectedBranch) {
-                this.selectedBranch = branch.name;
-                $wire.loadCommits(branch.name);
-            } else if (branch && this.selectedBranch === branch.name && $wire.commits.length === 0) {
-                $wire.loadCommits(branch.name);
-            }
+            if (!branch) return;
+            if (branch.name === this.selectedBranch && $wire.commits.length > 0) return;
+            this.selectedBranch = branch.name;
+            const id = ++this._loadId;
+            await $wire.loadCommits(branch.name);
+            if (this._loadId !== id) return;
         },
 
         handleKeydown(e) {
@@ -178,13 +176,16 @@ new class extends Component {
                 <div class="w-[240px] shrink-0 border-r border-gh-border flex flex-col max-h-[60vh]">
                     {{-- Search input --}}
                     <div class="p-2 border-b border-gh-border">
-                        <input
+                        <flux:input
                             x-ref="searchInput"
                             x-model.debounce.100ms="search"
                             @input="onSearchChange()"
-                            type="text"
                             placeholder="Filter branches..."
-                            class="w-full bg-gh-bg border border-gh-border rounded px-2 py-1.5 text-xs text-gh-text placeholder-gh-muted focus:outline-none focus:border-gh-accent"
+                            icon="magnifying-glass"
+                            size="sm"
+                            variant="filled"
+                            clearable
+                            @keydown.escape.stop
                         />
                     </div>
 
@@ -194,7 +195,7 @@ new class extends Component {
                         <template x-if="filteredLocal.length > 0">
                             <div>
                                 <div class="px-3 pt-2 pb-1">
-                                    <span class="text-[10px] uppercase tracking-wider font-semibold text-gh-muted" x-text="localLabel"></span>
+                                    <span class="text-[10px] uppercase tracking-wider font-semibold text-gh-muted">Local</span>
                                 </div>
                                 <template x-for="(branch, i) in filteredLocal" :key="branch.name">
                                     <button
@@ -215,7 +216,7 @@ new class extends Component {
                         <template x-if="filteredRemote.length > 0">
                             <div>
                                 <div class="px-3 pt-3 pb-1 border-t border-gh-border">
-                                    <span class="text-[10px] uppercase tracking-wider font-semibold text-gh-muted" x-text="remoteLabel"></span>
+                                    <span class="text-[10px] uppercase tracking-wider font-semibold text-gh-muted">Remote</span>
                                 </div>
                                 <template x-for="(branch, j) in filteredRemote" :key="branch.name">
                                     <button
@@ -246,7 +247,7 @@ new class extends Component {
                     <div class="px-4 py-2 border-b border-gh-border flex items-center gap-2 shrink-0">
                         <flux:icon icon="clock" variant="micro" class="text-gh-muted" />
                         <span class="text-xs font-semibold text-gh-text truncate" x-text="selectedBranch || 'Select a branch'"></span>
-                        <span class="text-xs text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + (hasMore ? '+' : '') + ')'"></span>
+                        <span class="text-xs text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + ($wire.hasMore ? '+' : '') + ')'"></span>
                     </div>
 
                     {{-- Commits list --}}
@@ -279,7 +280,7 @@ new class extends Component {
                         </template>
 
                         {{-- Load more --}}
-                        <template x-if="hasMore">
+                        <template x-if="$wire.hasMore">
                             <div class="px-4 py-3 text-center">
                                 <button
                                     @click="$wire.loadMore(selectedBranch)"
