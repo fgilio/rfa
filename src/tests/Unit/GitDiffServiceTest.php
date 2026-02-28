@@ -52,6 +52,7 @@ function initRepo(string $dir): void
         'git init -b main',
         "git config user.email 'test@rfa.test'",
         "git config user.name 'RFA Test'",
+        'git config commit.gpgsign false',
     ]));
 }
 
@@ -458,4 +459,145 @@ test('getWorkingDirectoryFingerprint is deterministic for same state', function 
     $hash2 = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
 
     expect($hash1)->toBe($hash2);
+});
+
+// -- getBranches tests --
+
+test('getBranches returns current branch in local list', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "ok\n");
+    commitAll($this->tmpDir, 'initial');
+
+    $result = $this->service->getBranches($this->tmpDir);
+
+    expect($result['local'])->toHaveCount(1)
+        ->and($result['local'][0]->name)->toBe('main')
+        ->and($result['local'][0]->isCurrent)->toBeTrue()
+        ->and($result['local'][0]->isRemote)->toBeFalse();
+});
+
+test('getBranches returns multiple local branches', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "ok\n");
+    commitAll($this->tmpDir, 'initial');
+
+    exec('cd '.escapeshellarg($this->tmpDir).' && git branch feature-x');
+    exec('cd '.escapeshellarg($this->tmpDir).' && git branch bugfix-y');
+
+    $result = $this->service->getBranches($this->tmpDir);
+    $names = array_map(fn ($b) => $b->name, $result['local']);
+
+    expect($names)->toContain('main')
+        ->and($names)->toContain('feature-x')
+        ->and($names)->toContain('bugfix-y');
+
+    $current = array_filter($result['local'], fn ($b) => $b->isCurrent);
+    expect($current)->toHaveCount(1);
+    expect(array_values($current)[0]->name)->toBe('main');
+});
+
+test('getBranches returns empty remote list when no remotes', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "ok\n");
+    commitAll($this->tmpDir, 'initial');
+
+    $result = $this->service->getBranches($this->tmpDir);
+
+    expect($result['remote'])->toBeEmpty();
+});
+
+// -- getCommitLog tests --
+
+test('getCommitLog returns commits for current branch', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "v1\n");
+    commitAll($this->tmpDir, 'first commit');
+
+    File::put($this->tmpDir.'/file.txt', "v2\n");
+    commitAll($this->tmpDir, 'second commit');
+
+    $commits = $this->service->getCommitLog($this->tmpDir);
+
+    expect($commits)->toHaveCount(2)
+        ->and($commits[0]->message)->toBe('second commit')
+        ->and($commits[1]->message)->toBe('first commit');
+});
+
+test('getCommitLog respects limit parameter', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "v1\n");
+    commitAll($this->tmpDir, 'first');
+
+    File::put($this->tmpDir.'/file.txt', "v2\n");
+    commitAll($this->tmpDir, 'second');
+
+    File::put($this->tmpDir.'/file.txt', "v3\n");
+    commitAll($this->tmpDir, 'third');
+
+    $commits = $this->service->getCommitLog($this->tmpDir, limit: 2);
+
+    expect($commits)->toHaveCount(2)
+        ->and($commits[0]->message)->toBe('third')
+        ->and($commits[1]->message)->toBe('second');
+});
+
+test('getCommitLog respects offset parameter', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "v1\n");
+    commitAll($this->tmpDir, 'first');
+
+    File::put($this->tmpDir.'/file.txt', "v2\n");
+    commitAll($this->tmpDir, 'second');
+
+    File::put($this->tmpDir.'/file.txt', "v3\n");
+    commitAll($this->tmpDir, 'third');
+
+    $commits = $this->service->getCommitLog($this->tmpDir, limit: 50, offset: 1);
+
+    expect($commits)->toHaveCount(2)
+        ->and($commits[0]->message)->toBe('second')
+        ->and($commits[1]->message)->toBe('first');
+});
+
+test('getCommitLog returns commits for specific branch', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "v1\n");
+    commitAll($this->tmpDir, 'main commit');
+
+    exec('cd '.escapeshellarg($this->tmpDir).' && git checkout -b feature-branch');
+    File::put($this->tmpDir.'/file.txt', "v2\n");
+    commitAll($this->tmpDir, 'feature commit');
+
+    exec('cd '.escapeshellarg($this->tmpDir).' && git checkout main');
+
+    $commits = $this->service->getCommitLog($this->tmpDir, branch: 'feature-branch');
+
+    expect($commits)->toHaveCount(2)
+        ->and($commits[0]->message)->toBe('feature commit')
+        ->and($commits[1]->message)->toBe('main commit');
+});
+
+test('getCommitLog returns entries with all fields populated', function () {
+    initRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "ok\n");
+    commitAll($this->tmpDir, 'test commit');
+
+    $commits = $this->service->getCommitLog($this->tmpDir);
+
+    expect($commits)->toHaveCount(1);
+    $commit = $commits[0];
+    expect($commit->hash)->toHaveLength(40)
+        ->and($commit->shortHash)->not->toBeEmpty()
+        ->and($commit->message)->toBe('test commit')
+        ->and($commit->author)->toBe('RFA Test')
+        ->and($commit->relativeDate)->not->toBeEmpty()
+        ->and($commit->date)->not->toBeEmpty();
+});
+
+test('getCommitLog returns empty array for empty repo', function () {
+    initRepo($this->tmpDir);
+
+    $commits = $this->service->getCommitLog($this->tmpDir);
+
+    expect($commits)->toBeEmpty();
 });
