@@ -3,10 +3,11 @@
 use App\Actions\LoadFileDiffAction;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
-new class extends Component {
+new #[Lazy(bundle: true)] class extends Component {
     /** @var array<string, mixed> */
     #[Locked]
     public array $file = [];
@@ -17,9 +18,6 @@ new class extends Component {
     #[Locked]
     public int $projectId = 0;
 
-    #[Locked]
-    public int $loadDelay = 0;
-
     public bool $isViewed = false;
 
     /** @var array<int, array<string, mixed>> */
@@ -27,6 +25,51 @@ new class extends Component {
 
     /** @var array<string, mixed>|null */
     protected ?array $diffData = null;
+
+    /** @param array<string, mixed> $params */
+    public static function placeholder(array $params = []): string
+    {
+        $file = $params['file'] ?? [];
+        $path = e($file['path'] ?? '');
+        $oldPath = isset($file['oldPath']) ? e($file['oldPath']) . ' &rarr; ' : '';
+        $adds = (int) ($file['additions'] ?? 0);
+        $dels = (int) ($file['deletions'] ?? 0);
+
+        $badges = '';
+        if ($adds > 0) {
+            $badges .= '<span class="inline-flex items-center rounded-md bg-green-500/10 px-1.5 py-0.5 text-[11px] font-medium text-green-400">+' . $adds . '</span> ';
+        }
+        if ($dels > 0) {
+            $badges .= '<span class="inline-flex items-center rounded-md bg-red-500/10 px-1.5 py-0.5 text-[11px] font-medium text-red-400">-' . $dels . '</span>';
+        }
+
+        return <<<HTML
+        <div>
+            <div class="bg-gh-surface border-b border-gh-border px-4 py-2 flex items-center gap-2">
+                <span class="text-gh-muted">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-3"><path d="M12.78 5.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 6.28a.75.75 0 0 1 1.06-1.06L8 8.94l3.72-3.72a.75.75 0 0 1 1.06 0Z" /></svg>
+                </span>
+                <span class="font-mono text-sm truncate">{$oldPath}{$path}</span>
+                <span class="ml-auto flex items-center gap-2 text-xs shrink-0">{$badges}</span>
+            </div>
+            <div class="px-4 py-8 text-center">
+                <span class="text-gh-muted text-sm animate-pulse">Loading...</span>
+            </div>
+        </div>
+        HTML;
+    }
+
+    public function mount(): void
+    {
+        if (! ($this->file['isBinary'] ?? false)) {
+            $this->diffData = app(LoadFileDiffAction::class)->handle(
+                $this->repoPath,
+                $this->file['path'],
+                $this->file['isUntracked'] ?? false,
+                cacheKey: $this->diffCacheKey(),
+            );
+        }
+    }
 
     public function hydrate(): void
     {
@@ -37,20 +80,6 @@ new class extends Component {
     public function updateComments(array $comments): void
     {
         $this->fileComments = $comments;
-    }
-
-    public function loadFileDiff(): void
-    {
-        if ($this->diffData !== null) {
-            return;
-        }
-
-        $this->diffData = app(LoadFileDiffAction::class)->handle(
-            $this->repoPath,
-            $this->file['path'],
-            $this->file['isUntracked'] ?? false,
-            cacheKey: $this->diffCacheKey(),
-        );
     }
 
     public function expandContext(): void
@@ -314,18 +343,8 @@ new class extends Component {
                 @endif
             </div>
         @elseif($diffData === null)
-            {{-- Loading state: trigger lazy load via x-intersect --}}
-            <div
-                x-intersect.once="setTimeout(() => $wire.loadFileDiff(), {{ $loadDelay }})"
-                class="px-4 py-8 text-center"
-            >
-                <div wire:loading wire:target="loadFileDiff">
-                    <flux:icon icon="arrow-path" variant="micro" class="animate-spin inline-block text-gh-muted mr-1" />
-                    <flux:text variant="subtle" size="sm" inline>Loading diff...</flux:text>
-                </div>
-                <div wire:loading.remove wire:target="loadFileDiff">
-                    <flux:text variant="subtle" size="sm">Waiting to load...</flux:text>
-                </div>
+            <div class="px-4 py-8 text-center">
+                <flux:text variant="subtle" size="sm">No diff data available</flux:text>
             </div>
         @elseif($diffData['tooLarge'] ?? false)
             <div class="px-4 py-8 text-center">

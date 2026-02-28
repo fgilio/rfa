@@ -2,10 +2,16 @@
 
 use App\Actions\CheckForAppUpdateAction;
 use Flux\Flux;
+use Livewire\Attributes\Defer;
 use Livewire\Component;
 
-new class extends Component {
+new #[Defer] class extends Component {
     public bool $notified = false;
+
+    public function mount(): void
+    {
+        $this->checkForUpdate();
+    }
 
     public function checkForUpdate(): void
     {
@@ -31,4 +37,4 @@ new class extends Component {
 
 ?>
 
-<div wire:init="checkForUpdate" wire:poll.3600s="checkForUpdate"></div>
+<div wire:poll.3600s="checkForUpdate"></div>

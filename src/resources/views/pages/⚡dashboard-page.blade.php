@@ -54,7 +54,7 @@ new #[Layout('layouts.app')] class extends Component {
 
                     <div class="space-y-2">
                         @foreach($projects as $project)
-                            <a href="/p/{{ $project['slug'] }}"
+                            <a href="/p/{{ $project['slug'] }}" wire:navigate.hover
                                class="block p-4 rounded-lg border border-gh-border hover:border-gh-accent/50 bg-gh-surface transition-colors">
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center gap-3 min-w-0">

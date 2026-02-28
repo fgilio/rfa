@@ -344,7 +344,7 @@ new #[Layout('layouts.app')] class extends Component {
     {{-- Header --}}
     <header class="sticky top-0 z-50 bg-gh-surface border-b border-gh-border px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <a href="/" class="hover:opacity-80 transition-opacity"><flux:heading size="lg">rfa</flux:heading></a>
+            <a href="/" wire:navigate class="hover:opacity-80 transition-opacity"><flux:heading size="lg">rfa</flux:heading></a>
             <flux:text variant="subtle" size="sm">{{ $projectName }}</flux:text>
             @if($projectBranch)
                 <flux:badge size="sm" variant="outline">{{ $projectBranch }}</flux:badge>
@@ -544,7 +544,6 @@ new #[Layout('layouts.app')] class extends Component {
                                 <livewire:diff-file
                                     :key="$pair['jsonFile']['id']"
                                     :file="$pair['jsonFile']"
-                                    :load-delay="0"
                                     :file-comments="$this->groupedComments[$pair['jsonFile']['id']] ?? []"
                                     :is-viewed="in_array($pair['jsonFile']['path'], $viewedFiles)"
                                     :repo-path="$repoPath"
@@ -555,7 +554,6 @@ new #[Layout('layouts.app')] class extends Component {
                                 <livewire:diff-file
                                     :key="$pair['mdFile']['id']"
                                     :file="$pair['mdFile']"
-                                    :load-delay="0"
                                     :file-comments="$this->groupedComments[$pair['mdFile']['id']] ?? []"
                                     :is-viewed="in_array($pair['mdFile']['path'], $viewedFiles)"
                                     :repo-path="$repoPath"
@@ -572,7 +570,6 @@ new #[Layout('layouts.app')] class extends Component {
                         <livewire:diff-file
                             :key="$file['id']"
                             :file="$file"
-                            :load-delay="(int) (floor($loop->index / 15) * 100)"
                             :file-comments="$this->groupedComments[$file['id']] ?? []"
                             :is-viewed="in_array($file['path'], $viewedFiles)"
                             :repo-path="$repoPath"
