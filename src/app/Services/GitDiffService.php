@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\DTOs\BranchEntry;
+use App\DTOs\CommitEntry;
 use App\DTOs\FileListEntry;
 use App\Exceptions\GitCommandException;
 use Carbon\Carbon;
@@ -352,6 +354,96 @@ class GitDiffService
         } catch (GitCommandException) {
             return null;
         }
+    }
+
+    /**
+     * @return array{local: BranchEntry[], remote: BranchEntry[]}
+     */
+    public function getBranches(string $repoPath): array
+    {
+        $localOutput = $this->runGit($repoPath, ['branch', '--list', '--no-color']);
+        $local = [];
+
+        foreach (array_filter(explode("\n", $localOutput)) as $line) {
+            $isCurrent = str_starts_with($line, '* ');
+            $name = trim(ltrim($line, '* '));
+
+            if ($name === '' || str_starts_with($name, '(HEAD detached')) {
+                continue;
+            }
+
+            $local[] = new BranchEntry(
+                name: $name,
+                isCurrent: $isCurrent,
+                isRemote: false,
+            );
+        }
+
+        $remote = [];
+
+        try {
+            $remoteOutput = $this->runGit($repoPath, ['branch', '--remotes', '--no-color']);
+
+            foreach (array_filter(explode("\n", $remoteOutput)) as $line) {
+                $name = trim($line);
+
+                if ($name === '' || str_contains($name, '->')) {
+                    continue;
+                }
+
+                $remoteName = str_contains($name, '/') ? substr($name, 0, (int) strpos($name, '/')) : null;
+
+                $remote[] = new BranchEntry(
+                    name: $name,
+                    isCurrent: false,
+                    isRemote: true,
+                    remote: $remoteName,
+                );
+            }
+        } catch (GitCommandException) {
+            // No remotes configured — ignore
+        }
+
+        return ['local' => $local, 'remote' => $remote];
+    }
+
+    /**
+     * @return CommitEntry[]
+     */
+    public function getCommitLog(string $repoPath, int $limit = 50, int $offset = 0, ?string $branch = null): array
+    {
+        $args = ['log', "--format=%H\x1e%h\x1e%s\x1e%an\x1e%ar\x1e%aI", "--skip={$offset}", '-n', (string) $limit];
+
+        if ($branch !== null && $branch !== '') {
+            $args[] = $branch;
+        }
+
+        try {
+            $output = $this->runGit($repoPath, $args);
+        } catch (GitCommandException) {
+            return [];
+        }
+
+        $entries = [];
+
+        foreach (array_filter(explode("\n", trim($output))) as $line) {
+            $parts = explode("\x1e", $line);
+
+            if (count($parts) < 6) {
+                continue;
+            }
+
+            $entries[] = new CommitEntry(
+                hash: $parts[0],
+                shortHash: $parts[1],
+                message: $parts[2],
+                author: $parts[3],
+                relativeDate: $parts[4],
+                date: $parts[5],
+            );
+        }
+
+        return $entries;
     }
 
     private function getLastModified(string $repoPath, string $path): ?string

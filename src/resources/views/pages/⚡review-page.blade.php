@@ -347,7 +347,7 @@ new #[Layout('layouts.app')] class extends Component {
             <a href="/" class="hover:opacity-80 transition-opacity"><flux:heading size="lg">rfa</flux:heading></a>
             <flux:text variant="subtle" size="sm">{{ $projectName }}</flux:text>
             @if($projectBranch)
-                <flux:badge size="sm" variant="outline">{{ $projectBranch }}</flux:badge>
+                <livewire:branch-explorer :repo-path="$repoPath" :current-branch="$projectBranch" />
             @endif
         </div>
         <div class="flex items-center gap-3 text-xs">

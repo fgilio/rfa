@@ -17,6 +17,7 @@ beforeEach(function () {
         'git init -b main',
         "git config user.email 'test@rfa.test'",
         "git config user.name 'RFA Test'",
+        'git config commit.gpgsign false',
     ]));
 
     // Create a binary PNG-like file and commit it
