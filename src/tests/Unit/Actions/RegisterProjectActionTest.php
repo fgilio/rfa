@@ -12,6 +12,7 @@ beforeEach(function () {
     File::makeDirectory($this->testRepoPath, 0755, true);
 
     File::put($this->testRepoPath.'/file.txt', 'hello');
+    // gpgsign=false: disable GPG signing so test commits work without a key
     exec('cd '.escapeshellarg($this->testRepoPath).' && git init -b main && git config user.email "t@t" && git config user.name "T" && git config commit.gpgsign false && git add -A && git commit -m "init" 2>&1');
 });
 
@@ -55,6 +56,7 @@ test('handles slug collisions with suffix', function () {
     File::makeDirectory($path2.'/'.basename($this->testRepoPath), 0755, true);
     $duplicatePath = $path2.'/'.basename($this->testRepoPath);
     File::put($duplicatePath.'/file.txt', 'world');
+    // gpgsign=false: disable GPG signing so test commits work without a key
     exec('cd '.escapeshellarg($duplicatePath).' && git init -b main && git config user.email "t@t" && git config user.name "T" && git config commit.gpgsign false && git add -A && git commit -m "init" 2>&1');
 
     $first = app(RegisterProjectAction::class)->handle($this->testRepoPath);

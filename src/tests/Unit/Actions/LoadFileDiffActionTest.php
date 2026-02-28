@@ -19,7 +19,7 @@ beforeEach(function () {
         'git init -b main',
         "git config user.email 'test@rfa.test'",
         "git config user.name 'RFA Test'",
-        'git config commit.gpgsign false',
+        'git config commit.gpgsign false', // Disable GPG signing so test commits work without a key
     ]));
 
     File::put($this->tmpDir.'/hello.txt', "line1\n");
