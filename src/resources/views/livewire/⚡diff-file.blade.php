@@ -173,21 +173,43 @@ new class extends Component {
         draftBody: '',
         lastClickedLine: null,
         showDraft: false,
+        isDragging: false,
+        dragStartLine: null,
+        dragSide: null,
 
-        selectLine(lineNum, side, event) {
+        startDrag(lineNum, side, event) {
+            if (event.button !== 0) return;
             if (event.shiftKey && this.lastClickedLine !== null) {
                 this.draftLine = Math.min(this.lastClickedLine, lineNum);
                 this.draftEndLine = Math.max(this.lastClickedLine, lineNum);
-            } else {
-                this.draftLine = lineNum;
-                this.draftEndLine = lineNum;
-                this.lastClickedLine = lineNum;
+                this.draftSide = side;
+                this.showDraft = true;
+                this.$nextTick(() => { this.$refs.commentInput?.focus(); });
+                return;
             }
+            this.isDragging = true;
+            this.dragStartLine = lineNum;
+            this.dragSide = side;
+            this.draftLine = lineNum;
+            this.draftEndLine = lineNum;
             this.draftSide = side;
+            this.showDraft = false;
+        },
+
+        onDragOver(newLineNum, oldLineNum) {
+            if (!this.isDragging) return;
+            let lineNum = this.dragSide === 'left' ? oldLineNum : newLineNum;
+            if (lineNum === null) return;
+            this.draftLine = Math.min(this.dragStartLine, lineNum);
+            this.draftEndLine = Math.max(this.dragStartLine, lineNum);
+        },
+
+        endDrag() {
+            if (!this.isDragging) return;
+            this.isDragging = false;
             this.showDraft = true;
-            this.$nextTick(() => {
-                this.$refs.commentInput?.focus();
-            });
+            this.lastClickedLine = this.draftEndLine;
+            this.$nextTick(() => { this.$refs.commentInput?.focus(); });
         },
 
         cancelDraft() {
@@ -210,7 +232,8 @@ new class extends Component {
         },
 
         isLineInDraft(lineNum) {
-            if (!this.showDraft || this.draftLine === null) return false;
+            if (this.draftLine === null) return false;
+            if (!this.showDraft && !this.isDragging) return false;
             return lineNum >= this.draftLine && lineNum <= (this.draftEndLine ?? this.draftLine);
         },
 
@@ -220,6 +243,7 @@ new class extends Component {
             $wire.dispatch('toggle-viewed', { filePath: this.filePath });
         }
     }"
+    @mouseup.window="endDrag()"
     @comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"
     @collapse-all-files.window="collapsed = true"
     @expand-all-files.window="collapsed = false"
@@ -348,7 +372,7 @@ new class extends Component {
                 $hasGaps = count($hunks) > 1 || (count($hunks) === 1 && $hunks[0]['newStart'] > 1);
             @endphp
             <div class="overflow-x-auto">
-                <table class="w-full border-collapse font-mono text-xs leading-5">
+                <table class="w-full border-collapse font-mono text-xs leading-5" :class="isDragging ? 'select-none' : ''">
                     @if($hasGaps)
                         <tr class="bg-gh-hunk-bg">
                             <td colspan="4" class="px-4 py-1 text-center">
@@ -424,20 +448,21 @@ new class extends Component {
                             <tr
                                 class="diff-line {{ $bgClass }}"
                                 :class="isLineInDraft({{ $lineNum ?? 'null' }}) ? 'line-selected' : ''"
+                                @mouseenter="onDragOver({{ $line['newLineNum'] ?? 'null' }}, {{ $line['oldLineNum'] ?? 'null' }})"
                             >
                                 {{-- Old line number --}}
-                                <td data-testid="diff-line-number" class="diff-line-num w-[1px] px-2 text-right text-gh-muted/50 select-none {{ $numBgClass }}"
+                                <td data-testid="diff-line-number" class="diff-line-num w-[1px] px-2 text-right text-gh-muted/50 select-none cursor-pointer {{ $numBgClass }}"
                                     @if($line['oldLineNum'])
-                                        @click="selectLine({{ $line['oldLineNum'] }}, 'left', $event)"
+                                        @mousedown.prevent="startDrag({{ $line['oldLineNum'] }}, 'left', $event)"
                                     @endif
                                 >
                                     {{ $line['oldLineNum'] ?? '' }}
                                 </td>
 
                                 {{-- New line number --}}
-                                <td data-testid="diff-line-number" class="diff-line-num w-[1px] px-2 text-right text-gh-muted/50 select-none {{ $numBgClass }}"
+                                <td data-testid="diff-line-number" class="diff-line-num w-[1px] px-2 text-right text-gh-muted/50 select-none cursor-pointer {{ $numBgClass }}"
                                     @if($line['newLineNum'])
-                                        @click="selectLine({{ $line['newLineNum'] }}, 'right', $event)"
+                                        @mousedown.prevent="startDrag({{ $line['newLineNum'] }}, 'right', $event)"
                                     @endif
                                 >
                                     {{ $line['newLineNum'] ?? '' }}
