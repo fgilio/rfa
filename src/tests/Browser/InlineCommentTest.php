@@ -109,3 +109,25 @@ test('clicking line on removal row opens exactly one comment form', function () 
     // Only one comment form should render, not two
     expect($helloFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
 });
+
+test('dragging across line numbers selects a multi-line range', function () {
+    $page = $this->visit($this->projectUrl());
+
+    // Target hello.php's right-side (new) line numbers for predictable numbering
+    $helloFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("hello.php"))');
+    $lineNumbers = $helloFile->locator('td[data-testid="diff-line-number"]:nth-child(2)');
+
+    $first = $lineNumbers->first();
+    $last = $lineNumbers->last();
+
+    // Drag from first to last line number
+    $first->dragTo($last);
+
+    // Fill and save comment
+    $helloFile->getByPlaceholder('Write a comment', false)->first()->fill('Drag range comment');
+    $helloFile->getByRole('button', ['name' => 'Save'])->first()->click();
+
+    // Multi-line indicator "Lines X-Y" should appear
+    $page->assertSee('Drag range comment');
+    $page->assertSee('Lines');
+});
