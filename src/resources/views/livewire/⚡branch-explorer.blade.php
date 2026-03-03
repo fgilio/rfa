@@ -12,6 +12,12 @@ new class extends Component {
     #[Locked]
     public string $currentBranch = '';
 
+    #[Locked]
+    public string $projectSlug = '';
+
+    #[Locked]
+    public ?string $activeCommitHash = null;
+
     /** @var array{local: list<array<string, mixed>>, remote: list<array<string, mixed>>, current: string} */
     public array $branches = ['local' => [], 'remote' => [], 'current' => ''];
 
@@ -54,6 +60,8 @@ new class extends Component {
         selectedIndex: 0,
         selectedBranch: @js($currentBranch),
         allBranches: @js($branches),
+        baseHash: null,
+        baseShortHash: null,
         _loadId: 0,
 
         get filteredLocal() {
@@ -147,6 +155,30 @@ new class extends Component {
 
         copyHash(hash) {
             navigator.clipboard.writeText(hash).catch(() => {});
+        },
+
+        activeCommitHash: @js($activeCommitHash),
+
+        viewCommit(hash) {
+            if (this.baseHash) {
+                Livewire.navigate(`/p/{{ $projectSlug }}/${hash}/${this.baseHash}`);
+            } else {
+                Livewire.navigate(`/p/{{ $projectSlug }}/c/${hash}`);
+            }
+        },
+
+        setBase(hash, short) {
+            this.baseHash = hash;
+            this.baseShortHash = short;
+        },
+
+        clearBase() {
+            this.baseHash = null;
+            this.baseShortHash = null;
+        },
+
+        viewWorkingTree() {
+            Livewire.navigate(`/p/{{ $projectSlug }}`);
         }
     }"
     @keydown.window="handleKeydown($event)"
@@ -244,10 +276,22 @@ new class extends Component {
                 {{-- Right pane: commits --}}
                 <div class="flex-1 flex flex-col max-h-[60vh] min-w-0">
                     {{-- Commits header --}}
-                    <div class="px-4 py-2 border-b border-gh-border flex items-center gap-2 shrink-0">
+                    <div class="px-4 py-2 border-b border-gh-border flex items-center gap-2 shrink-0 bg-gh-surface/50">
                         <flux:icon icon="clock" variant="micro" class="text-gh-muted" />
                         <span class="text-xs font-semibold text-gh-text truncate" x-text="selectedBranch || 'Select a branch'"></span>
                         <span class="text-xs text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + ($wire.hasMore ? '+' : '') + ')'"></span>
+
+                        <div class="ml-auto flex items-center gap-2">
+                            <template x-if="baseHash">
+                                <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gh-accent/10 border border-gh-accent/20">
+                                    <span class="text-[10px] text-gh-accent font-mono" x-text="'Compare from ' + baseShortHash"></span>
+                                    <button @click="clearBase()" class="text-gh-accent hover:text-gh-accent/80">
+                                        <flux:icon icon="x-mark" variant="micro" />
+                                    </button>
+                                </div>
+                            </template>
+                            <flux:button size="xs" variant="ghost" @click="viewWorkingTree()" class="!text-[10px]">Working Tree</flux:button>
+                        </div>
                     </div>
 
                     {{-- Commits list --}}
@@ -259,22 +303,60 @@ new class extends Component {
                         </template>
 
                         <template x-for="commit in $wire.commits" :key="commit.hash">
-                            <div class="px-4 py-2 border-b border-gh-border/50 hover:bg-gh-border/30 transition-colors group">
+                            <div
+                                class="px-4 py-2 border-b border-gh-border/50 hover:bg-gh-border/30 transition-colors group cursor-pointer"
+                                @click="viewCommit(commit.hash)"
+                                :class="{
+                                    'bg-gh-accent/10 border-l-2 border-l-gh-accent': activeCommitHash === commit.hash,
+                                    'bg-gh-accent/5': baseHash === commit.hash && activeCommitHash !== commit.hash,
+                                    'hover:bg-gh-accent/10': baseHash && baseHash !== commit.hash && activeCommitHash !== commit.hash
+                                }"
+                            >
                                 <div class="flex items-start gap-2">
                                     <div class="min-w-0 flex-1">
-                                        <div class="text-xs text-gh-text truncate" x-text="commit.message"></div>
+                                        <div class="text-xs text-gh-text truncate font-medium group-hover:text-gh-accent transition-colors" x-text="commit.message"></div>
                                         <div class="flex items-center gap-2 mt-0.5">
                                             <span class="text-[10px] text-gh-muted" x-text="commit.author"></span>
                                             <span class="text-[10px] text-gh-muted">·</span>
                                             <span class="text-[10px] text-gh-muted" x-text="commit.relativeDate"></span>
                                         </div>
+                                        <template x-if="baseHash === commit.hash">
+                                            <span class="text-[10px] text-gh-accent font-medium mt-0.5">Compare from</span>
+                                        </template>
+                                        <template x-if="baseHash && baseHash !== commit.hash">
+                                            <span class="text-[10px] text-gh-accent font-medium mt-0.5">Compare to</span>
+                                        </template>
                                     </div>
-                                    <button
-                                        @click.stop="copyHash(commit.hash)"
-                                        class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono bg-gh-bg border border-gh-border text-gh-muted hover:text-gh-accent hover:border-gh-accent/50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
-                                        x-text="commit.shortHash"
-                                        title="Copy full hash"
-                                    ></button>
+
+                                    <div class="flex items-center gap-1 transition-opacity" :class="baseHash === commit.hash ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'" @click.stop>
+                                        <template x-if="baseHash !== commit.hash">
+                                            <flux:tooltip content="Compare from">
+                                                <button
+                                                    @click="setBase(commit.hash, commit.shortHash)"
+                                                    class="p-1 rounded hover:bg-gh-border text-gh-muted hover:text-gh-text"
+                                                >
+                                                    <flux:icon icon="arrows-right-left" variant="micro" />
+                                                </button>
+                                            </flux:tooltip>
+                                        </template>
+                                        <template x-if="baseHash === commit.hash">
+                                            <flux:tooltip content="Clear base">
+                                                <button
+                                                    @click="clearBase()"
+                                                    class="p-1 rounded hover:bg-gh-border text-gh-accent"
+                                                >
+                                                    <flux:icon icon="x-mark" variant="micro" />
+                                                </button>
+                                            </flux:tooltip>
+                                        </template>
+
+                                        <button
+                                            @click.stop="copyHash(commit.hash)"
+                                            class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gh-bg border border-gh-border text-gh-muted hover:text-gh-accent hover:border-gh-accent/50 transition-all cursor-pointer"
+                                            x-text="commit.shortHash"
+                                            title="Copy full hash"
+                                        ></button>
+                                    </div>
                                 </div>
                             </div>
                         </template>

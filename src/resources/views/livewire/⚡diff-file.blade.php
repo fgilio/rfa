@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\LoadFileDiffAction;
+use App\DTOs\DiffTarget;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
@@ -20,6 +21,12 @@ new class extends Component {
     #[Locked]
     public int $loadDelay = 0;
 
+    #[Locked]
+    public string $diffFrom = 'HEAD';
+
+    #[Locked]
+    public ?string $diffTo = null;
+
     public bool $isViewed = false;
 
     /** @var array<int, array<string, mixed>> */
@@ -27,6 +34,8 @@ new class extends Component {
 
     /** @var array<string, mixed>|null */
     protected ?array $diffData = null;
+
+    private ?DiffTarget $cachedTarget = null;
 
     public function hydrate(): void
     {
@@ -50,6 +59,7 @@ new class extends Component {
             $this->file['path'],
             $this->file['isUntracked'] ?? false,
             cacheKey: $this->diffCacheKey(),
+            target: $this->buildDiffTarget(),
         );
     }
 
@@ -64,6 +74,7 @@ new class extends Component {
             $this->file['isUntracked'] ?? false,
             cacheKey: $cacheKey,
             contextLines: 99999,
+            target: $this->buildDiffTarget(),
         );
     }
 
@@ -95,6 +106,7 @@ new class extends Component {
             $this->file['path'],
             $this->file['isUntracked'] ?? false,
             contextLines: 99999,
+            target: $this->buildDiffTarget(),
         );
 
         if (empty($fullDiff['hunks'])) {
@@ -143,14 +155,19 @@ new class extends Component {
         $this->diffData['hunks'] = $hunks;
 
         // Update cache with expanded state
-        Cache::put($this->diffCacheKey(), $this->diffData, now()->addHours(config('rfa.cache_ttl_hours', 24)));
+        Cache::put($this->diffCacheKey(), $this->diffData, now()->addHours($this->buildDiffTarget()->cacheTtlHours()));
+    }
+
+    private function buildDiffTarget(): DiffTarget
+    {
+        return $this->cachedTarget ??= DiffTarget::fromRefs($this->diffFrom, $this->diffTo);
     }
 
     private function diffCacheKey(): string
     {
-        $key = $this->projectId > 0 ? $this->projectId : $this->repoPath;
+        $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
 
-        return DiffCacheKey::for($key, $this->file['id']);
+        return DiffCacheKey::for($projectKey, $this->file['id'], $this->buildDiffTarget()->contextKey());
     }
 
     public function render(): \Illuminate\Contracts\View\View
@@ -306,6 +323,8 @@ new class extends Component {
                 $hasBeforeImage = in_array($status, ['modified', 'binary', 'renamed', 'deleted']);
                 $hasAfterImage = in_array($status, ['modified', 'binary', 'renamed', 'added']);
                 $beforePath = $file['oldPath'] ?? $file['path'];
+                $beforeRef = $diffTo === null ? 'HEAD' : $diffFrom;
+                $afterRef = $diffTo ?? 'working';
             @endphp
             <div class="px-4 py-6 flex items-start justify-center gap-6">
                 @if($hasBeforeImage)
@@ -313,7 +332,7 @@ new class extends Component {
                         <flux:badge color="red" size="sm">{{ $status === 'deleted' ? 'Deleted' : 'Before' }}</flux:badge>
                         <div class="border border-gh-border rounded-lg p-1" style="background: repeating-conic-gradient(rgb(128 128 128 / 0.15) 0% 25%, transparent 0% 50%) 50% / 16px 16px;">
                             <img
-                                src="/api/image/{{ $projectId }}/head/{{ $beforePath }}"
+                                src="/api/image/{{ $projectId }}/{{ $beforeRef }}/{{ $beforePath }}"
                                 alt="{{ $beforePath }}"
                                 class="max-h-96 object-contain"
                                 loading="lazy"
@@ -327,7 +346,7 @@ new class extends Component {
                         <flux:badge color="green" size="sm">{{ $status === 'added' ? 'New' : 'After' }}</flux:badge>
                         <div class="border border-gh-border rounded-lg p-1" style="background: repeating-conic-gradient(rgb(128 128 128 / 0.15) 0% 25%, transparent 0% 50%) 50% / 16px 16px;">
                             <img
-                                src="/api/image/{{ $projectId }}/working/{{ $file['path'] }}"
+                                src="/api/image/{{ $projectId }}/{{ $afterRef }}/{{ $file['path'] }}"
                                 alt="{{ $file['path'] }}"
                                 class="max-h-96 object-contain"
                                 loading="lazy"
