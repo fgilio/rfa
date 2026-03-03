@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\DiffTarget;
 use App\DTOs\FileDiff;
 use App\Exceptions\GitCommandException;
 use App\Services\DiffParser;
@@ -20,11 +21,13 @@ final readonly class LoadFileDiffAction
     ) {}
 
     /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool} */
-    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3): array
+    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null): array
     {
-        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines): array {
+        $target ??= DiffTarget::workingDirectory();
+
+        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target): array {
             try {
-                $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, contextLines: $contextLines);
+                $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, contextLines: $contextLines, target: $target);
             } catch (GitCommandException $e) {
                 return FileDiff::emptyArray($path, 'modified', tooLarge: false)
                     + ['error' => $e->stderr ?: $e->getMessage()];
@@ -50,7 +53,7 @@ final readonly class LoadFileDiffAction
         };
 
         if ($cacheKey) {
-            return Cache::remember($cacheKey, now()->addHours(config('rfa.cache_ttl_hours', 24)), $compute);
+            return Cache::remember($cacheKey, now()->addHours($target->cacheTtlHours()), $compute);
         }
 
         return $compute();

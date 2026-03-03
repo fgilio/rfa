@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\LoadFileDiffAction;
+use App\DTOs\DiffTarget;
 use App\Models\Project;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
@@ -26,7 +27,7 @@ beforeEach(function () {
     // Mock LoadFileDiffAction so it never touches git
     app()->bind(LoadFileDiffAction::class, fn () => new class
     {
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3): array
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null): array
         {
             return DiffFixtureGenerator::diffData(path: $path);
         }

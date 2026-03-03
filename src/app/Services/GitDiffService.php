@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\DTOs\BranchEntry;
 use App\DTOs\CommitEntry;
+use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
 use App\Exceptions\GitCommandException;
 use Carbon\Carbon;
@@ -45,19 +46,20 @@ class GitDiffService
     }
 
     /** @return FileListEntry[] */
-    public function getFileList(string $repoPath, ?string $globalGitignorePath = null): array
+    public function getFileList(string $repoPath, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
     {
+        $target ??= DiffTarget::workingDirectory();
         $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
 
         // Get status (M/A/D/R) for tracked changes
         $nameStatus = $this->runGit($repoPath, [
-            'diff', 'HEAD', '--name-status', '--find-renames',
+            ...$target->toDiffArgs(), '--name-status', '--find-renames',
             '--', '.', ...$excludes,
         ]);
 
         // Get +/- line counts for tracked changes
         $numstat = $this->runGit($repoPath, [
-            'diff', 'HEAD', '--numstat', '--find-renames',
+            ...$target->toDiffArgs(), '--numstat', '--find-renames',
             '--', '.', ...$excludes,
         ]);
 
@@ -127,60 +129,62 @@ class GitDiffService
                 deletions: $stats['deletions'],
                 isBinary: $isBinary,
                 isUntracked: false,
-                lastModified: $this->getLastModified($repoPath, $path),
+                lastModified: $target->isWorkingDirectory() ? $this->getLastModified($repoPath, $path) : null,
             );
         }
 
-        // Get untracked files
-        $lsFilesArgs = ['ls-files', '--others', '--exclude-standard'];
-        if ($globalGitignorePath !== null && File::isFile($globalGitignorePath)) {
-            $lsFilesArgs[] = '--exclude-from='.$globalGitignorePath;
-        }
-        $untrackedOutput = $this->runGit($repoPath, $lsFilesArgs);
+        // Get untracked files only when comparing against working tree
+        if ($target->isWorkingDirectory()) {
+            $lsFilesArgs = ['ls-files', '--others', '--exclude-standard'];
+            if ($globalGitignorePath !== null && File::isFile($globalGitignorePath)) {
+                $lsFilesArgs[] = '--exclude-from='.$globalGitignorePath;
+            }
+            $untrackedOutput = $this->runGit($repoPath, $lsFilesArgs);
 
-        if (trim($untrackedOutput) !== '') {
-            $untrackedFiles = array_filter(explode("\n", trim($untrackedOutput)));
+            if (trim($untrackedOutput) !== '') {
+                $untrackedFiles = array_filter(explode("\n", trim($untrackedOutput)));
 
-            foreach ($untrackedFiles as $file) {
-                if ($this->ignoreService->isPathExcluded($file, $excludes)) {
-                    continue;
-                }
+                foreach ($untrackedFiles as $file) {
+                    if ($this->ignoreService->isPathExcluded($file, $excludes)) {
+                        continue;
+                    }
 
-                $fullPath = $repoPath.'/'.$file;
-                if (! File::isFile($fullPath)) {
-                    continue;
-                }
+                    $fullPath = $repoPath.'/'.$file;
+                    if (! File::isFile($fullPath)) {
+                        continue;
+                    }
 
-                $isBinary = $this->isBinary($fullPath);
+                    $isBinary = $this->isBinary($fullPath);
 
-                if ($isBinary) {
+                    if ($isBinary) {
+                        $entries[] = new FileListEntry(
+                            path: $file,
+                            status: 'added',
+                            oldPath: null,
+                            additions: 0,
+                            deletions: 0,
+                            isBinary: true,
+                            isUntracked: true,
+                            lastModified: $this->getLastModified($repoPath, $file),
+                        );
+
+                        continue;
+                    }
+
+                    $content = File::get($fullPath);
+                    $lineCount = substr_count($content, "\n") + ($content !== '' && ! str_ends_with($content, "\n") ? 1 : 0);
+
                     $entries[] = new FileListEntry(
                         path: $file,
                         status: 'added',
                         oldPath: null,
-                        additions: 0,
+                        additions: $lineCount,
                         deletions: 0,
-                        isBinary: true,
+                        isBinary: false,
                         isUntracked: true,
                         lastModified: $this->getLastModified($repoPath, $file),
                     );
-
-                    continue;
                 }
-
-                $content = File::get($fullPath);
-                $lineCount = substr_count($content, "\n") + ($content !== '' && ! str_ends_with($content, "\n") ? 1 : 0);
-
-                $entries[] = new FileListEntry(
-                    path: $file,
-                    status: 'added',
-                    oldPath: null,
-                    additions: $lineCount,
-                    deletions: 0,
-                    isBinary: false,
-                    isUntracked: true,
-                    lastModified: $this->getLastModified($repoPath, $file),
-                );
             }
         }
 
@@ -224,18 +228,19 @@ class GitDiffService
         return hash('xxh128', implode("\n", $lines));
     }
 
-    public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3): ?string
+    public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3, ?DiffTarget $target = null): ?string
     {
+        $target ??= DiffTarget::workingDirectory();
         $maxBytes ??= config('rfa.diff_max_bytes', 512_000);
 
-        if ($isUntracked) {
+        if ($isUntracked && $target->isWorkingDirectory()) {
             return $this->buildUntrackedDiff($repoPath, $path, $maxBytes);
         }
 
         $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
 
         $raw = $this->runGit($repoPath, [
-            'diff', 'HEAD',
+            ...$target->toDiffArgs(),
             '--no-color', '--no-ext-diff', "--unified={$contextLines}", '--text', '--find-renames',
             '--', $path, ...$excludes,
         ]);
@@ -337,9 +342,9 @@ class GitDiffService
         return trim($this->runGit($directory, ['rev-parse', '--abbrev-ref', 'HEAD']));
     }
 
-    public function getFileContent(string $repoPath, string $path, string $ref = 'working'): ?string
+    public function getFileContent(string $repoPath, string $path, string $ref = DiffTarget::WORKING_CONTEXT): ?string
     {
-        if ($ref === 'working') {
+        if ($ref === DiffTarget::WORKING_CONTEXT) {
             $fullPath = $repoPath.'/'.$path;
 
             if (! File::isFile($fullPath)) {
@@ -349,8 +354,53 @@ class GitDiffService
             return File::get($fullPath);
         }
 
+        // Normalize legacy lowercase 'head' from image URLs
+        if ($ref === 'head') {
+            $ref = 'HEAD';
+        }
+
         try {
-            return $this->runGit($repoPath, ['show', 'HEAD:'.$path]);
+            return $this->runGit($repoPath, ['show', $ref.':'.$path]);
+        } catch (GitCommandException) {
+            return null;
+        }
+    }
+
+    public function resolveRef(string $repoPath, string $ref): ?string
+    {
+        if (str_starts_with($ref, '-')) {
+            return null;
+        }
+
+        try {
+            $resolved = trim($this->runGit($repoPath, ['rev-parse', '--verify', $ref.'^{commit}']));
+
+            return $resolved !== '' ? $resolved : null;
+        } catch (GitCommandException) {
+            return null;
+        }
+    }
+
+    /** @return string[] */
+    public function getCommitParents(string $repoPath, string $hash): array
+    {
+        try {
+            $output = trim($this->runGit($repoPath, ['rev-parse', $hash.'^@']));
+
+            return $output !== '' ? explode("\n", $output) : [];
+        } catch (GitCommandException) {
+            return [];
+        }
+    }
+
+    public function getChildCommit(string $repoPath, string $hash): ?string
+    {
+        try {
+            $output = trim($this->runGit($repoPath, [
+                'log', '--ancestry-path', '--format=%H', '--reverse', '-1', $hash.'..HEAD',
+            ]));
+
+            return $output !== '' ? $output : null;
         } catch (GitCommandException) {
             return null;
         }

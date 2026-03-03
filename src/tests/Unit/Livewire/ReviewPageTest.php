@@ -5,6 +5,7 @@ use App\Actions\GetFileListAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
+use App\DTOs\DiffTarget;
 use App\Models\Project;
 use App\Services\GitDiffService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -47,7 +48,7 @@ beforeEach(function () {
     {
         public function __construct(private array $files) {}
 
-        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null): array
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
         {
             app('test.captured_gitignore_paths')->push($globalGitignorePath);
 
@@ -57,7 +58,7 @@ beforeEach(function () {
 
     app()->bind(RestoreSessionAction::class, fn () => new class
     {
-        public function handle(string $repoPath, array $currentFiles, ?int $projectId = null): array
+        public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT): array
         {
             return ['comments' => [], 'viewedFiles' => [], 'globalComment' => ''];
         }
@@ -65,7 +66,7 @@ beforeEach(function () {
 
     app()->bind(SaveSessionAction::class, fn () => new class
     {
-        public function handle(string $repoPath, array $comments, array $viewedFiles, string $globalComment, ?int $projectId = null): void {}
+        public function handle(string $repoPath, array $comments, array $viewedFiles, string $globalComment, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT): void {}
     });
 
     // Prevent backfill from calling real git
@@ -196,7 +197,7 @@ test('submitReview refreshes file list and populates reviewPairs', function () {
         {
             public function __construct(private array $sourceFiles, private array $reviewFiles, private object $counter) {}
 
-            public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null): array
+            public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
             {
                 $this->counter->value++;
 

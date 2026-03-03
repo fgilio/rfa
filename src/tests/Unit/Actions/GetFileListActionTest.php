@@ -46,7 +46,7 @@ test('clears cache by default', function () {
     $action = new GetFileListAction(new GitDiffService(new IgnoreService));
     $files = $action->handle($this->tmpDir);
 
-    $cacheKey = 'rfa_diff_v3_'.hash('xxh128', $this->tmpDir.':'.$files[0]['id']);
+    $cacheKey = 'rfa_diff_v4_'.hash('xxh128', $this->tmpDir.':working:'.$files[0]['id']);
     Cache::put($cacheKey, 'stale', 60);
 
     $action->handle($this->tmpDir);
@@ -60,7 +60,7 @@ test('preserves cache when clearCache is false', function () {
     $action = new GetFileListAction(new GitDiffService(new IgnoreService));
     $files = $action->handle($this->tmpDir, clearCache: false);
 
-    $cacheKey = 'rfa_diff_v3_'.hash('xxh128', $this->tmpDir.':'.$files[0]['id']);
+    $cacheKey = 'rfa_diff_v4_'.hash('xxh128', $this->tmpDir.':working:'.$files[0]['id']);
     Cache::put($cacheKey, 'kept', 60);
 
     $action->handle($this->tmpDir, clearCache: false);
