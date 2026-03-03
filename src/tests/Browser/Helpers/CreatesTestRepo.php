@@ -11,6 +11,12 @@ trait CreatesTestRepo
 
     protected string $testProjectSlug = '';
 
+    /** @var list<string> Full SHA hashes, oldest→newest */
+    protected array $commitHashes = [];
+
+    /** @var list<string> 7-char short hashes, oldest→newest */
+    protected array $commitShortHashes = [];
+
     protected function setUpTestRepo(): void
     {
         $this->testRepoPath = sys_get_temp_dir().'/rfa_browser_'.uniqid();
@@ -125,6 +131,114 @@ trait CreatesTestRepo
         $lines[0] = 'changed1';
         $lines[29] = 'changed30';
         File::put($this->testRepoPath.'/multi.txt', implode("\n", $lines)."\n");
+
+        $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
+        $this->testProjectSlug = $project->slug;
+    }
+
+    protected function setUpCommitHistoryRepo(): void
+    {
+        $this->testRepoPath = sys_get_temp_dir().'/rfa_browser_'.uniqid();
+        File::makeDirectory($this->testRepoPath, 0755, true);
+
+        // Commit 1: initial hello.php
+        File::put($this->testRepoPath.'/hello.php', implode("\n", [
+            '<?php',
+            'function greet($name) {',
+            '    return "Hello, " . $name;',
+            '}',
+            '',
+        ]));
+
+        $this->runShell(implode(' && ', [
+            'git init -b main',
+            "git config user.email 'test@rfa.test'",
+            "git config user.name 'RFA Test'",
+            'git config commit.gpgsign false',
+            'git add -A',
+            "git commit -m 'Add greet function'",
+        ]));
+
+        // Commit 2: modify hello.php (add type hints) + add utils.php
+        File::put($this->testRepoPath.'/hello.php', implode("\n", [
+            '<?php',
+            'function greet(string $name): string {',
+            '    return "Hello, {$name}!";',
+            '}',
+            '',
+        ]));
+
+        File::put($this->testRepoPath.'/utils.php', implode("\n", [
+            '<?php',
+            'function formatDate($date) {',
+            "    return date('Y-m-d', strtotime(\$date));",
+            '}',
+            '',
+        ]));
+
+        $this->runShell(implode(' && ', [
+            'git add -A',
+            "git commit -m 'Add type hints and utils'",
+        ]));
+
+        // Commit 3: modify utils.php (change date format)
+        File::put($this->testRepoPath.'/utils.php', implode("\n", [
+            '<?php',
+            'function formatDate($date) {',
+            "    return date('d/m/Y', strtotime(\$date));",
+            '}',
+            '',
+        ]));
+
+        $this->runShell(implode(' && ', [
+            'git add -A',
+            "git commit -m 'Change date format to d/m/Y'",
+        ]));
+
+        // Collect commit hashes oldest→newest
+        $log = trim($this->runShell('git log --reverse --format=%H'));
+        $this->commitHashes = explode("\n", $log);
+        $this->commitShortHashes = array_map(fn ($h) => substr($h, 0, 7), $this->commitHashes);
+
+        $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
+        $this->testProjectSlug = $project->slug;
+    }
+
+    protected function setUpCommitHistoryRepoWithWdChange(): void
+    {
+        $this->setUpCommitHistoryRepo();
+
+        // Add uncommitted working directory change to hello.php
+        File::put($this->testRepoPath.'/hello.php', implode("\n", [
+            '<?php',
+            '// Updated with WD change',
+            'function greet(string $name): string {',
+            '    return "Hello, {$name}!";',
+            '}',
+            '',
+        ]));
+    }
+
+    protected function setUpCommitHistoryRepoWithEmptyCommit(): void
+    {
+        $this->testRepoPath = sys_get_temp_dir().'/rfa_browser_'.uniqid();
+        File::makeDirectory($this->testRepoPath, 0755, true);
+
+        File::put($this->testRepoPath.'/README.md', "# Test\n");
+
+        $this->runShell(implode(' && ', [
+            'git init -b main',
+            "git config user.email 'test@rfa.test'",
+            "git config user.name 'RFA Test'",
+            'git config commit.gpgsign false',
+            'git add -A',
+            "git commit -m 'Initial commit'",
+            "git commit --allow-empty -m 'Empty commit'",
+        ]));
+
+        $log = trim($this->runShell('git log --reverse --format=%H'));
+        $this->commitHashes = explode("\n", $log);
+        $this->commitShortHashes = array_map(fn ($h) => substr($h, 0, 7), $this->commitHashes);
 
         $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
         $this->testProjectSlug = $project->slug;
