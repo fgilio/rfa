@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\DiffTarget;
 use App\Models\ReviewSession;
 
 final readonly class RestoreSessionAction
@@ -12,11 +13,12 @@ final readonly class RestoreSessionAction
      * @param  array<int, array<string, mixed>>  $currentFiles
      * @return array{comments: array<int, array<string, mixed>>, viewedFiles: array<int, string>, globalComment: string}
      */
-    public function handle(string $repoPath, array $currentFiles, ?int $projectId = null): array
+    public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT): array
     {
-        $key = $projectId ? ['project_id' => $projectId] : ['repo_path' => $repoPath];
-
-        $session = ReviewSession::firstOrCreate($key, ['repo_path' => $repoPath]);
+        $session = ReviewSession::firstOrCreate(
+            ReviewSession::scopeKey($repoPath, $projectId, $contextFingerprint),
+            ['repo_path' => $repoPath],
+        );
 
         $currentPaths = collect($currentFiles)->pluck('path')->all();
         $fileIdMap = collect($currentFiles)->pluck('id', 'path')->all();
