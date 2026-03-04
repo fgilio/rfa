@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Models\Project;
-use App\Services\GitDiffService;
+use App\Services\GitMetadataService;
 use Illuminate\Support\Str;
 
 final readonly class RegisterProjectAction
 {
     public function __construct(
-        private GitDiffService $git,
+        private GitMetadataService $git,
     ) {}
 
     public function handle(string $directory): Project

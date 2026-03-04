@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
-use App\Services\GitDiffService;
+use App\Services\GitMetadataService;
 
 final readonly class GetBranchListAction
 {
     public function __construct(
-        private GitDiffService $gitDiffService,
+        private GitMetadataService $gitMetadataService,
     ) {}
 
     /**
@@ -17,7 +17,7 @@ final readonly class GetBranchListAction
      */
     public function handle(string $repoPath): array
     {
-        $branches = $this->gitDiffService->getBranches($repoPath);
+        $branches = $this->gitMetadataService->getBranches($repoPath);
 
         $current = '';
         $local = [];

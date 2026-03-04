@@ -5,23 +5,23 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
-use App\Services\GitDiffService;
+use App\Services\GitMetadataService;
 
 final readonly class ResolveCommitAction
 {
     public function __construct(
-        private GitDiffService $gitDiffService,
+        private GitMetadataService $gitMetadataService,
     ) {}
 
     public function handle(string $repoPath, string $ref): ?DiffTarget
     {
-        $hash = $this->gitDiffService->resolveRef($repoPath, $ref);
+        $hash = $this->gitMetadataService->resolveRef($repoPath, $ref);
 
         if ($hash === null) {
             return null;
         }
 
-        $parents = $this->gitDiffService->getCommitParents($repoPath, $hash);
+        $parents = $this->gitMetadataService->getCommitParents($repoPath, $hash);
 
         return DiffTarget::commit($hash, $parents[0] ?? null);
     }

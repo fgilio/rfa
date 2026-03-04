@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Models\Project;
-use App\Services\GitDiffService;
+use App\Services\GitMetadataService;
 
 final readonly class ServeImageAction
 {
     public function __construct(
-        private GitDiffService $gitDiffService,
+        private GitMetadataService $gitMetadataService,
     ) {}
 
     /** @return array{content: string, mimeType: string}|null */
@@ -18,7 +18,7 @@ final readonly class ServeImageAction
     {
         $project = Project::findOrFail($projectId);
 
-        $content = $this->gitDiffService->getFileContent($project->path, $path, $ref);
+        $content = $this->gitMetadataService->getFileContent($project->path, $path, $ref);
 
         if ($content === null) {
             return null;
