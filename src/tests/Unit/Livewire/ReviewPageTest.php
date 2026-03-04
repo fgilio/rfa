@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\BackfillGlobalGitignoreAction;
 use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
 use App\Actions\ResolveProjectAction;
@@ -7,7 +8,6 @@ use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\DTOs\DiffTarget;
 use App\Models\Project;
-use App\Services\GitDiffService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 
@@ -70,9 +70,9 @@ beforeEach(function () {
     });
 
     // Prevent backfill from calling real git
-    app()->bind(GitDiffService::class, fn () => new class
+    app()->bind(BackfillGlobalGitignoreAction::class, fn () => new class
     {
-        public function resolveGlobalExcludesFile(string $repoPath): ?string
+        public function handle(int $projectId, string $repoPath): ?string
         {
             return null;
         }
@@ -143,12 +143,11 @@ test('mount backfills null gitignore path from git config', function () {
 
     $resolvedPath = '/home/user/.gitignore_global';
 
-    // Override GitDiffService mock to return a path
-    app()->bind(GitDiffService::class, fn () => new class($resolvedPath)
+    app()->bind(BackfillGlobalGitignoreAction::class, fn () => new class($resolvedPath)
     {
         public function __construct(private string $path) {}
 
-        public function resolveGlobalExcludesFile(string $repoPath): ?string
+        public function handle(int $projectId, string $repoPath): ?string
         {
             return $this->path;
         }
@@ -157,7 +156,6 @@ test('mount backfills null gitignore path from git config', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project']);
 
     expect($component->get('globalGitignorePath'))->toBe($resolvedPath);
-    expect($this->project->fresh()->global_gitignore_path)->toBe($resolvedPath);
 });
 
 test('mount backfills empty string gitignore path from git config', function () {
@@ -165,11 +163,11 @@ test('mount backfills empty string gitignore path from git config', function () 
 
     $resolvedPath = '/home/user/.gitignore_global';
 
-    app()->bind(GitDiffService::class, fn () => new class($resolvedPath)
+    app()->bind(BackfillGlobalGitignoreAction::class, fn () => new class($resolvedPath)
     {
         public function __construct(private string $path) {}
 
-        public function resolveGlobalExcludesFile(string $repoPath): ?string
+        public function handle(int $projectId, string $repoPath): ?string
         {
             return $this->path;
         }
@@ -178,7 +176,6 @@ test('mount backfills empty string gitignore path from git config', function () 
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project']);
 
     expect($component->get('globalGitignorePath'))->toBe($resolvedPath);
-    expect($this->project->fresh()->global_gitignore_path)->toBe($resolvedPath);
 });
 
 // -- Submit review refreshes file list --

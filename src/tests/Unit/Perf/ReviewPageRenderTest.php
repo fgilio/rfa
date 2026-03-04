@@ -1,12 +1,12 @@
 <?php
 
+use App\Actions\BackfillGlobalGitignoreAction;
 use App\Actions\GetFileListAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\DTOs\DiffTarget;
 use App\Models\Project;
-use App\Services\GitDiffService;
 use Livewire\Livewire;
 use Tests\Helpers\DiffFixtureGenerator;
 
@@ -51,9 +51,9 @@ beforeEach(function () {
         public function handle(string $repoPath, array $comments, array $viewedFiles, string $globalComment, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT): void {}
     });
 
-    app()->bind(GitDiffService::class, fn () => new class
+    app()->bind(BackfillGlobalGitignoreAction::class, fn () => new class
     {
-        public function resolveGlobalExcludesFile(string $repoPath): ?string
+        public function handle(int $projectId, string $repoPath): ?string
         {
             return null;
         }

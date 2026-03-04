@@ -6,6 +6,8 @@ use App\Actions\DeleteReviewFilesAction;
 use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
 use App\Actions\GroupReviewFilesAction;
+use App\Actions\BackfillGlobalGitignoreAction;
+use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreSessionAction;
@@ -100,13 +102,8 @@ new #[Layout('layouts.app')] class extends Component {
 
         // Backfill path for projects registered before the migration
         if ($this->globalGitignorePath === null) {
-            $this->globalGitignorePath = app(\App\Services\GitDiffService::class)
-                ->resolveGlobalExcludesFile($this->repoPath);
-
-            if ($this->globalGitignorePath !== null) {
-                Project::where('id', $this->projectId)
-                    ->update(['global_gitignore_path' => $this->globalGitignorePath]);
-            }
+            $this->globalGitignorePath = app(BackfillGlobalGitignoreAction::class)
+                ->handle($this->projectId, $this->repoPath);
         }
 
         $this->refreshFileList();
@@ -135,18 +132,8 @@ new #[Layout('layouts.app')] class extends Component {
             return;
         }
 
-        $gitDiffService = app(\App\Services\GitDiffService::class);
-
-        $commits = $gitDiffService->getCommitLog($this->repoPath, limit: 1, branch: $this->diffTo);
-        $commit = $commits[0] ?? null;
-
-        $this->commitInfo = [
-            'shortHash' => $commit?->shortHash ?? substr($this->diffTo, 0, 7),
-            'message' => $commit?->message ?? '',
-            'author' => $commit?->author ?? '',
-            'prevHash' => $this->diffFrom !== DiffTarget::EMPTY_TREE_HASH ? $this->diffFrom : null,
-            'nextHash' => $gitDiffService->getChildCommit($this->repoPath, $this->diffTo),
-        ];
+        $this->commitInfo = app(LoadCommitMetadataAction::class)
+            ->handle($this->repoPath, $this->diffTo, $this->diffFrom);
     }
 
     private function refreshFileList(bool $clearCache = true): void
