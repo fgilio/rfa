@@ -2,6 +2,7 @@
 
 use App\Exceptions\GitCommandException;
 use App\Services\GitDiffService;
+use App\Services\GitProcessService;
 use App\Services\IgnoreService;
 use Faker\Factory as Faker;
 use Illuminate\Support\Facades\File;
@@ -11,7 +12,7 @@ uses(Tests\TestCase::class);
 beforeEach(function () {
     $this->faker = Faker::create();
     $this->faker->seed(crc32(static::class.$this->name()));
-    $this->service = new GitDiffService(new IgnoreService);
+    $this->service = new GitDiffService(new GitProcessService, new IgnoreService);
 
     $ref = new ReflectionClass($this->service);
 
@@ -43,34 +44,14 @@ test('isBinary returns false for plain text', function () {
     expect($this->isBinary->invoke($this->service, $path))->toBeFalse();
 });
 
-// -- Helper: init a git repo in tmpDir --
-
-function initRepo(string $dir): void
-{
-    exec(implode(' && ', [
-        'cd '.escapeshellarg($dir),
-        'git init -b main',
-        "git config user.email 'test@rfa.test'",
-        "git config user.name 'RFA Test'",
-        'git config commit.gpgsign false', // Disable GPG signing so test commits work without a key
-    ]));
-}
-
-function commitAll(string $dir, string $message = 'commit'): void
-{
-    exec(implode(' && ', [
-        'cd '.escapeshellarg($dir),
-        'git add -A',
-        'git commit -m '.escapeshellarg($message),
-    ]));
-}
+// -- Helpers in tests/Helpers/Git.php --
 
 // -- getFileList tests --
 
 test('getFileList returns modified file with correct status', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/hello.txt', "line1\nline2\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/hello.txt', "line1\nchanged\nline3\n");
 
@@ -84,9 +65,9 @@ test('getFileList returns modified file with correct status', function () {
 });
 
 test('getFileList returns added file for untracked', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/tracked.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/newfile.txt', "hello\nworld\n");
 
@@ -101,9 +82,9 @@ test('getFileList returns added file for untracked', function () {
 });
 
 test('getFileList returns deleted file', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/doomed.txt', "bye\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::delete($this->tmpDir.'/doomed.txt');
 
@@ -115,9 +96,9 @@ test('getFileList returns deleted file', function () {
 });
 
 test('getFileList returns renamed file with oldPath', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/old_name.txt', "content\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     exec('cd '.escapeshellarg($this->tmpDir).' && git mv old_name.txt new_name.txt');
 
@@ -130,9 +111,9 @@ test('getFileList returns renamed file with oldPath', function () {
 });
 
 test('getFileList detects binary files', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/binary.bin', "hello\0world");
 
@@ -144,9 +125,9 @@ test('getFileList detects binary files', function () {
 });
 
 test('getFileList excludes rfaignore patterns', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/keep.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/.rfaignore', "*.log\n");
     File::put($this->tmpDir.'/debug.log', "should not appear\n");
@@ -160,9 +141,9 @@ test('getFileList excludes rfaignore patterns', function () {
 });
 
 test('getFileList excludes untracked files matching globalGitignorePath', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/tracked.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/data.rfa_test_ext', "test data\n");
     File::put($this->tmpDir.'/newfile.txt', "hello\n");
@@ -178,9 +159,9 @@ test('getFileList excludes untracked files matching globalGitignorePath', functi
 });
 
 test('getFileList ignores globalGitignorePath when file does not exist', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/tracked.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/data.rfa_test_ext', "test data\n");
 
@@ -191,9 +172,9 @@ test('getFileList ignores globalGitignorePath when file does not exist', functio
 });
 
 test('getFileList returns empty for clean repo', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     $entries = $this->service->getFileList($this->tmpDir);
 
@@ -203,9 +184,9 @@ test('getFileList returns empty for clean repo', function () {
 // -- getFileDiff tests --
 
 test('getFileDiff returns raw diff for tracked file', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/hello.txt', "line1\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/hello.txt', "line1\nline2\n");
 
@@ -216,9 +197,9 @@ test('getFileDiff returns raw diff for tracked file', function () {
 });
 
 test('getFileDiff returns synthetic diff for untracked file', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/newfile.txt', "hello\nworld\n");
 
@@ -229,9 +210,9 @@ test('getFileDiff returns synthetic diff for untracked file', function () {
 });
 
 test('getFileDiff returns null when diff exceeds max bytes', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/big.txt', "small\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/big.txt', str_repeat("long line of content\n", 500));
 
@@ -241,9 +222,9 @@ test('getFileDiff returns null when diff exceeds max bytes', function () {
 });
 
 test('getFileDiff handles binary untracked file', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/image.bin', "png\0data");
 
@@ -253,9 +234,9 @@ test('getFileDiff handles binary untracked file', function () {
 });
 
 test('getFileDiff returns empty string for missing untracked file', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     $diff = $this->service->getFileDiff($this->tmpDir, 'gone.txt', isUntracked: true);
 
@@ -263,9 +244,9 @@ test('getFileDiff returns empty string for missing untracked file', function () 
 });
 
 test('getFileDiff untracked file with trailing newline has correct line count', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/newfile.txt', "line1\nline2\n");
 
@@ -278,9 +259,9 @@ test('getFileDiff untracked file with trailing newline has correct line count', 
 });
 
 test('getFileDiff handles empty untracked file', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/empty.txt', '');
 
@@ -291,11 +272,11 @@ test('getFileDiff handles empty untracked file', function () {
 });
 
 test('getFileDiff respects contextLines parameter', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     // 20-line file, modify line 1 and line 20 to create 2 hunks with default context
     $lines = array_map(fn ($i) => "line{$i}", range(1, 20));
     File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     $lines[0] = 'changed1';
     $lines[19] = 'changed20';
@@ -312,59 +293,12 @@ test('getFileDiff respects contextLines parameter', function () {
     expect($diffFull)->toContain('@@ -1,');
 });
 
-// -- GitCommandException tests --
-
-test('getFileList throws GitCommandException for non-git directory', function () {
-    // tmpDir is not a git repo (no initRepo call)
-    $this->service->getFileList($this->tmpDir);
-})->throws(GitCommandException::class);
-
-// -- getFileContent tests --
-
-test('getFileContent returns working directory content', function () {
-    initRepo($this->tmpDir);
-    File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
-
-    File::put($this->tmpDir.'/data.txt', 'hello world');
-
-    expect($this->service->getFileContent($this->tmpDir, 'data.txt'))->toBe('hello world');
-});
-
-test('getFileContent returns HEAD content via git show', function () {
-    initRepo($this->tmpDir);
-    File::put($this->tmpDir.'/file.txt', 'original');
-    commitAll($this->tmpDir, 'initial');
-
-    File::put($this->tmpDir.'/file.txt', 'modified');
-
-    expect($this->service->getFileContent($this->tmpDir, 'file.txt', 'head'))->toBe('original');
-});
-
-test('getFileContent returns null for missing working file', function () {
-    initRepo($this->tmpDir);
-    File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
-
-    expect($this->service->getFileContent($this->tmpDir, 'nonexistent.txt'))->toBeNull();
-});
-
-test('getFileContent returns null for file not in HEAD', function () {
-    initRepo($this->tmpDir);
-    File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
-
-    File::put($this->tmpDir.'/untracked.txt', 'new');
-
-    expect($this->service->getFileContent($this->tmpDir, 'untracked.txt', 'head'))->toBeNull();
-});
-
 // -- Unicode/emoji file path tests --
 
 test('getFileList returns correct path for modified file with unicode name', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/⚡show.blade.php', "original\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/⚡show.blade.php', "changed\n");
 
@@ -376,9 +310,9 @@ test('getFileList returns correct path for modified file with unicode name', fun
 });
 
 test('getFileList returns correct path for untracked file with emoji name', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/🚀launch.txt', "hello\n");
 
@@ -390,9 +324,9 @@ test('getFileList returns correct path for untracked file with emoji name', func
 });
 
 test('getFileDiff returns valid diff for unicode-named file', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/⚡show.blade.php', "line1\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/⚡show.blade.php', "line1\nline2\n");
 
@@ -404,6 +338,11 @@ test('getFileDiff returns valid diff for unicode-named file', function () {
 });
 
 // -- GitCommandException tests --
+
+test('getFileList throws GitCommandException for non-git directory', function () {
+    // tmpDir is not a git repo (no initRepo call)
+    $this->service->getFileList($this->tmpDir);
+})->throws(GitCommandException::class);
 
 test('GitCommandException carries stderr and exit code', function () {
     try {
@@ -422,9 +361,9 @@ test('GitCommandException carries stderr and exit code', function () {
 // -- getWorkingDirectoryFingerprint tests --
 
 test('getWorkingDirectoryFingerprint changes when tracked file modified', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/hello.txt', "line1\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     $before = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
 
@@ -435,9 +374,9 @@ test('getWorkingDirectoryFingerprint changes when tracked file modified', functi
 });
 
 test('getWorkingDirectoryFingerprint changes when untracked file added', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/hello.txt', "line1\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     $before = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
 
@@ -448,9 +387,9 @@ test('getWorkingDirectoryFingerprint changes when untracked file added', functio
 });
 
 test('getWorkingDirectoryFingerprint is deterministic for same state', function () {
-    initRepo($this->tmpDir);
+    initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/hello.txt', "line1\n");
-    commitAll($this->tmpDir, 'initial');
+    commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/hello.txt', "changed\n");
     File::put($this->tmpDir.'/newfile.txt', "hello\n");
@@ -459,145 +398,4 @@ test('getWorkingDirectoryFingerprint is deterministic for same state', function 
     $hash2 = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
 
     expect($hash1)->toBe($hash2);
-});
-
-// -- getBranches tests --
-
-test('getBranches returns current branch in local list', function () {
-    initRepo($this->tmpDir);
-    File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
-
-    $result = $this->service->getBranches($this->tmpDir);
-
-    expect($result['local'])->toHaveCount(1)
-        ->and($result['local'][0]->name)->toBe('main')
-        ->and($result['local'][0]->isCurrent)->toBeTrue()
-        ->and($result['local'][0]->isRemote)->toBeFalse();
-});
-
-test('getBranches returns multiple local branches', function () {
-    initRepo($this->tmpDir);
-    File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
-
-    exec('cd '.escapeshellarg($this->tmpDir).' && git branch feature-x');
-    exec('cd '.escapeshellarg($this->tmpDir).' && git branch bugfix-y');
-
-    $result = $this->service->getBranches($this->tmpDir);
-    $names = array_map(fn ($b) => $b->name, $result['local']);
-
-    expect($names)->toContain('main')
-        ->and($names)->toContain('feature-x')
-        ->and($names)->toContain('bugfix-y');
-
-    $current = array_filter($result['local'], fn ($b) => $b->isCurrent);
-    expect($current)->toHaveCount(1);
-    expect(array_values($current)[0]->name)->toBe('main');
-});
-
-test('getBranches returns empty remote list when no remotes', function () {
-    initRepo($this->tmpDir);
-    File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitAll($this->tmpDir, 'initial');
-
-    $result = $this->service->getBranches($this->tmpDir);
-
-    expect($result['remote'])->toBeEmpty();
-});
-
-// -- getCommitLog tests --
-
-test('getCommitLog returns commits for current branch', function () {
-    initRepo($this->tmpDir);
-    File::put($this->tmpDir.'/file.txt', "v1\n");
-    commitAll($this->tmpDir, 'first commit');
-
-    File::put($this->tmpDir.'/file.txt', "v2\n");
-    commitAll($this->tmpDir, 'second commit');
-
-    $commits = $this->service->getCommitLog($this->tmpDir);
-
-    expect($commits)->toHaveCount(2)
-        ->and($commits[0]->message)->toBe('second commit')
-        ->and($commits[1]->message)->toBe('first commit');
-});
-
-test('getCommitLog respects limit parameter', function () {
-    initRepo($this->tmpDir);
-    File::put($this->tmpDir.'/file.txt', "v1\n");
-    commitAll($this->tmpDir, 'first');
-
-    File::put($this->tmpDir.'/file.txt', "v2\n");
-    commitAll($this->tmpDir, 'second');
-
-    File::put($this->tmpDir.'/file.txt', "v3\n");
-    commitAll($this->tmpDir, 'third');
-
-    $commits = $this->service->getCommitLog($this->tmpDir, limit: 2);
-
-    expect($commits)->toHaveCount(2)
-        ->and($commits[0]->message)->toBe('third')
-        ->and($commits[1]->message)->toBe('second');
-});
-
-test('getCommitLog respects offset parameter', function () {
-    initRepo($this->tmpDir);
-    File::put($this->tmpDir.'/file.txt', "v1\n");
-    commitAll($this->tmpDir, 'first');
-
-    File::put($this->tmpDir.'/file.txt', "v2\n");
-    commitAll($this->tmpDir, 'second');
-
-    File::put($this->tmpDir.'/file.txt', "v3\n");
-    commitAll($this->tmpDir, 'third');
-
-    $commits = $this->service->getCommitLog($this->tmpDir, limit: 50, offset: 1);
-
-    expect($commits)->toHaveCount(2)
-        ->and($commits[0]->message)->toBe('second')
-        ->and($commits[1]->message)->toBe('first');
-});
-
-test('getCommitLog returns commits for specific branch', function () {
-    initRepo($this->tmpDir);
-    File::put($this->tmpDir.'/file.txt', "v1\n");
-    commitAll($this->tmpDir, 'main commit');
-
-    exec('cd '.escapeshellarg($this->tmpDir).' && git checkout -b feature-branch');
-    File::put($this->tmpDir.'/file.txt', "v2\n");
-    commitAll($this->tmpDir, 'feature commit');
-
-    exec('cd '.escapeshellarg($this->tmpDir).' && git checkout main');
-
-    $commits = $this->service->getCommitLog($this->tmpDir, branch: 'feature-branch');
-
-    expect($commits)->toHaveCount(2)
-        ->and($commits[0]->message)->toBe('feature commit')
-        ->and($commits[1]->message)->toBe('main commit');
-});
-
-test('getCommitLog returns entries with all fields populated', function () {
-    initRepo($this->tmpDir);
-    File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitAll($this->tmpDir, 'test commit');
-
-    $commits = $this->service->getCommitLog($this->tmpDir);
-
-    expect($commits)->toHaveCount(1);
-    $commit = $commits[0];
-    expect($commit->hash)->toHaveLength(40)
-        ->and($commit->shortHash)->not->toBeEmpty()
-        ->and($commit->message)->toBe('test commit')
-        ->and($commit->author)->toBe('RFA Test')
-        ->and($commit->relativeDate)->not->toBeEmpty()
-        ->and($commit->date)->not->toBeEmpty();
-});
-
-test('getCommitLog returns empty array for empty repo', function () {
-    initRepo($this->tmpDir);
-
-    $commits = $this->service->getCommitLog($this->tmpDir);
-
-    expect($commits)->toBeEmpty();
 });

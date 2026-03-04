@@ -4,46 +4,17 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\DTOs\BranchEntry;
-use App\DTOs\CommitEntry;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
-use App\Exceptions\GitCommandException;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\File;
-use Symfony\Component\Process\Process;
 
 class GitDiffService
 {
     public function __construct(
+        private readonly GitProcessService $git,
         private readonly IgnoreService $ignoreService,
     ) {}
-
-    public function resolveGlobalExcludesFile(string $repoPath): ?string
-    {
-        try {
-            $raw = trim($this->runGit($repoPath, ['config', '--global', 'core.excludesFile']));
-        } catch (GitCommandException) {
-            return null;
-        }
-
-        if ($raw === '') {
-            return null;
-        }
-
-        // Expand ~ to HOME
-        if (str_starts_with($raw, '~/')) {
-            $home = $_SERVER['HOME'] ?? getenv('HOME');
-            if ($home === false || $home === '') {
-                return null;
-            }
-            $raw = $home.substr($raw, 1);
-        }
-
-        $resolved = realpath($raw);
-
-        return $resolved !== false && File::isFile($resolved) ? $resolved : null;
-    }
 
     /** @return FileListEntry[] */
     public function getFileList(string $repoPath, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
@@ -52,13 +23,13 @@ class GitDiffService
         $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
 
         // Get status (M/A/D/R) for tracked changes
-        $nameStatus = $this->runGit($repoPath, [
+        $nameStatus = $this->git->run($repoPath, [
             ...$target->toDiffArgs(), '--name-status', '--find-renames',
             '--', '.', ...$excludes,
         ]);
 
         // Get +/- line counts for tracked changes
-        $numstat = $this->runGit($repoPath, [
+        $numstat = $this->git->run($repoPath, [
             ...$target->toDiffArgs(), '--numstat', '--find-renames',
             '--', '.', ...$excludes,
         ]);
@@ -139,7 +110,7 @@ class GitDiffService
             if ($globalGitignorePath !== null && File::isFile($globalGitignorePath)) {
                 $lsFilesArgs[] = '--exclude-from='.$globalGitignorePath;
             }
-            $untrackedOutput = $this->runGit($repoPath, $lsFilesArgs);
+            $untrackedOutput = $this->git->run($repoPath, $lsFilesArgs);
 
             if (trim($untrackedOutput) !== '') {
                 $untrackedFiles = array_filter(explode("\n", trim($untrackedOutput)));
@@ -195,7 +166,7 @@ class GitDiffService
     {
         $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
 
-        $nameStatus = $this->runGit($repoPath, [
+        $nameStatus = $this->git->run($repoPath, [
             'diff', 'HEAD', '--name-status', '--find-renames',
             '--', '.', ...$excludes,
         ]);
@@ -204,7 +175,7 @@ class GitDiffService
         if ($globalGitignorePath !== null && File::isFile($globalGitignorePath)) {
             $lsFilesArgs[] = '--exclude-from='.$globalGitignorePath;
         }
-        $untrackedOutput = $this->runGit($repoPath, $lsFilesArgs);
+        $untrackedOutput = $this->git->run($repoPath, $lsFilesArgs);
 
         $lines = array_filter([
             ...explode("\n", trim($nameStatus)),
@@ -239,7 +210,7 @@ class GitDiffService
 
         $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
 
-        $raw = $this->runGit($repoPath, [
+        $raw = $this->git->run($repoPath, [
             ...$target->toDiffArgs(),
             '--no-color', '--no-ext-diff', "--unified={$contextLines}", '--text', '--find-renames',
             '--', $path, ...$excludes,
@@ -301,201 +272,6 @@ class GitDiffService
         return $diff;
     }
 
-    public function getTopLevel(string $directory): string
-    {
-        return trim($this->runGit($directory, ['rev-parse', '--show-toplevel']));
-    }
-
-    public function getGitCommonDir(string $directory): string
-    {
-        $raw = trim($this->runGit($directory, ['rev-parse', '--git-common-dir']));
-
-        if ($raw === '' || $raw === '.git') {
-            return '';
-        }
-
-        // git may return relative path - resolve it
-        if (! str_starts_with($raw, '/')) {
-            $raw = $directory.'/'.$raw;
-        }
-
-        return (string) realpath($raw);
-    }
-
-    public function getGitDir(string $directory): string
-    {
-        $raw = trim($this->runGit($directory, ['rev-parse', '--git-dir']));
-
-        if ($raw === '') {
-            return '';
-        }
-
-        if (! str_starts_with($raw, '/')) {
-            $raw = $directory.'/'.$raw;
-        }
-
-        return (string) realpath($raw);
-    }
-
-    public function getCurrentBranch(string $directory): string
-    {
-        return trim($this->runGit($directory, ['rev-parse', '--abbrev-ref', 'HEAD']));
-    }
-
-    public function getFileContent(string $repoPath, string $path, string $ref = DiffTarget::WORKING_CONTEXT): ?string
-    {
-        if ($ref === DiffTarget::WORKING_CONTEXT) {
-            $fullPath = $repoPath.'/'.$path;
-
-            if (! File::isFile($fullPath)) {
-                return null;
-            }
-
-            return File::get($fullPath);
-        }
-
-        // Normalize legacy lowercase 'head' from image URLs
-        if ($ref === 'head') {
-            $ref = 'HEAD';
-        }
-
-        try {
-            return $this->runGit($repoPath, ['show', $ref.':'.$path]);
-        } catch (GitCommandException) {
-            return null;
-        }
-    }
-
-    public function resolveRef(string $repoPath, string $ref): ?string
-    {
-        if (str_starts_with($ref, '-')) {
-            return null;
-        }
-
-        try {
-            $resolved = trim($this->runGit($repoPath, ['rev-parse', '--verify', $ref.'^{commit}']));
-
-            return $resolved !== '' ? $resolved : null;
-        } catch (GitCommandException) {
-            return null;
-        }
-    }
-
-    /** @return string[] */
-    public function getCommitParents(string $repoPath, string $hash): array
-    {
-        try {
-            $output = trim($this->runGit($repoPath, ['rev-parse', $hash.'^@']));
-
-            return $output !== '' ? explode("\n", $output) : [];
-        } catch (GitCommandException) {
-            return [];
-        }
-    }
-
-    public function getChildCommit(string $repoPath, string $hash): ?string
-    {
-        try {
-            $output = trim($this->runGit($repoPath, [
-                'log', '--ancestry-path', '--format=%H', '--reverse', '-1', $hash.'..HEAD',
-            ]));
-
-            return $output !== '' ? $output : null;
-        } catch (GitCommandException) {
-            return null;
-        }
-    }
-
-    /**
-     * @return array{local: BranchEntry[], remote: BranchEntry[]}
-     */
-    public function getBranches(string $repoPath): array
-    {
-        $localOutput = $this->runGit($repoPath, ['branch', '--list', '--no-color']);
-        $local = [];
-
-        foreach (array_filter(explode("\n", $localOutput)) as $line) {
-            $isCurrent = str_starts_with($line, '* ');
-            $name = trim(ltrim($line, '* '));
-
-            if ($name === '' || str_starts_with($name, '(HEAD detached')) {
-                continue;
-            }
-
-            $local[] = new BranchEntry(
-                name: $name,
-                isCurrent: $isCurrent,
-                isRemote: false,
-            );
-        }
-
-        $remote = [];
-
-        try {
-            $remoteOutput = $this->runGit($repoPath, ['branch', '--remotes', '--no-color']);
-
-            foreach (array_filter(explode("\n", $remoteOutput)) as $line) {
-                $name = trim($line);
-
-                if ($name === '' || str_contains($name, '->')) {
-                    continue;
-                }
-
-                $remoteName = str_contains($name, '/') ? substr($name, 0, (int) strpos($name, '/')) : null;
-
-                $remote[] = new BranchEntry(
-                    name: $name,
-                    isCurrent: false,
-                    isRemote: true,
-                    remote: $remoteName,
-                );
-            }
-        } catch (GitCommandException) {
-            // No remotes configured — ignore
-        }
-
-        return ['local' => $local, 'remote' => $remote];
-    }
-
-    /**
-     * @return CommitEntry[]
-     */
-    public function getCommitLog(string $repoPath, int $limit = 50, int $offset = 0, ?string $branch = null): array
-    {
-        $args = ['log', "--format=%H\x1e%h\x1e%s\x1e%an\x1e%ar\x1e%aI", "--skip={$offset}", '-n', (string) $limit];
-
-        if ($branch !== null && $branch !== '' && ! str_starts_with($branch, '-')) {
-            $args[] = $branch;
-        }
-
-        try {
-            $output = $this->runGit($repoPath, $args);
-        } catch (GitCommandException) {
-            return [];
-        }
-
-        $entries = [];
-
-        foreach (array_filter(explode("\n", trim($output))) as $line) {
-            $parts = explode("\x1e", $line);
-
-            if (count($parts) < 6) {
-                continue;
-            }
-
-            $entries[] = new CommitEntry(
-                hash: $parts[0],
-                shortHash: $parts[1],
-                message: $parts[2],
-                author: $parts[3],
-                relativeDate: $parts[4],
-                date: $parts[5],
-            );
-        }
-
-        return $entries;
-    }
-
     private function getLastModified(string $repoPath, string $path): ?string
     {
         $fullPath = $repoPath.'/'.$path;
@@ -505,24 +281,6 @@ class GitDiffService
         }
 
         return Carbon::createFromTimestamp(File::lastModified($fullPath))->diffForHumans(short: true);
-    }
-
-    /** @param array<int, string> $args */
-    private function runGit(string $repoPath, array $args): string
-    {
-        $process = new Process(['git', '-c', 'core.quotepath=false', '-C', $repoPath, ...$args]);
-        $process->setTimeout(30);
-        $process->run();
-
-        if (! $process->isSuccessful()) {
-            throw new GitCommandException(
-                command: 'git '.implode(' ', $args),
-                stderr: trim($process->getErrorOutput()),
-                exitCode: $process->getExitCode() ?? 1,
-            );
-        }
-
-        return $process->getOutput();
     }
 
     private function isBinary(string $path): bool
