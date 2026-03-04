@@ -11,9 +11,9 @@ beforeEach(function () {
     $this->testRepoPath = sys_get_temp_dir().'/rfa_register_test_'.uniqid();
     File::makeDirectory($this->testRepoPath, 0755, true);
 
+    initTestRepo($this->testRepoPath);
     File::put($this->testRepoPath.'/file.txt', 'hello');
-    // gpgsign=false: disable GPG signing so test commits work without a key
-    exec('cd '.escapeshellarg($this->testRepoPath).' && git init -b main && git config user.email "t@t" && git config user.name "T" && git config commit.gpgsign false && git add -A && git commit -m "init" 2>&1');
+    commitTestRepo($this->testRepoPath, 'init');
 });
 
 afterEach(function () {
@@ -55,9 +55,9 @@ test('handles slug collisions with suffix', function () {
     $path2 = sys_get_temp_dir().'/rfa_register_test2_'.uniqid();
     File::makeDirectory($path2.'/'.basename($this->testRepoPath), 0755, true);
     $duplicatePath = $path2.'/'.basename($this->testRepoPath);
+    initTestRepo($duplicatePath);
     File::put($duplicatePath.'/file.txt', 'world');
-    // gpgsign=false: disable GPG signing so test commits work without a key
-    exec('cd '.escapeshellarg($duplicatePath).' && git init -b main && git config user.email "t@t" && git config user.name "T" && git config commit.gpgsign false && git add -A && git commit -m "init" 2>&1');
+    commitTestRepo($duplicatePath, 'init');
 
     $first = app(RegisterProjectAction::class)->handle($this->testRepoPath);
     $second = app(RegisterProjectAction::class)->handle($duplicatePath);

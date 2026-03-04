@@ -4,6 +4,7 @@ use App\Actions\LoadFileDiffAction;
 use App\Exceptions\GitCommandException;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
+use App\Services\GitProcessService;
 use App\Services\IgnoreService;
 use App\Services\SyntaxHighlightService;
 use Illuminate\Support\Facades\File;
@@ -14,16 +15,10 @@ beforeEach(function () {
     $this->tmpDir = sys_get_temp_dir().'/rfa_action_test_'.uniqid();
     File::makeDirectory($this->tmpDir, 0755, true);
 
-    exec(implode(' && ', [
-        'cd '.escapeshellarg($this->tmpDir),
-        'git init -b main',
-        "git config user.email 'test@rfa.test'",
-        "git config user.name 'RFA Test'",
-        'git config commit.gpgsign false', // Disable GPG signing so test commits work without a key
-    ]));
+    initTestRepo($this->tmpDir);
 
     File::put($this->tmpDir.'/hello.txt', "line1\n");
-    exec('cd '.escapeshellarg($this->tmpDir).' && git add -A && git commit -m init');
+    commitTestRepo($this->tmpDir, 'init');
 });
 
 afterEach(function () {
@@ -33,7 +28,7 @@ afterEach(function () {
 test('returns full DTO array for modified file', function () {
     File::put($this->tmpDir.'/hello.txt', "line1\nline2\n");
 
-    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService);
     $result = $action->handle($this->tmpDir, 'hello.txt');
 
     expect($result)->toHaveKeys(['path', 'status', 'hunks', 'additions', 'deletions', 'isBinary', 'tooLarge'])
@@ -49,7 +44,7 @@ test('returns tooLarge true when diff exceeds limit', function () {
     // Use a very low maxBytes config
     config(['rfa.diff_max_bytes' => 100]);
 
-    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService);
     $result = $action->handle($this->tmpDir, 'hello.txt');
 
     expect($result)->toHaveKeys(['path', 'status', 'oldPath', 'hunks', 'additions', 'deletions', 'isBinary', 'tooLarge'])
@@ -62,7 +57,7 @@ test('returns tooLarge true when diff exceeds limit', function () {
 });
 
 test('returns empty array for empty diff', function () {
-    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService);
     $result = $action->handle($this->tmpDir, 'nonexistent.txt', isUntracked: true);
 
     expect($result['hunks'])->toBe([])
@@ -72,7 +67,7 @@ test('returns empty array for empty diff', function () {
 test('handles untracked file', function () {
     File::put($this->tmpDir.'/newfile.txt', "hello\nworld\n");
 
-    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService);
     $result = $action->handle($this->tmpDir, 'newfile.txt', isUntracked: true);
 
     expect($result)->not->toBeNull()
@@ -85,10 +80,10 @@ test('handles untracked file', function () {
 
 test('adds highlightedContent for known file types', function () {
     File::put($this->tmpDir.'/hello.php', "<?php\necho 'hi';\n");
-    exec('cd '.escapeshellarg($this->tmpDir).' && git add -A && git commit -m "add php"');
+    commitTestRepo($this->tmpDir, 'add php');
     File::put($this->tmpDir.'/hello.php', "<?php\necho 'hello';\n");
 
-    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService);
     $result = $action->handle($this->tmpDir, 'hello.php');
 
     expect($result)->not->toBeNull()
@@ -102,10 +97,10 @@ test('adds highlightedContent for known file types', function () {
 
 test('no highlightedContent for unknown file types', function () {
     File::put($this->tmpDir.'/data.xyz', "some content\n");
-    exec('cd '.escapeshellarg($this->tmpDir).' && git add -A && git commit -m "add xyz"');
+    commitTestRepo($this->tmpDir, 'add xyz');
     File::put($this->tmpDir.'/data.xyz', "updated content\n");
 
-    $action = new LoadFileDiffAction(new GitDiffService(new IgnoreService), new DiffParser, new SyntaxHighlightService);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService);
     $result = $action->handle($this->tmpDir, 'data.xyz');
 
     expect($result)->not->toBeNull();
@@ -120,14 +115,14 @@ test('contextLines parameter produces single hunk for full context', function ()
     // Create file with 20 lines, modify first and last to produce 2 hunks
     $lines = array_map(fn ($i) => "line{$i}", range(1, 20));
     File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
-    exec('cd '.escapeshellarg($this->tmpDir).' && git add -A && git commit -m "add many"');
+    commitTestRepo($this->tmpDir, 'add many');
 
     $lines[0] = 'changed1';
     $lines[19] = 'changed20';
     File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
 
     $action = new LoadFileDiffAction(
-        new GitDiffService(new IgnoreService),
+        new GitDiffService(new GitProcessService, new IgnoreService),
         new DiffParser,
         new SyntaxHighlightService,
     );
