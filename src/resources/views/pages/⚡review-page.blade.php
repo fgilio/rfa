@@ -14,6 +14,7 @@ use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\Actions\ToggleViewedAction;
 use App\DTOs\DiffTarget;
+use App\DTOs\FileListEntry;
 use App\Exceptions\GitCommandException;
 use App\Actions\UpdateProjectSettingAction;
 use Livewire\Attributes\Computed;
@@ -112,6 +113,10 @@ new #[Layout('layouts.app')] class extends Component {
         $this->comments = $session['comments'];
         $this->viewedFiles = $session['viewedFiles'];
         $this->globalComment = $session['globalComment'];
+
+        if (! empty($session['orphanedPaths'])) {
+            $this->injectOrphanedFiles($session['orphanedPaths']);
+        }
     }
 
     public function isCommitMode(): bool
@@ -167,6 +172,10 @@ new #[Layout('layouts.app')] class extends Component {
         $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $this->buildDiffTarget()->contextKey());
         $this->comments = $session['comments'];
         $this->viewedFiles = $session['viewedFiles'];
+
+        if (! empty($session['orphanedPaths'])) {
+            $this->injectOrphanedFiles($session['orphanedPaths']);
+        }
     }
 
     #[On('add-comment')]
@@ -320,6 +329,24 @@ new #[Layout('layouts.app')] class extends Component {
         $this->reviewPairs = [];
 
         Flux::toast(text: 'All reviews deleted', variant: 'success');
+    }
+
+    /** @param array<int, string> $orphanedPaths */
+    private function injectOrphanedFiles(array $orphanedPaths): void
+    {
+        foreach ($orphanedPaths as $path) {
+            $entry = new FileListEntry(
+                path: $path,
+                status: 'commented',
+                oldPath: null,
+                additions: 0,
+                deletions: 0,
+                isBinary: false,
+                isUntracked: false,
+            );
+            $this->files[] = $entry->toArray();
+        }
+        $this->groupFiles();
     }
 
     private function groupFiles(): void
@@ -580,6 +607,7 @@ new #[Layout('layouts.app')] class extends Component {
                             'added' => ['green', 'A'],
                             'deleted' => ['red', 'D'],
                             'renamed' => ['yellow', 'R'],
+                            'commented' => ['zinc', 'C'],
                             default => ['yellow', 'M'],
                         };
                     @endphp
@@ -589,7 +617,7 @@ new #[Layout('layouts.app')] class extends Component {
                         class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-colors"
                         :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-link/10 text-gh-link' : 'text-gh-muted'"
                     >
-                        <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', default => 'text-amber-500 dark:text-amber-400' } }}">{{ $badgeLabel }}</span>
+                        <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', 'C' => 'text-gh-muted', default => 'text-amber-500 dark:text-amber-400' } }}">{{ $badgeLabel }}</span>
                         <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
                         <flux:icon icon="check" variant="outline" x-show="viewedFiles['{{ $file['id'] }}']"
                             class="text-gh-green shrink-0" x-cloak />
