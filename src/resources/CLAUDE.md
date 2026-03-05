@@ -22,7 +22,8 @@
 - Prefer raw text `text-gh-green`/`text-gh-red` over `flux:badge` for +/- counts in headers
 
 ## Icons
-- Always use `variant="micro"` (16px solid) - outline is too thin/delicate for brutalist style
+- Always use `variant="outline"` (24px stroke) for `flux:icon`
+- Use `icon:variant="outline"` on `flux:button` and `flux:input` that have icon props
 
 ## Dark Mode
 - Managed by Flux's `@fluxAppearance` + `$flux.dark` - never hardcode `class="dark"` on `<html>`
