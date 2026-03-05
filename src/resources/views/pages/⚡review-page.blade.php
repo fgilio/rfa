@@ -184,6 +184,39 @@ new #[Layout('layouts.app')] class extends Component {
         $this->skipRender();
     }
 
+    #[On('add-draft-comment')]
+    public function addDraftComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body): void
+    {
+        $comment = app(AddCommentAction::class)->handle($this->files, $fileId, $side, $startLine, $endLine, $body, isDraft: true);
+
+        if (! $comment) {
+            return;
+        }
+
+        $this->comments[] = $comment;
+        $this->saveSession();
+        $this->dispatchFileComments($fileId);
+        $this->skipRender();
+    }
+
+    #[On('update-comment')]
+    public function updateComment(string $commentId, string $body, bool $isDraft = false): void
+    {
+        $index = collect($this->comments)->search(fn ($c) => $c['id'] === $commentId);
+
+        if ($index === false) {
+            return;
+        }
+
+        $this->comments[$index]['body'] = $body;
+        $this->comments[$index]['isDraft'] = $isDraft;
+        $fileId = $this->comments[$index]['fileId'];
+
+        $this->saveSession();
+        $this->dispatchFileComments($fileId);
+        $this->skipRender();
+    }
+
     #[On('delete-comment')]
     public function deleteComment(string $commentId): void
     {
@@ -230,7 +263,9 @@ new #[Layout('layouts.app')] class extends Component {
     {
         $this->saveSession();
 
-        $result = app(ExportReviewAction::class)->handle($this->repoPath, $this->comments, $this->globalComment, $this->files);
+        $finalizedComments = array_values(array_filter($this->comments, fn ($c) => ! ($c['isDraft'] ?? false)));
+
+        $result = app(ExportReviewAction::class)->handle($this->repoPath, $finalizedComments, $this->globalComment, $this->files);
 
         $this->exportResult = $result['clipboard'];
         $this->submitted = true;
@@ -374,7 +409,7 @@ new #[Layout('layouts.app')] class extends Component {
     "
     @keydown.window="
         if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {
-            if ($event.key === 'Escape') { fileFilter = ''; $event.target.blur(); $event.preventDefault(); }
+            if ($event.key === 'Escape' && !$event.target.closest('[data-comment-form]')) { fileFilter = ''; $event.target.blur(); $event.preventDefault(); }
             return;
         }
         if ($event.key === '/') { $refs.fileFilterInput?.focus(); $event.preventDefault(); }

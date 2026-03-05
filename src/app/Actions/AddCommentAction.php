@@ -13,7 +13,7 @@ final readonly class AddCommentAction
      * @param  array<int, array<string, mixed>>  $files
      * @return array<string, mixed>|null
      */
-    public function handle(array $files, string $fileId, string $side, ?int $startLine, ?int $endLine, string $body): ?array
+    public function handle(array $files, string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, bool $isDraft = false): ?array
     {
         if (trim($body) === '') {
             return null;
@@ -44,6 +44,7 @@ final readonly class AddCommentAction
             'startLine' => $startLine,
             'endLine' => $endLine,
             'body' => $body,
+            'isDraft' => $isDraft,
         ];
     }
 }

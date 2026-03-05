@@ -11,13 +11,17 @@
         </div>
     @else
         <div class="px-5 py-3.5 flex items-center gap-4"
-            x-data="{ get commentCount() { return $wire.comments.length }, get hasGlobal() { return ($wire.globalComment || '').trim().length > 0 } }"
+            x-data="{
+                get commentCount() { return $wire.comments.filter(c => !c.isDraft).length },
+                get draftCount() { return $wire.comments.filter(c => c.isDraft).length },
+                get hasGlobal() { return ($wire.globalComment || '').trim().length > 0 }
+            }"
         >
             <div class="flex-1">
                 <flux:textarea
                     wire:model.live.debounce.500ms="globalComment"
                     placeholder="Overall review comment (optional)"
-                    rows="1"
+                    rows="auto"
                     resize="none"
                     class="font-mono text-xs"
                 />
@@ -26,9 +30,12 @@
                 <template x-if="commentCount > 0">
                     <span class="font-mono text-xs text-gh-muted" x-text="commentCount + ' ' + (commentCount === 1 ? 'comment' : 'comments')"></span>
                 </template>
+                <template x-if="draftCount > 0">
+                    <span class="font-mono text-xs text-amber-500 dark:text-amber-400" x-text="draftCount + ' ' + (draftCount === 1 ? 'draft' : 'drafts')"></span>
+                </template>
                 <flux:button
                     variant="primary"
-                    wire:click="submitReview"
+                    @click="if (draftCount > 0 && !confirm(`You have ${draftCount} draft comment${draftCount === 1 ? '' : 's'} that won't be included. Submit anyway?`)) return; $wire.submitReview()"
                     x-bind:disabled="commentCount === 0 && !hasGlobal"
                 >
                     Submit Review

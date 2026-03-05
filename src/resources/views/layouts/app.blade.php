@@ -107,6 +107,16 @@
             width: 3px;
             background: rgb(var(--gh-link));
         }
+        .draft-indicator { position: relative; }
+        .draft-indicator::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: rgb(var(--gh-muted) / 0.5);
+        }
         /* Phiki syntax highlighting */
         .diff-line td span[style] { background-color: transparent !important; }
         .dark .diff-line td span[style] {

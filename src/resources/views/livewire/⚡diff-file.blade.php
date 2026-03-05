@@ -193,6 +193,9 @@ new class extends Component {
         isDragging: false,
         dragStartLine: null,
         dragSide: null,
+        escHint: false,
+        escTimer: null,
+        editingDraftId: null,
 
         startDrag(lineNum, side, event) {
             if (event.button !== 0) return;
@@ -202,6 +205,13 @@ new class extends Component {
                 this.draftSide = side;
                 this.showDraft = true;
                 this.$nextTick(() => { this.$refs.commentInput?.focus(); });
+                return;
+            }
+            // Check for existing draft on this line
+            const comments = $wire.fileComments || [];
+            const existingDraft = comments.find(c => c.isDraft && c.side === side && c.startLine !== null && lineNum >= c.startLine && lineNum <= (c.endLine ?? c.startLine));
+            if (existingDraft) {
+                this.editDraft(existingDraft);
                 return;
             }
             this.isDragging = true;
@@ -234,17 +244,63 @@ new class extends Component {
             this.draftBody = '';
             this.draftLine = null;
             this.draftEndLine = null;
+            this.escHint = false;
+            if (this.escTimer) { clearTimeout(this.escTimer); this.escTimer = null; }
+            this.editingDraftId = null;
+        },
+
+        handleEscape() {
+            if (this.draftBody.trim() === '') {
+                if (this.editingDraftId) {
+                    $wire.dispatch('delete-comment', { commentId: this.editingDraftId });
+                }
+                this.cancelDraft();
+                return;
+            }
+            if (!this.escHint) {
+                this.escHint = true;
+                this.escTimer = setTimeout(() => { this.escHint = false; this.escTimer = null; }, 1500);
+                return;
+            }
+            // Second Esc - save as draft
+            if (this.escTimer) { clearTimeout(this.escTimer); this.escTimer = null; }
+            if (this.editingDraftId) {
+                $wire.dispatch('update-comment', { commentId: this.editingDraftId, body: this.draftBody, isDraft: true });
+            } else if (this.draftSide === 'file') {
+                $wire.dispatch('add-draft-comment', { fileId: this.fileId, side: 'file', startLine: null, endLine: null, body: this.draftBody });
+            } else {
+                $wire.dispatch('add-draft-comment', { fileId: this.fileId, side: this.draftSide, startLine: this.draftLine, endLine: this.draftEndLine, body: this.draftBody });
+            }
+            this.cancelDraft();
+        },
+
+        editDraft(comment) {
+            this.draftBody = comment.body;
+            this.draftLine = comment.startLine;
+            this.draftEndLine = comment.endLine;
+            this.draftSide = comment.side;
+            this.editingDraftId = comment.id;
+            this.showDraft = true;
+            this.$nextTick(() => { this.$refs.commentInput?.focus(); });
         },
 
         saveDraft() {
             if (this.draftBody.trim() === '') return;
-            $wire.dispatch('add-comment', { fileId: this.fileId, side: this.draftSide, startLine: this.draftLine, endLine: this.draftEndLine, body: this.draftBody });
+            if (this.editingDraftId) {
+                $wire.dispatch('update-comment', { commentId: this.editingDraftId, body: this.draftBody, isDraft: false });
+            } else {
+                $wire.dispatch('add-comment', { fileId: this.fileId, side: this.draftSide, startLine: this.draftLine, endLine: this.draftEndLine, body: this.draftBody });
+            }
             this.cancelDraft();
         },
 
         saveFileComment() {
             if (this.draftBody.trim() === '') return;
-            $wire.dispatch('add-comment', { fileId: this.fileId, side: 'file', startLine: null, endLine: null, body: this.draftBody });
+            if (this.editingDraftId) {
+                $wire.dispatch('update-comment', { commentId: this.editingDraftId, body: this.draftBody, isDraft: false });
+            } else {
+                $wire.dispatch('add-comment', { fileId: this.fileId, side: 'file', startLine: null, endLine: null, body: this.draftBody });
+            }
             this.cancelDraft();
         },
 
@@ -503,18 +559,19 @@ new class extends Component {
                                 <template x-if="showDraft && draftEndLine === {{ $lineNum }} && draftSide !== 'file' && ({{ Js::from($lineSide) }} === 'context' || draftSide === {{ Js::from($lineSide) }})">
                                     <tr>
                                         <td colspan="4" class="p-0">
-                                            <flux:card size="sm" class="!rounded-none border-y border-gh-border">
+                                            <flux:card size="sm" class="!rounded-none border-y border-gh-border" data-comment-form>
                                                 <flux:textarea
                                                     x-ref="commentInput"
                                                     x-model="draftBody"
                                                     @keydown.meta.enter="saveDraft()"
                                                     @keydown.ctrl.enter="saveDraft()"
-                                                    @keydown.escape="cancelDraft()"
+                                                    @keydown.escape.stop="handleEscape()"
                                                     placeholder="Write a comment... (Cmd/Ctrl+Enter to save, Esc to cancel)"
-                                                    rows="2"
-                                                    resize="vertical"
+                                                    rows="auto"
+                                                    resize="none"
                                                     class="font-mono text-xs"
                                                 />
+                                                <div x-show="escHint" x-cloak class="text-xs text-gh-muted mt-1" data-testid="esc-hint">Press Esc again to save as draft</div>
                                                 <div class="flex justify-end gap-2 mt-2">
                                                     <flux:button variant="ghost" size="sm" @click="cancelDraft()">Cancel</flux:button>
                                                     <flux:button variant="primary" size="sm" color="green" @click="saveDraft()">Save</flux:button>
@@ -537,11 +594,21 @@ new class extends Component {
                                 }
                             @endphp
                             @foreach($lineComments as $comment)
-                                <tr>
+                                <tr x-data @if($comment['isDraft'] ?? false) x-show="editingDraftId !== '{{ $comment['id'] }}'" @endif>
                                     <td colspan="4" class="p-0">
-                                        <div class="comment-indicator bg-gh-surface/80 border-y border-gh-border px-4 py-2">
+                                        <div class="{{ ($comment['isDraft'] ?? false) ? 'draft-indicator' : 'comment-indicator' }} bg-gh-surface/80 border-y border-gh-border px-4 py-2 {{ ($comment['isDraft'] ?? false) ? 'cursor-pointer' : '' }}"
+                                            @if($comment['isDraft'] ?? false)
+                                                @click="editDraft({{ Js::from($comment) }})"
+                                                data-testid="draft-comment"
+                                            @endif
+                                        >
                                             <div class="flex items-start justify-between gap-2">
-                                                <flux:text size="sm" class="whitespace-pre-wrap">{{ $comment['body'] }}</flux:text>
+                                                <div class="flex items-center gap-2">
+                                                    @if($comment['isDraft'] ?? false)
+                                                        <span class="text-[10px] font-mono font-medium text-amber-500 dark:text-amber-400 uppercase tracking-wider">Draft</span>
+                                                    @endif
+                                                    <flux:text size="sm" class="whitespace-pre-wrap">{{ $comment['body'] }}</flux:text>
+                                                </div>
                                                 <flux:tooltip content="Delete comment">
                                                     <flux:button
                                                         icon="x-mark"
@@ -549,7 +616,7 @@ new class extends Component {
                                                         variant="ghost"
                                                         size="xs"
                                                         aria-label="Delete comment"
-                                                        @click="$wire.dispatch('delete-comment', { commentId: '{{ $comment['id'] }}' })"
+                                                        @click.stop="$wire.dispatch('delete-comment', { commentId: '{{ $comment['id'] }}' })"
                                                         class="shrink-0 hover:!text-red-400"
                                                     />
                                                 </flux:tooltip>
@@ -569,18 +636,19 @@ new class extends Component {
 
         {{-- File-level comment form --}}
         <template x-if="showDraft && draftSide === 'file'">
-            <flux:card size="sm" class="!rounded-none border-t border-gh-border">
+            <flux:card size="sm" class="!rounded-none border-t border-gh-border" data-comment-form>
                 <flux:textarea
                     x-ref="commentInput"
                     x-model="draftBody"
                     @keydown.meta.enter="saveFileComment()"
                     @keydown.ctrl.enter="saveFileComment()"
-                    @keydown.escape="cancelDraft()"
+                    @keydown.escape.stop="handleEscape()"
                     placeholder="File comment... (Cmd/Ctrl+Enter to save, Esc to cancel)"
-                    rows="2"
-                    resize="vertical"
+                    rows="auto"
+                    resize="none"
                     class="font-mono text-xs"
                 />
+                <div x-show="escHint" x-cloak class="text-xs text-gh-muted mt-1" data-testid="esc-hint">Press Esc again to save as draft</div>
                 <div class="flex justify-end gap-2 mt-2">
                     <flux:button variant="ghost" size="sm" @click="cancelDraft()">Cancel</flux:button>
                     <flux:button variant="primary" size="sm" color="green" @click="saveFileComment()">Save</flux:button>
@@ -591,20 +659,32 @@ new class extends Component {
         {{-- File-level saved comments --}}
         @foreach($fileComments as $comment)
             @if($comment['side'] === 'file')
-                <div class="comment-indicator bg-gh-surface/80 border-t border-gh-border px-4 py-2">
-                    <div class="flex items-start justify-between gap-2">
-                        <flux:text size="sm" class="whitespace-pre-wrap">{{ $comment['body'] }}</flux:text>
-                        <flux:tooltip content="Delete comment">
-                            <flux:button
-                                icon="x-mark"
-                                icon:variant="outline"
-                                variant="ghost"
-                                size="xs"
-                                aria-label="Delete comment"
-                                @click="$wire.dispatch('delete-comment', { commentId: '{{ $comment['id'] }}' })"
-                                class="shrink-0 hover:!text-red-400"
-                            />
-                        </flux:tooltip>
+                <div x-data @if($comment['isDraft'] ?? false) x-show="editingDraftId !== '{{ $comment['id'] }}'" @endif>
+                    <div class="{{ ($comment['isDraft'] ?? false) ? 'draft-indicator' : 'comment-indicator' }} bg-gh-surface/80 border-t border-gh-border px-4 py-2 {{ ($comment['isDraft'] ?? false) ? 'cursor-pointer' : '' }}"
+                        @if($comment['isDraft'] ?? false)
+                            @click="editDraft({{ Js::from($comment) }})"
+                            data-testid="draft-comment"
+                        @endif
+                    >
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                @if($comment['isDraft'] ?? false)
+                                    <span class="text-[10px] font-mono font-medium text-amber-500 dark:text-amber-400 uppercase tracking-wider">Draft</span>
+                                @endif
+                                <flux:text size="sm" class="whitespace-pre-wrap">{{ $comment['body'] }}</flux:text>
+                            </div>
+                            <flux:tooltip content="Delete comment">
+                                <flux:button
+                                    icon="x-mark"
+                                    icon:variant="outline"
+                                    variant="ghost"
+                                    size="xs"
+                                    aria-label="Delete comment"
+                                    @click.stop="$wire.dispatch('delete-comment', { commentId: '{{ $comment['id'] }}' })"
+                                    class="shrink-0 hover:!text-red-400"
+                                />
+                            </flux:tooltip>
+                        </div>
                     </div>
                 </div>
             @endif

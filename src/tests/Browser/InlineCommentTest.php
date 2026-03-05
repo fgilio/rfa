@@ -54,7 +54,7 @@ test('cmd+enter keyboard shortcut saves comment', function () {
     $page->assertSee('Keyboard shortcut test');
 });
 
-test('escape keyboard shortcut cancels comment', function () {
+test('escape on empty comment form closes it', function () {
     $page = $this->visit($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
