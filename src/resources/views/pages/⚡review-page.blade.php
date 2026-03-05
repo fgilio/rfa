@@ -407,7 +407,7 @@ new #[Layout('layouts.app')] class extends Component {
                 x-text="Object.values(viewedFiles).filter(Boolean).length + '/{{ count($sourceFiles) }} viewed'"
                 x-cloak></span>
             @if(count($reviewPairs) > 0)
-                <flux:badge color="purple" size="sm">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</flux:badge>
+                <span class="font-mono text-xs text-gh-muted px-1.5 py-0.5 rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
             @endif
             <span class="font-mono text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
             <span class="font-mono text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
@@ -554,7 +554,7 @@ new #[Layout('layouts.app')] class extends Component {
                         x-show="fileMatchesFilter({{ Js::from($file['path']) }})"
                         @click="scrollToFile('{{ $file['id'] }}')"
                         class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-colors"
-                        :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-border/30 text-gh-text font-medium' : 'text-gh-muted'"
+                        :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-link/10 text-gh-link' : 'text-gh-muted'"
                     >
                         <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', default => 'text-amber-500 dark:text-amber-400' } }}">{{ $badgeLabel }}</span>
                         <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>

@@ -399,7 +399,7 @@ new class extends Component {
                                     wire:click="expandContext"
                                     wire:loading.attr="disabled"
                                     wire:target="expandContext"
-                                    class="text-gh-accent text-xs hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                                    class="text-gh-link text-xs hover:underline inline-flex items-center gap-1 disabled:opacity-50"
                                 >
                                     <flux:icon wire:loading wire:target="expandContext" icon="arrow-path" variant="micro" class="animate-spin" />
                                     Show full file
@@ -422,7 +422,7 @@ new class extends Component {
                                             wire:click="expandGap({{ $hunkIndex }})"
                                             wire:loading.attr="disabled"
                                             wire:target="expandGap"
-                                            class="text-gh-accent hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                                            class="text-gh-link hover:underline inline-flex items-center gap-1 disabled:opacity-50"
                                         >
                                             <flux:icon wire:loading wire:target="expandGap" icon="arrow-path" variant="micro" class="animate-spin" />
                                             <span wire:loading.remove wire:target="expandGap">Expand {{ $hiddenCount }} hidden lines</span>
@@ -434,7 +434,7 @@ new class extends Component {
                                             wire:click="expandGap(0)"
                                             wire:loading.attr="disabled"
                                             wire:target="expandGap"
-                                            class="text-gh-accent hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                                            class="text-gh-link hover:underline inline-flex items-center gap-1 disabled:opacity-50"
                                         >
                                             <flux:icon wire:loading wire:target="expandGap" icon="arrow-path" variant="micro" class="animate-spin" />
                                             <span wire:loading.remove wire:target="expandGap">Expand {{ $hiddenCount }} hidden lines</span>

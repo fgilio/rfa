@@ -165,7 +165,7 @@ test('clicking sidebar file scrolls to it', function () {
     // Click the last sidebar button (utils.php)
     $page->page()->getByRole('button', ['name' => 'utils.php'])->click();
 
-    $activeCount = $page->page()->locator('aside button.text-gh-accent')->count();
+    $activeCount = $page->page()->locator('aside button.text-gh-link')->count();
     expect($activeCount)->toBeGreaterThan(0);
 });
 

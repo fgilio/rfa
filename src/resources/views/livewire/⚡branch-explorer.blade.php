@@ -283,9 +283,9 @@ new class extends Component {
 
                         <div class="ml-auto flex items-center gap-2">
                             <template x-if="baseHash">
-                                <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gh-accent/10 border border-gh-accent/20">
-                                    <span class="text-[10px] text-gh-accent font-mono" x-text="'Compare from ' + baseShortHash"></span>
-                                    <button @click="clearBase()" class="text-gh-accent hover:text-gh-accent/80">
+                                <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gh-link/10 border border-gh-link/20">
+                                    <span class="text-[10px] text-gh-link font-mono" x-text="'Compare from ' + baseShortHash"></span>
+                                    <button @click="clearBase()" class="text-gh-link hover:text-gh-link/80">
                                         <flux:icon icon="x-mark" variant="micro" />
                                     </button>
                                 </div>
@@ -321,10 +321,10 @@ new class extends Component {
                                             <span class="text-[10px] font-mono text-gh-muted" x-text="commit.relativeDate"></span>
                                         </div>
                                         <template x-if="baseHash === commit.hash">
-                                            <span class="text-[10px] text-gh-accent font-medium mt-0.5">Compare from</span>
+                                            <span class="text-[10px] text-gh-link font-medium mt-0.5">Compare from</span>
                                         </template>
                                         <template x-if="baseHash && baseHash !== commit.hash">
-                                            <span class="text-[10px] text-gh-accent font-medium mt-0.5">Compare to</span>
+                                            <span class="text-[10px] text-gh-link font-medium mt-0.5">Compare to</span>
                                         </template>
                                     </div>
 
@@ -343,7 +343,7 @@ new class extends Component {
                                             <flux:tooltip content="Clear base">
                                                 <button
                                                     @click="clearBase()"
-                                                    class="p-1 rounded hover:bg-gh-border text-gh-accent"
+                                                    class="p-1 rounded hover:bg-gh-border text-gh-link"
                                                 >
                                                     <flux:icon icon="x-mark" variant="micro" />
                                                 </button>
@@ -352,7 +352,7 @@ new class extends Component {
 
                                         <button
                                             @click.stop="copyHash(commit.hash)"
-                                            class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gh-bg border border-gh-border text-gh-muted hover:text-gh-accent hover:border-gh-accent/50 transition-all cursor-pointer"
+                                            class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gh-bg border border-gh-border text-gh-muted hover:text-gh-link hover:border-gh-link/50 transition-all cursor-pointer"
                                             x-text="commit.shortHash"
                                             title="Copy full hash"
                                         ></button>
@@ -366,7 +366,7 @@ new class extends Component {
                             <div class="px-4 py-3 text-center">
                                 <button
                                     @click="$wire.loadMore(selectedBranch)"
-                                    class="text-xs text-gh-accent hover:underline cursor-pointer"
+                                    class="text-xs text-gh-link hover:underline cursor-pointer"
                                 >
                                     Load more commits...
                                 </button>
