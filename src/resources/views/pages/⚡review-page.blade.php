@@ -573,7 +573,7 @@ new #[Layout('layouts.app')] class extends Component {
                 @endforeach
             </div>
         </aside>
-        <div class="group/resize hidden lg:flex sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-0 cursor-col-resize items-center justify-center z-10 shrink-0"
+        <div data-testid="sidebar-resize-handle" class="group/resize hidden lg:flex sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-0 cursor-col-resize items-center justify-center z-10 shrink-0"
             style="padding: 0 6px; margin: 0 -6px;"
             @mousedown="startResize($event)"
             @dblclick="sidebarWidth = 288; localStorage.setItem('rfa-sidebar-width', 288)">

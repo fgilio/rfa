@@ -19,7 +19,7 @@ test('dragging sidebar handle changes sidebar width', function () {
 
     // Simulate drag: mousedown on handle, mousemove +100px, mouseup
     $page->script("
-        const handle = document.querySelector('aside .cursor-col-resize');
+        const handle = document.querySelector('[data-testid=sidebar-resize-handle]');
         const rect = handle.getBoundingClientRect();
         const startX = rect.left + rect.width / 2;
         const startY = rect.top + rect.height / 2;
@@ -51,7 +51,7 @@ test('sidebar width persists in localStorage after drag', function () {
     $page = $this->visit($this->projectUrl());
 
     $page->script("
-        const handle = document.querySelector('aside .cursor-col-resize');
+        const handle = document.querySelector('[data-testid=sidebar-resize-handle]');
         const rect = handle.getBoundingClientRect();
         const startX = rect.left + rect.width / 2;
         const startY = rect.top + rect.height / 2;
@@ -79,7 +79,7 @@ test('sidebar width clamps at minimum 200px', function () {
     $page = $this->visit($this->projectUrl());
 
     $page->script("
-        const handle = document.querySelector('aside .cursor-col-resize');
+        const handle = document.querySelector('[data-testid=sidebar-resize-handle]');
         const rect = handle.getBoundingClientRect();
         const startX = rect.left + rect.width / 2;
         const startY = rect.top + rect.height / 2;
@@ -105,7 +105,7 @@ test('sidebar width clamps at maximum 600px', function () {
     $page = $this->visit($this->projectUrl());
 
     $page->script("
-        const handle = document.querySelector('aside .cursor-col-resize');
+        const handle = document.querySelector('[data-testid=sidebar-resize-handle]');
         const rect = handle.getBoundingClientRect();
         const startX = rect.left + rect.width / 2;
         const startY = rect.top + rect.height / 2;
@@ -132,7 +132,7 @@ test('main content gets pointer-events-none during drag', function () {
 
     // Start drag but don't release
     $page->script("
-        const handle = document.querySelector('aside .cursor-col-resize');
+        const handle = document.querySelector('[data-testid=sidebar-resize-handle]');
         const rect = handle.getBoundingClientRect();
         const startX = rect.left + rect.width / 2;
         const startY = rect.top + rect.height / 2;
@@ -169,7 +169,7 @@ test('double-clicking resize handle resets sidebar to default width', function (
 
     // First drag sidebar wider
     $page->script("
-        const handle = document.querySelector('aside .cursor-col-resize');
+        const handle = document.querySelector('[data-testid=sidebar-resize-handle]');
         const rect = handle.getBoundingClientRect();
         const startX = rect.left + rect.width / 2;
         const startY = rect.top + rect.height / 2;
@@ -189,7 +189,7 @@ test('double-clicking resize handle resets sidebar to default width', function (
 
     // Double-click the handle
     $page->script("
-        const handle = document.querySelector('aside .cursor-col-resize');
+        const handle = document.querySelector('[data-testid=sidebar-resize-handle]');
         handle.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     ");
 
