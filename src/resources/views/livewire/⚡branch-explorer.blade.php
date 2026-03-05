@@ -188,9 +188,9 @@ new class extends Component {
         @click="openPanel()"
         class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded border border-gh-border hover:border-gh-text/30 bg-gh-surface text-gh-text transition-colors cursor-pointer"
     >
-        <flux:icon icon="share" variant="outline" class="text-gh-muted" />
+        <flux:icon icon="share" variant="outline" class="!size-3.5 text-gh-muted" />
         <span>{{ $currentBranch }}</span>
-        <flux:icon icon="chevron-down" variant="outline" class="text-gh-muted" />
+        <flux:icon icon="chevron-down" variant="outline" class="!size-3.5 text-gh-muted" />
     </button>
 
     {{-- Overlay panel --}}
