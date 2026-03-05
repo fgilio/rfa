@@ -501,7 +501,7 @@ new #[Layout('layouts.app')] class extends Component {
 
     <div class="flex">
         {{-- Sidebar --}}
-        <aside class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-bg hidden lg:block relative" :style="{ width: sidebarWidth + 'px' }" x-ref="sidebar">
+        <aside class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-bg hidden lg:block" :style="{ width: sidebarWidth + 'px' }" x-ref="sidebar">
             <div class="p-4">
                 @if(! $this->isCommitMode() && count($reviewPairs) > 0)
                     <div class="flex items-center justify-between mb-3">
@@ -571,11 +571,18 @@ new #[Layout('layouts.app')] class extends Component {
                     </button>
                 @endforeach
             </div>
-            <div class="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-gh-accent/20 transition-colors"
-                style="padding-left: 3px; padding-right: 3px; margin-left: -3px; margin-right: -3px; background-clip: content-box;"
-                @mousedown="startResize($event)"
-                @dblclick="sidebarWidth = 288; localStorage.setItem('rfa-sidebar-width', 288)"></div>
         </aside>
+        <div class="group/resize hidden lg:flex sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-0 cursor-col-resize items-center justify-center z-10 shrink-0"
+            style="padding: 0 6px; margin: 0 -6px;"
+            @mousedown="startResize($event)"
+            @dblclick="sidebarWidth = 288; localStorage.setItem('rfa-sidebar-width', 288)">
+            <div class="absolute inset-y-0 w-px bg-transparent group-hover/resize:bg-gh-muted/40 transition-colors"></div>
+            <div class="absolute px-1 py-1.5 rounded-full bg-gh-surface border border-gh-border shadow-sm opacity-0 group-hover/resize:opacity-100 transition-opacity pointer-events-none flex flex-col items-center gap-[3px]">
+                <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
+                <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
+                <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
+            </div>
+        </div>
 
         {{-- Main content --}}
         <main class="flex-1 min-w-0 pb-24" :class="resizing && 'pointer-events-none'" style="contain: inline-size layout style">
