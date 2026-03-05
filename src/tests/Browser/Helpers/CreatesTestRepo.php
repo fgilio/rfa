@@ -261,6 +261,15 @@ trait CreatesTestRepo
         return '/p/'.$this->testProjectSlug;
     }
 
+    /** Visit the project page and wait for lazy-loaded diffs to finish loading. */
+    protected function visitAndLoad(string $url): \Pest\Browser\Api\PendingAwaitablePage
+    {
+        $page = $this->visit($url);
+        $page->waitForEvent('networkidle');
+
+        return $page;
+    }
+
     private function runShell(string $command): string
     {
         $output = [];

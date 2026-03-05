@@ -19,7 +19,7 @@ test('submit button disabled when no comments and no global comment', function (
 });
 
 test('submit button enables after adding a comment', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Review comment');
@@ -29,7 +29,7 @@ test('submit button enables after adding a comment', function () {
 });
 
 test('submitting shows success state with review submitted', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Looks good');
@@ -51,7 +51,7 @@ test('submitting with only global comment works', function () {
 });
 
 test('export creates rfa directory with json and md files on disk', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Export test comment');

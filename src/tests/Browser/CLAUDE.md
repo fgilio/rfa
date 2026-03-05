@@ -8,6 +8,7 @@
 - `script()` breaks the chain (returns JS result) - capture page reference first
 - For Livewire actions: use `pressAndWaitFor()` or assert after `click()` (auto-retry handles it)
 - EmptyStateTest uses `setUpEmptyTestRepo()` instead of `setUpTestRepo()`
+- Use `$this->visitAndLoad($url)` instead of `$this->visit($url)` when the test interacts with lazy-loaded content (e.g. diff line numbers). It waits for all Livewire requests to settle before proceeding, avoiding flaky timeouts under load.
 
 ## Selector Priority
 
