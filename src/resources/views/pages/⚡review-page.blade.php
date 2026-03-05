@@ -346,9 +346,9 @@ new #[Layout('layouts.app')] class extends Component {
     data-testid="review-component"
     x-data="{
         activeFile: null,
-        viewedFiles: {{ Js::from((object) collect($sourceFiles)->filter(fn($f) => in_array($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()) }},
+        viewedFiles: @js((object) collect($sourceFiles)->filter(fn($f) => in_array($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()),
         fileFilter: '',
-        filePaths: {{ Js::from(collect($sourceFiles)->pluck('path')->all()) }},
+        filePaths: @js(collect($sourceFiles)->pluck('path')->all()),
         sidebarWidth: parseInt(localStorage.getItem('rfa-sidebar-width') || 288),
         resizing: false,
         fileMatchesFilter(path) {
@@ -416,8 +416,8 @@ new #[Layout('layouts.app')] class extends Component {
         if ($event.shiftKey && $event.key === 'C') { $dispatch('collapse-all-files'); $event.preventDefault(); }
         if ($event.shiftKey && $event.key === 'E') { $dispatch('expand-all-files'); $event.preventDefault(); }
         @if($commitInfo)
-            if ($event.key === '[' && {{ Js::from($commitInfo['prevHash']) }}) { Livewire.navigate('/p/{{ $projectSlug }}/c/' + {{ Js::from($commitInfo['prevHash']) }}); $event.preventDefault(); }
-            if ($event.key === ']' && {{ Js::from($commitInfo['nextHash']) }}) { Livewire.navigate('/p/{{ $projectSlug }}/c/' + {{ Js::from($commitInfo['nextHash']) }}); $event.preventDefault(); }
+            if ($event.key === '[' && @js($commitInfo['prevHash'])) { Livewire.navigate('/p/{{ $projectSlug }}/c/' + @js($commitInfo['prevHash'])); $event.preventDefault(); }
+            if ($event.key === ']' && @js($commitInfo['nextHash'])) { Livewire.navigate('/p/{{ $projectSlug }}/c/' + @js($commitInfo['nextHash'])); $event.preventDefault(); }
         @endif
     "
 >
@@ -584,7 +584,7 @@ new #[Layout('layouts.app')] class extends Component {
                         };
                     @endphp
                     <button
-                        x-show="fileMatchesFilter({{ Js::from($file['path']) }})"
+                        x-show="fileMatchesFilter(@js($file['path']))"
                         @click="scrollToFile('{{ $file['id'] }}')"
                         class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-colors"
                         :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-link/10 text-gh-link' : 'text-gh-muted'"
@@ -697,7 +697,7 @@ new #[Layout('layouts.app')] class extends Component {
 
                 {{-- Source Files --}}
                 @foreach($sourceFiles as $file)
-                    <div id="{{ $file['id'] }}" class="border-b border-gh-border" x-show="fileMatchesFilter({{ Js::from($file['path']) }})">
+                    <div id="{{ $file['id'] }}" class="border-b border-gh-border" x-show="fileMatchesFilter(@js($file['path']))">
                         <livewire:diff-file
                             :key="$file['id']"
                             :file="$file"
