@@ -53,134 +53,17 @@ new class extends Component {
 
 ?>
 
+@assets
+<script src="/js/branch-explorer.js"></script>
+@endassets
+
 <div
-    x-data="{
-        open: false,
-        search: '',
-        selectedIndex: 0,
-        selectedBranch: @js($currentBranch),
-        allBranches: @js($branches),
-        baseHash: null,
-        baseShortHash: null,
-        _loadId: 0,
-
-        get filteredLocal() {
-            if (this.search === '') return this.allBranches.local || [];
-            const q = this.search.toLowerCase();
-            return (this.allBranches.local || []).filter(b => b.name.toLowerCase().includes(q));
-        },
-
-        get filteredRemote() {
-            if (this.search === '') return this.allBranches.remote || [];
-            const q = this.search.toLowerCase();
-            return (this.allBranches.remote || []).filter(b => b.name.toLowerCase().includes(q));
-        },
-
-        get allFiltered() {
-            return [...this.filteredLocal, ...this.filteredRemote];
-        },
-
-        async openPanel() {
-            this.open = true;
-            this.search = '';
-            this.selectedIndex = 0;
-            await $wire.loadBranches();
-            this.allBranches = $wire.branches;
-            const currentIdx = this.allFiltered.findIndex(b => b.name === this.selectedBranch);
-            if (currentIdx >= 0) this.selectedIndex = currentIdx;
-            this.selectCurrentBranch();
-            await this.$nextTick();
-            this.$refs.searchInput?.focus();
-        },
-
-        closePanel() {
-            this.open = false;
-        },
-
-        async selectCurrentBranch() {
-            const branch = this.allFiltered[this.selectedIndex];
-            if (!branch) return;
-            if (branch.name === this.selectedBranch && $wire.commits.length > 0) return;
-            this.selectedBranch = branch.name;
-            const id = ++this._loadId;
-            await $wire.loadCommits(branch.name);
-            if (this._loadId !== id) return;
-        },
-
-        handleKeydown(e) {
-            if (!this.open) return;
-
-            if (e.key === 'Escape') {
-                this.closePanel();
-                e.preventDefault();
-                return;
-            }
-
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (this.selectedIndex < this.allFiltered.length - 1) {
-                    this.selectedIndex++;
-                    this.selectCurrentBranch();
-                    this.scrollSelectedIntoView();
-                }
-                return;
-            }
-
-            if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (this.selectedIndex > 0) {
-                    this.selectedIndex--;
-                    this.selectCurrentBranch();
-                    this.scrollSelectedIntoView();
-                }
-                return;
-            }
-        },
-
-        onSearchChange() {
-            this.selectedIndex = 0;
-            this.selectCurrentBranch();
-        },
-
-        scrollSelectedIntoView() {
-            this.$nextTick(() => {
-                this.$refs.branchList?.querySelector('[data-selected=true]')?.scrollIntoView({ block: 'nearest' });
-            });
-        },
-
-        selectBranchAt(index) {
-            this.selectedIndex = index;
-            this.selectCurrentBranch();
-        },
-
-        copyHash(hash) {
-            navigator.clipboard.writeText(hash).catch(() => {});
-        },
-
+    x-data="branchExplorer({
+        currentBranch: @js($currentBranch),
         activeCommitHash: @js($activeCommitHash),
-
-        viewCommit(hash) {
-            if (this.baseHash) {
-                Livewire.navigate(`/p/{{ $projectSlug }}/${hash}/${this.baseHash}`);
-            } else {
-                Livewire.navigate(`/p/{{ $projectSlug }}/c/${hash}`);
-            }
-        },
-
-        setBase(hash, short) {
-            this.baseHash = hash;
-            this.baseShortHash = short;
-        },
-
-        clearBase() {
-            this.baseHash = null;
-            this.baseShortHash = null;
-        },
-
-        viewWorkingTree() {
-            Livewire.navigate(`/p/{{ $projectSlug }}`);
-        }
-    }"
+        projectSlug: @js($projectSlug),
+        branches: @js($branches),
+    })"
     @keydown.window="handleKeydown($event)"
 >
     {{-- Trigger: branch badge button --}}
