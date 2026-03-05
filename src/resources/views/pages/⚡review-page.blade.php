@@ -15,7 +15,7 @@ use App\Actions\SaveSessionAction;
 use App\Actions\ToggleViewedAction;
 use App\DTOs\DiffTarget;
 use App\Exceptions\GitCommandException;
-use App\Models\Project;
+use App\Actions\UpdateProjectSettingAction;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
@@ -158,7 +158,7 @@ new #[Layout('layouts.app')] class extends Component {
 
     public function updatedRespectGlobalGitignore(): void
     {
-        Project::where('id', $this->projectId)->update([
+        app(UpdateProjectSettingAction::class)->handle($this->projectId, [
             'respect_global_gitignore' => $this->respectGlobalGitignore,
         ]);
 

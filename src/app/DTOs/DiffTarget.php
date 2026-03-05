@@ -79,4 +79,13 @@ final readonly class DiffTarget
     {
         return $this->isImmutable() ? 720 : (int) config('rfa.cache_ttl_hours', 24);
     }
+
+    /** @return array{from: string, to: ?string} */
+    public function toArray(): array
+    {
+        return [
+            'from' => $this->from,
+            'to' => $this->to,
+        ];
+    }
 }
