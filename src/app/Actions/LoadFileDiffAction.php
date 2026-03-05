@@ -21,11 +21,11 @@ final readonly class LoadFileDiffAction
     ) {}
 
     /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool} */
-    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null): array
+    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, string $theme = 'light'): array
     {
         $target ??= DiffTarget::workingDirectory();
 
-        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target): array {
+        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target, $theme): array {
             try {
                 $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, contextLines: $contextLines, target: $target);
             } catch (GitCommandException $e) {
@@ -47,7 +47,7 @@ final readonly class LoadFileDiffAction
                 return FileDiff::emptyArray($path, 'modified', tooLarge: false);
             }
 
-            $highlightedHunks = $this->syntaxHighlightService->highlightHunks($fileDiff->hunks, $fileDiff->path);
+            $highlightedHunks = $this->syntaxHighlightService->highlightHunks($fileDiff->hunks, $fileDiff->path, $theme);
 
             return $fileDiff->withHunks($highlightedHunks)->toArray() + ['tooLarge' => false];
         };

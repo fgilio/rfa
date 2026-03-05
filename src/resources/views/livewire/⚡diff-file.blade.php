@@ -60,6 +60,7 @@ new class extends Component {
             $this->file['isUntracked'] ?? false,
             cacheKey: $this->diffCacheKey(),
             target: $this->buildDiffTarget(),
+            theme: $this->resolveTheme(),
         );
     }
 
@@ -75,6 +76,7 @@ new class extends Component {
             cacheKey: $cacheKey,
             contextLines: 99999,
             target: $this->buildDiffTarget(),
+            theme: $this->resolveTheme(),
         );
     }
 
@@ -107,6 +109,7 @@ new class extends Component {
             $this->file['isUntracked'] ?? false,
             contextLines: 99999,
             target: $this->buildDiffTarget(),
+            theme: $this->resolveTheme(),
         );
 
         if (empty($fullDiff['hunks'])) {
@@ -163,11 +166,41 @@ new class extends Component {
         return $this->cachedTarget ??= DiffTarget::fromRefs($this->diffFrom, $this->diffTo);
     }
 
+    public function reloadForTheme(): void
+    {
+        if ($this->diffData === null) {
+            return;
+        }
+
+        $cacheKey = $this->diffCacheKey();
+        $cached = Cache::get($cacheKey);
+
+        if ($cached !== null) {
+            $this->diffData = $cached;
+
+            return;
+        }
+
+        $this->diffData = app(LoadFileDiffAction::class)->handle(
+            $this->repoPath,
+            $this->file['path'],
+            $this->file['isUntracked'] ?? false,
+            cacheKey: $cacheKey,
+            target: $this->buildDiffTarget(),
+            theme: $this->resolveTheme(),
+        );
+    }
+
+    private function resolveTheme(): string
+    {
+        return request()->cookie('rfa_theme') === 'dark' ? 'dark' : 'light';
+    }
+
     private function diffCacheKey(): string
     {
         $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
 
-        return DiffCacheKey::for($projectKey, $this->file['id'], $this->buildDiffTarget()->contextKey());
+        return DiffCacheKey::for($projectKey, $this->file['id'], $this->buildDiffTarget()->contextKey(), $this->resolveTheme());
     }
 
     public function render(): \Illuminate\Contracts\View\View
@@ -318,6 +351,7 @@ new class extends Component {
     }"
     @mouseup.window="endDrag()"
     @comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"
+    @theme-changed.window="setTimeout(() => $wire.reloadForTheme(), {{ $loadDelay }})"
     @collapse-all-files.window="collapsed = true"
     @expand-all-files.window="collapsed = false"
     @expand-file.window="if ($event.detail.id === fileId) collapsed = false"

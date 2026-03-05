@@ -499,10 +499,7 @@ new #[Layout('layouts.app')] class extends Component {
                 </div>
             @endif
             <span class="w-px h-4 bg-gh-border"></span>
-            <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
-                icon="moon" icon:variant="outline" x-show="! $flux.dark" x-cloak />
-            <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
-                icon="sun" icon:variant="outline" x-show="$flux.dark" />
+            <livewire:theme-switcher />
         </div>
     </header>
 

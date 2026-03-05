@@ -29,7 +29,8 @@ final readonly class GetFileListAction
         if ($clearCache && ! $target->isImmutable()) {
             $projectKey = $projectId ?? $repoPath;
             foreach ($files as $file) {
-                Cache::forget(DiffCacheKey::for($projectKey, $file['id'], $target->contextKey()));
+                Cache::forget(DiffCacheKey::for($projectKey, $file['id'], $target->contextKey(), 'light'));
+                Cache::forget(DiffCacheKey::for($projectKey, $file['id'], $target->contextKey(), 'dark'));
             }
         }
 

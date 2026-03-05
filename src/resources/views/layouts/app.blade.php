@@ -119,11 +119,6 @@
         }
         /* Phiki syntax highlighting */
         .diff-line td span[style] { background-color: transparent !important; }
-        .dark .diff-line td span[style] {
-            color: var(--phiki-dark-color, inherit) !important;
-            font-style: var(--phiki-dark-font-style) !important;
-        }
-
         /* Scrollbar styling */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }

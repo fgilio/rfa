@@ -27,10 +27,7 @@ new #[Layout('layouts.app')] class extends Component {
     <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-6 py-4 flex items-center justify-between">
         <span class="rfa-logo text-2xl">rfa</span>
         <div class="flex items-center gap-3">
-            <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
-                icon="moon" icon:variant="outline" x-show="! $flux.dark" x-cloak />
-            <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
-                icon="sun" icon:variant="outline" x-show="$flux.dark" />
+            <livewire:theme-switcher />
         </div>
     </header>
 

@@ -5,9 +5,9 @@ use App\Models\Project;
 use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
 
-const THRESHOLD_SMALL_LIFECYCLE = 500.0;
-const THRESHOLD_LARGE_LIFECYCLE = 800.0;
-const THRESHOLD_MULTI_HUNK_LIFECYCLE = 600.0;
+const THRESHOLD_SMALL_LIFECYCLE = 200.0;
+const THRESHOLD_LARGE_LIFECYCLE = 500.0;
+const THRESHOLD_MULTI_HUNK_LIFECYCLE = 200.0;
 
 beforeEach(function () {
     $this->tempDir = sys_get_temp_dir().'/rfa_lifecycle_'.uniqid();
