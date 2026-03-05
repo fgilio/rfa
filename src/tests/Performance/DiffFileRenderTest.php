@@ -27,7 +27,7 @@ beforeEach(function () {
     // Mock LoadFileDiffAction so it never touches git
     app()->bind(LoadFileDiffAction::class, fn () => new class
     {
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, string $theme = 'light'): array
         {
             return DiffFixtureGenerator::diffData(path: $path);
         }

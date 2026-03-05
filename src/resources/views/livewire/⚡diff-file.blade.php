@@ -35,6 +35,8 @@ new class extends Component {
     /** @var array<string, mixed>|null */
     protected ?array $diffData = null;
 
+    private bool $contextExpanded = false;
+
     private ?DiffTarget $cachedTarget = null;
 
     public function hydrate(): void
@@ -46,6 +48,7 @@ new class extends Component {
     public function updateComments(array $comments): void
     {
         $this->fileComments = $comments;
+        $this->ensureCommentedLinesVisible();
     }
 
     public function loadFileDiff(): void
@@ -62,6 +65,8 @@ new class extends Component {
             target: $this->buildDiffTarget(),
             theme: $this->resolveTheme(),
         );
+
+        $this->ensureCommentedLinesVisible();
     }
 
     public function expandContext(): void
@@ -159,6 +164,56 @@ new class extends Component {
 
         // Update cache with expanded state
         Cache::put($this->diffCacheKey(), $this->diffData, now()->addHours($this->buildDiffTarget()->cacheTtlHours()));
+    }
+
+    private function ensureCommentedLinesVisible(): void
+    {
+        if ($this->contextExpanded || empty($this->fileComments)) {
+            return;
+        }
+
+        $inlineComments = array_filter($this->fileComments, fn ($c) => ($c['side'] ?? '') !== 'file');
+        if (empty($inlineComments)) {
+            return;
+        }
+
+        // No hunks but has inline comments - load full file
+        if ($this->diffData === null || empty($this->diffData['hunks'])) {
+            $this->contextExpanded = true;
+            $this->expandContext();
+
+            return;
+        }
+
+        $visible = $this->getVisibleLineKeys();
+
+        foreach ($inlineComments as $c) {
+            $key = ($c['side'] ?? 'right').':'.($c['endLine'] ?? $c['startLine'] ?? 0);
+            if (! isset($visible[$key])) {
+                $this->contextExpanded = true;
+                $this->expandContext();
+
+                return;
+            }
+        }
+    }
+
+    /** @return array<string, true> */
+    private function getVisibleLineKeys(): array
+    {
+        $visible = [];
+        foreach ($this->diffData['hunks'] ?? [] as $hunk) {
+            foreach ($hunk['lines'] as $line) {
+                if (isset($line['oldLineNum'])) {
+                    $visible['left:'.$line['oldLineNum']] = true;
+                }
+                if (isset($line['newLineNum'])) {
+                    $visible['right:'.$line['newLineNum']] = true;
+                }
+            }
+        }
+
+        return $visible;
     }
 
     private function buildDiffTarget(): DiffTarget
@@ -296,6 +351,21 @@ new class extends Component {
                 @endif
             @endforeach
         </div>
+        {{-- Unplaced inline comments (line no longer exists in diff) --}}
+        @php
+            $visibleLines = $this->getVisibleLineKeys();
+            $unplacedComments = collect($fileComments)->where('side', '!=', 'file')->filter(function ($c) use ($visibleLines) {
+                $key = $c['side'] . ':' . ($c['endLine'] ?? $c['startLine'] ?? 0);
+                return !isset($visibleLines[$key]);
+            });
+        @endphp
+        @if($unplacedComments->isNotEmpty())
+            @foreach($unplacedComments as $comment)
+                <div x-data @if($comment['isDraft'] ?? false) x-show="editingCommentId !== '{{ $comment['id'] }}'" @endif>
+                    <x-comment-display :comment="$comment" border-class="border-b" />
+                </div>
+            @endforeach
+        @endif
         @if($file['isBinary'] && !($file['isImage'] ?? false))
             <div class="px-4 py-8 text-center">
                 <flux:text variant="subtle" size="sm">Binary file not shown</flux:text>
