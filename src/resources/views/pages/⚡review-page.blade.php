@@ -509,7 +509,7 @@ new #[Layout('layouts.app')] class extends Component {
                         @if(count($reviewPairs) > 1)
                             <button class="text-gh-muted hover:text-red-400 transition-colors"
                                 @click="if (confirm('Delete all review files?')) $wire.deleteAllReviewPairs()">
-                                <flux:icon icon="trash" variant="outline" />
+                                <flux:icon icon="trash" variant="outline" class="!size-4" />
                             </button>
                         @endif
                     </div>
@@ -521,7 +521,7 @@ new #[Layout('layouts.app')] class extends Component {
                             </button>
                             <button class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0 ml-auto"
                                 @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')">
-                                <flux:icon icon="trash" variant="outline" />
+                                <flux:icon icon="trash" variant="outline" class="!size-4" />
                             </button>
                         </div>
                     @endforeach
