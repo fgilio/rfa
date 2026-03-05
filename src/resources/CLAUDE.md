@@ -21,12 +21,8 @@
 - `link` is muted blue for interactive text (links, expandable buttons, active states). Distinct from body text without breaking monochrome vibe
 - Prefer raw text `text-gh-green`/`text-gh-red` over `flux:badge` for +/- counts in headers
 
-## Icons
-- Always use `variant="outline"` (24px stroke) for `flux:icon`
-- Use `icon:variant="outline"` on `flux:button` and `flux:input` that have icon props
-
 ## Dark Mode
-- Managed by Flux's `@fluxAppearance` + `$flux.dark` - never hardcode `class="dark"` on `<html>`
+- Managed by Flux's `@fluxAppearance` + `$flux.dark`
 - Toggle: `$flux.dark = ! $flux.dark`
 - System preference detection is automatic via Flux
 
