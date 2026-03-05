@@ -387,29 +387,30 @@ new #[Layout('layouts.app')] class extends Component {
     "
 >
     {{-- Header --}}
-    <header class="sticky top-0 z-50 bg-gh-surface border-b border-gh-border px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <a href="/" class="hover:opacity-80 transition-opacity"><flux:heading size="lg">rfa</flux:heading></a>
-            <flux:text variant="subtle" size="sm">{{ $projectName }}</flux:text>
+    <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <a href="/" class="hover:opacity-70 transition-opacity"><span class="rfa-logo text-xl">rfa</span></a>
+            <span class="text-gh-border select-none">/</span>
+            <span class="font-medium tracking-brutal text-sm">{{ $projectName }}</span>
             @if($projectBranch)
                 <livewire:branch-explorer :repo-path="$repoPath" :current-branch="$projectBranch" :project-slug="$projectSlug" :active-commit-hash="$diffTo" />
             @endif
         </div>
         <div class="flex items-center gap-3 text-xs">
-            <flux:text variant="subtle" size="sm" inline
+            <span class="font-mono text-gh-muted"
                 x-text="fileFilter === ''
                     ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
                     : filePaths.filter(p => fileMatchesFilter(p)).length + '/{{ count($sourceFiles) }} files'"
-            >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</flux:text>
-            <flux:text variant="subtle" size="sm" inline
+            >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</span>
+            <span class="font-mono text-gh-muted"
                 x-show="Object.values(viewedFiles).filter(Boolean).length > 0"
                 x-text="Object.values(viewedFiles).filter(Boolean).length + '/{{ count($sourceFiles) }} viewed'"
-                x-cloak />
+                x-cloak></span>
             @if(count($reviewPairs) > 0)
-                <flux:badge color="purple" size="sm">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</flux:badge>
+                <span class="font-mono text-xs text-gh-muted px-1.5 py-0.5 rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
             @endif
-            <flux:badge color="green" size="sm">+{{ collect($sourceFiles)->sum('additions') }}</flux:badge>
-            <flux:badge color="red" size="sm">-{{ collect($sourceFiles)->sum('deletions') }}</flux:badge>
+            <span class="font-mono text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
+            <span class="font-mono text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
             @if(! $this->isCommitMode())
                 <span class="w-px h-4 bg-gh-border"></span>
                 <flux:checkbox wire:model.live="respectGlobalGitignore"
@@ -417,11 +418,11 @@ new #[Layout('layouts.app')] class extends Component {
             @endif
             <span class="w-px h-4 bg-gh-border"></span>
             <flux:tooltip content="Expand all (Shift+E)">
-                <flux:button variant="ghost" size="sm" icon="expand-all"
+                <flux:button variant="ghost" size="sm" icon="expand-all" icon:variant="outline"
                     @click="$dispatch('expand-all-files')" />
             </flux:tooltip>
             <flux:tooltip content="Collapse all (Shift+C)">
-                <flux:button variant="ghost" size="sm" icon="collapse-all"
+                <flux:button variant="ghost" size="sm" icon="collapse-all" icon:variant="outline"
                     @click="$dispatch('collapse-all-files')" />
             </flux:tooltip>
             @if(! $this->isCommitMode())
@@ -452,7 +453,7 @@ new #[Layout('layouts.app')] class extends Component {
                     }
                 }" x-init="startPolling()" class="relative flex items-center">
                     <flux:tooltip content="Refresh page">
-                        <flux:button variant="ghost" size="sm" icon="arrow-path"
+                        <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
                             @click="refresh()" />
                     </flux:tooltip>
                     <span x-show="hasChanges" x-cloak
@@ -464,34 +465,34 @@ new #[Layout('layouts.app')] class extends Component {
             @endif
             <span class="w-px h-4 bg-gh-border"></span>
             <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
-                icon="moon" x-show="! $flux.dark" x-cloak />
+                icon="moon" icon:variant="outline" x-show="! $flux.dark" x-cloak />
             <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
-                icon="sun" x-show="$flux.dark" />
+                icon="sun" icon:variant="outline" x-show="$flux.dark" />
         </div>
     </header>
 
     {{-- Commit context bar --}}
     @if($commitInfo)
-        <div data-testid="commit-context-bar" class="sticky top-[var(--header-h)] z-40 bg-gh-bg border-b border-gh-border px-4 py-2 flex items-center gap-3 text-xs" style="--commit-bar-h: 36px;">
-            <flux:icon icon="code-bracket" variant="micro" class="text-gh-muted shrink-0" />
-            <flux:badge size="sm" variant="outline" class="font-mono shrink-0">{{ $commitInfo['shortHash'] }}</flux:badge>
-            <span class="text-gh-text truncate">{{ $commitInfo['message'] }}</span>
+        <div data-testid="commit-context-bar" class="sticky top-[var(--header-h)] z-40 bg-gh-surface border-b border-gh-border px-5 py-2.5 flex items-center gap-3 text-xs" style="--commit-bar-h: 40px;">
+            <flux:icon icon="code-bracket" variant="outline" class="text-gh-muted shrink-0" />
+            <span class="font-mono text-xs text-gh-muted shrink-0 px-1.5 py-0.5 rounded border border-gh-border">{{ $commitInfo['shortHash'] }}</span>
+            <span class="text-gh-text truncate font-medium">{{ $commitInfo['message'] }}</span>
             <span class="text-gh-muted shrink-0">{{ $commitInfo['author'] }}</span>
             <div class="ml-auto flex items-center gap-1 shrink-0">
                 @if($commitInfo['prevHash'])
                     <flux:tooltip content="Previous commit ([)">
-                        <flux:button aria-label="Previous commit" variant="ghost" size="xs" icon="chevron-left"
+                        <flux:button aria-label="Previous commit" variant="ghost" size="xs" icon="chevron-left" icon:variant="outline"
                             onclick="Livewire.navigate('/p/{{ $projectSlug }}/c/{{ $commitInfo['prevHash'] }}')" />
                     </flux:tooltip>
                 @endif
                 @if($commitInfo['nextHash'])
                     <flux:tooltip content="Next commit (])">
-                        <flux:button aria-label="Next commit" variant="ghost" size="xs" icon="chevron-right"
+                        <flux:button aria-label="Next commit" variant="ghost" size="xs" icon="chevron-right" icon:variant="outline"
                             onclick="Livewire.navigate('/p/{{ $projectSlug }}/c/{{ $commitInfo['nextHash'] }}')" />
                     </flux:tooltip>
                 @endif
                 <flux:tooltip content="Back to working directory">
-                    <flux:button aria-label="Back to working directory" variant="ghost" size="xs" icon="x-mark"
+                    <flux:button aria-label="Back to working directory" variant="ghost" size="xs" icon="x-mark" icon:variant="outline"
                         onclick="Livewire.navigate('/p/{{ $projectSlug }}')" />
                 </flux:tooltip>
             </div>
@@ -500,43 +501,44 @@ new #[Layout('layouts.app')] class extends Component {
 
     <div class="flex">
         {{-- Sidebar --}}
-        <aside class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-surface hidden lg:block relative" :style="{ width: sidebarWidth + 'px' }" x-ref="sidebar">
-            <div class="p-3">
+        <aside class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-bg hidden lg:block" :style="{ width: sidebarWidth + 'px' }" x-ref="sidebar">
+            <div class="p-4">
                 @if(! $this->isCommitMode() && count($reviewPairs) > 0)
-                    <div class="flex items-center justify-between mb-2">
-                        <flux:heading class="!text-xs uppercase tracking-wide">Reviews</flux:heading>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="section-label text-gh-muted">Reviews</span>
                         @if(count($reviewPairs) > 1)
                             <button class="text-gh-muted hover:text-red-400 transition-colors"
                                 @click="if (confirm('Delete all review files?')) $wire.deleteAllReviewPairs()">
-                                <flux:icon icon="trash" variant="micro" />
+                                <flux:icon icon="trash" variant="outline" class="!size-4" />
                             </button>
                         @endif
                     </div>
                     @foreach($reviewPairs as $pair)
-                        <div class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-gh-border/50 flex items-center gap-2 group transition-colors text-gh-text">
-                            <flux:badge variant="solid" color="purple" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0 justify-center">R</flux:badge>
-                            <button @click="scrollToFile('{{ $pair['id'] }}')" class="truncate text-left" title="{{ $pair['basename'] }}">
+                        <div class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-colors text-gh-text">
+                            <span class="text-[10px] font-mono font-medium text-purple-500 dark:text-purple-400 shrink-0">R</span>
+                            <button @click="scrollToFile('{{ $pair['id'] }}')" class="truncate text-left font-mono" title="{{ $pair['basename'] }}">
                                 {{ $pair['displayName'] }}
                             </button>
                             <button class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0 ml-auto"
                                 @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')">
-                                <flux:icon icon="trash" variant="micro" />
+                                <flux:icon icon="trash" variant="outline" class="!size-4" />
                             </button>
                         </div>
                     @endforeach
-                    <div class="border-b border-gh-border my-2"></div>
+                    <div class="border-b border-gh-border my-3"></div>
                 @endif
 
-                <flux:heading class="!text-xs uppercase tracking-wide mb-2">Files</flux:heading>
+                <span class="section-label text-gh-muted mb-3 block">Files</span>
                 <flux:input
                     x-model.debounce.150ms="fileFilter"
                     placeholder="Filter files..."
                     icon="magnifying-glass"
+                    icon:variant="outline"
                     clearable
                     kbd="/"
                     size="sm"
                     variant="filled"
-                    class="mb-2"
+                    class="mb-3"
                     x-ref="fileFilterInput"
                     @keydown.escape="fileFilter = ''; $el.blur()"
                 />
@@ -552,50 +554,57 @@ new #[Layout('layouts.app')] class extends Component {
                     <button
                         x-show="fileMatchesFilter({{ Js::from($file['path']) }})"
                         @click="scrollToFile('{{ $file['id'] }}')"
-                        class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-gh-border/50 flex items-center gap-2 group transition-colors"
-                        :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-border/50 text-gh-accent' : 'text-gh-text'"
+                        class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-colors"
+                        :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-link/10 text-gh-link' : 'text-gh-muted'"
                     >
-                        <flux:badge variant="solid" :color="$badgeColor" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0 justify-center">{{ $badgeLabel }}</flux:badge>
-                        <span class="truncate" title="{{ $file['path'] }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
-                        <flux:icon icon="check" variant="micro" x-show="viewedFiles['{{ $file['id'] }}']"
+                        <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', default => 'text-amber-500 dark:text-amber-400' } }}">{{ $badgeLabel }}</span>
+                        <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
+                        <flux:icon icon="check" variant="outline" x-show="viewedFiles['{{ $file['id'] }}']"
                             class="text-gh-green shrink-0" x-cloak />
-                        <span class="ml-auto flex gap-1 shrink-0">
+                        <span class="ml-auto flex gap-1.5 shrink-0 font-mono">
                             @if($file['additions'] > 0)
-                                <flux:badge color="green" size="sm">+{{ $file['additions'] }}</flux:badge>
+                                <span class="text-gh-green">+{{ $file['additions'] }}</span>
                             @endif
                             @if($file['deletions'] > 0)
-                                <flux:badge color="red" size="sm">-{{ $file['deletions'] }}</flux:badge>
+                                <span class="text-gh-red">-{{ $file['deletions'] }}</span>
                             @endif
                         </span>
                     </button>
                 @endforeach
             </div>
-            <div class="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-gh-accent/40 transition-colors"
-                style="padding-left: 3px; padding-right: 3px; margin-left: -3px; margin-right: -3px; background-clip: content-box;"
-                @mousedown="startResize($event)"
-                @dblclick="sidebarWidth = 288; localStorage.setItem('rfa-sidebar-width', 288)"></div>
         </aside>
+        <div class="group/resize hidden lg:flex sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-0 cursor-col-resize items-center justify-center z-10 shrink-0"
+            style="padding: 0 6px; margin: 0 -6px;"
+            @mousedown="startResize($event)"
+            @dblclick="sidebarWidth = 288; localStorage.setItem('rfa-sidebar-width', 288)">
+            <div class="absolute inset-y-0 w-px bg-transparent group-hover/resize:bg-gh-muted/40 transition-colors"></div>
+            <div class="absolute px-1 py-1.5 rounded-full bg-gh-surface border border-gh-border shadow-sm opacity-0 group-hover/resize:opacity-100 transition-opacity pointer-events-none flex flex-col items-center gap-[3px]">
+                <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
+                <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
+                <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
+            </div>
+        </div>
 
         {{-- Main content --}}
         <main class="flex-1 min-w-0 pb-24" :class="resizing && 'pointer-events-none'" style="contain: inline-size layout style">
             @if($gitError)
                 <div class="flex items-center justify-center h-[60vh]">
-                    <div class="text-center">
-                        <flux:icon icon="exclamation-triangle" variant="outline" class="mx-auto mb-3 text-red-400" />
-                        <flux:heading class="mb-2">Git error</flux:heading>
-                        <flux:text variant="subtle" size="sm" class="font-mono max-w-lg">{{ $gitError }}</flux:text>
+                    <div class="text-center max-w-lg">
+                        <p class="rfa-logo text-3xl text-red-400/30 mb-4">!</p>
+                        <h2 class="font-semibold tracking-brutal text-lg mb-2">Git error</h2>
+                        <p class="font-mono text-xs text-gh-muted leading-relaxed">{{ $gitError }}</p>
                     </div>
                 </div>
             @elseif(empty($files))
                 <div class="flex items-center justify-center h-[60vh]">
                     <div class="text-center">
-                        <flux:icon icon="document-magnifying-glass" variant="outline" class="mx-auto mb-3 text-gh-muted" />
+                        <p class="rfa-logo text-5xl text-gh-muted/20 mb-6">rfa</p>
                         @if($this->isCommitMode())
-                            <flux:heading class="mb-2">No file changes in this commit</flux:heading>
-                            <flux:text variant="subtle" size="sm">This commit has no diff (empty or merge commit)</flux:text>
+                            <h2 class="font-semibold tracking-brutal text-lg mb-2">No file changes in this commit</h2>
+                            <p class="text-sm text-gh-muted">This commit has no diff (empty or merge commit)</p>
                         @else
-                            <flux:heading class="mb-2">No changes detected</flux:heading>
-                            <flux:text variant="subtle" size="sm">Make some changes and run rfa again</flux:text>
+                            <h2 class="font-semibold tracking-brutal text-lg mb-2">No changes detected</h2>
+                            <p class="text-sm text-gh-muted">Make some changes and run rfa again</p>
                         @endif
                     </div>
                 </div>
@@ -604,21 +613,21 @@ new #[Layout('layouts.app')] class extends Component {
                 @if(! $this->isCommitMode())
                     @foreach($reviewPairs as $pair)
                         <div id="{{ $pair['id'] }}" class="border-b border-gh-border" x-data="{ collapsed: true }">
-                            <div class="sticky top-[var(--header-h)] z-10 bg-gh-surface border-b border-gh-border px-4 py-2 flex items-center gap-2">
+                            <div class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
                                 <button @click="collapsed = !collapsed" class="text-gh-muted hover:text-gh-text transition-colors">
-                                    <flux:icon icon="chevron-down" variant="micro" x-show="!collapsed" />
-                                    <flux:icon icon="chevron-right" variant="micro" x-show="collapsed" x-cloak />
+                                    <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
+                                    <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
                                 </button>
-                                <flux:badge variant="solid" color="purple" size="sm" class="!text-[10px] !px-1 !py-0 w-4 shrink-0 justify-center">R</flux:badge>
+                                <span class="text-[10px] font-mono font-medium text-purple-500 dark:text-purple-400 shrink-0">R</span>
                                 <span class="font-mono text-sm truncate">{{ $pair['displayName'] }}</span>
                                 @if($pair['jsonFile'])
-                                    <flux:badge size="sm" variant="outline">.json</flux:badge>
+                                    <span class="text-[10px] font-mono text-gh-muted">.json</span>
                                 @endif
                                 @if($pair['mdFile'])
-                                    <flux:badge size="sm" variant="outline">.md</flux:badge>
+                                    <span class="text-[10px] font-mono text-gh-muted">.md</span>
                                 @endif
                                 <span class="ml-auto">
-                                    <flux:button variant="ghost" size="sm" icon="trash"
+                                    <flux:button variant="ghost" size="sm" icon="trash" icon:variant="outline"
                                         @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')" />
                                 </span>
                             </div>

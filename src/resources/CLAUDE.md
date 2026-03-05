@@ -4,16 +4,33 @@
 - Always use Flux UI components over raw Tailwind/Alpine when available
 - Check fluxui.dev docs for component API before building custom markup
 
+## Typography
+- **Display font** (`font-display` / Space Grotesk): headings, labels, navigation text, buttons
+- **Mono font** (`font-mono` / JetBrains Mono): code, diffs, file paths, hashes, badges, technical data
+- Use `rfa-logo` class for the "rfa" wordmark (bold, tight tracking)
+- Use `section-label` class for uppercase section headers (e.g. "Files", "Reviews", "Local", "Remote")
+- Use `tracking-brutal` (-0.04em) on headings and `tracking-brutal-tight` (-0.06em) for display sizes
+- Diff code areas stay dense: `font-mono text-xs leading-5`
+
 ## Colors
 - Use `gh-*` color tokens from CSS variables
 - RGB-based tokens (bg, surface, border, text, muted, accent, green, red) support Tailwind opacity modifiers: `bg-gh-bg/50`
 - Raw tokens (add-bg, del-bg, hunk-bg, etc.) are used directly: `bg-gh-add-bg`
 - Theme colors defined in `config/theme.php`
+- `accent` is high-contrast (near-black in light, near-white in dark) - for structural emphasis (borders, indicators)
+- `link` is muted blue for interactive text (links, expandable buttons, active states). Distinct from body text without breaking monochrome vibe
+- Prefer raw text `text-gh-green`/`text-gh-red` over `flux:badge` for +/- counts in headers
 
 ## Dark Mode
-- Managed by Flux's `@fluxAppearance` + `$flux.dark` - never hardcode `class="dark"` on `<html>`
+- Managed by Flux's `@fluxAppearance` + `$flux.dark`
 - Toggle: `$flux.dark = ! $flux.dark`
 - System preference detection is automatic via Flux
+
+## Visual Style
+- Brutalist/raw aesthetic: bold type, dramatic scale contrast, generous whitespace in chrome
+- Headers use `backdrop-blur-sm bg-gh-bg/80` for frosted glass effect
+- Adaptive density: chrome elements breathe, code areas stay compact
+- Prefer plain text + font styling over Flux badges for inline stats
 
 ## Livewire SFC Components
 

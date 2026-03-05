@@ -14,7 +14,7 @@
 - **Models** (`app/Models/`) - Eloquent persistence. Minimal - no business logic.
 
 ### Adding New Features
-1. Create an Action in `app/Actions/` with `final readonly class` + `handle()` method
+1. Create an Action in `app/Actions/`
 2. If it needs new domain logic, add a Service or extend an existing one
 3. Wire the Action into whichever interface needs it (Livewire component, Artisan command, API controller)
 4. Add unit test in `tests/Unit/Actions/`
@@ -23,4 +23,4 @@
 - Actions that need DB state (e.g. `RestoreSessionAction`, `SaveSessionAction`) read/write internally. Stateless actions receive data via parameters for reuse across interfaces.
 - Actions use constructor injection for service dependencies
 - Actions may accept an optional `cacheKey` param for opt-in caching (e.g. `LoadFileDiffAction`). Use `DiffCacheKey::for()` for diff cache keys.
-- DTOs provide `toArray()` for serialization
+
