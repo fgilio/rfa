@@ -17,8 +17,12 @@
 - RGB-based tokens (bg, surface, border, text, muted, accent, green, red) support Tailwind opacity modifiers: `bg-gh-bg/50`
 - Raw tokens (add-bg, del-bg, hunk-bg, etc.) are used directly: `bg-gh-add-bg`
 - Theme colors defined in `config/theme.php`
-- `accent` is high-contrast (near-black in light, near-white in dark) — not a brand color
+- `accent` is high-contrast (near-black in light, near-white in dark) - for structural emphasis (borders, indicators)
+- `link` is muted blue for interactive text (links, expandable buttons, active states). Distinct from body text without breaking monochrome vibe
 - Prefer raw text `text-gh-green`/`text-gh-red` over `flux:badge` for +/- counts in headers
+
+## Icons
+- Always use `variant="micro"` (16px solid) - outline is too thin/delicate for brutalist style
 
 ## Dark Mode
 - Managed by Flux's `@fluxAppearance` + `$flux.dark` - never hardcode `class="dark"` on `<html>`

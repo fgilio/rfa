@@ -25,6 +25,7 @@
                             text: 'rgb(var(--gh-text) / <alpha-value>)',
                             muted: 'rgb(var(--gh-muted) / <alpha-value>)',
                             accent: 'rgb(var(--gh-accent) / <alpha-value>)',
+                            link: 'rgb(var(--gh-link) / <alpha-value>)',
                             green: 'rgb(var(--gh-green) / <alpha-value>)',
                             red: 'rgb(var(--gh-red) / <alpha-value>)',
                             'add-bg': 'var(--gh-add-bg)',
@@ -87,14 +88,14 @@
         .section-label {
             font-family: 'Space Grotesk', system-ui, sans-serif;
             font-weight: 600;
-            font-size: 10px;
+            font-size: 11px;
             letter-spacing: 0.12em;
             text-transform: uppercase;
         }
 
         .diff-line:hover { background: var(--gh-hover-bg) !important; }
         .diff-line-num { cursor: pointer; user-select: none; }
-        .diff-line-num:hover { color: rgb(var(--gh-accent)); }
+        .diff-line-num:hover { color: rgb(var(--gh-link)); }
         .line-selected { background: var(--gh-selected-bg) !important; }
         .comment-indicator { position: relative; }
         .comment-indicator::before {
@@ -104,7 +105,7 @@
             top: 0;
             bottom: 0;
             width: 3px;
-            background: rgb(var(--gh-accent));
+            background: rgb(var(--gh-link));
         }
         /* Phiki syntax highlighting */
         .diff-line td span[style] { background-color: transparent !important; }
