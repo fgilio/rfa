@@ -186,7 +186,7 @@ new class extends Component {
     {{-- Trigger: branch badge button --}}
     <button
         @click="openPanel()"
-        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded border border-gh-border hover:border-gh-accent/50 bg-gh-surface text-gh-text transition-colors cursor-pointer"
+        class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded border border-gh-border hover:border-gh-text/30 bg-gh-surface text-gh-text transition-colors cursor-pointer"
     >
         <flux:icon icon="share" variant="micro" class="text-gh-muted" />
         <span>{{ $currentBranch }}</span>
@@ -201,13 +201,13 @@ new class extends Component {
 
             {{-- Panel --}}
             <div
-                class="fixed top-[15vh] left-1/2 -translate-x-1/2 z-[61] w-[700px] max-w-[90vw] max-h-[60vh] bg-gh-surface border border-gh-border rounded-xl shadow-2xl flex overflow-hidden"
+                class="fixed top-[15vh] left-1/2 -translate-x-1/2 z-[61] w-[700px] max-w-[90vw] max-h-[60vh] bg-gh-bg border border-gh-border rounded-xl shadow-2xl flex overflow-hidden"
                 @click.stop
             >
                 {{-- Left pane: branches --}}
                 <div class="w-[240px] shrink-0 border-r border-gh-border flex flex-col max-h-[60vh]">
                     {{-- Search input --}}
-                    <div class="p-2 border-b border-gh-border">
+                    <div class="p-3 border-b border-gh-border">
                         <flux:input
                             x-ref="searchInput"
                             x-model.debounce.100ms="search"
@@ -226,14 +226,14 @@ new class extends Component {
                         {{-- Local branches --}}
                         <template x-if="filteredLocal.length > 0">
                             <div>
-                                <div class="px-3 pt-2 pb-1">
-                                    <span class="text-[10px] uppercase tracking-wider font-semibold text-gh-muted">Local</span>
+                                <div class="px-3 pt-3 pb-1">
+                                    <span class="section-label text-gh-muted">Local</span>
                                 </div>
                                 <template x-for="(branch, i) in filteredLocal" :key="branch.name">
                                     <button
                                         @click="selectBranchAt(i)"
-                                        class="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors"
-                                        :class="selectedIndex === i ? 'bg-gh-accent/10 text-gh-accent' : 'text-gh-text hover:bg-gh-border/50'"
+                                        class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors"
+                                        :class="selectedIndex === i ? 'bg-gh-text/10 text-gh-text font-medium' : 'text-gh-muted hover:bg-gh-border/30 hover:text-gh-text'"
                                         :data-selected="selectedIndex === i"
                                     >
                                         <flux:icon icon="check" variant="micro" class="shrink-0" x-show="branch.isCurrent" x-cloak />
@@ -248,13 +248,13 @@ new class extends Component {
                         <template x-if="filteredRemote.length > 0">
                             <div>
                                 <div class="px-3 pt-3 pb-1 border-t border-gh-border">
-                                    <span class="text-[10px] uppercase tracking-wider font-semibold text-gh-muted">Remote</span>
+                                    <span class="section-label text-gh-muted">Remote</span>
                                 </div>
                                 <template x-for="(branch, j) in filteredRemote" :key="branch.name">
                                     <button
                                         @click="selectBranchAt(filteredLocal.length + j)"
-                                        class="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors"
-                                        :class="selectedIndex === (filteredLocal.length + j) ? 'bg-gh-accent/10 text-gh-accent' : 'text-gh-text hover:bg-gh-border/50'"
+                                        class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors"
+                                        :class="selectedIndex === (filteredLocal.length + j) ? 'bg-gh-text/10 text-gh-text font-medium' : 'text-gh-muted hover:bg-gh-border/30 hover:text-gh-text'"
                                         :data-selected="selectedIndex === (filteredLocal.length + j)"
                                     >
                                         <span class="shrink-0 w-3"></span>
@@ -276,10 +276,10 @@ new class extends Component {
                 {{-- Right pane: commits --}}
                 <div class="flex-1 flex flex-col max-h-[60vh] min-w-0">
                     {{-- Commits header --}}
-                    <div class="px-4 py-2 border-b border-gh-border flex items-center gap-2 shrink-0 bg-gh-surface/50">
+                    <div class="px-4 py-2.5 border-b border-gh-border flex items-center gap-2 shrink-0">
                         <flux:icon icon="clock" variant="micro" class="text-gh-muted" />
-                        <span class="text-xs font-semibold text-gh-text truncate" x-text="selectedBranch || 'Select a branch'"></span>
-                        <span class="text-xs text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + ($wire.hasMore ? '+' : '') + ')'"></span>
+                        <span class="text-xs font-semibold tracking-brutal text-gh-text truncate" x-text="selectedBranch || 'Select a branch'"></span>
+                        <span class="text-xs font-mono text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + ($wire.hasMore ? '+' : '') + ')'"></span>
 
                         <div class="ml-auto flex items-center gap-2">
                             <template x-if="baseHash">
@@ -304,21 +304,21 @@ new class extends Component {
 
                         <template x-for="commit in $wire.commits" :key="commit.hash">
                             <div
-                                class="px-4 py-2 border-b border-gh-border/50 hover:bg-gh-border/30 transition-colors group cursor-pointer"
+                                class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
                                 @click="viewCommit(commit.hash)"
                                 :class="{
-                                    'bg-gh-accent/10 border-l-2 border-l-gh-accent': activeCommitHash === commit.hash,
-                                    'bg-gh-accent/5': baseHash === commit.hash && activeCommitHash !== commit.hash,
-                                    'hover:bg-gh-accent/10': baseHash && baseHash !== commit.hash && activeCommitHash !== commit.hash
+                                    'bg-gh-text/5 border-l-2 border-l-gh-text': activeCommitHash === commit.hash,
+                                    'bg-gh-text/3': baseHash === commit.hash && activeCommitHash !== commit.hash,
+                                    'hover:bg-gh-text/5': baseHash && baseHash !== commit.hash && activeCommitHash !== commit.hash
                                 }"
                             >
                                 <div class="flex items-start gap-2">
                                     <div class="min-w-0 flex-1">
-                                        <div class="text-xs text-gh-text truncate font-medium group-hover:text-gh-accent transition-colors" x-text="commit.message"></div>
+                                        <div class="text-xs text-gh-text truncate font-medium tracking-tight" x-text="commit.message"></div>
                                         <div class="flex items-center gap-2 mt-0.5">
-                                            <span class="text-[10px] text-gh-muted" x-text="commit.author"></span>
-                                            <span class="text-[10px] text-gh-muted">·</span>
-                                            <span class="text-[10px] text-gh-muted" x-text="commit.relativeDate"></span>
+                                            <span class="text-[10px] font-mono text-gh-muted" x-text="commit.author"></span>
+                                            <span class="text-[10px] text-gh-muted">&middot;</span>
+                                            <span class="text-[10px] font-mono text-gh-muted" x-text="commit.relativeDate"></span>
                                         </div>
                                         <template x-if="baseHash === commit.hash">
                                             <span class="text-[10px] text-gh-accent font-medium mt-0.5">Compare from</span>

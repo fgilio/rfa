@@ -268,18 +268,18 @@ new class extends Component {
     class="group"
 >
     {{-- File header --}}
-    <div data-testid="file-header" class="sticky top-[var(--header-h)] z-10 bg-gh-surface border-b border-gh-border px-4 py-2 flex items-center gap-2">
+    <div data-testid="file-header" class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
         <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'" @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }" class="text-gh-muted hover:text-gh-text transition-colors">
             <flux:icon icon="chevron-down" variant="micro" x-show="!collapsed" />
             <flux:icon icon="chevron-right" variant="micro" x-show="collapsed" x-cloak />
         </button>
 
-        <flux:text size="sm" inline class="font-mono truncate cursor-pointer" @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }">
+        <span class="font-mono text-sm truncate cursor-pointer" @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }">
             @if($file['oldPath'])
-                <flux:text variant="subtle" size="sm" inline>{{ $file['oldPath'] }} &rarr;</flux:text>
+                <span class="text-gh-muted">{{ $file['oldPath'] }} &rarr;</span>
             @endif
             {{ $file['path'] }}
-        </flux:text>
+        </span>
 
         <flux:tooltip content="Copy file name">
             <flux:button
@@ -290,12 +290,12 @@ new class extends Component {
             />
         </flux:tooltip>
 
-        <span class="ml-auto flex items-center gap-2 text-xs shrink-0">
+        <span class="ml-auto flex items-center gap-2.5 text-xs shrink-0 font-mono">
             @if($file['additions'] > 0)
-                <flux:badge color="green" size="sm">+{{ $file['additions'] }}</flux:badge>
+                <span class="text-gh-green">+{{ $file['additions'] }}</span>
             @endif
             @if($file['deletions'] > 0)
-                <flux:badge color="red" size="sm">-{{ $file['deletions'] }}</flux:badge>
+                <span class="text-gh-red">-{{ $file['deletions'] }}</span>
             @endif
             <flux:checkbox x-model="viewed" @change="onViewedChange()" label="Viewed" class="text-xs" />
             <flux:tooltip content="Add file comment">

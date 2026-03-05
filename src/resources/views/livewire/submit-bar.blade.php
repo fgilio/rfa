@@ -1,16 +1,16 @@
 {{-- Fixed bottom submit bar --}}
-<div class="fixed bottom-0 left-0 right-0 z-50 bg-gh-surface border-t border-gh-border">
+<div class="fixed bottom-0 left-0 right-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-t border-gh-border">
     @if($submitted)
-        <div class="px-4 py-3 flex items-center justify-between">
+        <div class="px-5 py-3.5 flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <flux:icon icon="check-circle" variant="mini" class="text-gh-green" />
-                <flux:heading size="sm">Review submitted</flux:heading>
-                <flux:badge class="font-mono">{{ $exportResult }}</flux:badge>
+                <span class="font-semibold tracking-brutal">Review submitted</span>
+                <span class="font-mono text-xs text-gh-muted px-2 py-0.5 rounded border border-gh-border">{{ $exportResult }}</span>
             </div>
-            <flux:text variant="subtle" size="sm">Copied to clipboard - Ctrl+C to exit</flux:text>
+            <span class="text-xs text-gh-muted">Copied to clipboard &mdash; Ctrl+C to exit</span>
         </div>
     @else
-        <div class="px-4 py-3 flex items-center gap-3"
+        <div class="px-5 py-3.5 flex items-center gap-4"
             x-data="{ get commentCount() { return $wire.comments.length }, get hasGlobal() { return ($wire.globalComment || '').trim().length > 0 } }"
         >
             <div class="flex-1">
@@ -24,7 +24,7 @@
             </div>
             <div class="flex items-center gap-3 shrink-0">
                 <template x-if="commentCount > 0">
-                    <flux:badge x-text="commentCount + ' ' + (commentCount === 1 ? 'comment' : 'comments')" />
+                    <span class="font-mono text-xs text-gh-muted" x-text="commentCount + ' ' + (commentCount === 1 ? 'comment' : 'comments')"></span>
                 </template>
                 <flux:button
                     variant="primary"
