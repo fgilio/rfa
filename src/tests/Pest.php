@@ -8,7 +8,7 @@ uses(TestCase::class, RefreshDatabase::class, Browsable::class)
     ->in('Browser');
 
 uses(TestCase::class, RefreshDatabase::class)
-    ->in('Unit/Perf');
+    ->in('Performance');
 
 expect()->extend('toRenderWithin', function (float $maxMs) {
     $ms = $this->value;
