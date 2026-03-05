@@ -17,6 +17,7 @@
             editingCommentId: null,
             escHint: false,
             escTimer: null,
+            autoExpandedForComment: false,
 
             // Line-drag state
             isDragging: false,
@@ -28,6 +29,7 @@
             },
 
             handleLineMousedown(lineNum, side, event) {
+                this.autoExpandedForComment = false;
                 if (event.button !== 0) return;
                 if (event.shiftKey && this.lastClickedLine !== null) {
                     this.formLine = Math.min(this.lastClickedLine, lineNum);
@@ -77,6 +79,11 @@
                 this.escHint = false;
                 if (this.escTimer) { clearTimeout(this.escTimer); this.escTimer = null; }
                 this.editingCommentId = null;
+                if (this.autoExpandedForComment) {
+                    this.autoExpandedForComment = false;
+                    this.collapsed = true;
+                    this.$nextTick(() => { this.$refs.fileCommentBtn?.focus(); });
+                }
             },
 
             handleEscape() {
@@ -112,7 +119,18 @@
                 this.formEndLine = null;
                 this.formSide = 'file';
                 this.showForm = true;
-                this.focusCommentInput();
+
+                if (this.collapsed) {
+                    this.autoExpandedForComment = true;
+                    this.collapsed = false;
+                }
+
+                this.$nextTick(() => {
+                    requestAnimationFrame(() => {
+                        this.$refs.commentInput?.focus();
+                        this.$refs.fileCommentForm?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    });
+                });
             },
 
             submitComment(isDraft = false) {

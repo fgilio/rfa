@@ -224,19 +224,19 @@ new class extends Component {
     @mouseup.window="endDrag()"
     @comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"
     @theme-changed.window="setTimeout(() => $wire.reloadForTheme(), {{ $loadDelay }})"
-    @collapse-all-files.window="collapsed = true"
-    @expand-all-files.window="collapsed = false"
-    @expand-file.window="if ($event.detail.id === fileId) collapsed = false"
+    @collapse-all-files.window="autoExpandedForComment = false; collapsed = true"
+    @expand-all-files.window="autoExpandedForComment = false; collapsed = false"
+    @expand-file.window="if ($event.detail.id === fileId) { autoExpandedForComment = false; collapsed = false }"
     class="group"
 >
     {{-- File header --}}
     <div data-testid="file-header" class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
-        <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'" @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }" class="text-gh-muted hover:text-gh-text transition-colors">
+        <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'" @click="autoExpandedForComment = false; if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }" class="text-gh-muted hover:text-gh-text transition-colors">
             <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
             <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
         </button>
 
-        <span class="font-mono text-sm truncate cursor-pointer" @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }">
+        <span class="font-mono text-sm truncate cursor-pointer" @click="autoExpandedForComment = false; if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }">
             @if($file['oldPath'])
                 <span class="text-gh-muted">{{ $file['oldPath'] }} &rarr;</span>
             @endif
@@ -263,6 +263,7 @@ new class extends Component {
             <flux:checkbox x-model="viewed" @change="onViewedChange()" label="Viewed" class="text-xs" />
             <flux:tooltip content="Add file comment">
                 <flux:button
+                    x-ref="fileCommentBtn"
                     icon="chat-bubble-left"
                     icon:variant="outline"
                     variant="ghost"
@@ -272,11 +273,29 @@ new class extends Component {
                     class="ml-2"
                 />
             </flux:tooltip>
+            <span
+                x-show="$wire.fileComments.length"
+                x-text="$wire.fileComments.length"
+                class="text-[10px] font-mono text-gh-muted tabular-nums"
+            ></span>
         </span>
     </div>
 
     {{-- File body --}}
     <div x-show="!collapsed" x-collapse.duration.150ms>
+        {{-- File-level comment form + saved comments --}}
+        <div x-ref="fileCommentForm">
+            <template x-if="showForm && formSide === 'file'">
+                <x-comment-form save="submitComment" placeholder="File comment..." border-class="border-b" />
+            </template>
+            @foreach($fileComments as $comment)
+                @if($comment['side'] === 'file')
+                    <div x-data @if($comment['isDraft'] ?? false) x-show="editingCommentId !== '{{ $comment['id'] }}'" @endif>
+                        <x-comment-display :comment="$comment" border-class="border-b" />
+                    </div>
+                @endif
+            @endforeach
+        </div>
         @if($file['isBinary'] && !($file['isImage'] ?? false))
             <div class="px-4 py-8 text-center">
                 <flux:text variant="subtle" size="sm">Binary file not shown</flux:text>
@@ -495,18 +514,5 @@ new class extends Component {
             </div>
         @endif
 
-        {{-- File-level comment form --}}
-        <template x-if="showForm && formSide === 'file'">
-            <x-comment-form save="submitComment" placeholder="File comment..." border-class="border-t" />
-        </template>
-
-        {{-- File-level saved comments --}}
-        @foreach($fileComments as $comment)
-            @if($comment['side'] === 'file')
-                <div x-data @if($comment['isDraft'] ?? false) x-show="editingCommentId !== '{{ $comment['id'] }}'" @endif>
-                    <x-comment-display :comment="$comment" border-class="border-t" />
-                </div>
-            @endif
-        @endforeach
     </div>
 </div>
