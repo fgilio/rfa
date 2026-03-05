@@ -22,10 +22,11 @@ test('creates session when none exists and returns defaults', function () {
     expect($result['comments'])->toBeEmpty();
     expect($result['viewedFiles'])->toBeEmpty();
     expect($result['globalComment'])->toBe('');
+    expect($result['orphanedPaths'])->toBeEmpty();
     expect(ReviewSession::where('repo_path', $repoPath)->exists())->toBeTrue();
 });
 
-test('restores and prunes stale comments', function () {
+test('restores comments and tracks orphaned paths', function () {
     $repoPath = '/tmp/'.$this->faker->word();
     ReviewSession::create([
         'repo_path' => $repoPath,
@@ -41,9 +42,12 @@ test('restores and prunes stale comments', function () {
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
 
-    expect($result['comments'])->toHaveCount(1);
+    expect($result['comments'])->toHaveCount(2);
     expect($result['comments'][0]['file'])->toBe('exists.php');
     expect($result['comments'][0]['fileId'])->toBe('file-new');
+    expect($result['comments'][1]['file'])->toBe('gone.php');
+    expect($result['comments'][1]['fileId'])->toBe('file-'.hash('xxh128', 'gone.php'));
+    expect($result['orphanedPaths'])->toBe(['gone.php']);
     expect($result['viewedFiles'])->toBe(['exists.php']);
     expect($result['globalComment'])->toBe('hello');
 });

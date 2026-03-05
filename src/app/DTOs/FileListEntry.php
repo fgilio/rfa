@@ -20,9 +20,14 @@ class FileListEntry
         public readonly ?string $lastModified = null,
     ) {}
 
+    public static function idForPath(string $path): string
+    {
+        return 'file-'.hash('xxh128', $path);
+    }
+
     public function getId(): string
     {
-        return 'file-'.hash('xxh128', $this->path);
+        return self::idForPath($this->path);
     }
 
     public function isImage(): bool

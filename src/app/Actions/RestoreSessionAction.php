@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
+use App\DTOs\FileListEntry;
 use App\Models\ReviewSession;
 
 final readonly class RestoreSessionAction
 {
     /**
      * @param  array<int, array<string, mixed>>  $currentFiles
-     * @return array{comments: array<int, array<string, mixed>>, viewedFiles: array<int, string>, globalComment: string}
+     * @return array{comments: array<int, array<string, mixed>>, viewedFiles: array<int, string>, globalComment: string, orphanedPaths: array<int, string>}
      */
     public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT): array
     {
@@ -28,19 +29,35 @@ final readonly class RestoreSessionAction
         $viewedFiles = $session->viewed_files ?? [];
         $viewedFiles = array_values(array_intersect($viewedFiles, $currentPaths));
 
-        // Restore comments - prune entries for files no longer in the diff, remap fileId
+        // Restore comments - remap fileId, generate deterministic ID for orphaned files
         /** @var array<int, array<string, mixed>> $savedComments */
         $savedComments = $session->comments ?? [];
+        $orphanedPaths = [];
         $comments = collect($savedComments)
-            ->filter(fn (array $c) => isset($fileIdMap[$c['file'] ?? '']))
-            ->map(fn (array $c) => array_merge($c, ['fileId' => $fileIdMap[$c['file']]]))
+            ->map(function (array $c) use ($fileIdMap, &$orphanedPaths) {
+                $path = $c['file'] ?? '';
+                if (isset($fileIdMap[$path])) {
+                    return array_merge($c, ['fileId' => $fileIdMap[$path]]);
+                }
+                if ($path !== '') {
+                    $orphanedPaths[$path] = true;
+
+                    return array_merge($c, ['fileId' => FileListEntry::idForPath($path)]);
+                }
+
+                return null;
+            })
+            ->filter()
             ->values()
             ->all();
+
+        $orphanedPaths = array_keys($orphanedPaths);
 
         return [
             'comments' => $comments,
             'viewedFiles' => $viewedFiles,
             'globalComment' => $session->global_comment ?? '',
+            'orphanedPaths' => $orphanedPaths,
         ];
     }
 }
