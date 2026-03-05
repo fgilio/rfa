@@ -418,11 +418,11 @@ new #[Layout('layouts.app')] class extends Component {
             @endif
             <span class="w-px h-4 bg-gh-border"></span>
             <flux:tooltip content="Expand all (Shift+E)">
-                <flux:button variant="ghost" size="sm" icon="expand-all"
+                <flux:button variant="ghost" size="sm" icon="expand-all" icon:variant="outline"
                     @click="$dispatch('expand-all-files')" />
             </flux:tooltip>
             <flux:tooltip content="Collapse all (Shift+C)">
-                <flux:button variant="ghost" size="sm" icon="collapse-all"
+                <flux:button variant="ghost" size="sm" icon="collapse-all" icon:variant="outline"
                     @click="$dispatch('collapse-all-files')" />
             </flux:tooltip>
             @if(! $this->isCommitMode())
@@ -453,7 +453,7 @@ new #[Layout('layouts.app')] class extends Component {
                     }
                 }" x-init="startPolling()" class="relative flex items-center">
                     <flux:tooltip content="Refresh page">
-                        <flux:button variant="ghost" size="sm" icon="arrow-path"
+                        <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
                             @click="refresh()" />
                     </flux:tooltip>
                     <span x-show="hasChanges" x-cloak
@@ -465,34 +465,34 @@ new #[Layout('layouts.app')] class extends Component {
             @endif
             <span class="w-px h-4 bg-gh-border"></span>
             <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
-                icon="moon" x-show="! $flux.dark" x-cloak />
+                icon="moon" icon:variant="outline" x-show="! $flux.dark" x-cloak />
             <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
-                icon="sun" x-show="$flux.dark" />
+                icon="sun" icon:variant="outline" x-show="$flux.dark" />
         </div>
     </header>
 
     {{-- Commit context bar --}}
     @if($commitInfo)
         <div data-testid="commit-context-bar" class="sticky top-[var(--header-h)] z-40 bg-gh-surface border-b border-gh-border px-5 py-2.5 flex items-center gap-3 text-xs" style="--commit-bar-h: 40px;">
-            <flux:icon icon="code-bracket" variant="micro" class="text-gh-muted shrink-0" />
+            <flux:icon icon="code-bracket" variant="outline" class="text-gh-muted shrink-0" />
             <span class="font-mono text-xs text-gh-muted shrink-0 px-1.5 py-0.5 rounded border border-gh-border">{{ $commitInfo['shortHash'] }}</span>
             <span class="text-gh-text truncate font-medium">{{ $commitInfo['message'] }}</span>
             <span class="text-gh-muted shrink-0">{{ $commitInfo['author'] }}</span>
             <div class="ml-auto flex items-center gap-1 shrink-0">
                 @if($commitInfo['prevHash'])
                     <flux:tooltip content="Previous commit ([)">
-                        <flux:button aria-label="Previous commit" variant="ghost" size="xs" icon="chevron-left"
+                        <flux:button aria-label="Previous commit" variant="ghost" size="xs" icon="chevron-left" icon:variant="outline"
                             onclick="Livewire.navigate('/p/{{ $projectSlug }}/c/{{ $commitInfo['prevHash'] }}')" />
                     </flux:tooltip>
                 @endif
                 @if($commitInfo['nextHash'])
                     <flux:tooltip content="Next commit (])">
-                        <flux:button aria-label="Next commit" variant="ghost" size="xs" icon="chevron-right"
+                        <flux:button aria-label="Next commit" variant="ghost" size="xs" icon="chevron-right" icon:variant="outline"
                             onclick="Livewire.navigate('/p/{{ $projectSlug }}/c/{{ $commitInfo['nextHash'] }}')" />
                     </flux:tooltip>
                 @endif
                 <flux:tooltip content="Back to working directory">
-                    <flux:button aria-label="Back to working directory" variant="ghost" size="xs" icon="x-mark"
+                    <flux:button aria-label="Back to working directory" variant="ghost" size="xs" icon="x-mark" icon:variant="outline"
                         onclick="Livewire.navigate('/p/{{ $projectSlug }}')" />
                 </flux:tooltip>
             </div>
@@ -509,7 +509,7 @@ new #[Layout('layouts.app')] class extends Component {
                         @if(count($reviewPairs) > 1)
                             <button class="text-gh-muted hover:text-red-400 transition-colors"
                                 @click="if (confirm('Delete all review files?')) $wire.deleteAllReviewPairs()">
-                                <flux:icon icon="trash" variant="micro" />
+                                <flux:icon icon="trash" variant="outline" />
                             </button>
                         @endif
                     </div>
@@ -521,7 +521,7 @@ new #[Layout('layouts.app')] class extends Component {
                             </button>
                             <button class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0 ml-auto"
                                 @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')">
-                                <flux:icon icon="trash" variant="micro" />
+                                <flux:icon icon="trash" variant="outline" />
                             </button>
                         </div>
                     @endforeach
@@ -533,6 +533,7 @@ new #[Layout('layouts.app')] class extends Component {
                     x-model.debounce.150ms="fileFilter"
                     placeholder="Filter files..."
                     icon="magnifying-glass"
+                    icon:variant="outline"
                     clearable
                     kbd="/"
                     size="sm"
@@ -558,7 +559,7 @@ new #[Layout('layouts.app')] class extends Component {
                     >
                         <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', default => 'text-amber-500 dark:text-amber-400' } }}">{{ $badgeLabel }}</span>
                         <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
-                        <flux:icon icon="check" variant="micro" x-show="viewedFiles['{{ $file['id'] }}']"
+                        <flux:icon icon="check" variant="outline" x-show="viewedFiles['{{ $file['id'] }}']"
                             class="text-gh-green shrink-0" x-cloak />
                         <span class="ml-auto flex gap-1.5 shrink-0 font-mono">
                             @if($file['additions'] > 0)
@@ -614,8 +615,8 @@ new #[Layout('layouts.app')] class extends Component {
                         <div id="{{ $pair['id'] }}" class="border-b border-gh-border" x-data="{ collapsed: true }">
                             <div class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
                                 <button @click="collapsed = !collapsed" class="text-gh-muted hover:text-gh-text transition-colors">
-                                    <flux:icon icon="chevron-down" variant="micro" x-show="!collapsed" />
-                                    <flux:icon icon="chevron-right" variant="micro" x-show="collapsed" x-cloak />
+                                    <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
+                                    <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
                                 </button>
                                 <span class="text-[10px] font-mono font-medium text-purple-500 dark:text-purple-400 shrink-0">R</span>
                                 <span class="font-mono text-sm truncate">{{ $pair['displayName'] }}</span>
@@ -626,7 +627,7 @@ new #[Layout('layouts.app')] class extends Component {
                                     <span class="text-[10px] font-mono text-gh-muted">.md</span>
                                 @endif
                                 <span class="ml-auto">
-                                    <flux:button variant="ghost" size="sm" icon="trash"
+                                    <flux:button variant="ghost" size="sm" icon="trash" icon:variant="outline"
                                         @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')" />
                                 </span>
                             </div>

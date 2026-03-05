@@ -188,9 +188,9 @@ new class extends Component {
         @click="openPanel()"
         class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded border border-gh-border hover:border-gh-text/30 bg-gh-surface text-gh-text transition-colors cursor-pointer"
     >
-        <flux:icon icon="share" variant="micro" class="text-gh-muted" />
+        <flux:icon icon="share" variant="outline" class="text-gh-muted" />
         <span>{{ $currentBranch }}</span>
-        <flux:icon icon="chevron-down" variant="micro" class="text-gh-muted" />
+        <flux:icon icon="chevron-down" variant="outline" class="text-gh-muted" />
     </button>
 
     {{-- Overlay panel --}}
@@ -214,6 +214,7 @@ new class extends Component {
                             @input="onSearchChange()"
                             placeholder="Filter branches..."
                             icon="magnifying-glass"
+                            icon:variant="outline"
                             size="sm"
                             variant="filled"
                             clearable
@@ -236,7 +237,7 @@ new class extends Component {
                                         :class="selectedIndex === i ? 'bg-gh-text/10 text-gh-text font-medium' : 'text-gh-muted hover:bg-gh-border/30 hover:text-gh-text'"
                                         :data-selected="selectedIndex === i"
                                     >
-                                        <flux:icon icon="check" variant="micro" class="shrink-0" x-show="branch.isCurrent" x-cloak />
+                                        <flux:icon icon="check" variant="outline" class="shrink-0" x-show="branch.isCurrent" x-cloak />
                                         <span class="shrink-0 w-3" x-show="!branch.isCurrent"></span>
                                         <span class="truncate" x-text="branch.name"></span>
                                     </button>
@@ -277,7 +278,7 @@ new class extends Component {
                 <div class="flex-1 flex flex-col max-h-[60vh] min-w-0">
                     {{-- Commits header --}}
                     <div class="px-4 py-2.5 border-b border-gh-border flex items-center gap-2 shrink-0">
-                        <flux:icon icon="clock" variant="micro" class="text-gh-muted" />
+                        <flux:icon icon="clock" variant="outline" class="text-gh-muted" />
                         <span class="text-xs font-semibold tracking-brutal text-gh-text truncate" x-text="selectedBranch || 'Select a branch'"></span>
                         <span class="text-xs font-mono text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + ($wire.hasMore ? '+' : '') + ')'"></span>
 
@@ -286,7 +287,7 @@ new class extends Component {
                                 <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gh-link/10 border border-gh-link/20">
                                     <span class="text-[10px] text-gh-link font-mono" x-text="'Compare from ' + baseShortHash"></span>
                                     <button @click="clearBase()" class="text-gh-link hover:text-gh-link/80">
-                                        <flux:icon icon="x-mark" variant="micro" />
+                                        <flux:icon icon="x-mark" variant="outline" />
                                     </button>
                                 </div>
                             </template>
@@ -335,7 +336,7 @@ new class extends Component {
                                                     @click="setBase(commit.hash, commit.shortHash)"
                                                     class="p-1 rounded hover:bg-gh-border text-gh-muted hover:text-gh-text"
                                                 >
-                                                    <flux:icon icon="arrows-right-left" variant="micro" />
+                                                    <flux:icon icon="arrows-right-left" variant="outline" />
                                                 </button>
                                             </flux:tooltip>
                                         </template>
@@ -345,7 +346,7 @@ new class extends Component {
                                                     @click="clearBase()"
                                                     class="p-1 rounded hover:bg-gh-border text-gh-link"
                                                 >
-                                                    <flux:icon icon="x-mark" variant="micro" />
+                                                    <flux:icon icon="x-mark" variant="outline" />
                                                 </button>
                                             </flux:tooltip>
                                         </template>

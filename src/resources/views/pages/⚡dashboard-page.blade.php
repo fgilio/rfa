@@ -28,9 +28,9 @@ new #[Layout('layouts.app')] class extends Component {
         <span class="rfa-logo text-2xl">rfa</span>
         <div class="flex items-center gap-3">
             <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
-                icon="moon" x-show="! $flux.dark" x-cloak />
+                icon="moon" icon:variant="outline" x-show="! $flux.dark" x-cloak />
             <flux:button x-data x-on:click="$flux.dark = ! $flux.dark" variant="ghost" size="sm"
-                icon="sun" x-show="$flux.dark" />
+                icon="sun" icon:variant="outline" x-show="$flux.dark" />
         </div>
     </header>
 
@@ -71,11 +71,12 @@ new #[Layout('layouts.app')] class extends Component {
                                             variant="ghost"
                                             size="sm"
                                             icon="trash"
+                                            icon:variant="outline"
                                             wire:click.prevent.stop="removeProject({{ $project['id'] }})"
                                             wire:confirm="Remove this project from the list?"
                                             class="text-gh-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                                         />
-                                        <flux:icon icon="chevron-right" variant="micro" class="text-gh-muted group-hover:text-gh-text transition-colors" />
+                                        <flux:icon icon="chevron-right" variant="outline" class="text-gh-muted group-hover:text-gh-text transition-colors" />
                                     </div>
                                 </div>
                                 <p class="mt-2 font-mono text-xs text-gh-muted truncate">{{ $project['path'] }}</p>

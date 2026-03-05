@@ -3,7 +3,7 @@
     @if($submitted)
         <div class="px-5 py-3.5 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <flux:icon icon="check-circle" variant="mini" class="text-gh-green" />
+                <flux:icon icon="check-circle" variant="outline" class="text-gh-green" />
                 <span class="font-semibold tracking-brutal">Review submitted</span>
                 <span class="font-mono text-xs text-gh-muted px-2 py-0.5 rounded border border-gh-border">{{ $exportResult }}</span>
             </div>

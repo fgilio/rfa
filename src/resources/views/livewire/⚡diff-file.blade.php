@@ -270,8 +270,8 @@ new class extends Component {
     {{-- File header --}}
     <div data-testid="file-header" class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
         <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'" @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }" class="text-gh-muted hover:text-gh-text transition-colors">
-            <flux:icon icon="chevron-down" variant="micro" x-show="!collapsed" />
-            <flux:icon icon="chevron-right" variant="micro" x-show="collapsed" x-cloak />
+            <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
+            <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
         </button>
 
         <span class="font-mono text-sm truncate cursor-pointer" @click="if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }">
@@ -284,6 +284,7 @@ new class extends Component {
         <flux:tooltip content="Copy file name">
             <flux:button
                 icon="square-2-stack"
+                icon:variant="outline"
                 variant="ghost"
                 size="sm"
                 @click="$dispatch('copy-to-clipboard', { text: filePath })"
@@ -301,6 +302,7 @@ new class extends Component {
             <flux:tooltip content="Add file comment">
                 <flux:button
                     icon="chat-bubble-left"
+                    icon:variant="outline"
                     variant="ghost"
                     size="sm"
                     aria-label="Add file comment"
@@ -363,7 +365,7 @@ new class extends Component {
                 class="px-4 py-8 text-center"
             >
                 <div wire:loading wire:target="loadFileDiff">
-                    <flux:icon icon="arrow-path" variant="micro" class="animate-spin inline-block text-gh-muted mr-1" />
+                    <flux:icon icon="arrow-path" variant="outline" class="animate-spin inline-block text-gh-muted mr-1" />
                     <flux:text variant="subtle" size="sm" inline>Loading diff...</flux:text>
                 </div>
                 <div wire:loading.remove wire:target="loadFileDiff">
@@ -372,12 +374,12 @@ new class extends Component {
             </div>
         @elseif($diffData['tooLarge'] ?? false)
             <div class="px-4 py-8 text-center">
-                <flux:icon icon="exclamation-triangle" variant="micro" class="inline-block text-gh-muted mr-1" />
+                <flux:icon icon="exclamation-triangle" variant="outline" class="inline-block text-gh-muted mr-1" />
                 <flux:text variant="subtle" size="sm" inline>File diff too large to display</flux:text>
             </div>
         @elseif($diffData['error'] ?? false)
             <div class="px-4 py-8 text-center">
-                <flux:icon icon="exclamation-triangle" variant="micro" class="inline-block text-red-400 mr-1" />
+                <flux:icon icon="exclamation-triangle" variant="outline" class="inline-block text-red-400 mr-1" />
                 <flux:text variant="subtle" size="sm" inline>Git error: {{ $diffData['error'] }}</flux:text>
             </div>
         @elseif(empty($diffData['hunks']))
@@ -401,7 +403,7 @@ new class extends Component {
                                     wire:target="expandContext"
                                     class="text-gh-link text-xs hover:underline inline-flex items-center gap-1 disabled:opacity-50"
                                 >
-                                    <flux:icon wire:loading wire:target="expandContext" icon="arrow-path" variant="micro" class="animate-spin" />
+                                    <flux:icon wire:loading wire:target="expandContext" icon="arrow-path" variant="outline" class="animate-spin" />
                                     Show full file
                                 </button>
                             </td>
@@ -424,7 +426,7 @@ new class extends Component {
                                             wire:target="expandGap"
                                             class="text-gh-link hover:underline inline-flex items-center gap-1 disabled:opacity-50"
                                         >
-                                            <flux:icon wire:loading wire:target="expandGap" icon="arrow-path" variant="micro" class="animate-spin" />
+                                            <flux:icon wire:loading wire:target="expandGap" icon="arrow-path" variant="outline" class="animate-spin" />
                                             <span wire:loading.remove wire:target="expandGap">Expand {{ $hiddenCount }} hidden lines</span>
                                             <span wire:loading wire:target="expandGap">Expanding...</span>
                                         </button>
@@ -436,7 +438,7 @@ new class extends Component {
                                             wire:target="expandGap"
                                             class="text-gh-link hover:underline inline-flex items-center gap-1 disabled:opacity-50"
                                         >
-                                            <flux:icon wire:loading wire:target="expandGap" icon="arrow-path" variant="micro" class="animate-spin" />
+                                            <flux:icon wire:loading wire:target="expandGap" icon="arrow-path" variant="outline" class="animate-spin" />
                                             <span wire:loading.remove wire:target="expandGap">Expand {{ $hiddenCount }} hidden lines</span>
                                             <span wire:loading wire:target="expandGap">Expanding...</span>
                                         </button>
@@ -543,6 +545,7 @@ new class extends Component {
                                                 <flux:tooltip content="Delete comment">
                                                     <flux:button
                                                         icon="x-mark"
+                                                        icon:variant="outline"
                                                         variant="ghost"
                                                         size="xs"
                                                         aria-label="Delete comment"
@@ -594,6 +597,7 @@ new class extends Component {
                         <flux:tooltip content="Delete comment">
                             <flux:button
                                 icon="x-mark"
+                                icon:variant="outline"
                                 variant="ghost"
                                 size="xs"
                                 aria-label="Delete comment"
