@@ -3,7 +3,20 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LINK_TARGET="$HOME/.local/bin/rfa"
+APP_DIR="$SCRIPT_DIR/src"
 
+# Setup .env if missing
+if [ ! -f "$APP_DIR/.env" ]; then
+    cp "$APP_DIR/.env.example" "$APP_DIR/.env"
+    php "$APP_DIR/artisan" key:generate --quiet
+    echo "Created .env with application key"
+fi
+
+# Ensure database exists and is migrated
+touch "$APP_DIR/database/database.sqlite"
+php "$APP_DIR/artisan" migrate --force --quiet 2>/dev/null || true
+
+# Install symlink
 mkdir -p "$(dirname "$LINK_TARGET")"
 ln -sf "$SCRIPT_DIR/rfa" "$LINK_TARGET"
 echo "Installed: $LINK_TARGET -> $SCRIPT_DIR/rfa"
