@@ -157,7 +157,7 @@ test('clearing draft text and pressing esc deletes the draft', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
 
     $page->assertDontSee('Delete me');
-    expect($page->page()->getByTestId('draft-comment')->count())->toBe(0);
+    $page->page()->getByTestId('draft-comment')->waitFor(['state' => 'detached', 'timeout' => 5000]);
 });
 
 test('double esc on edited draft updates the draft', function () {
