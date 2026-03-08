@@ -1,0 +1,24 @@
+name: rfa
+icon: null
+processes:
+  Yazi:
+    command: yazi
+    working_dir: null
+    auto_start: false
+    auto_restart: false
+    restart_when_changed: []
+    env: {}
+  Lazygit:
+    command: lazygit
+    working_dir: null
+    auto_start: false
+    auto_restart: false
+    restart_when_changed: []
+    env: {}
+  Serve:
+    command: php artisan serve
+    working_dir: src
+    auto_start: true
+    auto_restart: true
+    restart_when_changed: []
+    env: {}
