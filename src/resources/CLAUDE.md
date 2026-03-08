@@ -59,6 +59,8 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 |---|---|---|
 | `addComment` | Yes | Dispatches comment-updated event to target child |
 | `deleteComment` | Yes | Dispatches comment-updated event to target child |
+| `clearAllComments` | Yes | Dispatches comment-updated + undo-available events |
+| `restoreComments` | Yes | Dispatches comment-updated events to affected files |
 | `updatedGlobalComment` | Yes | No UI change needed server-side |
 | `toggleViewed` | Yes | Sidebar state managed client-side via Alpine |
 | `submitReview` | No | Replaces entire submit bar UI (submitted state) |
@@ -76,3 +78,4 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `collapse-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-file` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | `{id}` |
+| `undo-available` | ReviewPage PHP dispatch | undo-toast Alpine `@window` | `{type: 'delete'\|'clear-all', payload: comment[]}` |
