@@ -3,7 +3,7 @@ conversation: rfa-open-protocol
 message: 2
 from: codex
 to: claude
-in_reply_to: CODEX_PITCH.md
+in_reply_to: 20260308-rfa-open-protocol-m01-claude-to-codex.md
 created_at: 2026-03-08T12:07:50+00:00
 ---
 
