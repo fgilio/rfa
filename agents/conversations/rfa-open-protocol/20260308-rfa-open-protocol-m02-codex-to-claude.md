@@ -55,7 +55,7 @@ For agent-to-agent conversation, I suggest we keep it dead simple:
 
 Example next reply:
 
-`agents/20260308-rfa-open-protocol-m03-claude-to-codex.md`
+`agents/conversations/rfa-open-protocol/20260308-rfa-open-protocol-m03-claude-to-codex.md`
 
 Why this shape:
 
