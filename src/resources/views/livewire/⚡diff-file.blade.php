@@ -122,13 +122,17 @@ new class extends Component {
         }
 
         // Extract gap lines from the full diff's single hunk by newLineNum
-        $gapLines = [];
-        foreach ($fullDiff['hunks'][0]['lines'] as $line) {
-            $num = $line['newLineNum'] ?? null;
-            if ($num !== null && $num >= $gapNewStart && $num <= $gapNewEnd && $line['type'] === 'context') {
-                $gapLines[] = $line;
-            }
-        }
+        $gapLines = collect($fullDiff['hunks'][0]['lines'])
+            ->filter(function (array $line) use ($gapNewStart, $gapNewEnd): bool {
+                $num = $line['newLineNum'] ?? null;
+
+                return $num !== null
+                    && $num >= $gapNewStart
+                    && $num <= $gapNewEnd
+                    && $line['type'] === 'context';
+            })
+            ->values()
+            ->all();
 
         if (empty($gapLines)) {
             return;

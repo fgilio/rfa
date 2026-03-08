@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\BranchEntry;
 use App\Services\GitMetadataService;
 
 final readonly class GetBranchListAction
@@ -18,22 +19,20 @@ final readonly class GetBranchListAction
     public function handle(string $repoPath): array
     {
         $branches = $this->gitMetadataService->getBranches($repoPath);
+        $localBranches = collect($branches['local']);
+        $currentBranch = $localBranches->first(fn (BranchEntry $branch): bool => $branch->isCurrent);
 
-        $current = '';
-        $local = [];
-
-        foreach ($branches['local'] as $branch) {
-            if ($branch->isCurrent) {
-                $current = $branch->name;
-            }
-            $local[] = $branch->toArray();
-        }
-
-        $remote = array_map(fn ($b) => $b->toArray(), $branches['remote']);
+        $current = $currentBranch instanceof BranchEntry ? $currentBranch->name : '';
+        $local = $localBranches
+            ->map(fn (BranchEntry $branch): array => $branch->toArray())
+            ->all();
+        $remote = collect($branches['remote'])
+            ->map(fn (BranchEntry $branch): array => $branch->toArray())
+            ->all();
 
         return [
             'local' => $local,
-            'remote' => array_values($remote),
+            'remote' => $remote,
             'current' => $current,
         ];
     }
