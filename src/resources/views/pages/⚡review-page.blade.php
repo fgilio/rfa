@@ -259,12 +259,14 @@ new #[Layout('layouts.app')] class extends Component {
         }
 
         $deletedComments = $this->comments;
-        $affectedFileIds = collect($deletedComments)->pluck('fileId')->unique()->all();
 
         $this->comments = [];
         $this->saveSession();
 
-        collect($affectedFileIds)->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
+        collect($deletedComments)
+            ->pluck('fileId')
+            ->unique()
+            ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
 
         $this->dispatch('undo-available', type: 'clear-all', payload: $deletedComments);
         $this->skipRender();
@@ -287,8 +289,10 @@ new #[Layout('layouts.app')] class extends Component {
         $this->comments = array_values(array_merge($this->comments, $newComments));
         $this->saveSession();
 
-        $affectedFileIds = collect($newComments)->pluck('fileId')->unique()->all();
-        collect($affectedFileIds)->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
+        collect($newComments)
+            ->pluck('fileId')
+            ->unique()
+            ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
 
         $this->skipRender();
     }
