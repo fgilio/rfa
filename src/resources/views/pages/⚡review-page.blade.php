@@ -229,7 +229,8 @@ new #[Layout('layouts.app')] class extends Component {
     #[On('delete-comment')]
     public function deleteComment(string $commentId): void
     {
-        $fileId = collect($this->comments)->firstWhere('id', $commentId)['fileId'] ?? null;
+        $deletedComment = collect($this->comments)->firstWhere('id', $commentId);
+        $fileId = $deletedComment['fileId'] ?? null;
 
         $result = app(DeleteCommentAction::class)->handle($this->comments, $commentId);
 
@@ -241,6 +242,55 @@ new #[Layout('layouts.app')] class extends Component {
         $this->saveSession();
 
         if ($fileId) {
+            $this->dispatchFileComments($fileId);
+        }
+
+        if ($deletedComment) {
+            $this->dispatch('undo-available', type: 'delete', payload: [$deletedComment]);
+        }
+
+        $this->skipRender();
+    }
+
+    public function clearAllComments(): void
+    {
+        if (empty($this->comments)) {
+            return;
+        }
+
+        $deletedComments = $this->comments;
+        $affectedFileIds = collect($deletedComments)->pluck('fileId')->unique()->all();
+
+        $this->comments = [];
+        $this->saveSession();
+
+        foreach ($affectedFileIds as $fileId) {
+            $this->dispatchFileComments($fileId);
+        }
+
+        $this->dispatch('undo-available', type: 'clear-all', payload: $deletedComments);
+        $this->skipRender();
+    }
+
+    /** @param  array<int, array<string, mixed>>  $comments */
+    public function restoreComments(array $comments): void
+    {
+        if (empty($comments)) {
+            return;
+        }
+
+        $existingIds = array_flip(collect($this->comments)->pluck('id')->all());
+        $newComments = collect($comments)->reject(fn ($c) => isset($existingIds[$c['id']]))->all();
+
+        if (empty($newComments)) {
+            return;
+        }
+
+        $this->comments = array_values(array_merge($this->comments, $newComments));
+        $this->saveSession();
+
+        $affectedFileIds = collect($newComments)->pluck('fileId')->unique()->all();
+        foreach ($affectedFileIds as $fileId) {
             $this->dispatchFileComments($fileId);
         }
 
@@ -742,6 +792,9 @@ new #[Layout('layouts.app')] class extends Component {
             @endif
         </main>
     </div>
+
+    {{-- Undo toast --}}
+    @include('livewire.undo-toast')
 
     {{-- Submit bar --}}
     @include('livewire.submit-bar')
