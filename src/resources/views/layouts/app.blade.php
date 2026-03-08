@@ -8,10 +8,7 @@
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="manifest" href="/manifest.webmanifest" crossorigin="anonymous">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/js/tailwind.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -50,6 +47,19 @@
         }
     </script>
     <style>
+        @font-face {
+            font-family: 'Space Grotesk';
+            src: url('/fonts/SpaceGrotesk-Variable.woff2') format('woff2');
+            font-weight: 400 700;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'JetBrains Mono';
+            src: url('/fonts/JetBrainsMono-Variable.woff2') format('woff2');
+            font-weight: 400 500;
+            font-display: swap;
+        }
+
         @php
             $lightColors = config('theme.colors.light');
             $darkColors  = config('theme.colors.dark');
