@@ -25,10 +25,7 @@ class MarkdownFormatter
         }
 
         // Group by file
-        $byFile = [];
-        foreach ($comments as $comment) {
-            $byFile[$comment->file][] = $comment;
-        }
+        $byFile = collect($comments)->groupBy(fn (Comment $comment): string => $comment->file);
 
         foreach ($byFile as $file => $fileComments) {
             $md .= "## `{$file}`\n\n";

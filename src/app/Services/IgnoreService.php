@@ -19,15 +19,15 @@ class IgnoreService
     /** @param array<int, string> $excludePatterns */
     public function isPathExcluded(string $path, array $excludePatterns): bool
     {
-        foreach ($excludePatterns as $pattern) {
+        return collect($excludePatterns)->contains(function (string $pattern) use ($path): bool {
             // Strip pathspec prefix: :(exclude) or :(glob,exclude)**/
             $glob = preg_replace('/^:\([^)]+\)(\*\*\/)?/', '', $pattern);
-            if (fnmatch($glob, $path) || fnmatch($glob, basename($path))) {
-                return true;
+            if ($glob === null) {
+                return false;
             }
-        }
 
-        return false;
+            return fnmatch($glob, $path) || fnmatch($glob, basename($path));
+        });
     }
 
     /** @return array<int, string> */
@@ -37,14 +37,14 @@ class IgnoreService
 
         $ignoreFile = $repoPath.'/.rfaignore';
         if (File::exists($ignoreFile)) {
-            $lines = explode("\n", File::get($ignoreFile));
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if ($line === '' || str_starts_with($line, '#')) {
-                    continue;
-                }
-                $patterns[] = $line;
-            }
+            $patterns = array_merge(
+                $patterns,
+                collect(explode("\n", File::get($ignoreFile)))
+                    ->map(fn (string $line): string => trim($line))
+                    ->reject(fn (string $line): bool => $line === '' || str_starts_with($line, '#'))
+                    ->values()
+                    ->all()
+            );
         }
 
         // Convert to git pathspec exclude format

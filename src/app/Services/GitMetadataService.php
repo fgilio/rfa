@@ -153,44 +153,39 @@ class GitMetadataService
     public function getBranches(string $repoPath): array
     {
         $localOutput = $this->git->run($repoPath, ['branch', '--list', '--no-color']);
-        $local = [];
-
-        foreach (array_filter(explode("\n", $localOutput)) as $line) {
-            $isCurrent = str_starts_with($line, '* ');
-            $name = trim(ltrim($line, '* '));
-
-            if ($name === '' || str_starts_with($name, '(HEAD detached')) {
-                continue;
-            }
-
-            $local[] = new BranchEntry(
-                name: $name,
-                isCurrent: $isCurrent,
+        $local = collect(explode("\n", $localOutput))
+            ->filter()
+            ->map(fn (string $line): BranchEntry => new BranchEntry(
+                name: trim(ltrim($line, '* ')),
+                isCurrent: str_starts_with($line, '* '),
                 isRemote: false,
-            );
-        }
+            ))
+            ->reject(fn (BranchEntry $branch): bool => $branch->name === '' || str_starts_with($branch->name, '(HEAD detached'))
+            ->values()
+            ->all();
 
         $remote = [];
 
         try {
             $remoteOutput = $this->git->run($repoPath, ['branch', '--remotes', '--no-color']);
+            $remote = collect(explode("\n", $remoteOutput))
+                ->map(fn (string $line): string => trim($line))
+                ->filter()
+                ->reject(fn (string $name): bool => str_contains($name, '->'))
+                ->map(function (string $name): BranchEntry {
+                    $remoteName = str_contains($name, '/')
+                        ? substr($name, 0, (int) strpos($name, '/'))
+                        : null;
 
-            foreach (array_filter(explode("\n", $remoteOutput)) as $line) {
-                $name = trim($line);
-
-                if ($name === '' || str_contains($name, '->')) {
-                    continue;
-                }
-
-                $remoteName = str_contains($name, '/') ? substr($name, 0, (int) strpos($name, '/')) : null;
-
-                $remote[] = new BranchEntry(
-                    name: $name,
-                    isCurrent: false,
-                    isRemote: true,
-                    remote: $remoteName,
-                );
-            }
+                    return new BranchEntry(
+                        name: $name,
+                        isCurrent: false,
+                        isRemote: true,
+                        remote: $remoteName,
+                    );
+                })
+                ->values()
+                ->all();
         } catch (GitCommandException) {
             // No remotes configured - ignore
         }
@@ -215,25 +210,19 @@ class GitMetadataService
             return [];
         }
 
-        $entries = [];
-
-        foreach (array_filter(explode("\n", trim($output))) as $line) {
-            $parts = explode("\x1e", $line);
-
-            if (count($parts) < 6) {
-                continue;
-            }
-
-            $entries[] = new CommitEntry(
+        return collect(explode("\n", trim($output)))
+            ->filter()
+            ->map(fn (string $line): array => explode("\x1e", $line))
+            ->filter(fn (array $parts): bool => count($parts) >= 6)
+            ->map(fn (array $parts): CommitEntry => new CommitEntry(
                 hash: $parts[0],
                 shortHash: $parts[1],
                 message: $parts[2],
                 author: $parts[3],
                 relativeDate: $parts[4],
                 date: $parts[5],
-            );
-        }
-
-        return $entries;
+            ))
+            ->values()
+            ->all();
     }
 }

@@ -24,22 +24,18 @@ class DiffParser
             return [];
         }
 
-        $files = [];
         $fileSections = preg_split('/^(?=diff --git )/m', $rawDiff);
-
-        foreach ($fileSections as $section) {
-            $section = trim($section);
-            if ($section === '' || ! str_starts_with($section, 'diff --git ')) {
-                continue;
-            }
-
-            $file = $this->parseFileSection($section);
-            if ($file !== null) {
-                $files[] = $file;
-            }
+        if ($fileSections === false) {
+            return [];
         }
 
-        return $files;
+        return collect($fileSections)
+            ->map(fn (string $section): string => trim($section))
+            ->filter(fn (string $section): bool => $section !== '' && str_starts_with($section, 'diff --git '))
+            ->map(fn (string $section): ?FileDiff => $this->parseFileSection($section))
+            ->filter()
+            ->values()
+            ->all();
     }
 
     private function parseFileSection(string $section): ?FileDiff

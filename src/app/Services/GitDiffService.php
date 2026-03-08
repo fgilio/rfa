@@ -81,28 +81,30 @@ class GitDiffService
             ];
         }
 
-        $entries = [];
+        $entries = collect($statusMap)
+            ->map(function (array $entry, string $path) use ($statMap, $target, $repoPath): FileListEntry {
+                [$status, $oldPath] = $entry;
 
-        // Process tracked changes
-        foreach ($statusMap as $path => [$status, $oldPath]) {
-            $stats = $statMap[$path] ?? ['additions' => 0, 'deletions' => 0, 'isBinary' => false];
-            $isBinary = $stats['isBinary'];
+                $stats = $statMap[$path] ?? ['additions' => 0, 'deletions' => 0, 'isBinary' => false];
+                $isBinary = $stats['isBinary'];
 
-            if ($isBinary && $status === 'modified') {
-                $status = 'binary';
-            }
+                if ($isBinary && $status === 'modified') {
+                    $status = 'binary';
+                }
 
-            $entries[] = new FileListEntry(
-                path: $path,
-                status: $status,
-                oldPath: $oldPath,
-                additions: $stats['additions'],
-                deletions: $stats['deletions'],
-                isBinary: $isBinary,
-                isUntracked: false,
-                lastModified: $target->isWorkingDirectory() ? $this->getLastModified($repoPath, $path) : null,
-            );
-        }
+                return new FileListEntry(
+                    path: $path,
+                    status: $status,
+                    oldPath: $oldPath,
+                    additions: $stats['additions'],
+                    deletions: $stats['deletions'],
+                    isBinary: $isBinary,
+                    isUntracked: false,
+                    lastModified: $target->isWorkingDirectory() ? $this->getLastModified($repoPath, $path) : null,
+                );
+            })
+            ->values()
+            ->all();
 
         // Get untracked files only when comparing against working tree
         if ($target->isWorkingDirectory()) {
@@ -261,13 +263,7 @@ class GitDiffService
         $diff .= "+++ b/{$path}\n";
         $diff .= '@@ -0,0 +1,'.count($lines)." @@\n";
 
-        foreach ($lines as $i => $line) {
-            $diff .= '+'.$line;
-            if ($i < count($lines) - 1) {
-                $diff .= "\n";
-            }
-        }
-        $diff .= "\n";
+        $diff .= '+'.implode("\n+", $lines)."\n";
 
         return $diff;
     }
