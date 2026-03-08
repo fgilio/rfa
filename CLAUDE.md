@@ -7,6 +7,7 @@ cd src && composer test        # Pest
 ## Code style
 
 - Prefer Laravel collections over foreach/for loops
+- No external resources (CDNs, Google Fonts) - all assets served locally (enforced by arch test)
 
 ## Running locally
 
