@@ -224,3 +224,119 @@ test('submitReview refreshes file list and populates reviewPairs', function () {
     expect($component->get('reviewPairs'))->toHaveCount(1);
     expect($component->get('submitted'))->toBeTrue();
 });
+
+// -- Clear all comments --
+
+test('clearAllComments empties comments and saves', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Comment 1')
+        ->dispatch('add-comment', fileId: 'def456', side: 'right', startLine: 2, endLine: 2, body: 'Comment 2')
+        ->call('clearAllComments');
+
+    expect($component->get('comments'))->toBeEmpty();
+});
+
+test('clearAllComments dispatches comment-updated to affected files', function () {
+    // Set comments directly to avoid addComment also dispatching comment-updated
+    // (Livewire's assertDispatched callback only checks the first matching event name)
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project']);
+    $component->set('comments', [
+        ['id' => 'c-1', 'fileId' => 'abc123', 'file' => 'src/Foo.php', 'side' => 'right', 'startLine' => 1, 'endLine' => 1, 'body' => 'Comment 1', 'isDraft' => false],
+        ['id' => 'c-2', 'fileId' => 'def456', 'file' => 'src/Bar.php', 'side' => 'right', 'startLine' => 2, 'endLine' => 2, 'body' => 'Comment 2', 'isDraft' => false],
+    ]);
+    $component->call('clearAllComments');
+
+    $component->assertDispatched('comment-updated', fn ($name, $params) => $params['fileId'] === 'abc123' && $params['comments'] === []);
+});
+
+test('clearAllComments dispatches undo-available with all comments', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Comment 1')
+        ->dispatch('add-comment', fileId: 'def456', side: 'right', startLine: 2, endLine: 2, body: 'Comment 2')
+        ->call('clearAllComments');
+
+    $component->assertDispatched('undo-available', fn ($name, $params) => $params['type'] === 'clear-all' && count($params['payload']) === 2);
+});
+
+test('clearAllComments no-ops when empty', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->call('clearAllComments');
+
+    $component->assertNotDispatched('undo-available');
+});
+
+test('clearAllComments skips render', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Comment 1')
+        ->call('clearAllComments');
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+});
+
+// -- Restore comments --
+
+test('restoreComments re-adds deleted comments', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Comment 1');
+
+    $comments = $component->get('comments');
+
+    $component->call('clearAllComments');
+    expect($component->get('comments'))->toBeEmpty();
+
+    $component->call('restoreComments', $comments);
+    expect($component->get('comments'))->toHaveCount(1);
+    expect($component->get('comments.0.body'))->toBe('Comment 1');
+});
+
+test('restoreComments skips duplicate IDs', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Comment 1');
+
+    $comments = $component->get('comments');
+
+    // Try to restore the same comment that already exists
+    $component->call('restoreComments', $comments);
+    expect($component->get('comments'))->toHaveCount(1);
+});
+
+test('restoreComments dispatches comment-updated to affected files', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Comment 1');
+
+    $comments = $component->get('comments');
+
+    $component->call('clearAllComments')
+        ->call('restoreComments', $comments);
+
+    // comment-updated dispatched once during clearAll (empty), then again during restore (with comment)
+    $component->assertDispatched('comment-updated', fn ($name, $params) => $params['fileId'] === 'abc123' && count($params['comments']) === 1);
+});
+
+test('restoreComments skips render', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Comment 1');
+
+    $comments = $component->get('comments');
+
+    $component->call('clearAllComments')
+        ->call('restoreComments', $comments);
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+});
+
+// -- Delete comment undo-available --
+
+test('deleteComment dispatches undo-available with deleted comment', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Comment 1');
+
+    $commentId = $component->get('comments.0.id');
+
+    $component->dispatch('delete-comment', commentId: $commentId);
+
+    $component->assertDispatched('undo-available', fn ($name, $params) => $params['type'] === 'delete'
+        && count($params['payload']) === 1
+        && $params['payload'][0]['id'] === $commentId
+    );
+});
