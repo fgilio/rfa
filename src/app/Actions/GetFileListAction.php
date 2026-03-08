@@ -23,15 +23,17 @@ final readonly class GetFileListAction
         $target ??= DiffTarget::workingDirectory();
 
         $fileList = $this->gitDiffService->getFileList($repoPath, $globalGitignorePath, $target);
-
-        $files = array_map(fn ($entry) => $entry->toArray(), $fileList);
+        $files = collect($fileList)
+            ->map(fn ($entry): array => $entry->toArray())
+            ->values()
+            ->all();
 
         if ($clearCache && ! $target->isImmutable()) {
             $projectKey = $projectId ?? $repoPath;
-            foreach ($files as $file) {
+            collect($files)->each(function (array $file) use ($projectKey, $target): void {
                 Cache::forget(DiffCacheKey::for($projectKey, $file['id'], $target->contextKey(), 'light'));
                 Cache::forget(DiffCacheKey::for($projectKey, $file['id'], $target->contextKey(), 'dark'));
-            }
+            });
         }
 
         return $files;

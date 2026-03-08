@@ -16,8 +16,9 @@ final readonly class DeleteCommentAction
             return null;
         }
 
-        return array_values(
-            array_filter($comments, fn ($c) => $c['id'] !== $commentId)
-        );
+        return collect($comments)
+            ->reject(fn (array $comment): bool => $comment['id'] === $commentId)
+            ->values()
+            ->all();
     }
 }

@@ -19,6 +19,9 @@ final readonly class GetCommitHistoryAction
     {
         $commits = $this->gitMetadataService->getCommitLog($repoPath, $limit, $offset, $branch);
 
-        return array_map(fn ($c) => $c->toArray(), $commits);
+        return collect($commits)
+            ->map(fn ($commit): array => $commit->toArray())
+            ->values()
+            ->all();
     }
 }
