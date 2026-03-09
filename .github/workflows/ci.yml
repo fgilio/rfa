@@ -104,13 +104,19 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git checkout --force ${{ github.event.pull_request.base.sha }}
+            composer install --no-interaction --prefer-dist
           fi
-          composer install --no-interaction --prefer-dist
           cp .env.example .env
           php artisan key:generate
           touch database/database.sqlite
           php artisan migrate:fresh --force
-          php artisan rfa:benchmark-perf --snapshot=/tmp/rfa-perf-baseline.json
+          # Skip baseline if command does not exist on base branch (first-time bootstrap)
+          if php artisan list --raw 2>/dev/null | grep -q 'rfa:benchmark-perf'; then
+            php artisan rfa:benchmark-perf --snapshot=/tmp/rfa-perf-baseline.json
+          else
+            echo '{"generated_at":"bootstrap","results":{}}' > /tmp/rfa-perf-baseline.json
+            echo "Benchmark command not available on base branch - using empty baseline"
+          fi
       - name: Compare PR benchmark to baseline
         if: github.event_name == 'pull_request'
         run: |
