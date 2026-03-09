@@ -177,6 +177,7 @@ new #[Layout('layouts.app')] class extends Component {
                                         .catch(() => { loading = false; });
                                 }, {{ $projectIndex * 100 }})"
                                 x-show="matchesSearch(@js($project['name']), @js($project['branch'] ?? ''), @js($project['path']))"
+                                :data-selected="selectedProjectId === $el.dataset.projectId || undefined"
                                 :class="selectedProjectId && selectedProjectId === $el.dataset.projectId ? 'ring-1 ring-gh-link/40' : ''"
                                 class="rounded-lg border border-gh-border hover:border-gh-text/30 bg-gh-surface transition-all"
                             >

@@ -10,7 +10,7 @@ test('arrow down selects first project', function () {
     $page = $this->visit('/');
     $this->pressGlobalKey($page, 'ArrowDown');
 
-    $id = $page->script("document.querySelector('[data-testid=\"project-card\"].ring-1')?.dataset.projectId");
+    $id = $page->script("document.querySelector('[data-testid=\"project-card\"][data-selected]')?.dataset.projectId");
     expect($id)->not->toBeNull();
 });
 
@@ -22,7 +22,7 @@ test('arrow keys cycle through projects', function () {
     $this->pressGlobalKey($page, 'ArrowDown');
     $this->pressGlobalKey($page, 'ArrowUp');
 
-    $selectedId = $page->script("document.querySelector('[data-testid=\"project-card\"].ring-1')?.dataset.projectId");
+    $selectedId = $page->script("document.querySelector('[data-testid=\"project-card\"][data-selected]')?.dataset.projectId");
     $firstId = $page->script("document.querySelectorAll('[data-testid=\"project-card\"]')[0]?.dataset.projectId");
     expect($selectedId)->toBe($firstId);
 });
@@ -35,7 +35,7 @@ test('arrow bounds are clamped', function () {
         $this->pressGlobalKey($page, 'ArrowDown');
     }
 
-    $selectedId = $page->script("document.querySelector('[data-testid=\"project-card\"].ring-1')?.dataset.projectId");
+    $selectedId = $page->script("document.querySelector('[data-testid=\"project-card\"][data-selected]')?.dataset.projectId");
     $lastId = $page->script("[...document.querySelectorAll('[data-testid=\"project-card\"]')].at(-1)?.dataset.projectId");
     expect($selectedId)->toBe($lastId);
 });
@@ -57,12 +57,12 @@ test('escape clears selection', function () {
     $this->pressGlobalKey($page, 'ArrowDown');
 
     // Verify something is selected
-    $before = $page->script("document.querySelector('[data-testid=\"project-card\"].ring-1')?.dataset.projectId");
+    $before = $page->script("document.querySelector('[data-testid=\"project-card\"][data-selected]')?.dataset.projectId");
     expect($before)->not->toBeNull();
 
     $this->pressGlobalKey($page, 'Escape');
 
-    $after = $page->script("document.querySelector('[data-testid=\"project-card\"].ring-1')?.dataset.projectId");
+    $after = $page->script("document.querySelector('[data-testid=\"project-card\"][data-selected]')?.dataset.projectId");
     expect($after)->toBeNull();
 });
 
@@ -79,16 +79,12 @@ test('search and arrow nav on filtered results', function () {
 
     $this->pressGlobalKey($page, 'ArrowDown');
 
-    // Wait for Alpine to apply selection ring to the visible card (atomic check avoids race)
+    // Wait for selection to land on the visible card (atomic check avoids race between reads)
     $page->page()->waitForFunction("
-        (() => {
-            const sel = document.querySelector('[data-testid=\"project-card\"].ring-1');
-            const vis = document.querySelector('[data-project-card]:not([style*=\"display: none\"])');
-            return sel && vis && sel.dataset.projectId === vis.dataset.projectId;
-        })()
+        document.querySelector('[data-project-card]:not([style*=\"display: none\"])[data-selected]') !== null
     ");
 
-    $selectedId = $page->script("document.querySelector('[data-testid=\"project-card\"].ring-1')?.dataset.projectId");
+    $selectedId = $page->script("document.querySelector('[data-testid=\"project-card\"][data-selected]')?.dataset.projectId");
     expect($selectedId)->not->toBeNull();
 });
 
