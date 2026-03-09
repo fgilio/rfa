@@ -115,11 +115,7 @@ test('shift+c collapses all files', function () {
 
     $page->assertSee('function greet');
 
-    $page->script("
-        document.dispatchEvent(new KeyboardEvent('keydown', {
-            key: 'C', shiftKey: true, bubbles: true
-        }));
-    ");
+    $this->pressGlobalKey($page, 'C', ['shiftKey' => true]);
 
     // Auto-retries ~5s (avoids one-shot check during CSS transition)
     $page->assertDontSee('function greet');
@@ -132,21 +128,13 @@ test('shift+e expands all files', function () {
     $page->assertSee('function greet');
 
     // Collapse all first
-    $page->script("
-        document.dispatchEvent(new KeyboardEvent('keydown', {
-            key: 'C', shiftKey: true, bubbles: true
-        }));
-    ");
+    $this->pressGlobalKey($page, 'C', ['shiftKey' => true]);
 
     // Wait for collapse to complete (auto-retries ~5s)
     $page->assertDontSee('function greet');
 
     // Expand all
-    $page->script("
-        document.dispatchEvent(new KeyboardEvent('keydown', {
-            key: 'E', shiftKey: true, bubbles: true
-        }));
-    ");
+    $this->pressGlobalKey($page, 'E', ['shiftKey' => true]);
 
     $page->assertSee('function greet');
 });

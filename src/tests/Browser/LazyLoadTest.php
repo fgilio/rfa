@@ -32,11 +32,7 @@ test('expanding collapsed file triggers diff load', function () {
     $page->assertSee('function greet');
 
     // Collapse all files
-    $page->script("
-        document.dispatchEvent(new KeyboardEvent('keydown', {
-            key: 'C', shiftKey: true, bubbles: true
-        }));
-    ");
+    $this->pressGlobalKey($page, 'C', ['shiftKey' => true]);
     $page->assertDontSee('function greet');
 
     // Expand just the hello.php file via sidebar click
