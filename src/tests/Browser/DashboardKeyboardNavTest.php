@@ -103,6 +103,9 @@ test('search and arrow nav on filtered results', function () {
     // Type a filter that matches only one project
     $page->page()->getByPlaceholder('Filter projects...')->fill('beta');
 
+    // Wait for 150ms debounce + Alpine reactivity to hide non-matching cards
+    $page->page()->waitForFunction("document.querySelectorAll('[data-project-card]:not([style*=\"display: none\"])').length === 1");
+
     $this->pressGlobalKey($page, 'ArrowDown');
 
     $selectedId = $page->script("document.querySelector('[data-testid=\"project-card\"].ring-1')?.dataset.projectId");
