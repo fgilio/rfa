@@ -3,7 +3,19 @@
 ## Stack
 
 - Pest 4 on PHPUnit 12
-- Run: `php artisan test` or `php artisan test --parallel`
+- Default fast path: `composer test` or `php artisan test`
+- Arch only: `composer test:arch`
+- Browser: `composer test:browser`
+- Perf benchmark: `composer test:perf`
+- Perf smoke suite: `composer test:perf:smoke`
+- Full local suite pass: `composer test:all`
+
+## Suite Model
+
+- `Core` = `Unit` + `Arch`
+- `Browser` = Playwright-backed browser coverage
+- `Performance` = deterministic smoke coverage for benchmark scenarios
+- CI perf regression gating happens through `php artisan rfa:benchmark-perf`, not PHPUnit thresholds
 
 ## Faker
 
@@ -17,9 +29,9 @@
 
 ## Temp Directories
 
-- Pattern: `sys_get_temp_dir().'/rfa_<name>_'.uniqid()`
-- Create in `beforeEach`, clean up in `afterEach` - always remove all created files
-- See `CommentExporterTest` and `GitDiffServiceTest` for examples
+- Prefer `InteractsWithTestRepositories::createTempDirectory()` for tracked temp dirs
+- If a test needs git repo setup, use `InteractsWithTestRepositories::initTestRepo()` and `commitTestRepo()`
+- Global cleanup in `tests/Pest.php` removes tracked temp dirs after each test
 
 ## Assertions
 
@@ -56,3 +68,9 @@
 ## Browser Tests
 
 - See `tests/Browser/CLAUDE.md` for details
+
+## Performance Benchmarks
+
+- The required CI perf check is the benchmark command, not a hard-coded ms assertion
+- Snapshot and compare via `php artisan rfa:benchmark-perf --snapshot=...` and `--compare=...`
+- Keep PHPUnit perf tests deterministic and structural
