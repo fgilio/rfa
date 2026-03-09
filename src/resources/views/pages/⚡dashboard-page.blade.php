@@ -63,7 +63,7 @@ new #[Layout('layouts.app')] class extends Component {
             }
         },
         initSort() {
-            if (this.sortBy !== '{{ $sortBy }}') {
+            if (this.sortBy !== @js($sortBy)) {
                 $wire.loadProjects(this.sortBy);
             }
         },
@@ -75,8 +75,8 @@ new #[Layout('layouts.app')] class extends Component {
     }"
     x-init="initSort()"
     @keydown.window="
-        if ($event.target.tagName === 'INPUT') {
-            if ($event.key === 'Escape') { search = ''; selectedIndex = -1; $event.target.blur(); $event.preventDefault(); }
+        if ($event.target.tagName === 'INPUT' || $event.target.tagName === 'TEXTAREA' || $event.target.isContentEditable) {
+            if ($event.key === 'Escape' && $event.target.tagName === 'INPUT') { search = ''; selectedIndex = -1; $event.target.blur(); $event.preventDefault(); }
             return;
         }
         if ($event.key === '/') { $refs.searchInput?.focus(); $event.preventDefault(); }
@@ -147,7 +147,10 @@ new #[Layout('layouts.app')] class extends Component {
 
             @php $projectIndex = 0; @endphp
             @foreach($projectGroups as $commonDir => $projects)
-                <div class="mb-8" x-show="[{{ collect($projects)->map(fn($p) => "matchesSearch('" . addslashes($p['name']) . "', '" . addslashes($p['branch'] ?? '') . "', '" . addslashes($p['path']) . "')")->join(', ') }}].some(Boolean)">
+                @php
+                    $groupSearchData = collect($projects)->map(fn($p) => [$p['name'], $p['branch'] ?? '', $p['path']])->values()->all();
+                @endphp
+                <div wire:key="group-{{ md5($commonDir) }}" class="mb-8" x-show="@js($groupSearchData).some(([n, b, p]) => matchesSearch(n, b, p))">
                     @if(count($projects) > 1)
                         <p class="section-label text-gh-muted mb-3 font-mono truncate">{{ $commonDir }}</p>
                     @endif
@@ -155,6 +158,7 @@ new #[Layout('layouts.app')] class extends Component {
                     <div class="space-y-3">
                         @foreach($projects as $project)
                             <div
+                                wire:key="project-{{ $project['id'] }}"
                                 data-project-card
                                 x-data="{
                                     status: null,
@@ -166,7 +170,7 @@ new #[Layout('layouts.app')] class extends Component {
                                         .then(d => { status = d; loading = false; })
                                         .catch(() => { loading = false; });
                                 }, {{ $projectIndex * 100 }})"
-                                x-show="matchesSearch('{{ addslashes($project['name']) }}', '{{ addslashes($project['branch'] ?? '') }}', '{{ addslashes($project['path']) }}')"
+                                x-show="matchesSearch(@js($project['name']), @js($project['branch'] ?? ''), @js($project['path']))"
                                 :class="selectedIndex >= 0 && visibleProjects[selectedIndex] === $el ? 'ring-1 ring-gh-link/40' : ''"
                                 class="rounded-lg border border-gh-border hover:border-gh-text/30 bg-gh-surface transition-all"
                             >
