@@ -8,20 +8,15 @@ use Illuminate\Support\Facades\Http;
 uses(Tests\TestCase::class);
 
 beforeEach(function () {
-    $this->tmpDir = sys_get_temp_dir().'/rfa_app_update_'.uniqid();
-    File::makeDirectory($this->tmpDir, 0755, true);
+    $this->tmpDir = $this->createTempDirectory('rfa_app_update_');
 
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
 
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'init');
+    $this->commitTestRepo($this->tmpDir, 'init');
 
     config(['rfa.github_repo' => 'test-owner/test-repo']);
     Cache::flush();
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->tmpDir);
 });
 
 test('detects update when remote is ahead', function () {
@@ -94,7 +89,7 @@ test('cache invalidates after SHA changes', function () {
 
     // Create a new commit to change the SHA
     File::put($this->tmpDir.'/file.txt', "changed\n");
-    commitTestRepo($this->tmpDir, 'second');
+    $this->commitTestRepo($this->tmpDir, 'second');
 
     $action->handle($this->tmpDir);
 

@@ -9,17 +9,12 @@ use Illuminate\Support\Facades\File;
 uses(Tests\TestCase::class);
 
 beforeEach(function () {
-    $this->tmpDir = sys_get_temp_dir().'/rfa_changes_test_'.uniqid();
-    File::makeDirectory($this->tmpDir, 0755, true);
+    $this->tmpDir = $this->createTempDirectory('rfa_changes_test_');
 
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
 
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'init');
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->tmpDir);
+    $this->commitTestRepo($this->tmpDir, 'init');
 });
 
 test('returns non-empty string hash', function () {

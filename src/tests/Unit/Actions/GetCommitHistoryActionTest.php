@@ -8,17 +8,12 @@ use Illuminate\Support\Facades\File;
 uses(Tests\TestCase::class);
 
 beforeEach(function () {
-    $this->tmpDir = sys_get_temp_dir().'/rfa_commithistory_test_'.uniqid();
-    File::makeDirectory($this->tmpDir, 0755, true);
+    $this->tmpDir = $this->createTempDirectory('rfa_commithistory_test_');
 
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
 
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'init');
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->tmpDir);
+    $this->commitTestRepo($this->tmpDir, 'init');
 });
 
 test('returns commits as arrays with all fields', function () {
@@ -32,10 +27,10 @@ test('returns commits as arrays with all fields', function () {
 
 test('respects limit and offset parameters', function () {
     File::put($this->tmpDir.'/file.txt', "v2\n");
-    commitTestRepo($this->tmpDir, 'second');
+    $this->commitTestRepo($this->tmpDir, 'second');
 
     File::put($this->tmpDir.'/file.txt', "v3\n");
-    commitTestRepo($this->tmpDir, 'third');
+    $this->commitTestRepo($this->tmpDir, 'third');
 
     $action = new GetCommitHistoryAction(new GitMetadataService(new GitProcessService));
 
@@ -49,11 +44,11 @@ test('respects limit and offset parameters', function () {
 });
 
 test('returns commits for specific branch', function () {
-    exec('cd '.escapeshellarg($this->tmpDir).' && git checkout -b feature');
+    $this->runTestRepoCommand($this->tmpDir, 'git checkout -b feature');
     File::put($this->tmpDir.'/file.txt', "feature\n");
-    commitTestRepo($this->tmpDir, 'feature-work');
+    $this->commitTestRepo($this->tmpDir, 'feature-work');
 
-    exec('cd '.escapeshellarg($this->tmpDir).' && git checkout main');
+    $this->runTestRepoCommand($this->tmpDir, 'git checkout main');
 
     $action = new GetCommitHistoryAction(new GitMetadataService(new GitProcessService));
     $commits = $action->handle($this->tmpDir, branch: 'feature');

@@ -12,17 +12,12 @@ use Illuminate\Support\Facades\File;
 uses(Tests\TestCase::class);
 
 beforeEach(function () {
-    $this->tmpDir = sys_get_temp_dir().'/rfa_action_test_'.uniqid();
-    File::makeDirectory($this->tmpDir, 0755, true);
+    $this->tmpDir = $this->createTempDirectory('rfa_action_test_');
 
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
 
     File::put($this->tmpDir.'/hello.txt', "line1\n");
-    commitTestRepo($this->tmpDir, 'init');
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->tmpDir);
+    $this->commitTestRepo($this->tmpDir, 'init');
 });
 
 test('returns full DTO array for modified file', function () {
@@ -80,7 +75,7 @@ test('handles untracked file', function () {
 
 test('adds highlightedContent for known file types', function () {
     File::put($this->tmpDir.'/hello.php', "<?php\necho 'hi';\n");
-    commitTestRepo($this->tmpDir, 'add php');
+    $this->commitTestRepo($this->tmpDir, 'add php');
     File::put($this->tmpDir.'/hello.php', "<?php\necho 'hello';\n");
 
     $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService);
@@ -97,7 +92,7 @@ test('adds highlightedContent for known file types', function () {
 
 test('no highlightedContent for unknown file types', function () {
     File::put($this->tmpDir.'/data.xyz', "some content\n");
-    commitTestRepo($this->tmpDir, 'add xyz');
+    $this->commitTestRepo($this->tmpDir, 'add xyz');
     File::put($this->tmpDir.'/data.xyz', "updated content\n");
 
     $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService);
@@ -115,7 +110,7 @@ test('contextLines parameter produces single hunk for full context', function ()
     // Create file with 20 lines, modify first and last to produce 2 hunks
     $lines = array_map(fn ($i) => "line{$i}", range(1, 20));
     File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
-    commitTestRepo($this->tmpDir, 'add many');
+    $this->commitTestRepo($this->tmpDir, 'add many');
 
     $lines[0] = 'changed1';
     $lines[19] = 'changed20';

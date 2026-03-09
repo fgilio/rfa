@@ -8,17 +8,12 @@ use Illuminate\Support\Facades\File;
 uses(Tests\TestCase::class);
 
 beforeEach(function () {
-    $this->tmpDir = sys_get_temp_dir().'/rfa_branchlist_test_'.uniqid();
-    File::makeDirectory($this->tmpDir, 0755, true);
+    $this->tmpDir = $this->createTempDirectory('rfa_branchlist_test_');
 
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
 
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'init');
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->tmpDir);
+    $this->commitTestRepo($this->tmpDir, 'init');
 });
 
 test('returns branches as arrays with current branch identified', function () {
@@ -34,7 +29,10 @@ test('returns branches as arrays with current branch identified', function () {
 });
 
 test('returns multiple branches sorted by git', function () {
-    exec('cd '.escapeshellarg($this->tmpDir).' && git branch alpha && git branch zeta');
+    $this->runTestRepoCommand($this->tmpDir, [
+        'git branch alpha',
+        'git branch zeta',
+    ]);
 
     $action = new GetBranchListAction(new GitMetadataService(new GitProcessService));
     $result = $action->handle($this->tmpDir);
