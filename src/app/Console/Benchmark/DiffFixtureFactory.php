@@ -6,8 +6,57 @@ namespace App\Console\Benchmark;
 
 use App\DTOs\FileListEntry;
 
+/**
+ * @phpstan-type FileEntryData array{
+ *     id: string,
+ *     path: string,
+ *     status: string,
+ *     oldPath: ?string,
+ *     additions: int,
+ *     deletions: int,
+ *     isBinary: bool,
+ *     isUntracked: bool,
+ *     isImage: bool,
+ *     lastModified: ?string
+ * }
+ * @phpstan-type DiffLineData array{
+ *     type: string,
+ *     content: string,
+ *     oldLineNum: ?int,
+ *     newLineNum: ?int,
+ *     highlightedContent: string
+ * }
+ * @phpstan-type HunkData array{
+ *     header: string,
+ *     oldStart: int,
+ *     oldCount: int,
+ *     newStart: int,
+ *     newCount: int,
+ *     lines: list<DiffLineData>
+ * }
+ * @phpstan-type DiffData array{
+ *     path: string,
+ *     status: string,
+ *     oldPath: ?string,
+ *     hunks: list<HunkData>,
+ *     additions: int,
+ *     deletions: int,
+ *     isBinary: bool,
+ *     tooLarge: bool
+ * }
+ * @phpstan-type CommentData array{
+ *     id: string,
+ *     fileId: string,
+ *     file: string,
+ *     side: string,
+ *     startLine: int,
+ *     endLine: int,
+ *     body: string
+ * }
+ */
 final class DiffFixtureFactory
 {
+    /** @var list<string> */
     private static array $directories = [
         'src/Controllers',
         'src/Models',
@@ -23,10 +72,13 @@ final class DiffFixtureFactory
         'tests/Unit',
     ];
 
+    /** @var list<string> */
     private static array $extensions = ['php', 'blade.php', 'js', 'ts', 'vue', 'css'];
 
+    /** @var list<string> */
     private static array $statuses = ['modified', 'added', 'deleted', 'modified', 'modified'];
 
+    /** @return FileEntryData */
     public static function fileEntry(
         string $path = 'src/Example.php',
         string $status = 'modified',
@@ -44,7 +96,7 @@ final class DiffFixtureFactory
         ))->toArray();
     }
 
-    /** @return array<int, array<string, mixed>> */
+    /** @return list<FileEntryData> */
     public static function fileEntries(int $count): array
     {
         $entries = [];
@@ -66,9 +118,7 @@ final class DiffFixtureFactory
         return $entries;
     }
 
-    /**
-     * @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool}
-     */
+    /** @return DiffData */
     public static function diffData(
         int $hunks = 1,
         int $linesPerHunk = 10,
@@ -153,7 +203,7 @@ final class DiffFixtureFactory
         ];
     }
 
-    /** @return array<int, array<string, mixed>> */
+    /** @return list<CommentData> */
     public static function comments(string $fileId, int $count): array
     {
         $comments = [];

@@ -19,6 +19,11 @@ use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 
+/**
+ * @phpstan-import-type CommentData from DiffFixtureFactory
+ * @phpstan-import-type DiffData from DiffFixtureFactory
+ * @phpstan-import-type FileEntryData from DiffFixtureFactory
+ */
 final class PerfScenarioRunner
 {
     public function __construct(
@@ -105,6 +110,11 @@ final class PerfScenarioRunner
         );
     }
 
+    /**
+     * @param  FileEntryData  $file
+     * @param  DiffData  $diffData
+     * @param  list<CommentData>  $comments
+     */
     private function measureDiffFileRender(array $file, array $diffData, array $comments = []): float
     {
         $this->resetState();
@@ -119,8 +129,10 @@ final class PerfScenarioRunner
 
         $this->app->bind(LoadFileDiffAction::class, fn () => new class($diffData)
         {
+            /** @param  array<string, mixed>  $diffData */
             public function __construct(private readonly array $diffData) {}
 
+            /** @return array<string, mixed> */
             public function handle(
                 string $repoPath,
                 string $path,
@@ -169,6 +181,7 @@ final class PerfScenarioRunner
         {
             public function __construct(private readonly Project $project) {}
 
+            /** @return array<string, mixed> */
             public function handle(string $slug): array
             {
                 return $this->project->toArray();
@@ -177,6 +190,10 @@ final class PerfScenarioRunner
 
         $this->app->bind(RestoreSessionAction::class, fn () => new class
         {
+            /**
+             * @param  array<int, array<string, mixed>>  $currentFiles
+             * @return array{comments: array<int, mixed>, viewedFiles: array<int, mixed>, globalComment: string}
+             */
             public function handle(
                 string $repoPath,
                 array $currentFiles,
@@ -189,6 +206,10 @@ final class PerfScenarioRunner
 
         $this->app->bind(SaveSessionAction::class, fn () => new class
         {
+            /**
+             * @param  array<int, mixed>  $comments
+             * @param  array<int, mixed>  $viewedFiles
+             */
             public function handle(
                 string $repoPath,
                 array $comments,
@@ -201,7 +222,7 @@ final class PerfScenarioRunner
 
         $this->app->bind(BackfillGlobalGitignoreAction::class, fn () => new class
         {
-            public function handle(int $projectId, string $repoPath): ?string
+            public function handle(int $projectId, string $repoPath): null
             {
                 return null;
             }
@@ -209,8 +230,10 @@ final class PerfScenarioRunner
 
         $this->app->bind(GetFileListAction::class, fn () => new class($files)
         {
+            /** @param  list<array<string, mixed>>  $files */
             public function __construct(private readonly array $files) {}
 
+            /** @return list<array<string, mixed>> */
             public function handle(
                 string $repoPath,
                 bool $clearCache = true,
@@ -229,6 +252,7 @@ final class PerfScenarioRunner
         return (hrtime(true) - $start) / 1_000_000;
     }
 
+    /** @param  array<string, int>  $data */
     private function measureBladeRender(string $template, array $data): float
     {
         $this->resetState();
