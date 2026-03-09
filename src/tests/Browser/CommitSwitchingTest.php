@@ -1,13 +1,5 @@
 <?php
 
-use Tests\Browser\Helpers\CreatesTestRepo;
-
-uses(CreatesTestRepo::class);
-
-afterEach(function () {
-    $this->tearDownTestRepo();
-});
-
 // -- Navigation & Context Bar --
 
 test('navigating to commit URL shows context bar with hash and message', function () {

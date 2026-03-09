@@ -1,15 +1,7 @@
 <?php
 
-use Tests\Browser\Helpers\CreatesTestRepo;
-
-uses(CreatesTestRepo::class);
-
 beforeEach(function () {
     $this->setUpEmptyTestRepo();
-});
-
-afterEach(function () {
-    $this->tearDownTestRepo();
 });
 
 test('no changes shows no changes detected message', function () {

@@ -1,36 +1,7 @@
 <?php
 
-use App\Actions\RegisterProjectAction;
-use Illuminate\Support\Facades\File;
-use Tests\Browser\Helpers\CreatesTestRepo;
-
-uses(CreatesTestRepo::class);
-
 beforeEach(function () {
-    $this->repoPaths = [];
-
-    // Create 3 projects with minimal git repos
-    foreach (['alpha-project', 'beta-project', 'gamma-project'] as $name) {
-        $path = sys_get_temp_dir().'/rfa_dashboard_'.uniqid().'_'.$name;
-        File::makeDirectory($path, 0755, true);
-        File::put($path.'/README.md', "# {$name}\n");
-
-        exec('cd '.escapeshellarg($path).' && git init -b main && git config user.email "test@rfa.test" && git config user.name "RFA Test" && git add -A && git commit -m "init" 2>&1');
-
-        // Add uncommitted change so status API returns data
-        File::put($path.'/README.md', "# {$name}\nchanged\n");
-
-        app(RegisterProjectAction::class)->handle($path);
-        $this->repoPaths[] = $path;
-    }
-});
-
-afterEach(function () {
-    foreach ($this->repoPaths as $path) {
-        if ($path !== '' && File::isDirectory($path)) {
-            File::deleteDirectory($path);
-        }
-    }
+    $this->setUpRegisteredProjects(['alpha-project', 'beta-project', 'gamma-project']);
 });
 
 // -- Arrow navigation --

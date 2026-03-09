@@ -2,12 +2,16 @@
 
 - Run: `composer test:browser` (headless) or `composer test:browser:headed` (visible)
 - Backed by Playwright (not Selenium) - auto-awaits DOM changes
-- Uses `CreatesTestRepo` trait to create temp git repos with known diffs
-- Each test gets a fresh repo in `beforeEach`, cleaned up in `afterEach`
+- `CreatesTestRepo` is wired globally in `tests/Pest.php`
+- Each test opts into a repo scenario in `beforeEach`; cleanup is global and automatic
 - Assertions auto-retry for ~5 seconds (handles Livewire async)
 - `script()` breaks the chain (returns JS result) - capture page reference first
 - For Livewire actions: use `pressAndWaitFor()` or assert after `click()` (auto-retry handles it)
-- EmptyStateTest uses `setUpEmptyTestRepo()` instead of `setUpTestRepo()`
+- Default repo: `setUpTestRepo()`
+- Empty repo: `setUpEmptyTestRepo()`
+- Multi-hunk repo: `setUpMultiHunkTestRepo()`
+- Commit history repo: `setUpCommitHistoryRepo()`
+- Dashboard project list: `setUpRegisteredProjects([...])`
 - Use `$this->visitAndLoad($url)` instead of `$this->visit($url)` when the test interacts with lazy-loaded content (e.g. diff line numbers). It waits for all Livewire requests to settle before proceeding, avoiding flaky timeouts under load.
 
 ## Selector Priority

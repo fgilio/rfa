@@ -4,12 +4,21 @@ namespace Tests\Browser\Helpers;
 
 use App\Actions\RegisterProjectAction;
 use Illuminate\Support\Facades\File;
+use Tests\Helpers\InteractsWithTestRepositories;
 
 trait CreatesTestRepo
 {
+    use InteractsWithTestRepositories;
+
     protected string $testRepoPath = '';
 
     protected string $testProjectSlug = '';
+
+    /** @var list<string> */
+    protected array $testRepoPaths = [];
+
+    /** @var list<string> */
+    protected array $testProjectSlugs = [];
 
     /** @var list<string> Full SHA hashes, oldest→newest */
     protected array $commitHashes = [];
@@ -19,8 +28,7 @@ trait CreatesTestRepo
 
     protected function setUpTestRepo(): void
     {
-        $this->testRepoPath = sys_get_temp_dir().'/rfa_browser_'.uniqid();
-        File::makeDirectory($this->testRepoPath, 0755, true);
+        $this->testRepoPath = $this->makeTempRepoPath();
 
         // Initial tracked files
         File::put($this->testRepoPath.'/hello.php', implode("\n", [
@@ -50,10 +58,7 @@ trait CreatesTestRepo
         ]));
 
         // Verify HEAD exists
-        $head = trim($this->runShell('git rev-parse HEAD'));
-        if ($head === '' || str_contains($head, 'fatal')) {
-            throw new \RuntimeException("Git setup failed: HEAD not established. Output: {$head}");
-        }
+        $this->assertHeadExists();
 
         // Modify hello.php
         File::put($this->testRepoPath.'/hello.php', implode("\n", [
@@ -76,14 +81,12 @@ trait CreatesTestRepo
         // Delete config.php
         File::delete($this->testRepoPath.'/config.php');
 
-        $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
-        $this->testProjectSlug = $project->slug;
+        $this->registerTestProject($this->testRepoPath);
     }
 
     protected function setUpEmptyTestRepo(): void
     {
-        $this->testRepoPath = sys_get_temp_dir().'/rfa_browser_'.uniqid();
-        File::makeDirectory($this->testRepoPath, 0755, true);
+        $this->testRepoPath = $this->makeTempRepoPath();
 
         File::put($this->testRepoPath.'/README.md', "# Test\n");
 
@@ -96,19 +99,14 @@ trait CreatesTestRepo
         ]));
 
         // Verify HEAD exists
-        $head = trim($this->runShell('git rev-parse HEAD'));
-        if ($head === '' || str_contains($head, 'fatal')) {
-            throw new \RuntimeException("Git setup failed: HEAD not established. Output: {$head}");
-        }
+        $this->assertHeadExists();
 
-        $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
-        $this->testProjectSlug = $project->slug;
+        $this->registerTestProject($this->testRepoPath);
     }
 
     protected function setUpMultiHunkTestRepo(): void
     {
-        $this->testRepoPath = sys_get_temp_dir().'/rfa_browser_'.uniqid();
-        File::makeDirectory($this->testRepoPath, 0755, true);
+        $this->testRepoPath = $this->makeTempRepoPath();
 
         // Create a 30-line file so modifying lines 1 and 30 produces 2 hunks with default context (3)
         $lines = array_map(fn ($i) => "line{$i}", range(1, 30));
@@ -122,24 +120,19 @@ trait CreatesTestRepo
             "git commit -m 'Initial commit'",
         ]));
 
-        $head = trim($this->runShell('git rev-parse HEAD'));
-        if ($head === '' || str_contains($head, 'fatal')) {
-            throw new \RuntimeException("Git setup failed: HEAD not established. Output: {$head}");
-        }
+        $this->assertHeadExists();
 
         // Modify first and last lines to create 2 distant hunks
         $lines[0] = 'changed1';
         $lines[29] = 'changed30';
         File::put($this->testRepoPath.'/multi.txt', implode("\n", $lines)."\n");
 
-        $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
-        $this->testProjectSlug = $project->slug;
+        $this->registerTestProject($this->testRepoPath);
     }
 
     protected function setUpCommitHistoryRepo(): void
     {
-        $this->testRepoPath = sys_get_temp_dir().'/rfa_browser_'.uniqid();
-        File::makeDirectory($this->testRepoPath, 0755, true);
+        $this->testRepoPath = $this->makeTempRepoPath();
 
         // Commit 1: initial hello.php
         File::put($this->testRepoPath.'/hello.php', implode("\n", [
@@ -200,8 +193,7 @@ trait CreatesTestRepo
         $this->commitHashes = explode("\n", $log);
         $this->commitShortHashes = array_map(fn ($h) => substr($h, 0, 7), $this->commitHashes);
 
-        $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
-        $this->testProjectSlug = $project->slug;
+        $this->registerTestProject($this->testRepoPath);
     }
 
     protected function setUpCommitHistoryRepoWithWdChange(): void
@@ -221,8 +213,7 @@ trait CreatesTestRepo
 
     protected function setUpCommitHistoryRepoWithEmptyCommit(): void
     {
-        $this->testRepoPath = sys_get_temp_dir().'/rfa_browser_'.uniqid();
-        File::makeDirectory($this->testRepoPath, 0755, true);
+        $this->testRepoPath = $this->makeTempRepoPath();
 
         File::put($this->testRepoPath.'/README.md', "# Test\n");
 
@@ -240,8 +231,37 @@ trait CreatesTestRepo
         $this->commitHashes = explode("\n", $log);
         $this->commitShortHashes = array_map(fn ($h) => substr($h, 0, 7), $this->commitHashes);
 
-        $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
-        $this->testProjectSlug = $project->slug;
+        $this->registerTestProject($this->testRepoPath);
+    }
+
+    protected function setUpRegisteredProjects(array $names, bool $withWorkingTreeChanges = true): void
+    {
+        $this->testRepoPaths = [];
+        $this->testProjectSlugs = [];
+
+        foreach ($names as $name) {
+            $path = $this->makeTempRepoPath("rfa_dashboard_{$name}_");
+
+            File::put($path.'/README.md', "# {$name}\n");
+
+            $this->runShellIn($path, implode(' && ', [
+                'git init -b main',
+                "git config user.email 'test@rfa.test'",
+                "git config user.name 'RFA Test'",
+                'git config commit.gpgsign false',
+                'git add -A',
+                "git commit -m 'Initial commit'",
+            ]));
+
+            if ($withWorkingTreeChanges) {
+                File::put($path.'/README.md', "# {$name}\nchanged\n");
+            }
+
+            $slug = $this->registerTestProject($path);
+
+            $this->testRepoPaths[] = $path;
+            $this->testProjectSlugs[] = $slug;
+        }
     }
 
     protected function addLargeFile(string $name = 'large.txt', int $bytes = 600_000): void
@@ -255,11 +275,25 @@ trait CreatesTestRepo
         $page->script('document.dispatchEvent(new KeyboardEvent("keydown", '.$opts.'));');
     }
 
-    protected function tearDownTestRepo(): void
+    protected function tearDownTrackedTestRepos(): void
     {
-        if ($this->testRepoPath !== '' && File::isDirectory($this->testRepoPath)) {
-            $this->removeDir($this->testRepoPath);
+        $paths = array_values(array_unique(array_filter([
+            $this->testRepoPath,
+            ...$this->testRepoPaths,
+        ])));
+
+        usort($paths, fn (string $left, string $right) => strlen($right) <=> strlen($left));
+
+        foreach ($paths as $path) {
+            if (File::isDirectory($path)) {
+                $this->removeDir($path);
+            }
         }
+
+        $this->testRepoPath = '';
+        $this->testProjectSlug = '';
+        $this->testRepoPaths = [];
+        $this->testProjectSlugs = [];
     }
 
     protected function projectUrl(): string
@@ -276,17 +310,39 @@ trait CreatesTestRepo
         return $page;
     }
 
-    private function runShell(string $command): string
+    private function makeTempRepoPath(string $prefix = 'rfa_browser_'): string
     {
-        $output = [];
-        $code = 0;
-        exec('cd '.escapeshellarg($this->testRepoPath)." && {$command} 2>&1", $output, $code);
+        return $this->createTempDirectory($prefix);
+    }
 
-        if ($code !== 0) {
-            throw new \RuntimeException("Shell command failed (exit {$code}): {$command}\n".implode("\n", $output));
+    private function assertHeadExists(): void
+    {
+        $head = trim($this->runShell('git rev-parse HEAD'));
+
+        if ($head === '' || str_contains($head, 'fatal')) {
+            throw new \RuntimeException("Git setup failed: HEAD not established. Output: {$head}");
+        }
+    }
+
+    private function registerTestProject(string $path): string
+    {
+        $project = app(RegisterProjectAction::class)->handle($path);
+
+        if ($this->testRepoPath === $path) {
+            $this->testProjectSlug = $project->slug;
         }
 
-        return implode("\n", $output);
+        return $project->slug;
+    }
+
+    private function runShell(string $command): string
+    {
+        return $this->runShellIn($this->testRepoPath, $command);
+    }
+
+    private function runShellIn(string $path, string $command): string
+    {
+        return $this->runTestRepoCommand($path, $command);
     }
 
     private function removeDir(string $dir): void

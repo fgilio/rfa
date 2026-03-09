@@ -1,15 +1,7 @@
 <?php
 
-use Tests\Browser\Helpers\CreatesTestRepo;
-
-uses(CreatesTestRepo::class);
-
 beforeEach(function () {
     $this->setUpTestRepo();
-});
-
-afterEach(function () {
-    $this->tearDownTestRepo();
 });
 
 test('page loads with header showing repo name and file count', function () {
