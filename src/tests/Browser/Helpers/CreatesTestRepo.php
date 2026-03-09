@@ -48,14 +48,8 @@ trait CreatesTestRepo
             '',
         ]));
 
-        // Init + config + commit in a single shell to avoid any exec isolation issues
-        $this->runShell(implode(' && ', [
-            'git init -b main',
-            "git config user.email 'test@rfa.test'",
-            "git config user.name 'RFA Test'",
-            'git add -A',
-            "git commit -m 'Initial commit'",
-        ]));
+        $this->initTestRepo($this->testRepoPath);
+        $this->commitTestRepo($this->testRepoPath, 'Initial commit');
 
         // Verify HEAD exists
         $this->assertHeadExists();
@@ -90,13 +84,8 @@ trait CreatesTestRepo
 
         File::put($this->testRepoPath.'/README.md', "# Test\n");
 
-        $this->runShell(implode(' && ', [
-            'git init -b main',
-            "git config user.email 'test@rfa.test'",
-            "git config user.name 'RFA Test'",
-            'git add -A',
-            "git commit -m 'Initial commit'",
-        ]));
+        $this->initTestRepo($this->testRepoPath);
+        $this->commitTestRepo($this->testRepoPath, 'Initial commit');
 
         // Verify HEAD exists
         $this->assertHeadExists();
@@ -112,13 +101,8 @@ trait CreatesTestRepo
         $lines = array_map(fn ($i) => "line{$i}", range(1, 30));
         File::put($this->testRepoPath.'/multi.txt', implode("\n", $lines)."\n");
 
-        $this->runShell(implode(' && ', [
-            'git init -b main',
-            "git config user.email 'test@rfa.test'",
-            "git config user.name 'RFA Test'",
-            'git add -A',
-            "git commit -m 'Initial commit'",
-        ]));
+        $this->initTestRepo($this->testRepoPath);
+        $this->commitTestRepo($this->testRepoPath, 'Initial commit');
 
         $this->assertHeadExists();
 
@@ -143,14 +127,8 @@ trait CreatesTestRepo
             '',
         ]));
 
-        $this->runShell(implode(' && ', [
-            'git init -b main',
-            "git config user.email 'test@rfa.test'",
-            "git config user.name 'RFA Test'",
-            'git config commit.gpgsign false',
-            'git add -A',
-            "git commit -m 'Add greet function'",
-        ]));
+        $this->initTestRepo($this->testRepoPath);
+        $this->commitTestRepo($this->testRepoPath, 'Add greet function');
 
         // Commit 2: modify hello.php (add type hints) + add utils.php
         File::put($this->testRepoPath.'/hello.php', implode("\n", [
@@ -217,15 +195,9 @@ trait CreatesTestRepo
 
         File::put($this->testRepoPath.'/README.md', "# Test\n");
 
-        $this->runShell(implode(' && ', [
-            'git init -b main',
-            "git config user.email 'test@rfa.test'",
-            "git config user.name 'RFA Test'",
-            'git config commit.gpgsign false',
-            'git add -A',
-            "git commit -m 'Initial commit'",
-            "git commit --allow-empty -m 'Empty commit'",
-        ]));
+        $this->initTestRepo($this->testRepoPath);
+        $this->commitTestRepo($this->testRepoPath, 'Initial commit');
+        $this->runShell("git commit --allow-empty -m 'Empty commit'");
 
         $log = trim($this->runShell('git log --reverse --format=%H'));
         $this->commitHashes = explode("\n", $log);
@@ -244,14 +216,8 @@ trait CreatesTestRepo
 
             File::put($path.'/README.md', "# {$name}\n");
 
-            $this->runShellIn($path, implode(' && ', [
-                'git init -b main',
-                "git config user.email 'test@rfa.test'",
-                "git config user.name 'RFA Test'",
-                'git config commit.gpgsign false',
-                'git add -A',
-                "git commit -m 'Initial commit'",
-            ]));
+            $this->initTestRepo($path);
+            $this->commitTestRepo($path, 'Initial commit');
 
             if ($withWorkingTreeChanges) {
                 File::put($path.'/README.md', "# {$name}\nchanged\n");
