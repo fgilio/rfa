@@ -249,6 +249,12 @@ trait CreatesTestRepo
         File::put($this->testRepoPath.'/'.$name, str_repeat("line of content for large file\n", (int) ceil($bytes / 30)));
     }
 
+    protected function pressGlobalKey(mixed $page, string $key, array $modifiers = []): void
+    {
+        $opts = json_encode(['key' => $key, 'bubbles' => true, 'cancelable' => true] + $modifiers);
+        $page->script('document.dispatchEvent(new KeyboardEvent("keydown", '.$opts.'));');
+    }
+
     protected function tearDownTestRepo(): void
     {
         if ($this->testRepoPath !== '' && File::isDirectory($this->testRepoPath)) {
