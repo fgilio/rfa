@@ -79,13 +79,17 @@ test('search and arrow nav on filtered results', function () {
 
     $this->pressGlobalKey($page, 'ArrowDown');
 
-    // Wait for Alpine to apply selection ring, then verify selected card is the filtered one
-    $page->page()->waitForFunction("document.querySelector('[data-testid=\"project-card\"].ring-1') !== null");
+    // Wait for Alpine to apply selection ring to the visible card (atomic check avoids race)
+    $page->page()->waitForFunction("
+        (() => {
+            const sel = document.querySelector('[data-testid=\"project-card\"].ring-1');
+            const vis = document.querySelector('[data-project-card]:not([style*=\"display: none\"])');
+            return sel && vis && sel.dataset.projectId === vis.dataset.projectId;
+        })()
+    ");
 
     $selectedId = $page->script("document.querySelector('[data-testid=\"project-card\"].ring-1')?.dataset.projectId");
-    $visibleId = $page->script("document.querySelector('[data-project-card]:not([style*=\"display: none\"])')?.dataset.projectId");
-    expect($selectedId)->not->toBeNull()
-        ->and($selectedId)->toBe($visibleId);
+    expect($selectedId)->not->toBeNull();
 });
 
 // -- Slash to focus --
