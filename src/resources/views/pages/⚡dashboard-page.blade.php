@@ -37,6 +37,7 @@ new #[Layout('layouts.app')] class extends Component {
     x-data="{
         search: '',
         selectedIndex: -1,
+        selectedProjectId: null,
         sortBy: localStorage.getItem('rfa-sort') || 'recent',
         get flatProjects() {
             return Array.from(this.$root.querySelectorAll('[data-project-card]'));
@@ -53,6 +54,7 @@ new #[Layout('layouts.app')] class extends Component {
             const visible = this.visibleProjects;
             if (!visible.length) return;
             this.selectedIndex = Math.max(0, Math.min(visible.length - 1, this.selectedIndex + dir));
+            this.selectedProjectId = visible[this.selectedIndex]?.dataset.projectId ?? null;
             visible[this.selectedIndex]?.scrollIntoView({ block: 'nearest' });
         },
         openSelected() {
@@ -75,14 +77,15 @@ new #[Layout('layouts.app')] class extends Component {
     }"
     x-init="initSort()"
     @keydown.window="
+        if ($event.key === 'ArrowDown') { navigate(1); $event.preventDefault(); return; }
+        if ($event.key === 'ArrowUp') { navigate(-1); $event.preventDefault(); return; }
+        if ($event.key === 'Enter' && selectedIndex >= 0) { openSelected(); $event.preventDefault(); return; }
         if ($event.target.tagName === 'INPUT' || $event.target.tagName === 'TEXTAREA' || $event.target.isContentEditable) {
-            if ($event.key === 'Escape' && $event.target.tagName === 'INPUT') { search = ''; selectedIndex = -1; $event.target.blur(); $event.preventDefault(); }
+            if ($event.key === 'Escape' && $event.target.tagName === 'INPUT') { search = ''; selectedIndex = -1; selectedProjectId = null; $event.target.blur(); $event.preventDefault(); }
             return;
         }
+        if ($event.key === 'Escape') { selectedIndex = -1; selectedProjectId = null; $event.preventDefault(); return; }
         if ($event.key === '/') { $refs.searchInput?.focus(); $event.preventDefault(); }
-        if ($event.key === 'j') { navigate(1); $event.preventDefault(); }
-        if ($event.key === 'k') { navigate(-1); $event.preventDefault(); }
-        if ($event.key === 'Enter' && selectedIndex >= 0) { openSelected(); $event.preventDefault(); }
     "
 >
     <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-6 py-4 flex items-center justify-between">
@@ -125,8 +128,9 @@ new #[Layout('layouts.app')] class extends Component {
                     size="sm"
                     variant="filled"
                     x-ref="searchInput"
-                    @keydown.escape="search = ''; selectedIndex = -1; $el.blur()"
-                    @input="selectedIndex = -1"
+                    autofocus
+                    @keydown.escape="search = ''; selectedIndex = -1; selectedProjectId = null; $el.blur()"
+                    @input="selectedIndex = -1; selectedProjectId = null"
                 />
                 @php
                     $totalProjects = collect($projectGroups)->flatten(1)->count();
@@ -140,7 +144,7 @@ new #[Layout('layouts.app')] class extends Component {
                     >{{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}</span>
                     <span class="font-mono text-xs text-gh-muted/50" x-show="search === ''">
                         <kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">/</kbd> search
-                        <kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px] ml-2">j</kbd><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">k</kbd> navigate
+                        <kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px] ml-2">&uarr;</kbd><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">&darr;</kbd> navigate
                     </span>
                 </div>
             </div>
@@ -160,6 +164,8 @@ new #[Layout('layouts.app')] class extends Component {
                             <div
                                 wire:key="project-{{ $project['id'] }}"
                                 data-project-card
+                                data-project-id="{{ $project['id'] }}"
+                                data-testid="project-card"
                                 x-data="{
                                     status: null,
                                     loading: true,
@@ -171,7 +177,7 @@ new #[Layout('layouts.app')] class extends Component {
                                         .catch(() => { loading = false; });
                                 }, {{ $projectIndex * 100 }})"
                                 x-show="matchesSearch(@js($project['name']), @js($project['branch'] ?? ''), @js($project['path']))"
-                                :class="selectedIndex >= 0 && visibleProjects[selectedIndex] === $el ? 'ring-1 ring-gh-link/40' : ''"
+                                :class="selectedProjectId && selectedProjectId === $el.dataset.projectId ? 'ring-1 ring-gh-link/40' : ''"
                                 class="rounded-lg border border-gh-border hover:border-gh-text/30 bg-gh-surface transition-all"
                             >
                                 <a href="/p/{{ $project['slug'] }}"
