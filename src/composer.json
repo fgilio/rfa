@@ -51,11 +51,18 @@
         "test:types": "./vendor/bin/phpstan analyse --memory-limit=512M",
         "test": [
             "@php artisan config:clear --ansi",
-            "@php artisan test"
+            "@php artisan test --testsuite=Core"
         ],
-        "test:perf": "@php artisan test --group=perf",
+        "test:arch": "@php artisan test --testsuite=Arch",
         "test:browser": "@php artisan test --testsuite=Browser",
         "test:browser:headed": "@php artisan test --testsuite=Browser --headed",
+        "test:perf": "@php artisan rfa:benchmark-perf",
+        "test:perf:smoke": "@php artisan test --testsuite=Performance",
+        "test:all": [
+            "@composer test",
+            "@composer test:browser",
+            "@composer test:perf:smoke"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"

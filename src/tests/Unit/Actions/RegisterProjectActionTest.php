@@ -8,16 +8,10 @@ use Illuminate\Support\Facades\File;
 uses(Tests\TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
-    $this->testRepoPath = sys_get_temp_dir().'/rfa_register_test_'.uniqid();
-    File::makeDirectory($this->testRepoPath, 0755, true);
-
-    initTestRepo($this->testRepoPath);
+    $this->testRepoPath = $this->createTempDirectory('rfa_register_test_');
+    $this->initTestRepo($this->testRepoPath);
     File::put($this->testRepoPath.'/file.txt', 'hello');
-    commitTestRepo($this->testRepoPath, 'init');
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->testRepoPath);
+    $this->commitTestRepo($this->testRepoPath, 'init');
 });
 
 test('registers new project from git directory', function () {
@@ -43,7 +37,7 @@ test('updates branch on repeated registration', function () {
     app(RegisterProjectAction::class)->handle($this->testRepoPath);
 
     // Create and checkout a new branch
-    exec('cd '.escapeshellarg($this->testRepoPath).' && git checkout -b feature-x 2>&1');
+    $this->runTestRepoCommand($this->testRepoPath, 'git checkout -b feature-x');
 
     $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
 
@@ -52,27 +46,22 @@ test('updates branch on repeated registration', function () {
 
 test('handles slug collisions with suffix', function () {
     // Create two repos with same basename
-    $path2 = sys_get_temp_dir().'/rfa_register_test2_'.uniqid();
+    $path2 = $this->createTempDirectory('rfa_register_test2_');
     File::makeDirectory($path2.'/'.basename($this->testRepoPath), 0755, true);
     $duplicatePath = $path2.'/'.basename($this->testRepoPath);
-    initTestRepo($duplicatePath);
+    $this->initTestRepo($duplicatePath);
     File::put($duplicatePath.'/file.txt', 'world');
-    commitTestRepo($duplicatePath, 'init');
+    $this->commitTestRepo($duplicatePath, 'init');
 
     $first = app(RegisterProjectAction::class)->handle($this->testRepoPath);
     $second = app(RegisterProjectAction::class)->handle($duplicatePath);
 
     expect($second->slug)->toBe($first->slug.'-2');
-
-    File::deleteDirectory($path2);
 });
 
 test('throws on non-git directory', function () {
-    $nonGit = sys_get_temp_dir().'/rfa_nongit_'.uniqid();
-    File::makeDirectory($nonGit);
+    $nonGit = $this->createTempDirectory('rfa_nongit_');
 
     expect(fn () => app(RegisterProjectAction::class)->handle($nonGit))
         ->toThrow(\RuntimeException::class);
-
-    File::deleteDirectory($nonGit);
 });

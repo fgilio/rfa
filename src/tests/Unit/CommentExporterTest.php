@@ -13,12 +13,7 @@ beforeEach(function () {
     $this->faker = Faker::create();
     $this->faker->seed(crc32(static::class.$this->name()));
     $this->exporter = new CommentExporter(new MarkdownFormatter);
-    $this->tmpDir = sys_get_temp_dir().'/rfa_test_'.uniqid();
-    File::makeDirectory($this->tmpDir, 0755, true);
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->tmpDir);
+    $this->tmpDir = $this->createTempDirectory('rfa_test_');
 });
 
 test('exports JSON with schema version and snake_case keys', function () {

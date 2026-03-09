@@ -8,13 +8,12 @@ use Illuminate\Support\Facades\File;
 uses(Tests\TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
-    $this->tmpDir = sys_get_temp_dir().'/rfa_serve_image_'.uniqid();
-    File::makeDirectory($this->tmpDir, 0755, true);
+    $this->tmpDir = $this->createTempDirectory('rfa_serve_image_');
 
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
 
     File::put($this->tmpDir.'/logo.png', "PNG\0original");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     $this->project = Project::create([
         'slug' => 'test-img',
@@ -24,10 +23,6 @@ beforeEach(function () {
         'is_worktree' => false,
         'branch' => 'main',
     ]);
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->tmpDir);
 });
 
 test('returns content and mime type for working ref', function () {

@@ -2,11 +2,19 @@
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
+         defaultTestSuite="Core"
          colors="true"
 >
     <testsuites>
+        <testsuite name="Core">
+            <directory>tests/Unit</directory>
+            <directory>tests/Arch</directory>
+        </testsuite>
         <testsuite name="Unit">
             <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Arch">
+            <directory>tests/Arch</directory>
         </testsuite>
         <testsuite name="Browser">
             <directory>tests/Browser</directory>

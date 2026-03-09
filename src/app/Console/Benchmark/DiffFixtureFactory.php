@@ -2,22 +2,83 @@
 
 declare(strict_types=1);
 
-namespace Tests\Helpers;
+namespace App\Console\Benchmark;
 
 use App\DTOs\FileListEntry;
 
-final class DiffFixtureGenerator
+/**
+ * @phpstan-type FileEntryData array{
+ *     id: string,
+ *     path: string,
+ *     status: string,
+ *     oldPath: ?string,
+ *     additions: int,
+ *     deletions: int,
+ *     isBinary: bool,
+ *     isUntracked: bool,
+ *     isImage: bool,
+ *     lastModified: ?string
+ * }
+ * @phpstan-type DiffLineData array{
+ *     type: string,
+ *     content: string,
+ *     oldLineNum: ?int,
+ *     newLineNum: ?int,
+ *     highlightedContent: string
+ * }
+ * @phpstan-type HunkData array{
+ *     header: string,
+ *     oldStart: int,
+ *     oldCount: int,
+ *     newStart: int,
+ *     newCount: int,
+ *     lines: list<DiffLineData>
+ * }
+ * @phpstan-type DiffData array{
+ *     path: string,
+ *     status: string,
+ *     oldPath: ?string,
+ *     hunks: list<HunkData>,
+ *     additions: int,
+ *     deletions: int,
+ *     isBinary: bool,
+ *     tooLarge: bool
+ * }
+ * @phpstan-type CommentData array{
+ *     id: string,
+ *     fileId: string,
+ *     file: string,
+ *     side: string,
+ *     startLine: int,
+ *     endLine: int,
+ *     body: string
+ * }
+ */
+final class DiffFixtureFactory
 {
+    /** @var list<string> */
     private static array $directories = [
-        'src/Controllers', 'src/Models', 'src/Services', 'src/Actions',
-        'app/Http', 'app/Jobs', 'app/Events', 'app/Listeners',
-        'resources/views', 'config', 'database/migrations', 'tests/Unit',
+        'src/Controllers',
+        'src/Models',
+        'src/Services',
+        'src/Actions',
+        'app/Http',
+        'app/Jobs',
+        'app/Events',
+        'app/Listeners',
+        'resources/views',
+        'config',
+        'database/migrations',
+        'tests/Unit',
     ];
 
+    /** @var list<string> */
     private static array $extensions = ['php', 'blade.php', 'js', 'ts', 'vue', 'css'];
 
+    /** @var list<string> */
     private static array $statuses = ['modified', 'added', 'deleted', 'modified', 'modified'];
 
+    /** @return FileEntryData */
     public static function fileEntry(
         string $path = 'src/Example.php',
         string $status = 'modified',
@@ -35,16 +96,16 @@ final class DiffFixtureGenerator
         ))->toArray();
     }
 
-    /** @return array<int, array<string, mixed>> */
+    /** @return list<FileEntryData> */
     public static function fileEntries(int $count): array
     {
         $entries = [];
 
         for ($i = 0; $i < $count; $i++) {
             $dir = self::$directories[$i % count(self::$directories)];
-            $ext = self::$extensions[$i % count(self::$extensions)];
+            $extension = self::$extensions[$i % count(self::$extensions)];
             $status = self::$statuses[$i % count(self::$statuses)];
-            $path = "{$dir}/File{$i}.{$ext}";
+            $path = "{$dir}/File{$i}.{$extension}";
 
             $entries[] = self::fileEntry(
                 path: $path,
@@ -57,9 +118,7 @@ final class DiffFixtureGenerator
         return $entries;
     }
 
-    /**
-     * @return array{path: string, status: string, oldPath: ?string, hunks: array, additions: int, deletions: int, isBinary: bool, tooLarge: bool}
-     */
+    /** @return DiffData */
     public static function diffData(
         int $hunks = 1,
         int $linesPerHunk = 10,
@@ -71,44 +130,47 @@ final class DiffFixtureGenerator
         $currentOldLine = 1;
         $currentNewLine = 1;
 
-        for ($h = 0; $h < $hunks; $h++) {
+        for ($hunkIndex = 0; $hunkIndex < $hunks; $hunkIndex++) {
             $lines = [];
             $hunkAdditions = 0;
             $hunkDeletions = 0;
 
-            for ($l = 0; $l < $linesPerHunk; $l++) {
-                $mod = $l % 5;
+            for ($lineIndex = 0; $lineIndex < $linesPerHunk; $lineIndex++) {
+                $mod = $lineIndex % 5;
 
                 if ($mod === 0) {
-                    // remove line
                     $lines[] = [
                         'type' => 'remove',
-                        'content' => "    \$old_var_{$h}_{$l} = getValue();",
+                        'content' => "    \$old_var_{$hunkIndex}_{$lineIndex} = getValue();",
                         'oldLineNum' => $currentOldLine++,
                         'newLineNum' => null,
-                        'highlightedContent' => "<span class=\"hl-variable\">\$old_var_{$h}_{$l}</span> = getValue();",
+                        'highlightedContent' => "<span class=\"hl-variable\">\$old_var_{$hunkIndex}_{$lineIndex}</span> = getValue();",
                     ];
                     $hunkDeletions++;
-                } elseif ($mod === 1) {
-                    // add line
+
+                    continue;
+                }
+
+                if ($mod === 1) {
                     $lines[] = [
                         'type' => 'add',
-                        'content' => "    \$new_var_{$h}_{$l} = getUpdatedValue();",
+                        'content' => "    \$new_var_{$hunkIndex}_{$lineIndex} = getUpdatedValue();",
                         'oldLineNum' => null,
                         'newLineNum' => $currentNewLine++,
-                        'highlightedContent' => "<span class=\"hl-variable\">\$new_var_{$h}_{$l}</span> = getUpdatedValue();",
+                        'highlightedContent' => "<span class=\"hl-variable\">\$new_var_{$hunkIndex}_{$lineIndex}</span> = getUpdatedValue();",
                     ];
                     $hunkAdditions++;
-                } else {
-                    // context line
-                    $lines[] = [
-                        'type' => 'context',
-                        'content' => "    // context line {$h}:{$l}",
-                        'oldLineNum' => $currentOldLine++,
-                        'newLineNum' => $currentNewLine++,
-                        'highlightedContent' => "<span class=\"hl-comment\">// context line {$h}:{$l}</span>",
-                    ];
+
+                    continue;
                 }
+
+                $lines[] = [
+                    'type' => 'context',
+                    'content' => "    // context line {$hunkIndex}:{$lineIndex}",
+                    'oldLineNum' => $currentOldLine++,
+                    'newLineNum' => $currentNewLine++,
+                    'highlightedContent' => "<span class=\"hl-comment\">// context line {$hunkIndex}:{$lineIndex}</span>",
+                ];
             }
 
             $oldCount = $hunkDeletions + ($linesPerHunk - $hunkAdditions - $hunkDeletions);
@@ -125,8 +187,6 @@ final class DiffFixtureGenerator
 
             $totalAdditions += $hunkAdditions;
             $totalDeletions += $hunkDeletions;
-
-            // gap between hunks
             $currentOldLine += 20;
             $currentNewLine += 20;
         }
@@ -143,7 +203,7 @@ final class DiffFixtureGenerator
         ];
     }
 
-    /** @return array<int, array<string, mixed>> */
+    /** @return list<CommentData> */
     public static function comments(string $fileId, int $count): array
     {
         $comments = [];

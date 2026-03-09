@@ -12,7 +12,7 @@
  * - Services must not depend on Actions or Livewire
  * - Actions must not depend on Livewire
  * - Models must not depend on any other app layer
- * - Only Actions should use Models (persistence boundary)
+ * - Only Actions and console benchmark tooling should use Models
  */
 arch('dtos are standalone and do not depend on other app layers')
     ->expect('App\DTOs')
@@ -46,9 +46,12 @@ arch('models do not depend on other app layers')
         'App\Livewire',
     ]);
 
-arch('models are only used in actions')
+arch('models are only used in actions and console benchmark tooling')
     ->expect('App\Models')
-    ->toOnlyBeUsedIn('App\Actions');
+    ->toOnlyBeUsedIn([
+        'App\Actions',
+        'App\Console\Benchmark',
+    ]);
 
 arch('services are only used in actions and services')
     ->expect('App\Services')
@@ -57,13 +60,14 @@ arch('services are only used in actions and services')
         'App\Services',
     ]);
 
-arch('dtos are only used in services, actions, and livewire')
+arch('dtos are only used in services, actions, livewire, and console benchmark tooling')
     ->expect('App\DTOs')
     ->toOnlyBeUsedIn([
         'App\Services',
         'App\Actions',
         'App\DTOs',
         'App\Livewire',
+        'App\Console\Benchmark',
     ]);
 
 arch('support does not depend on other app layers')

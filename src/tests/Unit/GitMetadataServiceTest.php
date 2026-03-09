@@ -9,20 +9,15 @@ uses(Tests\TestCase::class);
 beforeEach(function () {
     $this->service = new GitMetadataService(new GitProcessService);
 
-    $this->tmpDir = sys_get_temp_dir().'/rfa_gitrepo_test_'.uniqid();
-    File::makeDirectory($this->tmpDir, 0755, true);
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->tmpDir);
+    $this->tmpDir = $this->createTempDirectory('rfa_gitrepo_test_');
 });
 
 // -- resolveGlobalExcludesFile tests --
 
 test('resolveGlobalExcludesFile returns string or null', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     // Result depends on host git config - just verify it returns the right type
     $result = $this->service->resolveGlobalExcludesFile($this->tmpDir);
@@ -33,9 +28,9 @@ test('resolveGlobalExcludesFile returns string or null', function () {
 // -- getTopLevel tests --
 
 test('getTopLevel returns repo root directory', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     $subDir = $this->tmpDir.'/sub/dir';
     File::makeDirectory($subDir, 0755, true);
@@ -48,9 +43,9 @@ test('getTopLevel returns repo root directory', function () {
 // -- getCurrentBranch tests --
 
 test('getCurrentBranch returns current branch name', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     expect($this->service->getCurrentBranch($this->tmpDir))->toBe('main');
 });
@@ -58,9 +53,9 @@ test('getCurrentBranch returns current branch name', function () {
 // -- getGitCommonDir tests --
 
 test('getGitCommonDir returns empty string for regular repo', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     expect($this->service->getGitCommonDir($this->tmpDir))->toBe('');
 });
@@ -68,9 +63,9 @@ test('getGitCommonDir returns empty string for regular repo', function () {
 // -- getGitDir tests --
 
 test('getGitDir returns .git path', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     expect($this->service->getGitDir($this->tmpDir))->toBe(realpath($this->tmpDir.'/.git'));
 });
@@ -78,9 +73,9 @@ test('getGitDir returns .git path', function () {
 // -- resolveRef tests --
 
 test('resolveRef resolves HEAD', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     $result = $this->service->resolveRef($this->tmpDir, 'HEAD');
 
@@ -88,9 +83,9 @@ test('resolveRef resolves HEAD', function () {
 });
 
 test('resolveRef resolves branch name', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     $result = $this->service->resolveRef($this->tmpDir, 'main');
 
@@ -98,9 +93,9 @@ test('resolveRef resolves branch name', function () {
 });
 
 test('resolveRef resolves short hash', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     $fullHash = $this->service->resolveRef($this->tmpDir, 'HEAD');
     $short = substr($fullHash, 0, 7);
@@ -109,17 +104,17 @@ test('resolveRef resolves short hash', function () {
 });
 
 test('resolveRef returns null for invalid ref', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     expect($this->service->resolveRef($this->tmpDir, 'nonexistent-ref-xyz'))->toBeNull();
 });
 
 test('resolveRef returns null for ref starting with dash', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     expect($this->service->resolveRef($this->tmpDir, '--exec=bad'))->toBeNull();
 });
@@ -127,12 +122,12 @@ test('resolveRef returns null for ref starting with dash', function () {
 // -- getCommitParents tests --
 
 test('getCommitParents returns parent hashes for a commit', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "v1\n");
-    commitTestRepo($this->tmpDir, 'first');
+    $this->commitTestRepo($this->tmpDir, 'first');
 
     File::put($this->tmpDir.'/file.txt', "v2\n");
-    commitTestRepo($this->tmpDir, 'second');
+    $this->commitTestRepo($this->tmpDir, 'second');
 
     $hash = $this->service->resolveRef($this->tmpDir, 'HEAD');
     $parents = $this->service->getCommitParents($this->tmpDir, $hash);
@@ -142,9 +137,9 @@ test('getCommitParents returns parent hashes for a commit', function () {
 });
 
 test('getCommitParents returns empty array for root commit', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "v1\n");
-    commitTestRepo($this->tmpDir, 'first');
+    $this->commitTestRepo($this->tmpDir, 'first');
 
     $hash = $this->service->resolveRef($this->tmpDir, 'HEAD');
     $parents = $this->service->getCommitParents($this->tmpDir, $hash);
@@ -155,14 +150,14 @@ test('getCommitParents returns empty array for root commit', function () {
 // -- getChildCommit tests --
 
 test('getChildCommit returns child hash', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "v1\n");
-    commitTestRepo($this->tmpDir, 'first');
+    $this->commitTestRepo($this->tmpDir, 'first');
 
     $parentHash = $this->service->resolveRef($this->tmpDir, 'HEAD');
 
     File::put($this->tmpDir.'/file.txt', "v2\n");
-    commitTestRepo($this->tmpDir, 'second');
+    $this->commitTestRepo($this->tmpDir, 'second');
 
     $childHash = $this->service->resolveRef($this->tmpDir, 'HEAD');
 
@@ -170,9 +165,9 @@ test('getChildCommit returns child hash', function () {
 });
 
 test('getChildCommit returns null for latest commit', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "v1\n");
-    commitTestRepo($this->tmpDir, 'first');
+    $this->commitTestRepo($this->tmpDir, 'first');
 
     $hash = $this->service->resolveRef($this->tmpDir, 'HEAD');
 
@@ -182,9 +177,9 @@ test('getChildCommit returns null for latest commit', function () {
 // -- getFileContent tests (moved from GitDiffServiceTest) --
 
 test('getFileContent returns working directory content', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/data.txt', 'hello world');
 
@@ -192,9 +187,9 @@ test('getFileContent returns working directory content', function () {
 });
 
 test('getFileContent returns HEAD content via git show', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', 'original');
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/file.txt', 'modified');
 
@@ -202,17 +197,17 @@ test('getFileContent returns HEAD content via git show', function () {
 });
 
 test('getFileContent returns null for missing working file', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     expect($this->service->getFileContent($this->tmpDir, 'nonexistent.txt'))->toBeNull();
 });
 
 test('getFileContent returns null for file not in HEAD', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/untracked.txt', 'new');
 
@@ -222,9 +217,9 @@ test('getFileContent returns null for file not in HEAD', function () {
 // -- getBranches tests (moved from GitDiffServiceTest) --
 
 test('getBranches returns current branch in local list', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     $result = $this->service->getBranches($this->tmpDir);
 
@@ -235,12 +230,14 @@ test('getBranches returns current branch in local list', function () {
 });
 
 test('getBranches returns multiple local branches', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
-    exec('cd '.escapeshellarg($this->tmpDir).' && git branch feature-x');
-    exec('cd '.escapeshellarg($this->tmpDir).' && git branch bugfix-y');
+    $this->runTestRepoCommand($this->tmpDir, [
+        'git branch feature-x',
+        'git branch bugfix-y',
+    ]);
 
     $result = $this->service->getBranches($this->tmpDir);
     $names = array_map(fn ($b) => $b->name, $result['local']);
@@ -255,9 +252,9 @@ test('getBranches returns multiple local branches', function () {
 });
 
 test('getBranches returns empty remote list when no remotes', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     $result = $this->service->getBranches($this->tmpDir);
 
@@ -267,12 +264,12 @@ test('getBranches returns empty remote list when no remotes', function () {
 // -- getCommitLog tests (moved from GitDiffServiceTest) --
 
 test('getCommitLog returns commits for current branch', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "v1\n");
-    commitTestRepo($this->tmpDir, 'first commit');
+    $this->commitTestRepo($this->tmpDir, 'first commit');
 
     File::put($this->tmpDir.'/file.txt', "v2\n");
-    commitTestRepo($this->tmpDir, 'second commit');
+    $this->commitTestRepo($this->tmpDir, 'second commit');
 
     $commits = $this->service->getCommitLog($this->tmpDir);
 
@@ -282,15 +279,15 @@ test('getCommitLog returns commits for current branch', function () {
 });
 
 test('getCommitLog respects limit parameter', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "v1\n");
-    commitTestRepo($this->tmpDir, 'first');
+    $this->commitTestRepo($this->tmpDir, 'first');
 
     File::put($this->tmpDir.'/file.txt', "v2\n");
-    commitTestRepo($this->tmpDir, 'second');
+    $this->commitTestRepo($this->tmpDir, 'second');
 
     File::put($this->tmpDir.'/file.txt', "v3\n");
-    commitTestRepo($this->tmpDir, 'third');
+    $this->commitTestRepo($this->tmpDir, 'third');
 
     $commits = $this->service->getCommitLog($this->tmpDir, limit: 2);
 
@@ -300,15 +297,15 @@ test('getCommitLog respects limit parameter', function () {
 });
 
 test('getCommitLog respects offset parameter', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "v1\n");
-    commitTestRepo($this->tmpDir, 'first');
+    $this->commitTestRepo($this->tmpDir, 'first');
 
     File::put($this->tmpDir.'/file.txt', "v2\n");
-    commitTestRepo($this->tmpDir, 'second');
+    $this->commitTestRepo($this->tmpDir, 'second');
 
     File::put($this->tmpDir.'/file.txt', "v3\n");
-    commitTestRepo($this->tmpDir, 'third');
+    $this->commitTestRepo($this->tmpDir, 'third');
 
     $commits = $this->service->getCommitLog($this->tmpDir, limit: 50, offset: 1);
 
@@ -318,15 +315,15 @@ test('getCommitLog respects offset parameter', function () {
 });
 
 test('getCommitLog returns commits for specific branch', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "v1\n");
-    commitTestRepo($this->tmpDir, 'main commit');
+    $this->commitTestRepo($this->tmpDir, 'main commit');
 
-    exec('cd '.escapeshellarg($this->tmpDir).' && git checkout -b feature-branch');
+    $this->runTestRepoCommand($this->tmpDir, 'git checkout -b feature-branch');
     File::put($this->tmpDir.'/file.txt', "v2\n");
-    commitTestRepo($this->tmpDir, 'feature commit');
+    $this->commitTestRepo($this->tmpDir, 'feature commit');
 
-    exec('cd '.escapeshellarg($this->tmpDir).' && git checkout main');
+    $this->runTestRepoCommand($this->tmpDir, 'git checkout main');
 
     $commits = $this->service->getCommitLog($this->tmpDir, branch: 'feature-branch');
 
@@ -336,9 +333,9 @@ test('getCommitLog returns commits for specific branch', function () {
 });
 
 test('getCommitLog returns entries with all fields populated', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'test commit');
+    $this->commitTestRepo($this->tmpDir, 'test commit');
 
     $commits = $this->service->getCommitLog($this->tmpDir);
 
@@ -353,7 +350,7 @@ test('getCommitLog returns entries with all fields populated', function () {
 });
 
 test('getCommitLog returns empty array for empty repo', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
 
     $commits = $this->service->getCommitLog($this->tmpDir);
 

@@ -10,13 +10,9 @@ beforeEach(function () {
     $this->faker = Faker::create();
     $this->faker->seed(crc32(static::class.$this->name()));
     $this->action = app(DeleteReviewFilesAction::class);
-    $this->tempDir = sys_get_temp_dir().'/rfa_delete_review_'.uniqid();
+    $this->tempDir = $this->createTempDirectory('rfa_delete_review_');
     $this->rfaDir = $this->tempDir.'/.rfa';
-    mkdir($this->rfaDir, 0755, true);
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->tempDir);
+    File::makeDirectory($this->rfaDir, 0755, true);
 });
 
 test('deletes both json and md files', function () {

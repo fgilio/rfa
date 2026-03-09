@@ -1,15 +1,7 @@
 <?php
 
-use Tests\Browser\Helpers\CreatesTestRepo;
-
-uses(CreatesTestRepo::class);
-
 beforeEach(function () {
     $this->setUpTestRepo();
-});
-
-afterEach(function () {
-    $this->tearDownTestRepo();
 });
 
 test('clicking file name collapses and expands file diff', function () {

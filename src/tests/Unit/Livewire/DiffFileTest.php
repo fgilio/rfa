@@ -1,17 +1,17 @@
 <?php
 
 use App\Actions\LoadFileDiffAction;
+use App\Console\Benchmark\DiffFixtureFactory;
 use App\DTOs\DiffTarget;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
-use Tests\Helpers\DiffFixtureGenerator;
 
 uses(Tests\TestCase::class);
 
 beforeEach(function () {
-    $this->file = DiffFixtureGenerator::fileEntry('src/Test.php');
-    $this->diffData = DiffFixtureGenerator::diffData(path: 'src/Test.php');
+    $this->file = DiffFixtureFactory::fileEntry('src/Test.php');
+    $this->diffData = DiffFixtureFactory::diffData(path: 'src/Test.php');
 
     // Prime cache so component doesn't try to load from git
     $cacheKey = DiffCacheKey::for(0, $this->file['id']);
@@ -22,7 +22,7 @@ beforeEach(function () {
     {
         public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, string $theme = 'light'): array
         {
-            return DiffFixtureGenerator::diffData(path: $path);
+            return DiffFixtureFactory::diffData(path: $path);
         }
     });
 });

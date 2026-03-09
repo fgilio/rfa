@@ -2,27 +2,25 @@
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Pest\Browser\Browsable;
+use Tests\Browser\Helpers\CreatesTestRepo;
+use Tests\Helpers\InteractsWithTestRepositories;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class, Browsable::class)
+uses(TestCase::class, RefreshDatabase::class, Browsable::class, CreatesTestRepo::class)
     ->in('Browser');
 
 uses(TestCase::class, RefreshDatabase::class)
     ->in('Performance');
 
-expect()->extend('toRenderWithin', function (float $maxMs) {
-    $ms = $this->value;
-    $testName = test()->name();
+uses(InteractsWithTestRepositories::class)
+    ->in('Unit', 'Performance');
 
-    $line = "[PERF] {$testName}: {$ms}ms\n";
-    fwrite(STDERR, $line);
-
-    // Also append to log file when PERF_LOG env is set
-    if ($logFile = env('PERF_LOG')) {
-        file_put_contents($logFile, $line, FILE_APPEND);
+afterEach(function () {
+    if (method_exists($this, 'tearDownTrackedTestRepos')) {
+        $this->tearDownTrackedTestRepos();
     }
 
-    expect($ms)->toBeLessThan($maxMs, "Render took {$ms}ms, exceeding {$maxMs}ms threshold");
-
-    return $this;
+    if (method_exists($this, 'cleanupTrackedTempDirectories')) {
+        $this->cleanupTrackedTempDirectories();
+    }
 });

@@ -8,12 +8,7 @@ beforeEach(function () {
     $this->faker = Faker::create();
     $this->faker->seed(crc32(static::class.$this->name()));
     $this->service = new IgnoreService;
-    $this->tmpDir = sys_get_temp_dir().'/rfa_ignore_test_'.uniqid();
-    File::makeDirectory($this->tmpDir, 0755, true);
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->tmpDir);
+    $this->tmpDir = $this->createTempDirectory('rfa_ignore_test_');
 });
 
 test('always excludes lock files without rfaignore', function () {

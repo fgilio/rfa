@@ -19,12 +19,7 @@ beforeEach(function () {
     $this->isBinary = $ref->getMethod('isBinary');
     $this->isBinary->setAccessible(true);
 
-    $this->tmpDir = sys_get_temp_dir().'/rfa_git_test_'.uniqid();
-    File::makeDirectory($this->tmpDir, 0755, true);
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->tmpDir);
+    $this->tmpDir = $this->createTempDirectory('rfa_git_test_');
 });
 
 // -- isBinary tests --
@@ -44,14 +39,14 @@ test('isBinary returns false for plain text', function () {
     expect($this->isBinary->invoke($this->service, $path))->toBeFalse();
 });
 
-// -- Helpers in tests/Helpers/Git.php --
+// -- Repository helpers --
 
 // -- getFileList tests --
 
 test('getFileList returns modified file with correct status', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/hello.txt', "line1\nline2\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/hello.txt', "line1\nchanged\nline3\n");
 
@@ -65,9 +60,9 @@ test('getFileList returns modified file with correct status', function () {
 });
 
 test('getFileList returns added file for untracked', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/tracked.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/newfile.txt', "hello\nworld\n");
 
@@ -82,9 +77,9 @@ test('getFileList returns added file for untracked', function () {
 });
 
 test('getFileList returns deleted file', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/doomed.txt', "bye\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::delete($this->tmpDir.'/doomed.txt');
 
@@ -96,11 +91,11 @@ test('getFileList returns deleted file', function () {
 });
 
 test('getFileList returns renamed file with oldPath', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/old_name.txt', "content\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
-    exec('cd '.escapeshellarg($this->tmpDir).' && git mv old_name.txt new_name.txt');
+    $this->runTestRepoCommand($this->tmpDir, 'git mv old_name.txt new_name.txt');
 
     $entries = $this->service->getFileList($this->tmpDir);
 
@@ -111,9 +106,9 @@ test('getFileList returns renamed file with oldPath', function () {
 });
 
 test('getFileList detects binary files', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/binary.bin', "hello\0world");
 
@@ -125,9 +120,9 @@ test('getFileList detects binary files', function () {
 });
 
 test('getFileList excludes rfaignore patterns', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/keep.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/.rfaignore', "*.log\n");
     File::put($this->tmpDir.'/debug.log', "should not appear\n");
@@ -141,9 +136,9 @@ test('getFileList excludes rfaignore patterns', function () {
 });
 
 test('getFileList excludes untracked files matching globalGitignorePath', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/tracked.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/data.rfa_test_ext', "test data\n");
     File::put($this->tmpDir.'/newfile.txt', "hello\n");
@@ -159,9 +154,9 @@ test('getFileList excludes untracked files matching globalGitignorePath', functi
 });
 
 test('getFileList ignores globalGitignorePath when file does not exist', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/tracked.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/data.rfa_test_ext', "test data\n");
 
@@ -172,9 +167,9 @@ test('getFileList ignores globalGitignorePath when file does not exist', functio
 });
 
 test('getFileList returns empty for clean repo', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     $entries = $this->service->getFileList($this->tmpDir);
 
@@ -184,9 +179,9 @@ test('getFileList returns empty for clean repo', function () {
 // -- getFileDiff tests --
 
 test('getFileDiff returns raw diff for tracked file', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/hello.txt', "line1\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/hello.txt', "line1\nline2\n");
 
@@ -197,9 +192,9 @@ test('getFileDiff returns raw diff for tracked file', function () {
 });
 
 test('getFileDiff returns synthetic diff for untracked file', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/newfile.txt', "hello\nworld\n");
 
@@ -210,9 +205,9 @@ test('getFileDiff returns synthetic diff for untracked file', function () {
 });
 
 test('getFileDiff returns null when diff exceeds max bytes', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/big.txt', "small\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/big.txt', str_repeat("long line of content\n", 500));
 
@@ -222,9 +217,9 @@ test('getFileDiff returns null when diff exceeds max bytes', function () {
 });
 
 test('getFileDiff handles binary untracked file', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/image.bin', "png\0data");
 
@@ -234,9 +229,9 @@ test('getFileDiff handles binary untracked file', function () {
 });
 
 test('getFileDiff returns empty string for missing untracked file', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     $diff = $this->service->getFileDiff($this->tmpDir, 'gone.txt', isUntracked: true);
 
@@ -244,9 +239,9 @@ test('getFileDiff returns empty string for missing untracked file', function () 
 });
 
 test('getFileDiff untracked file with trailing newline has correct line count', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/newfile.txt', "line1\nline2\n");
 
@@ -259,9 +254,9 @@ test('getFileDiff untracked file with trailing newline has correct line count', 
 });
 
 test('getFileDiff handles empty untracked file', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/empty.txt', '');
 
@@ -272,11 +267,11 @@ test('getFileDiff handles empty untracked file', function () {
 });
 
 test('getFileDiff respects contextLines parameter', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     // 20-line file, modify line 1 and line 20 to create 2 hunks with default context
     $lines = array_map(fn ($i) => "line{$i}", range(1, 20));
     File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     $lines[0] = 'changed1';
     $lines[19] = 'changed20';
@@ -296,9 +291,9 @@ test('getFileDiff respects contextLines parameter', function () {
 // -- Unicode/emoji file path tests --
 
 test('getFileList returns correct path for modified file with unicode name', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/⚡show.blade.php', "original\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/⚡show.blade.php', "changed\n");
 
@@ -310,9 +305,9 @@ test('getFileList returns correct path for modified file with unicode name', fun
 });
 
 test('getFileList returns correct path for untracked file with emoji name', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/🚀launch.txt', "hello\n");
 
@@ -324,9 +319,9 @@ test('getFileList returns correct path for untracked file with emoji name', func
 });
 
 test('getFileDiff returns valid diff for unicode-named file', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/⚡show.blade.php', "line1\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/⚡show.blade.php', "line1\nline2\n");
 
@@ -361,9 +356,9 @@ test('GitCommandException carries stderr and exit code', function () {
 // -- getWorkingDirectoryFingerprint tests --
 
 test('getWorkingDirectoryFingerprint changes when tracked file modified', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/hello.txt', "line1\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     $before = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
 
@@ -374,9 +369,9 @@ test('getWorkingDirectoryFingerprint changes when tracked file modified', functi
 });
 
 test('getWorkingDirectoryFingerprint changes when untracked file added', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/hello.txt', "line1\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     $before = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
 
@@ -387,9 +382,9 @@ test('getWorkingDirectoryFingerprint changes when untracked file added', functio
 });
 
 test('getWorkingDirectoryFingerprint is deterministic for same state', function () {
-    initTestRepo($this->tmpDir);
+    $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/hello.txt', "line1\n");
-    commitTestRepo($this->tmpDir, 'initial');
+    $this->commitTestRepo($this->tmpDir, 'initial');
 
     File::put($this->tmpDir.'/hello.txt', "changed\n");
     File::put($this->tmpDir.'/newfile.txt', "hello\n");

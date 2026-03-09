@@ -1,15 +1,7 @@
 <?php
 
-use Tests\Browser\Helpers\CreatesTestRepo;
-
-uses(CreatesTestRepo::class);
-
 beforeEach(function () {
     $this->setUpMultiHunkTestRepo();
-});
-
-afterEach(function () {
-    $this->tearDownTestRepo();
 });
 
 test('clicking expand hidden lines shows full file context', function () {
