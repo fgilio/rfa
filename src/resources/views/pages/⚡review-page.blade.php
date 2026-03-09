@@ -334,6 +334,16 @@ new #[Layout('layouts.app')] class extends Component {
 
         Flux::toast(variant: 'success', heading: 'Review submitted', text: $this->exportResult);
         $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
+
+        // Clear finalized comments, keep drafts
+        $affectedFileIds = collect($this->comments)->pluck('fileId')->unique();
+        $this->comments = array_values(array_filter($this->comments, fn ($c) => $c['isDraft'] ?? false));
+        $this->globalComment = '';
+        $this->viewedFiles = [];
+        $this->saveSession();
+
+        $affectedFileIds->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
+        $this->dispatch('reset-viewed-files');
     }
 
     /** @return array<string, array<int, array<string, mixed>>> */
@@ -481,6 +491,7 @@ new #[Layout('layouts.app')] class extends Component {
         }
     }"
     @file-viewed-changed.window="viewedFiles[$event.detail.id] = $event.detail.viewed"
+    @reset-viewed-files.window="viewedFiles = {}"
     @copy-to-clipboard.window="
         navigator.clipboard.writeText($event.detail.text).catch(() => {});
     "
