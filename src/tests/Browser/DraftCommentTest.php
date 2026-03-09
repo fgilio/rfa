@@ -251,13 +251,16 @@ test('submit with drafts shows confirm dialog', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
 
+    // Wait for draft to be saved to Livewire state before submitting
+    $page->assertSee('1 draft');
+
     // Override confirm to capture message and auto-accept
     $page->script('window.__confirmMsg = null; window.confirm = function(msg) { window.__confirmMsg = msg; return true; }');
 
     $page->pressAndWaitFor('Submit Review', 3);
 
     $dialogMessage = $page->script('window.__confirmMsg');
-    expect($dialogMessage)->toContain('draft');
+    expect($dialogMessage)->toBeString()->toContain('draft');
 });
 
 // -- Persistence --
