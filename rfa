@@ -102,6 +102,12 @@ start_daemon() {
     PORT=4000
     while lsof -i :"$PORT" >/dev/null 2>&1; do PORT=$((PORT + 1)); done
 
+    # Bootstrap .env if missing
+    if [ ! -f "$APP_DIR/.env" ]; then
+        cp "$APP_DIR/.env.example" "$APP_DIR/.env"
+        php "$APP_DIR/artisan" key:generate --quiet
+    fi
+
     # Run migrations
     php "$APP_DIR/artisan" migrate --force --quiet 2>/dev/null || true
 
