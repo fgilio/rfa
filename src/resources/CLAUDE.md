@@ -36,6 +36,17 @@
 
 Page components live in `resources/views/pages/` (namespace `pages::`). Non-page components live in `resources/views/livewire/` (default namespace).
 
+### No literal `<style>` tags in SFC views
+
+Livewire's SFC parser extracts `<style>` tags from raw file content before Blade compilation (`SingleFileParser::extractStylePortion`). This means a dynamic `<style>` like `<style>{!! $css !!}</style>` gets stripped - the Blade directive is never evaluated.
+
+To emit dynamic CSS, build the tag via Blade output instead:
+```blade
+{!! '<style>' . $css . '</style>' !!}
+```
+
+This avoids the SFC regex while producing identical HTML at runtime.
+
 ### Parent-Child: Avoid 1+N Re-renders
 
 ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile children (`resources/views/livewire/⚡diff-file.blade.php`) - one per changed file. Livewire re-hydrates ALL children when a parent re-renders. With `#[Reactive]` props, Livewire's JS interceptor bundles every reactive child into every parent request - even if the prop didn't change. This hits `TooManyComponentsException` (default limit ~20) on repos with many files.
