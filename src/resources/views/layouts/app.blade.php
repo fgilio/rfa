@@ -127,8 +127,6 @@
             width: 3px;
             background: rgb(var(--gh-muted) / 0.5);
         }
-        /* Phiki syntax highlighting */
-        .diff-line td span[style] { background-color: transparent !important; }
         /* Scrollbar styling */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }

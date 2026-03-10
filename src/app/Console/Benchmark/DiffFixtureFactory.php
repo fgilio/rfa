@@ -42,7 +42,8 @@ use App\DTOs\FileListEntry;
  *     additions: int,
  *     deletions: int,
  *     isBinary: bool,
- *     tooLarge: bool
+ *     tooLarge: bool,
+ *     syntaxStyles: string
  * }
  * @phpstan-type CommentData array{
  *     id: string,
@@ -200,6 +201,7 @@ final class DiffFixtureFactory
             'deletions' => $totalDeletions,
             'isBinary' => false,
             'tooLarge' => false,
+            'syntaxStyles' => '.hl-variable{color:#e36209;}.dark .hl-variable{color:#ffab70;}.hl-comment{color:#6a737d;}.dark .hl-comment{color:#6a737d;}',
         ];
     }
 

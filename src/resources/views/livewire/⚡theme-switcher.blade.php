@@ -17,12 +17,12 @@ new class extends Component {};
     "
 >
     <flux:button
-        x-on:click="$flux.dark = !$flux.dark; document.cookie = 'rfa_theme=' + ($flux.dark ? 'dark' : 'light') + ';path=/;max-age=31536000;SameSite=Lax'; $dispatch('theme-changed')"
+        x-on:click="$flux.dark = !$flux.dark; document.cookie = 'rfa_theme=' + ($flux.dark ? 'dark' : 'light') + ';path=/;max-age=31536000;SameSite=Lax'"
         variant="ghost" size="sm"
         icon="moon" icon:variant="outline" x-show="!$flux.dark" x-cloak
     />
     <flux:button
-        x-on:click="$flux.dark = !$flux.dark; document.cookie = 'rfa_theme=' + ($flux.dark ? 'dark' : 'light') + ';path=/;max-age=31536000;SameSite=Lax'; $dispatch('theme-changed')"
+        x-on:click="$flux.dark = !$flux.dark; document.cookie = 'rfa_theme=' + ($flux.dark ? 'dark' : 'light') + ';path=/;max-age=31536000;SameSite=Lax'"
         variant="ghost" size="sm"
         icon="sun" icon:variant="outline" x-show="$flux.dark"
     />

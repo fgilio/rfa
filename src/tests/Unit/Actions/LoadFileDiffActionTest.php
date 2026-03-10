@@ -7,6 +7,7 @@ use App\Services\GitDiffService;
 use App\Services\GitProcessService;
 use App\Services\IgnoreService;
 use App\Services\SyntaxHighlightService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 
 uses(Tests\TestCase::class);
@@ -90,6 +91,20 @@ test('adds highlightedContent for known file types', function () {
     expect($hasHighlighted)->toBeTrue();
 });
 
+test('result contains syntaxStyles CSS for known file types', function () {
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'hi';\n");
+    $this->commitTestRepo($this->tmpDir, 'add php styles');
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'hello';\n");
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService);
+    $result = $action->handle($this->tmpDir, 'hello.php');
+
+    expect($result)->toHaveKey('syntaxStyles')
+        ->and($result['syntaxStyles'])->toBeString()
+        ->and($result['syntaxStyles'])->not->toBeEmpty()
+        ->and($result['syntaxStyles'])->toContain('.dark ');
+});
+
 test('no highlightedContent for unknown file types', function () {
     File::put($this->tmpDir.'/data.xyz', "some content\n");
     $this->commitTestRepo($this->tmpDir, 'add xyz');
@@ -128,6 +143,63 @@ test('contextLines parameter produces single hunk for full context', function ()
     expect($default['hunks'])->toHaveCount(2);
     expect($full['hunks'])->toHaveCount(1);
     expect($full['hunks'][0]['newStart'])->toBe(1);
+});
+
+// -- self-healing cache --
+
+test('stale cache without syntaxStyles triggers re-computation', function () {
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'hi';\n");
+    $this->commitTestRepo($this->tmpDir, 'add php cache');
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'hello';\n");
+
+    $cacheKey = 'test-stale-cache-key';
+
+    // Seed cache with stale data missing syntaxStyles
+    Cache::put($cacheKey, [
+        'path' => 'hello.php',
+        'status' => 'modified',
+        'oldPath' => null,
+        'hunks' => [],
+        'additions' => 0,
+        'deletions' => 0,
+        'isBinary' => false,
+        'tooLarge' => false,
+    ], 3600);
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService);
+    $result = $action->handle($this->tmpDir, 'hello.php', cacheKey: $cacheKey);
+
+    expect($result)->toHaveKey('syntaxStyles')
+        ->and($result['syntaxStyles'])->toBeString()
+        ->and($result['hunks'])->not->toBeEmpty();
+});
+
+test('class names in highlightedContent have matching selectors in syntaxStyles', function () {
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'hi';\n");
+    $this->commitTestRepo($this->tmpDir, 'add php selectors');
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'hello';\n");
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService);
+    $result = $action->handle($this->tmpDir, 'hello.php');
+
+    $classNames = [];
+    foreach ($result['hunks'] as $hunk) {
+        foreach ($hunk['lines'] as $line) {
+            if (! empty($line['highlightedContent'])) {
+                preg_match_all('/class="([^"]+)"/', $line['highlightedContent'], $matches);
+                foreach ($matches[1] as $cls) {
+                    $classNames[$cls] = true;
+                }
+            }
+        }
+    }
+
+    expect($classNames)->not->toBeEmpty();
+
+    $css = $result['syntaxStyles'];
+    foreach (array_keys($classNames) as $cls) {
+        expect($css)->toContain(".{$cls}{");
+    }
 });
 
 // -- git error propagation --

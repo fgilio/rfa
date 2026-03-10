@@ -63,7 +63,6 @@ new class extends Component {
             $this->file['isUntracked'] ?? false,
             cacheKey: $this->diffCacheKey(),
             target: $this->buildDiffTarget(),
-            theme: $this->resolveTheme(),
         );
 
         $this->ensureCommentedLinesVisible();
@@ -81,7 +80,6 @@ new class extends Component {
             cacheKey: $cacheKey,
             contextLines: 99999,
             target: $this->buildDiffTarget(),
-            theme: $this->resolveTheme(),
         );
     }
 
@@ -114,7 +112,6 @@ new class extends Component {
             $this->file['isUntracked'] ?? false,
             contextLines: 99999,
             target: $this->buildDiffTarget(),
-            theme: $this->resolveTheme(),
         );
 
         if (empty($fullDiff['hunks'])) {
@@ -165,6 +162,11 @@ new class extends Component {
         }
 
         $this->diffData['hunks'] = $hunks;
+
+        // Merge syntax styles from the full diff
+        if (! empty($fullDiff['syntaxStyles'])) {
+            $this->diffData['syntaxStyles'] = ($this->diffData['syntaxStyles'] ?? '').$fullDiff['syntaxStyles'];
+        }
 
         // Update cache with expanded state
         Cache::put($this->diffCacheKey(), $this->diffData, now()->addHours($this->buildDiffTarget()->cacheTtlHours()));
@@ -225,41 +227,11 @@ new class extends Component {
         return $this->cachedTarget ??= DiffTarget::fromRefs($this->diffFrom, $this->diffTo);
     }
 
-    public function reloadForTheme(): void
-    {
-        if ($this->diffData === null) {
-            return;
-        }
-
-        $cacheKey = $this->diffCacheKey();
-        $cached = Cache::get($cacheKey);
-
-        if ($cached !== null) {
-            $this->diffData = $cached;
-
-            return;
-        }
-
-        $this->diffData = app(LoadFileDiffAction::class)->handle(
-            $this->repoPath,
-            $this->file['path'],
-            $this->file['isUntracked'] ?? false,
-            cacheKey: $cacheKey,
-            target: $this->buildDiffTarget(),
-            theme: $this->resolveTheme(),
-        );
-    }
-
-    private function resolveTheme(): string
-    {
-        return request()->cookie('rfa_theme') === 'dark' ? 'dark' : 'light';
-    }
-
     private function diffCacheKey(): string
     {
         $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
 
-        return DiffCacheKey::for($projectKey, $this->file['id'], $this->buildDiffTarget()->contextKey(), $this->resolveTheme());
+        return DiffCacheKey::for($projectKey, $this->file['id'], $this->buildDiffTarget()->contextKey());
     }
 
     public function render(): \Illuminate\Contracts\View\View
@@ -282,7 +254,6 @@ new class extends Component {
     })"
     @mouseup.window="endDrag()"
     @comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"
-    @theme-changed.window="setTimeout(() => $wire.reloadForTheme(), {{ $loadDelay }})"
     @collapse-all-files.window="autoExpandedForComment = false; collapsed = true"
     @expand-all-files.window="autoExpandedForComment = false; collapsed = false"
     @expand-file.window="if ($event.detail.id === fileId) { autoExpandedForComment = false; collapsed = false }"
@@ -447,6 +418,9 @@ new class extends Component {
                 $hunks = $diffData['hunks'];
                 $hasGaps = count($hunks) > 1 || (count($hunks) === 1 && $hunks[0]['newStart'] > 1);
             @endphp
+            @if($diffData['syntaxStyles'] ?? '')
+                {!! '<style>' . $diffData['syntaxStyles'] . '</style>' !!}
+            @endif
             <div class="overflow-x-auto">
                 <table class="w-full border-collapse font-mono text-xs leading-5" :class="isDragging ? 'select-none' : ''">
                     @if($hasGaps)

@@ -4,6 +4,7 @@ use App\Actions\GetFileListAction;
 use App\Services\GitDiffService;
 use App\Services\GitProcessService;
 use App\Services\IgnoreService;
+use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 
@@ -36,7 +37,7 @@ test('clears cache by default', function () {
     $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService));
     $files = $action->handle($this->tmpDir);
 
-    $cacheKey = 'rfa_diff_v5_'.hash('xxh128', $this->tmpDir.':working:'.$files[0]['id'].':light');
+    $cacheKey = DiffCacheKey::for($this->tmpDir, $files[0]['id']);
     Cache::put($cacheKey, 'stale', 60);
 
     $action->handle($this->tmpDir);
@@ -50,7 +51,7 @@ test('preserves cache when clearCache is false', function () {
     $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService));
     $files = $action->handle($this->tmpDir, clearCache: false);
 
-    $cacheKey = 'rfa_diff_v5_'.hash('xxh128', $this->tmpDir.':working:'.$files[0]['id'].':light');
+    $cacheKey = DiffCacheKey::for($this->tmpDir, $files[0]['id']);
     Cache::put($cacheKey, 'kept', 60);
 
     $action->handle($this->tmpDir, clearCache: false);

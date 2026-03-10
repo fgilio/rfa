@@ -20,7 +20,7 @@ beforeEach(function () {
     // Mock LoadFileDiffAction so it never touches git
     app()->bind(LoadFileDiffAction::class, fn () => new class
     {
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, string $theme = 'light'): array
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null): array
         {
             return DiffFixtureFactory::diffData(path: $path);
         }
@@ -109,6 +109,14 @@ test('file comment button has x-ref', function () {
     $html = mountDiffFile($this->file, loadDiff: false)->html();
 
     expect($html)->toContain('x-ref="fileCommentBtn"');
+});
+
+test('rendered HTML contains style block with syntax CSS', function () {
+    $html = mountDiffFile($this->file)->html();
+
+    expect($html)->toContain('<style>')
+        ->and($html)->toContain('.hl-variable{color:#e36209;}')
+        ->and($html)->toContain('.dark .hl-variable{color:#ffab70;}');
 });
 
 test('collapse event handlers reset autoExpandedForComment', function () {

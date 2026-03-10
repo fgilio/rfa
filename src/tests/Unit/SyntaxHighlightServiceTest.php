@@ -163,23 +163,41 @@ test('multi-hunk diff highlights all hunks independently', function () {
     expect(count($spans[0]))->toBeGreaterThan(2, 'foreach line should have multiple styled tokens');
 });
 
-test('dark theme produces different colors than light', function () {
+test('style map has entries with different light and dark colors', function () {
     $hunks = [
         new Hunk('', 1, 0, 1, 1, [
             new DiffLine('add', 'echo "hello";', null, 1),
         ]),
     ];
 
-    $lightResult = $this->service->highlightHunks($hunks, 'test.php', 'light');
-    $darkResult = $this->service->highlightHunks($hunks, 'test.php', 'dark');
+    $this->service->highlightHunks($hunks, 'test.php');
+    $styleMap = $this->service->getStyleMap();
 
-    expect($lightResult[0]->lines[0]->highlightedContent)->not->toBeNull()
-        ->and($darkResult[0]->lines[0]->highlightedContent)->not->toBeNull()
-        ->and($lightResult[0]->lines[0]->highlightedContent)
-        ->not->toBe($darkResult[0]->lines[0]->highlightedContent);
+    expect($styleMap)->not->toBeEmpty();
+
+    $hasDifference = collect($styleMap)->contains(fn ($styles) => $styles['light'] !== $styles['dark']);
+    expect($hasDifference)->toBeTrue();
 });
 
-test('output does not contain phiki dark CSS variables', function () {
+test('getStyleMap returns expected structure', function () {
+    $hunks = [
+        new Hunk('', 1, 0, 1, 1, [
+            new DiffLine('add', 'echo "hello";', null, 1),
+        ]),
+    ];
+
+    $this->service->highlightHunks($hunks, 'test.php');
+    $styleMap = $this->service->getStyleMap();
+
+    foreach ($styleMap as $className => $styles) {
+        expect($className)->toStartWith('_')
+            ->and($styles)->toHaveKeys(['light', 'dark'])
+            ->and($styles['light'])->toBeString()
+            ->and($styles['dark'])->toBeString();
+    }
+});
+
+test('output uses class not style attribute', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
             new DiffLine('context', '<?php', 1, 1),
@@ -188,15 +206,58 @@ test('output does not contain phiki dark CSS variables', function () {
         ]),
     ];
 
-    $lightResult = $this->service->highlightHunks($hunks, 'test.php', 'light');
-    $darkResult = $this->service->highlightHunks($hunks, 'test.php', 'dark');
+    $result = $this->service->highlightHunks($hunks, 'test.php');
 
-    foreach ([$lightResult, $darkResult] as $result) {
-        foreach ($result[0]->lines as $line) {
-            if ($line->highlightedContent !== null) {
-                expect($line->highlightedContent)->not->toContain('--phiki-dark');
+    foreach ($result[0]->lines as $line) {
+        if ($line->highlightedContent !== null) {
+            expect($line->highlightedContent)->not->toContain('style=')
+                ->and($line->highlightedContent)->toContain('class=');
+        }
+    }
+});
+
+test('no background-color in style map values', function () {
+    $hunks = [
+        new Hunk('', 1, 0, 1, 1, [
+            new DiffLine('add', 'echo "hello";', null, 1),
+        ]),
+    ];
+
+    $this->service->highlightHunks($hunks, 'test.php');
+    $styleMap = $this->service->getStyleMap();
+
+    foreach ($styleMap as $styles) {
+        expect($styles['light'])->not->toContain('background-color')
+            ->and($styles['dark'])->not->toContain('background-color');
+    }
+});
+
+test('all class names in highlighted HTML have matching style map entries', function () {
+    $hunks = [
+        new Hunk('', 1, 3, 1, 3, [
+            new DiffLine('context', '<?php', 1, 1),
+            new DiffLine('remove', 'echo "old";', 2, null),
+            new DiffLine('add', 'echo "new";', null, 2),
+        ]),
+    ];
+
+    $result = $this->service->highlightHunks($hunks, 'test.php');
+    $styleMap = $this->service->getStyleMap();
+
+    $classNames = [];
+    foreach ($result[0]->lines as $line) {
+        if ($line->highlightedContent !== null) {
+            preg_match_all('/class="([^"]+)"/', $line->highlightedContent, $matches);
+            foreach ($matches[1] as $cls) {
+                $classNames[$cls] = true;
             }
         }
+    }
+
+    expect($classNames)->not->toBeEmpty();
+
+    foreach (array_keys($classNames) as $cls) {
+        expect($styleMap)->toHaveKey($cls);
     }
 });
 

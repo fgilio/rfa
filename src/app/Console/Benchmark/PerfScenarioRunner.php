@@ -140,7 +140,6 @@ final class PerfScenarioRunner
                 ?string $cacheKey = null,
                 int $contextLines = 3,
                 ?DiffTarget $target = null,
-                string $theme = 'light',
             ): array {
                 return $this->diffData;
             }

@@ -44,24 +44,24 @@ class SyntaxHighlightService
 
     private ParsedTheme $darkTheme;
 
-    private ParsedTheme $activeTheme;
-
-    /** @var array<string, string> scope key => CSS style string */
+    /** @var array<string, string> scope key => CSS class name */
     private array $scopeCache = [];
+
+    /** @var array<string, array{light: string, dark: string}> class name => CSS declarations */
+    private array $classStyles = [];
 
     public function __construct()
     {
         $this->phiki = new Phiki;
         $this->lightTheme = $this->phiki->environment->themes->resolve(Theme::GithubLight);
         $this->darkTheme = $this->phiki->environment->themes->resolve(Theme::GithubDark);
-        $this->activeTheme = $this->lightTheme;
     }
 
     /**
      * @param  Hunk[]  $hunks
      * @return Hunk[]
      */
-    public function highlightHunks(array $hunks, string $filePath, string $theme = 'light'): array
+    public function highlightHunks(array $hunks, string $filePath): array
     {
         $grammar = GrammarMap::resolve($filePath);
 
@@ -69,10 +69,16 @@ class SyntaxHighlightService
             return $hunks;
         }
 
-        $this->activeTheme = $theme === 'dark' ? $this->darkTheme : $this->lightTheme;
         $this->scopeCache = [];
+        $this->classStyles = [];
 
         return array_map(fn (Hunk $hunk) => $this->highlightHunk($hunk, $grammar), $hunks);
+    }
+
+    /** @return array<string, array{light: string, dark: string}> */
+    public function getStyleMap(): array
+    {
+        return $this->classStyles;
     }
 
     private function highlightHunk(Hunk $hunk, Grammar $grammar): Hunk
@@ -156,8 +162,8 @@ class SyntaxHighlightService
                 $html = '';
                 foreach ($lineTokens as $token) {
                     $text = e($token->text);
-                    $style = $this->matchScopesToStyle($token->scopes);
-                    $html .= $style !== '' ? '<span style="'.$style.'">'.$text.'</span>' : $text;
+                    $class = $this->matchScopesToClass($token->scopes);
+                    $html .= $class !== '' ? '<span class="'.$class.'">'.$text.'</span>' : $text;
                 }
                 $result[] = $html;
             }
@@ -171,7 +177,7 @@ class SyntaxHighlightService
     /**
      * @param  list<string>  $scopes
      */
-    private function matchScopesToStyle(array $scopes): string
+    private function matchScopesToClass(array $scopes): string
     {
         $key = implode("\0", $scopes);
 
@@ -179,9 +185,32 @@ class SyntaxHighlightService
             return $this->scopeCache[$key];
         }
 
-        $match = $this->activeTheme->match($scopes);
-        $style = $match !== null ? $match->toStyleString() : '';
+        $lightMatch = $this->lightTheme->match($scopes);
+        $darkMatch = $this->darkTheme->match($scopes);
 
-        return $this->scopeCache[$key] = $style;
+        $lightCss = $lightMatch !== null ? $this->toCssDeclarations($lightMatch->toStyleArray()) : '';
+        $darkCss = $darkMatch !== null ? $this->toCssDeclarations($darkMatch->toStyleArray()) : '';
+
+        if ($lightCss === '' && $darkCss === '') {
+            return $this->scopeCache[$key] = '';
+        }
+
+        $className = '_'.substr(base_convert((string) abs(crc32($key)), 10, 36), 0, 5);
+        $this->classStyles[$className] = ['light' => $lightCss, 'dark' => $darkCss];
+
+        return $this->scopeCache[$key] = $className;
+    }
+
+    /** @param array<string, string> $styles */
+    private function toCssDeclarations(array $styles): string
+    {
+        unset($styles['background-color']);
+
+        $css = '';
+        foreach ($styles as $prop => $value) {
+            $css .= $prop.':'.$value.';';
+        }
+
+        return $css;
     }
 }
