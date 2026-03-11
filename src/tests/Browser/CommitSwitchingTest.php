@@ -157,6 +157,30 @@ test('clicking commit in branch explorer navigates to commit view', function () 
     $page->assertSee($this->commitShortHashes[2]);
 });
 
+test('escape in branch explorer filter clears input before closing panel', function () {
+    $this->setUpCommitHistoryRepo();
+
+    $page = $this->visit($this->projectUrl());
+
+    $page->page()->locator('button:has(span:text("main"))')->click();
+
+    $filterInput = $page->page()->getByPlaceholder('Filter branches...');
+    $filterInput->waitFor();
+    $page->page()->locator('text=Add greet function')->waitFor();
+
+    $filterInput->fill('ma');
+    $filterInput->press('Escape');
+
+    expect($filterInput->inputValue())->toBe('');
+    expect($filterInput->evaluate('el => el !== document.activeElement'))->toBeTrue();
+    expect($filterInput->isVisible())->toBeTrue();
+
+    $page->page()->locator('body')->press('Escape');
+    $filterInput->waitFor(['state' => 'hidden']);
+
+    $page->assertNoJavaScriptErrors();
+});
+
 // -- Session Isolation --
 
 test('comments in commit mode do not appear in working directory', function () {
