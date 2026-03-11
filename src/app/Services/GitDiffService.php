@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\File;
 
 class GitDiffService
 {
+    private const SYMLINK_MODE = '120000';
+
     public function __construct(
         private readonly GitProcessService $git,
         private readonly IgnoreService $ignoreService,
@@ -92,6 +94,10 @@ class GitDiffService
                     $status = 'binary';
                 }
 
+                $symlinkTarget = $target->isWorkingDirectory()
+                    ? $this->symlinkTarget($repoPath.'/'.$path)
+                    : null;
+
                 return new FileListEntry(
                     path: $path,
                     status: $status,
@@ -101,6 +107,8 @@ class GitDiffService
                     isBinary: $isBinary,
                     isUntracked: false,
                     lastModified: $target->isWorkingDirectory() ? $this->getLastModified($repoPath, $path) : null,
+                    isSymlink: $symlinkTarget !== null,
+                    symlinkTarget: $symlinkTarget,
                 );
             })
             ->values()
@@ -123,6 +131,25 @@ class GitDiffService
                     }
 
                     $fullPath = $repoPath.'/'.$file;
+
+                    $symlinkTarget = $this->symlinkTarget($fullPath);
+                    if ($symlinkTarget !== null) {
+                        $entries[] = new FileListEntry(
+                            path: $file,
+                            status: 'added',
+                            oldPath: null,
+                            additions: 1,
+                            deletions: 0,
+                            isBinary: false,
+                            isUntracked: true,
+                            lastModified: null,
+                            isSymlink: true,
+                            symlinkTarget: $symlinkTarget,
+                        );
+
+                        continue;
+                    }
+
                     if (! File::isFile($fullPath)) {
                         continue;
                     }
@@ -229,6 +256,13 @@ class GitDiffService
     {
         $fullPath = $repoPath.'/'.$path;
 
+        $symlinkTarget = $this->symlinkTarget($fullPath);
+        if ($symlinkTarget !== null) {
+            $mode = self::SYMLINK_MODE;
+
+            return "diff --git a/{$path} b/{$path}\nnew file mode {$mode}\n--- /dev/null\n+++ b/{$path}\n@@ -0,0 +1 @@\n+{$symlinkTarget}\n\\ No newline at end of file\n";
+        }
+
         if (! File::isFile($fullPath)) {
             return '';
         }
@@ -277,6 +311,11 @@ class GitDiffService
         }
 
         return Carbon::createFromTimestamp(File::lastModified($fullPath))->diffForHumans(short: true);
+    }
+
+    private function symlinkTarget(string $fullPath): ?string
+    {
+        return is_link($fullPath) ? readlink($fullPath) : null;
     }
 
     private function isBinary(string $path): bool

@@ -10,6 +10,8 @@ use App\DTOs\Hunk;
 
 class DiffParser
 {
+    private const SYMLINK_MODE = '120000';
+
     public function parseSingle(string $rawDiff): ?FileDiff
     {
         return $this->parse($rawDiff)[0] ?? null;
@@ -54,6 +56,7 @@ class DiffParser
         // Detect status from subsequent header lines
         $status = 'modified';
         $isBinary = false;
+        $isSymlink = false;
         $headerEnd = 0;
 
         for ($i = 1; $i < count($lines); $i++) {
@@ -61,8 +64,12 @@ class DiffParser
 
             if (str_starts_with($line, 'new file mode')) {
                 $status = 'added';
+                $isSymlink = str_ends_with($line, self::SYMLINK_MODE);
             } elseif (str_starts_with($line, 'deleted file mode')) {
                 $status = 'deleted';
+                $isSymlink = str_ends_with($line, self::SYMLINK_MODE);
+            } elseif (str_starts_with($line, 'index ') && str_ends_with($line, self::SYMLINK_MODE)) {
+                $isSymlink = true;
             } elseif (str_starts_with($line, 'rename from')) {
                 $status = 'renamed';
             } elseif (str_starts_with($line, 'similarity index')) {
@@ -85,6 +92,7 @@ class DiffParser
                 additions: 0,
                 deletions: 0,
                 isBinary: true,
+                isSymlink: $isSymlink,
             );
         }
 
@@ -147,6 +155,20 @@ class DiffParser
             }
         }
 
+        // Extract symlink target from diff content
+        $symlinkTarget = null;
+        if ($isSymlink && ! empty($hunks)) {
+            foreach ($hunks[0]->lines as $dl) {
+                if ($dl->type === 'add') {
+                    $symlinkTarget = $dl->content;
+                    break;
+                }
+                if ($dl->type === 'remove' && $symlinkTarget === null) {
+                    $symlinkTarget = $dl->content;
+                }
+            }
+        }
+
         return new FileDiff(
             path: $newPath,
             status: $status,
@@ -154,6 +176,8 @@ class DiffParser
             hunks: $hunks,
             additions: $additions,
             deletions: $deletions,
+            isSymlink: $isSymlink,
+            symlinkTarget: $symlinkTarget,
         );
     }
 

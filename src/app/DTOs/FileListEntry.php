@@ -18,6 +18,8 @@ class FileListEntry
         public readonly bool $isBinary,
         public readonly bool $isUntracked,
         public readonly ?string $lastModified = null,
+        public readonly bool $isSymlink = false,
+        public readonly ?string $symlinkTarget = null,
     ) {}
 
     public static function idForPath(string $path): string
@@ -51,6 +53,8 @@ class FileListEntry
             'isUntracked' => $this->isUntracked,
             'isImage' => $this->isImage(),
             'lastModified' => $this->lastModified,
+            'isSymlink' => $this->isSymlink,
+            'symlinkTarget' => $this->symlinkTarget,
         ];
     }
 }

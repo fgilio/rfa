@@ -15,6 +15,8 @@ class FileDiff
         public readonly int $additions,
         public readonly int $deletions,
         public readonly bool $isBinary = false,
+        public readonly bool $isSymlink = false,
+        public readonly ?string $symlinkTarget = null,
     ) {}
 
     /** @param Hunk[] $hunks */
@@ -28,6 +30,8 @@ class FileDiff
             additions: $this->additions,
             deletions: $this->deletions,
             isBinary: $this->isBinary,
+            isSymlink: $this->isSymlink,
+            symlinkTarget: $this->symlinkTarget,
         );
     }
 
@@ -42,11 +46,13 @@ class FileDiff
             'additions' => 0,
             'deletions' => 0,
             'isBinary' => false,
+            'isSymlink' => false,
+            'symlinkTarget' => null,
             'tooLarge' => $tooLarge,
         ];
     }
 
-    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool} */
+    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, isSymlink: bool, symlinkTarget: ?string} */
     public function toArray(): array
     {
         return [
@@ -57,6 +63,8 @@ class FileDiff
             'additions' => $this->additions,
             'deletions' => $this->deletions,
             'isBinary' => $this->isBinary,
+            'isSymlink' => $this->isSymlink,
+            'symlinkTarget' => $this->symlinkTarget,
         ];
     }
 }

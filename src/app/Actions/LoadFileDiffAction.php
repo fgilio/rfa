@@ -64,7 +64,7 @@ final readonly class LoadFileDiffAction
 
         if ($cacheKey) {
             $cached = Cache::get($cacheKey);
-            if ($cached !== null && array_key_exists('syntaxStyles', $cached)) {
+            if ($cached !== null && array_key_exists('syntaxStyles', $cached) && array_key_exists('isSymlink', $cached)) {
                 return $cached;
             }
             $result = $compute();
