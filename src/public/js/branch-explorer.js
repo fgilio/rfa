@@ -81,6 +81,15 @@
                 }
             },
 
+            handleSearchEscape(e) {
+                e.target.blur();
+
+                if (this.search === '') return;
+
+                this.search = '';
+                this.onSearchChange();
+            },
+
             onSearchChange() {
                 this.selectedIndex = 0;
                 this.loadSelectedBranch();

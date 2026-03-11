@@ -95,13 +95,13 @@ new class extends Component {
                             x-ref="searchInput"
                             x-model.debounce.100ms="search"
                             @input="onSearchChange()"
+                            @keydown.escape.stop="handleSearchEscape($event)"
                             placeholder="Filter branches..."
                             icon="magnifying-glass"
                             icon:variant="outline"
                             size="sm"
                             variant="filled"
                             clearable
-                            @keydown.escape.stop
                         />
                     </div>
 
