@@ -679,7 +679,10 @@ new #[Layout('layouts.app')] class extends Component {
                         :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-link/10 text-gh-link' : 'text-gh-muted'"
                     >
                         <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', 'C' => 'text-gh-muted', default => 'text-amber-500 dark:text-amber-400' } }}">{{ $badgeLabel }}</span>
-                        <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
+                        @if($file['isSymlink'] ?? false)
+                            <flux:icon icon="link" variant="outline" class="!size-3 text-gh-muted shrink-0" aria-hidden="true" />
+                        @endif
+                        <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['isSymlink'] ?? false) ? ' -> ' . $file['symlinkTarget'] : '' }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
                         <flux:icon icon="check" variant="outline" x-show="viewedFiles['{{ $file['id'] }}']"
                             class="text-gh-green shrink-0" x-cloak />
                         <span class="ml-auto flex gap-1.5 shrink-0 font-mono">

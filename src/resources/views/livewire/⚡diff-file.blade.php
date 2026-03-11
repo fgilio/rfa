@@ -273,6 +273,11 @@ new class extends Component {
             {{ $file['path'] }}
         </span>
 
+        @if($file['isSymlink'] ?? false)
+            <flux:icon icon="link" variant="outline" class="!size-3.5 text-gh-muted shrink-0" aria-hidden="true" />
+            <span class="font-mono text-xs text-gh-muted">&rarr; {{ $file['symlinkTarget'] }}</span>
+        @endif
+
         <flux:tooltip content="Copy file name">
             <flux:button
                 icon="square-2-stack"
@@ -341,7 +346,15 @@ new class extends Component {
                 </div>
             @endforeach
         @endif
-        @if($file['isBinary'] && !($file['isImage'] ?? false))
+        @if(($file['isSymlink'] ?? false) || ($diffData['isSymlink'] ?? false))
+            @php $target = $file['symlinkTarget'] ?? ($diffData['symlinkTarget'] ?? ''); @endphp
+            <div class="px-4 py-8 text-center">
+                <flux:icon icon="link" variant="outline" class="inline-block text-gh-muted mr-1" aria-hidden="true" />
+                <flux:text variant="subtle" size="sm" inline>
+                    Symbolic link &rarr; <span class="font-mono">{{ $target }}</span>
+                </flux:text>
+            </div>
+        @elseif($file['isBinary'] && !($file['isImage'] ?? false))
             <div class="px-4 py-8 text-center">
                 <flux:text variant="subtle" size="sm">Binary file not shown</flux:text>
             </div>
