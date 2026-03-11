@@ -82,9 +82,13 @@
             },
 
             handleSearchEscape(e) {
+                const hasFilter = e.target.value !== '' || this.search !== '';
+
+                e.target.value = '';
+                e.target.dispatchEvent(new Event('input', { bubbles: true }));
                 e.target.blur();
 
-                if (this.search === '') return;
+                if (!hasFilter) return;
 
                 this.search = '';
                 this.onSearchChange();

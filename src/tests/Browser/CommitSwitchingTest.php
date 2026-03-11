@@ -172,7 +172,7 @@ test('escape in branch explorer filter clears input before closing panel', funct
     $filterInput->press('Escape');
 
     expect($filterInput->inputValue())->toBe('');
-    expect($filterInput->evaluate('el => el !== document.activeElement'))->toBeTrue();
+    expect($page->script("document.activeElement?.getAttribute('placeholder')"))->not->toBe('Filter branches...');
     expect($filterInput->isVisible())->toBeTrue();
 
     $page->page()->locator('body')->press('Escape');
