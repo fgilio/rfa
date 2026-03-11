@@ -288,6 +288,55 @@ test('getFileDiff respects contextLines parameter', function () {
     expect($diffFull)->toContain('@@ -1,');
 });
 
+// -- Symlink tests --
+
+test('getFileList detects untracked symlink', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/target.md', "content\n");
+    symlink('target.md', $this->tmpDir.'/link.md');
+
+    $entries = $this->service->getFileList($this->tmpDir);
+
+    $link = collect($entries)->firstWhere('path', 'link.md');
+    expect($link)->not->toBeNull();
+    expect($link->isSymlink)->toBeTrue();
+    expect($link->symlinkTarget)->toBe('target.md');
+    expect($link->additions)->toBe(1);
+    expect($link->isUntracked)->toBeTrue();
+});
+
+test('getFileList detects broken symlink', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    symlink('nonexistent.md', $this->tmpDir.'/broken.md');
+
+    $entries = $this->service->getFileList($this->tmpDir);
+
+    $link = collect($entries)->firstWhere('path', 'broken.md');
+    expect($link)->not->toBeNull();
+    expect($link->isSymlink)->toBeTrue();
+    expect($link->symlinkTarget)->toBe('nonexistent.md');
+});
+
+test('buildUntrackedDiff generates mode 120000 for symlinks', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/target.md', "content\n");
+    symlink('target.md', $this->tmpDir.'/link.md');
+
+    $diff = $this->service->getFileDiff($this->tmpDir, 'link.md', isUntracked: true);
+
+    expect($diff)->toContain('new file mode 120000');
+    expect($diff)->toContain('+target.md');
+});
+
 // -- Unicode/emoji file path tests --
 
 test('getFileList returns correct path for modified file with unicode name', function () {

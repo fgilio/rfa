@@ -49,6 +49,8 @@ test('toArray includes all properties and computed id', function () {
         'isUntracked' => false,
         'isImage' => false,
         'lastModified' => null,
+        'isSymlink' => false,
+        'symlinkTarget' => null,
     ]);
 });
 

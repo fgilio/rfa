@@ -1,0 +1,9 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index abc1234..def5678 120000
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -1 +1 @@
+-OLD_TARGET.md
+\ No newline at end of file
++NEW_TARGET.md
+\ No newline at end of file

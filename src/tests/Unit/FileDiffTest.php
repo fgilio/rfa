@@ -76,6 +76,8 @@ test('emptyArray returns tooLarge array structure', function () {
         'additions' => 0,
         'deletions' => 0,
         'isBinary' => false,
+        'isSymlink' => false,
+        'symlinkTarget' => null,
         'tooLarge' => true,
     ]);
 });

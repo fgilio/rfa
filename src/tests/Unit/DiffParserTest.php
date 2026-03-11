@@ -119,3 +119,44 @@ test('parseSingle returns null for empty input', function () {
     expect($this->parser->parseSingle(''))->toBeNull();
     expect($this->parser->parseSingle('  '))->toBeNull();
 });
+
+// -- Symlink tests --
+
+test('parses new symlink', function () {
+    $files = $this->parser->parse(File::get(fixture('symlink_new.diff')));
+
+    expect($files)->toHaveCount(1);
+    expect($files[0]->path)->toBe('AGENTS.md');
+    expect($files[0]->status)->toBe('added');
+    expect($files[0]->isSymlink)->toBeTrue();
+    expect($files[0]->symlinkTarget)->toBe('CLAUDE.md');
+    expect($files[0]->additions)->toBe(1);
+});
+
+test('parses deleted symlink', function () {
+    $files = $this->parser->parse(File::get(fixture('symlink_deleted.diff')));
+
+    expect($files)->toHaveCount(1);
+    expect($files[0]->path)->toBe('AGENTS.md');
+    expect($files[0]->status)->toBe('deleted');
+    expect($files[0]->isSymlink)->toBeTrue();
+    expect($files[0]->symlinkTarget)->toBe('CLAUDE.md');
+});
+
+test('parses modified symlink target', function () {
+    $files = $this->parser->parse(File::get(fixture('symlink_modified.diff')));
+
+    expect($files)->toHaveCount(1);
+    expect($files[0]->isSymlink)->toBeTrue();
+    expect($files[0]->symlinkTarget)->toBe('NEW_TARGET.md');
+    expect($files[0]->additions)->toBe(1);
+    expect($files[0]->deletions)->toBe(1);
+});
+
+test('regular new file is not detected as symlink', function () {
+    $files = $this->parser->parse(File::get(fixture('new_file.diff')));
+
+    expect($files)->toHaveCount(1);
+    expect($files[0]->isSymlink)->toBeFalse();
+    expect($files[0]->symlinkTarget)->toBeNull();
+});
