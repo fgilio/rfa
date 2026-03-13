@@ -17,3 +17,4 @@ src/bootstrap/cache/*
 !src/storage/framework/views/.gitkeep
 !src/bootstrap/cache/.gitkeep
 src/.perf/
+autoresearch-perf.jsonl
