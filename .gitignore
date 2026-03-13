@@ -16,6 +16,7 @@
 /.zed
 /analytics.jsonl
 /auth.json
+/autoresearch-perf.jsonl
 /bootstrap/cache/*
 !/bootstrap/cache/.gitkeep
 /database.sqlite
