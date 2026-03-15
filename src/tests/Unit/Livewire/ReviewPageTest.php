@@ -8,6 +8,7 @@ use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\DTOs\DiffTarget;
 use App\Models\Project;
+use App\Services\GitDiffService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 
@@ -58,9 +59,9 @@ beforeEach(function () {
 
     app()->bind(RestoreSessionAction::class, fn () => new class
     {
-        public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT): array
+        public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT, ?DiffTarget $target = null): array
         {
-            return ['comments' => [], 'viewedFiles' => [], 'globalComment' => ''];
+            return ['comments' => [], 'viewedFiles' => [], 'globalComment' => '', 'orphanedPaths' => []];
         }
     });
 
@@ -68,6 +69,11 @@ beforeEach(function () {
     {
         public function handle(string $repoPath, array $comments, array $viewedFiles, string $globalComment, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT): void {}
     });
+
+    // Mock GitDiffService to avoid real git calls
+    $gitDiffMock = Mockery::mock(GitDiffService::class);
+    $gitDiffMock->shouldReceive('fileDiffFingerprint')->andReturn('mock-hash');
+    app()->instance(GitDiffService::class, $gitDiffMock);
 
     // Prevent backfill from calling real git
     app()->bind(BackfillGlobalGitignoreAction::class, fn () => new class
@@ -83,7 +89,7 @@ test('toggleViewed updates viewedFiles state', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->dispatch('toggle-viewed', filePath: 'src/Foo.php');
 
-    expect($component->get('viewedFiles'))->toBe(['src/Foo.php']);
+    expect($component->get('viewedFiles'))->toBe(['src/Foo.php' => 'mock-hash']);
 });
 
 test('toggleViewed skips parent re-render', function () {

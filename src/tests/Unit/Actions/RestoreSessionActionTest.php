@@ -1,8 +1,10 @@
 <?php
 
 use App\Actions\RestoreSessionAction;
+use App\DTOs\DiffTarget;
 use App\Models\Project;
 use App\Models\ReviewSession;
+use App\Services\GitDiffService;
 use Faker\Factory as Faker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -15,7 +17,7 @@ beforeEach(function () {
 
 test('creates session when none exists and returns defaults', function () {
     $repoPath = '/tmp/'.$this->faker->word();
-    $files = [['id' => 'file-abc', 'path' => 'f.php']];
+    $files = [['id' => 'file-abc', 'path' => 'f.php', 'isUntracked' => false]];
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
 
@@ -34,11 +36,16 @@ test('restores comments and tracks orphaned paths', function () {
             ['id' => 'c-1', 'file' => 'exists.php', 'fileId' => 'old-id'],
             ['id' => 'c-2', 'file' => 'gone.php', 'fileId' => 'old-id-2'],
         ],
-        'viewed_files' => ['exists.php', 'gone.php'],
+        'viewed_files' => ['exists.php' => 'somehash'],
         'global_comment' => 'hello',
     ]);
 
-    $files = [['id' => 'file-new', 'path' => 'exists.php']];
+    $files = [['id' => 'file-new', 'path' => 'exists.php', 'isUntracked' => false]];
+
+    // Mock GitDiffService to return matching fingerprint
+    $mock = Mockery::mock(GitDiffService::class);
+    $mock->shouldReceive('fileDiffFingerprint')->andReturn('somehash');
+    app()->instance(GitDiffService::class, $mock);
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
 
@@ -48,7 +55,7 @@ test('restores comments and tracks orphaned paths', function () {
     expect($result['comments'][1]['file'])->toBe('gone.php');
     expect($result['comments'][1]['fileId'])->toBe('file-'.hash('xxh128', 'gone.php'));
     expect($result['orphanedPaths'])->toBe(['gone.php']);
-    expect($result['viewedFiles'])->toBe(['exists.php']);
+    expect($result['viewedFiles'])->toBe(['exists.php' => 'somehash']);
     expect($result['globalComment'])->toBe('hello');
 });
 
@@ -64,7 +71,7 @@ test('remaps fileId to current file list', function () {
     ]);
 
     $currentId = 'file-'.hash('xxh128', 'f.php');
-    $files = [['id' => $currentId, 'path' => 'f.php']];
+    $files = [['id' => $currentId, 'path' => 'f.php', 'isUntracked' => false]];
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
 
@@ -88,10 +95,96 @@ test('keys by project_id when provided', function () {
         'global_comment' => 'from project',
     ]);
 
-    $files = [['id' => 'file-new', 'path' => 'f.php']];
+    $files = [['id' => 'file-new', 'path' => 'f.php', 'isUntracked' => false]];
 
     $result = app(RestoreSessionAction::class)->handle('/tmp/test-proj', $files, $project->id);
 
     expect($result['globalComment'])->toBe('from project');
     expect($result['comments'])->toHaveCount(1);
+});
+
+// -- Legacy migration --
+
+test('migrates legacy indexed array to associative with fresh fingerprints', function () {
+    $repoPath = '/tmp/'.$this->faker->word();
+    ReviewSession::create([
+        'repo_path' => $repoPath,
+        'comments' => [],
+        'viewed_files' => ['a.php', 'b.php', 'gone.php'],
+        'global_comment' => '',
+    ]);
+
+    $files = [
+        ['id' => 'id-a', 'path' => 'a.php', 'isUntracked' => false],
+        ['id' => 'id-b', 'path' => 'b.php', 'isUntracked' => false],
+    ];
+
+    $mock = Mockery::mock(GitDiffService::class);
+    $mock->shouldReceive('fileDiffFingerprint')
+        ->with($repoPath, 'a.php', false, null)
+        ->andReturn('hash-a');
+    $mock->shouldReceive('fileDiffFingerprint')
+        ->with($repoPath, 'b.php', false, null)
+        ->andReturn('hash-b');
+    app()->instance(GitDiffService::class, $mock);
+
+    $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
+
+    expect($result['viewedFiles'])->toBe(['a.php' => 'hash-a', 'b.php' => 'hash-b']);
+});
+
+// -- Fingerprint validation --
+
+test('unmarks viewed file when fingerprint mismatches', function () {
+    $repoPath = '/tmp/'.$this->faker->word();
+    ReviewSession::create([
+        'repo_path' => $repoPath,
+        'comments' => [],
+        'viewed_files' => ['a.php' => 'old-hash', 'b.php' => 'still-good'],
+        'global_comment' => '',
+    ]);
+
+    $files = [
+        ['id' => 'id-a', 'path' => 'a.php', 'isUntracked' => false],
+        ['id' => 'id-b', 'path' => 'b.php', 'isUntracked' => false],
+    ];
+
+    $mock = Mockery::mock(GitDiffService::class);
+    $mock->shouldReceive('fileDiffFingerprint')
+        ->with($repoPath, 'a.php', false, null)
+        ->andReturn('new-hash');
+    $mock->shouldReceive('fileDiffFingerprint')
+        ->with($repoPath, 'b.php', false, null)
+        ->andReturn('still-good');
+    app()->instance(GitDiffService::class, $mock);
+
+    $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
+
+    expect($result['viewedFiles'])->toBe(['b.php' => 'still-good']);
+});
+
+test('skips fingerprint validation for immutable targets', function () {
+    $repoPath = '/tmp/'.$this->faker->word();
+    $target = DiffTarget::commit('abc123');
+
+    ReviewSession::create([
+        'repo_path' => $repoPath,
+        'context_fingerprint' => $target->contextKey(),
+        'comments' => [],
+        'viewed_files' => ['a.php' => ''],
+        'global_comment' => '',
+    ]);
+
+    $files = [['id' => 'id-a', 'path' => 'a.php', 'isUntracked' => false]];
+
+    // Mock returns empty string for immutable (no validation needed)
+    $mock = Mockery::mock(GitDiffService::class);
+    $mock->shouldReceive('fileDiffFingerprint')
+        ->with($repoPath, 'a.php', false, $target)
+        ->andReturn('');
+    app()->instance(GitDiffService::class, $mock);
+
+    $result = app(RestoreSessionAction::class)->handle($repoPath, $files, null, $target->contextKey(), $target);
+
+    expect($result['viewedFiles'])->toBe(['a.php' => '']);
 });
