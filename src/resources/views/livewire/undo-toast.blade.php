@@ -1,45 +1,55 @@
-{{-- Undo toast for comment deletions --}}
+{{-- Generic undo toast with LIFO stack --}}
 <div
     x-data="{
-        visible: false,
-        message: '',
-        payload: null,
-        remaining: 0,
+        stack: [],
         intervalId: null,
 
-        show(detail) {
-            this.dismiss();
-            this.payload = detail.payload;
-            this.message = detail.type === 'clear-all'
-                ? `Cleared ${detail.payload.length} comment${detail.payload.length === 1 ? '' : 's'}`
-                : 'Comment deleted';
-            this.remaining = 10;
-            this.visible = true;
-            this.intervalId = setInterval(() => {
-                this.remaining--;
-                if (this.remaining <= 0) this.dismiss();
-            }, 1000);
+        get current() { return this.stack[0] ?? null },
+        get visible() { return this.current !== null },
+        get remaining() {
+            if (!this.current) return 0;
+            return Math.max(0, Math.ceil((this.current.expiresAt - Date.now()) / 1000));
+        },
+
+        push(detail) {
+            this.stack.unshift({
+                type: detail.type,
+                payload: detail.payload,
+                message: detail.message ?? 'Action completed',
+                expiresAt: Date.now() + (detail.ttl ?? 10) * 1000,
+            });
+            this.startTicker();
         },
 
         undo() {
-            if (!this.payload) return;
-            $wire.restoreComments(this.payload);
-            this.dismiss();
+            const entry = this.stack.shift();
+            if (!entry) return;
+            $wire.undo(entry.type, entry.payload);
         },
 
         dismiss() {
-            if (this.intervalId) { clearInterval(this.intervalId); this.intervalId = null; }
-            this.visible = false;
-            this.payload = null;
+            this.stack.shift();
+            if (!this.stack.length) this.stopTicker();
         },
 
-        destroy() {
-            if (this.intervalId) clearInterval(this.intervalId);
-        }
+        tick() {
+            const now = Date.now();
+            this.stack = this.stack.filter(e => e.expiresAt > now);
+            if (!this.stack.length) this.stopTicker();
+        },
+
+        startTicker() {
+            if (this.intervalId) return;
+            this.intervalId = setInterval(() => this.tick(), 1000);
+        },
+        stopTicker() {
+            if (this.intervalId) { clearInterval(this.intervalId); this.intervalId = null; }
+        },
+        destroy() { this.stopTicker(); }
     }"
-    @undo-available.window="show($event.detail)"
+    @undo-available.window="push($event.detail)"
     @keydown.window="
-        if (!visible || !payload) return;
+        if (!visible || !current) return;
         if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') return;
         if (($event.metaKey || $event.ctrlKey) && $event.key === 'z') { undo(); $event.preventDefault(); }
     "
@@ -57,7 +67,7 @@
     class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50"
 >
     <div class="bg-gh-surface border border-gh-border rounded px-4 py-2.5 font-mono text-xs flex items-center gap-3 shadow-lg">
-        <span x-text="message" class="text-gh-text"></span>
+        <span x-text="current?.message" class="text-gh-text"></span>
         <button @click="undo()" class="text-gh-link hover:underline font-medium" data-testid="undo-button">Undo</button>
         <span class="text-gh-muted" x-text="remaining + 's'"></span>
         {{-- Progress bar --}}
