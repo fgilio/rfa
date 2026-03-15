@@ -4,24 +4,39 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\DiffTarget;
+use App\Services\GitDiffService;
+
 final readonly class ToggleViewedAction
 {
+    public function __construct(
+        private GitDiffService $gitDiffService,
+    ) {}
+
     /**
-     * @param  array<int, string>  $viewedFiles
-     * @param  array<int, string>  $knownPaths
-     * @return array<int, string>|null
+     * @param  array<string, string>  $viewedFiles
+     * @param  array<int, array<string, mixed>>  $knownFiles
+     * @return array<string, string>|null
      */
-    public function handle(array $viewedFiles, string $filePath, array $knownPaths): ?array
+    public function handle(array $viewedFiles, string $filePath, array $knownFiles, string $repoPath = '', ?DiffTarget $target = null): ?array
     {
-        if (! in_array($filePath, $knownPaths)) {
+        $file = collect($knownFiles)->firstWhere('path', $filePath);
+
+        if ($file === null) {
             return null;
         }
 
-        if (in_array($filePath, $viewedFiles)) {
-            return array_values(array_diff($viewedFiles, [$filePath]));
+        if (array_key_exists($filePath, $viewedFiles)) {
+            unset($viewedFiles[$filePath]);
+
+            return $viewedFiles;
         }
 
-        $viewedFiles[] = $filePath;
+        $fingerprint = $repoPath !== ''
+            ? $this->gitDiffService->fileDiffFingerprint($repoPath, $filePath, $file['isUntracked'] ?? false, $target)
+            : '';
+
+        $viewedFiles[$filePath] = $fingerprint;
 
         return $viewedFiles;
     }

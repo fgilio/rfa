@@ -11,7 +11,7 @@ final readonly class SaveSessionAction
 {
     /**
      * @param  array<int, array<string, mixed>>  $comments
-     * @param  array<int, string>  $viewedFiles
+     * @param  array<string, string>  $viewedFiles
      */
     public function handle(string $repoPath, array $comments, array $viewedFiles, string $globalComment, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT): void
     {

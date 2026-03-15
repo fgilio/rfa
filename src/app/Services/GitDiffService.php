@@ -228,6 +228,19 @@ class GitDiffService
         return hash('xxh128', implode("\n", $lines));
     }
 
+    public function fileDiffFingerprint(string $repoPath, string $path, bool $isUntracked, ?DiffTarget $target = null): string
+    {
+        $target ??= DiffTarget::workingDirectory();
+
+        if ($target->isImmutable()) {
+            return '';
+        }
+
+        $raw = $this->getFileDiff($repoPath, $path, $isUntracked, contextLines: 0, target: $target);
+
+        return $raw !== null ? hash('xxh128', $raw) : '';
+    }
+
     public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3, ?DiffTarget $target = null): ?string
     {
         $target ??= DiffTarget::workingDirectory();

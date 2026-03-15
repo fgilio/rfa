@@ -54,7 +54,7 @@ new #[Layout('layouts.app')] class extends Component {
 
     public ?string $gitError = null;
 
-    /** @var array<int, string> */
+    /** @var array<string, string> */
     public array $viewedFiles = [];
 
     public ?string $activeFileId = null;
@@ -109,7 +109,8 @@ new #[Layout('layouts.app')] class extends Component {
 
         $this->refreshFileList();
 
-        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $this->buildDiffTarget()->contextKey());
+        $target = $this->buildDiffTarget();
+        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target->contextKey(), $target);
         $this->comments = $session['comments'];
         $this->viewedFiles = $session['viewedFiles'];
         $this->globalComment = $session['globalComment'];
@@ -169,7 +170,8 @@ new #[Layout('layouts.app')] class extends Component {
 
         $this->refreshFileList();
 
-        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $this->buildDiffTarget()->contextKey());
+        $target = $this->buildDiffTarget();
+        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target->contextKey(), $target);
         $this->comments = $session['comments'];
         $this->viewedFiles = $session['viewedFiles'];
 
@@ -300,8 +302,7 @@ new #[Layout('layouts.app')] class extends Component {
     #[On('toggle-viewed')]
     public function toggleViewed(string $filePath): void
     {
-        $knownPaths = collect($this->files)->pluck('path')->all();
-        $result = app(ToggleViewedAction::class)->handle($this->viewedFiles, $filePath, $knownPaths);
+        $result = app(ToggleViewedAction::class)->handle($this->viewedFiles, $filePath, $this->files, $this->repoPath, $this->buildDiffTarget());
 
         if ($result === null) {
             return;
@@ -433,7 +434,7 @@ new #[Layout('layouts.app')] class extends Component {
     data-testid="review-component"
     x-data="{
         activeFile: null,
-        viewedFiles: @js((object) collect($sourceFiles)->filter(fn($f) => in_array($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()),
+        viewedFiles: @js((object) collect($sourceFiles)->filter(fn($f) => array_key_exists($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()),
         fileFilter: '',
         filePaths: @js(collect($sourceFiles)->pluck('path')->all()),
         sidebarWidth: parseInt(localStorage.getItem('rfa-sidebar-width') || 288),
@@ -762,7 +763,7 @@ new #[Layout('layouts.app')] class extends Component {
                                         :file="$pair['jsonFile']"
                                         :load-delay="0"
                                         :file-comments="$this->groupedComments[$pair['jsonFile']['id']] ?? []"
-                                        :is-viewed="in_array($pair['jsonFile']['path'], $viewedFiles)"
+                                        :is-viewed="array_key_exists($pair['jsonFile']['path'], $viewedFiles)"
                                         :repo-path="$repoPath"
                                         :project-id="$projectId"
                                         :diff-from="$diffFrom"
@@ -775,7 +776,7 @@ new #[Layout('layouts.app')] class extends Component {
                                         :file="$pair['mdFile']"
                                         :load-delay="0"
                                         :file-comments="$this->groupedComments[$pair['mdFile']['id']] ?? []"
-                                        :is-viewed="in_array($pair['mdFile']['path'], $viewedFiles)"
+                                        :is-viewed="array_key_exists($pair['mdFile']['path'], $viewedFiles)"
                                         :repo-path="$repoPath"
                                         :project-id="$projectId"
                                         :diff-from="$diffFrom"
@@ -795,7 +796,7 @@ new #[Layout('layouts.app')] class extends Component {
                             :file="$file"
                             :load-delay="(int) (floor($loop->index / 15) * 100)"
                             :file-comments="$this->groupedComments[$file['id']] ?? []"
-                            :is-viewed="in_array($file['path'], $viewedFiles)"
+                            :is-viewed="array_key_exists($file['path'], $viewedFiles)"
                             :repo-path="$repoPath"
                             :project-id="$projectId"
                             :diff-from="$diffFrom"
