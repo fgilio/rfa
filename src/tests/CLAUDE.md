@@ -73,4 +73,5 @@
 
 - The required CI perf check is the benchmark command, not a hard-coded ms assertion
 - Snapshot and compare via `php artisan rfa:benchmark-perf --snapshot=...` and `--compare=...`
+- `rfa:benchmark-perf` must run against an isolated temp sqlite database plus non-persistent cache/session stores
 - Keep PHPUnit perf tests deterministic and structural
