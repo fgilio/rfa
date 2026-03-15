@@ -75,6 +75,9 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `updatedGlobalComment` | Yes | No UI change needed server-side |
 | `toggleViewed` | Yes | Sidebar state managed client-side via Alpine |
 | `submitReview` | No | Replaces entire submit bar UI (submitted state) |
+| `discardFileChanges` | No | Structural change: file removed from list, trash updated |
+| `restoreDiscardedFile` | No | Structural change: file reappears in list |
+| `permanentlyDeleteTrashed` | No | Trash section updated |
 
 ### Event Schema
 
@@ -89,4 +92,6 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `collapse-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-file` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | `{id}` |
-| `undo-available` | ReviewPage PHP dispatch | undo-toast Alpine `@window` | `{type: 'delete'\|'clear-all', payload: comment[]}` |
+| `undo-available` | ReviewPage PHP dispatch | undo-toast Alpine `@window` | `{type: 'delete'\|'clear-all'\|'discard', payload: comment[]\|int, message: string}` |
+| `discard-file` | DiffFile Alpine `$dispatch` | ReviewPage `#[On]` | `{fileId}` |
+| `fingerprint-reset` | ReviewPage PHP dispatch | change-polling Alpine `@window` | none |

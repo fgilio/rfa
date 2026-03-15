@@ -1,8 +1,11 @@
 <?php
 
 use App\Actions\AddCommentAction;
+use App\Actions\CleanExpiredTrashAction;
 use App\Actions\DeleteCommentAction;
 use App\Actions\DeleteReviewFilesAction;
+use App\Actions\DeleteTrashedFileAction;
+use App\Actions\DiscardFileChangesAction;
 use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
 use App\Actions\GroupReviewFilesAction;
@@ -10,13 +13,16 @@ use App\Actions\BackfillGlobalGitignoreAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
+use App\Actions\RestoreDiscardedFileAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\Actions\ToggleViewedAction;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
 use App\Exceptions\GitCommandException;
+use App\Support\DiffCacheKey;
 use App\Actions\UpdateProjectSettingAction;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
@@ -58,6 +64,9 @@ new #[Layout('layouts.app')] class extends Component {
     public array $viewedFiles = [];
 
     public ?string $activeFileId = null;
+
+    /** @var array<int, array<string, mixed>> */
+    public array $trashedFiles = [];
 
     public bool $respectGlobalGitignore = true;
 
@@ -118,6 +127,8 @@ new #[Layout('layouts.app')] class extends Component {
         if (! empty($session['orphanedPaths'])) {
             $this->injectOrphanedFiles($session['orphanedPaths']);
         }
+
+        $this->loadTrashedFiles();
     }
 
     public function isCommitMode(): bool
@@ -248,7 +259,7 @@ new #[Layout('layouts.app')] class extends Component {
         }
 
         if ($deletedComment) {
-            $this->dispatch('undo-available', type: 'delete', payload: [$deletedComment]);
+            $this->dispatch('undo-available', type: 'delete', payload: [$deletedComment], message: 'Comment deleted');
         }
 
         $this->skipRender();
@@ -270,33 +281,116 @@ new #[Layout('layouts.app')] class extends Component {
             ->unique()
             ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
 
-        $this->dispatch('undo-available', type: 'clear-all', payload: $deletedComments);
+        $count = count($deletedComments);
+        $this->dispatch('undo-available', type: 'clear-all', payload: $deletedComments,
+            message: "Cleared {$count} comment".($count === 1 ? '' : 's'));
         $this->skipRender();
     }
 
     /** @param  array<int, array<string, mixed>>  $comments */
     public function restoreComments(array $comments): void
     {
-        if (empty($comments)) {
+        $merged = $this->mergeComments($comments);
+
+        if (empty($merged)) {
             return;
         }
 
-        $existingIds = array_flip(collect($this->comments)->pluck('id')->all());
-        $newComments = collect($comments)->reject(fn ($c) => isset($existingIds[$c['id']]))->all();
-
-        if (empty($newComments)) {
-            return;
-        }
-
-        $this->comments = array_values(array_merge($this->comments, $newComments));
         $this->saveSession();
 
-        collect($newComments)
+        collect($merged)
             ->pluck('fileId')
             ->unique()
             ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
 
         $this->skipRender();
+    }
+
+    #[On('discard-file')]
+    public function discardFileChanges(string $fileId): void
+    {
+        if ($this->isCommitMode()) {
+            return;
+        }
+
+        $file = collect($this->files)->firstWhere('id', $fileId);
+        if (! $file || $file['status'] === 'commented') {
+            return;
+        }
+
+        $fileComments = collect($this->comments)->where('fileId', $fileId)->values()->all();
+
+        try {
+            $trashRecord = app(DiscardFileChangesAction::class)->handle(
+                repoPath: $this->repoPath,
+                path: $file['path'],
+                status: $file['status'],
+                projectId: $this->projectId,
+                oldPath: $file['oldPath'] ?? null,
+                isUntracked: $file['isUntracked'] ?? false,
+                isSymlink: $file['isSymlink'] ?? false,
+                comments: $fileComments,
+            );
+        } catch (\Throwable $e) {
+            $message = $e instanceof GitCommandException ? $e->stderr : $e->getMessage();
+            Flux::toast(variant: 'danger', text: 'Discard failed: '.$message);
+            $this->skipRender();
+
+            return;
+        }
+
+        // Remove comments for discarded file
+        $this->comments = array_values(
+            array_filter($this->comments, fn ($c) => $c['fileId'] !== $fileId)
+        );
+
+        // Invalidate diff cache for this file
+        $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
+        Cache::forget(DiffCacheKey::for($projectKey, $fileId, $this->buildDiffTarget()->contextKey()));
+
+        // Prune viewed state for the discarded file
+        unset($this->viewedFiles[$file['path']]);
+
+        $this->refreshFileList();
+        $this->saveSession();
+        $this->loadTrashedFiles();
+
+        $this->dispatch('undo-available', type: 'discard', payload: $trashRecord->id, message: 'Changes discarded');
+        $this->dispatch('fingerprint-reset');
+    }
+
+    public function restoreDiscardedFile(int $trashId): void
+    {
+        try {
+            $comments = app(RestoreDiscardedFileAction::class)->handle($trashId, $this->repoPath, $this->projectId);
+        } catch (\Throwable $e) {
+            Flux::toast(variant: 'danger', text: 'Restore failed');
+            $this->skipRender();
+
+            return;
+        }
+
+        $this->mergeComments($comments);
+        $this->refreshFileList();
+        $this->saveSession();
+        $this->loadTrashedFiles();
+
+        Flux::toast(text: 'Changes restored');
+    }
+
+    public function permanentlyDeleteTrashed(int $trashId): void
+    {
+        app(DeleteTrashedFileAction::class)->handle($trashId, $this->projectId);
+        $this->loadTrashedFiles();
+    }
+
+    public function undo(string $type, mixed $payload): void
+    {
+        match ($type) {
+            'delete', 'clear-all' => $this->restoreComments($payload),
+            'discard' => $this->restoreDiscardedFile($payload),
+            default => null,
+        };
     }
 
     #[On('toggle-viewed')]
@@ -423,9 +517,40 @@ new #[Layout('layouts.app')] class extends Component {
         $this->dispatch('comment-updated', fileId: $fileId, comments: $fileComments);
     }
 
+    /**
+     * @param  array<int, array<string, mixed>>  $comments
+     * @return array<int, array<string, mixed>>  newly merged comments (empty if none added)
+     */
+    private function mergeComments(array $comments): array
+    {
+        if (empty($comments)) {
+            return [];
+        }
+
+        $existingIds = array_flip(collect($this->comments)->pluck('id')->all());
+        $newComments = collect($comments)->reject(fn ($c) => isset($existingIds[$c['id']]))->all();
+
+        if (! empty($newComments)) {
+            $this->comments = array_values(array_merge($this->comments, $newComments));
+        }
+
+        return $newComments;
+    }
+
     private function saveSession(): void
     {
         app(SaveSessionAction::class)->handle($this->repoPath, $this->comments, $this->viewedFiles, $this->globalComment, $this->projectId, $this->buildDiffTarget()->contextKey());
+    }
+
+    private function loadTrashedFiles(): void
+    {
+        if ($this->isCommitMode()) {
+            $this->trashedFiles = [];
+
+            return;
+        }
+
+        $this->trashedFiles = app(CleanExpiredTrashAction::class)->handle($this->projectId);
     }
 };
 ?>
@@ -575,7 +700,7 @@ new #[Layout('layouts.app')] class extends Component {
                     refresh() {
                         window.location.reload();
                     }
-                }" x-init="startPolling()" class="relative flex items-center">
+                }" x-init="startPolling()" @fingerprint-reset.window="fingerprint = null; hasChanges = false" class="relative flex items-center">
                     <flux:tooltip content="Refresh page">
                         <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
                             @click="refresh()" />
@@ -673,19 +798,37 @@ new #[Layout('layouts.app')] class extends Component {
                             default => ['yellow', 'M'],
                         };
                     @endphp
-                    <button
+                    <div
                         x-show="fileMatchesFilter(@js($file['path']))"
-                        @click="scrollToFile('{{ $file['id'] }}')"
                         class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-colors"
                         :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-link/10 text-gh-link' : 'text-gh-muted'"
                     >
-                        <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', 'C' => 'text-gh-muted', default => 'text-amber-500 dark:text-amber-400' } }}">{{ $badgeLabel }}</span>
-                        @if($file['isSymlink'] ?? false)
-                            <flux:icon icon="link" variant="outline" class="!size-3 text-gh-muted shrink-0" aria-hidden="true" />
-                        @endif
-                        <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['isSymlink'] ?? false) ? ' -> ' . $file['symlinkTarget'] : '' }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
+                        <button @click="scrollToFile('{{ $file['id'] }}')" class="flex items-center gap-2.5 min-w-0 flex-1">
+                            <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', 'C' => 'text-gh-muted', default => 'text-amber-500 dark:text-amber-400' } }}">{{ $badgeLabel }}</span>
+                            @if($file['isSymlink'] ?? false)
+                                <flux:icon icon="link" variant="outline" class="!size-3 text-gh-muted shrink-0" aria-hidden="true" />
+                            @endif
+                            <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['isSymlink'] ?? false) ? ' -> ' . $file['symlinkTarget'] : '' }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
+                        </button>
                         <flux:icon icon="check" variant="outline" x-show="viewedFiles['{{ $file['id'] }}']"
                             class="text-gh-green shrink-0" x-cloak />
+                        @if(! $this->isCommitMode() && $file['status'] !== 'commented')
+                            <button
+                                class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text shrink-0"
+                                title="Discard changes"
+                                @click.stop="
+                                    @php $commentCount = count($this->groupedComments[$file['id']] ?? []); @endphp
+                                    @if($commentCount > 0)
+                                        if (confirm('Discard changes to {{ basename($file['path']) }} and remove {{ $commentCount }} comment{{ $commentCount === 1 ? '' : 's' }}? You can restore from Trash for 30 minutes.'))
+                                    @else
+                                        if (confirm('Discard all changes to {{ basename($file['path']) }}? You can restore from Trash for 30 minutes.'))
+                                    @endif
+                                        $wire.discardFileChanges('{{ $file['id'] }}')
+                                "
+                            >
+                                <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
+                            </button>
+                        @endif
                         <span class="ml-auto flex gap-1.5 shrink-0 font-mono">
                             @if($file['additions'] > 0)
                                 <span class="text-gh-green">+{{ $file['additions'] }}</span>
@@ -694,8 +837,40 @@ new #[Layout('layouts.app')] class extends Component {
                                 <span class="text-gh-red">-{{ $file['deletions'] }}</span>
                             @endif
                         </span>
-                    </button>
+                    </div>
                 @endforeach
+                @if(! empty($trashedFiles))
+                    <div class="border-t border-gh-border mt-3 pt-3">
+                        <span class="section-label text-gh-muted mb-3 block">Trash</span>
+                        @foreach($trashedFiles as $trashed)
+                            <div class="w-full px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2 group transition-colors"
+                                x-data="{ expiresAt: {{ $trashed['expires_at'] ? \Carbon\Carbon::parse($trashed['expires_at'])->getTimestampMs() : 0 }}, remaining: '' }"
+                                x-init="
+                                    const update = () => {
+                                        const ms = expiresAt - Date.now();
+                                        if (ms <= 0) { remaining = 'expired'; return; }
+                                        const m = Math.ceil(ms / 60000);
+                                        remaining = m < 1 ? '< 1m' : m + 'm';
+                                    };
+                                    update();
+                                    const iv = setInterval(update, 15000);
+                                    $cleanup(() => clearInterval(iv));
+                                "
+                            >
+                                <span class="font-mono text-xs text-gh-muted truncate flex-1" title="{{ $trashed['file_path'] }}">{{ basename($trashed['file_path']) }}</span>
+                                <span class="text-[10px] text-gh-muted tabular-nums" x-text="remaining"></span>
+                                <button @click="$wire.restoreDiscardedFile({{ $trashed['id'] }})" title="Restore"
+                                    class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-green hover:text-green-400 shrink-0">
+                                    <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
+                                </button>
+                                <button @click="if (confirm('Permanently delete?')) $wire.permanentlyDeleteTrashed({{ $trashed['id'] }})" title="Delete permanently"
+                                    class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0">
+                                    <flux:icon icon="trash" variant="outline" class="!size-3.5" />
+                                </button>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
             </div>
         </aside>
         <div data-testid="sidebar-resize-handle" class="group/resize hidden lg:flex sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-0 cursor-col-resize items-center justify-center z-10 shrink-0"

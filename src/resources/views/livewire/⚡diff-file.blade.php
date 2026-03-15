@@ -288,6 +288,25 @@ new class extends Component {
             />
         </flux:tooltip>
 
+        @if($diffTo === null && ($file['status'] ?? '') !== 'commented')
+            <flux:tooltip content="Discard changes">
+                <flux:button
+                    icon="arrow-uturn-left"
+                    icon:variant="outline"
+                    variant="ghost"
+                    size="sm"
+                    @click="
+                        @if(count($fileComments) > 0)
+                            if (confirm('Discard changes to {{ basename($file['path']) }} and remove {{ count($fileComments) }} comment{{ count($fileComments) === 1 ? '' : 's' }}? You can restore from Trash for 30 minutes.'))
+                        @else
+                            if (confirm('Discard all changes to {{ basename($file['path']) }}? You can restore from Trash for 30 minutes.'))
+                        @endif
+                            $dispatch('discard-file', { fileId: @js($file['id']) })
+                    "
+                />
+            </flux:tooltip>
+        @endif
+
         <span class="ml-auto flex items-center gap-2.5 text-xs shrink-0 font-mono">
             @if($file['additions'] > 0)
                 <span class="text-gh-green">+{{ $file['additions'] }}</span>
