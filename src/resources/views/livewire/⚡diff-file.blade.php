@@ -255,18 +255,18 @@ new class extends Component {
     @mouseup.window="endDrag()"
     @comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"
     @collapse-all-files.window="autoExpandedForComment = false; collapsed = true"
-    @expand-all-files.window="autoExpandedForComment = false; collapsed = false"
-    @expand-file.window="if ($event.detail.id === fileId) { autoExpandedForComment = false; collapsed = false }"
+    @expand-all-files.window="if (!viewed) { autoExpandedForComment = false; collapsed = false }"
+    @expand-file.window="if ($event.detail.id === fileId && !viewed) { autoExpandedForComment = false; collapsed = false }"
     class="group"
 >
     {{-- File header --}}
     <div data-testid="file-header" class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
-        <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'" @click="autoExpandedForComment = false; if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }" class="text-gh-muted hover:text-gh-text transition-colors">
+        <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'" :aria-disabled="viewedLocked" @click="toggleCollapse($event)" class="text-gh-muted hover:text-gh-text transition-colors" :class="viewedLocked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'">
             <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
             <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
         </button>
 
-        <span class="font-mono text-sm truncate cursor-pointer" @click="autoExpandedForComment = false; if ($event.altKey) { $dispatch(collapsed ? 'expand-all-files' : 'collapse-all-files') } else { collapsed = !collapsed }">
+        <span class="font-mono text-sm truncate" :class="viewedLocked ? 'cursor-not-allowed' : 'cursor-pointer'" @click="toggleCollapse($event)">
             @if($file['oldPath'])
                 <span class="text-gh-muted">{{ $file['oldPath'] }} &rarr;</span>
             @endif
