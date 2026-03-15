@@ -264,6 +264,8 @@ final class PerfScenarioRunner
 
     private function resetState(): void
     {
+        app(BenchmarkIsolation::class)->ensureActive();
+
         Cache::flush();
 
         ReviewSession::query()->delete();

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Benchmark\BenchmarkIsolation;
 use App\Console\Benchmark\PerfBenchmarkStatistics;
 use App\Console\Benchmark\PerfScenarioRunner;
 use Illuminate\Console\Command;
@@ -24,13 +25,13 @@ class BenchmarkPerformanceCommand extends Command
 
     protected $description = 'Benchmark representative RFA rendering scenarios';
 
-    public function handle(PerfScenarioRunner $runner): int
+    public function handle(PerfScenarioRunner $runner, BenchmarkIsolation $benchmarkIsolation): int
     {
         if ((bool) $this->option('child')) {
-            return $this->runChildSample($runner);
+            return $this->runChildSample($runner, $benchmarkIsolation);
         }
 
-        $report = $this->collectReport();
+        $report = $this->collectReport($benchmarkIsolation);
 
         if ($snapshotPath = $this->option('snapshot')) {
             $this->writeSnapshot($snapshotPath, $report);
@@ -51,8 +52,10 @@ class BenchmarkPerformanceCommand extends Command
         return self::SUCCESS;
     }
 
-    private function runChildSample(PerfScenarioRunner $runner): int
+    private function runChildSample(PerfScenarioRunner $runner, BenchmarkIsolation $benchmarkIsolation): int
     {
+        $benchmarkIsolation->activate();
+
         $report = [
             'generated_at' => now()->toIso8601String(),
             'results' => $runner->measureAll(
@@ -69,18 +72,18 @@ class BenchmarkPerformanceCommand extends Command
     /**
      * @return array{generated_at: string, config: array<string, int|float>, results: array<string, array{median_ms: float, samples_ms: list<float>}>}
      */
-    private function collectReport(): array
+    private function collectReport(BenchmarkIsolation $benchmarkIsolation): array
     {
         $warmupSamples = (int) $this->option('warmup-samples');
         $samples = (int) $this->option('samples');
         $measurementsByScenario = [];
 
         for ($i = 0; $i < $warmupSamples; $i++) {
-            $this->runChildProcess();
+            $this->runChildProcess($benchmarkIsolation);
         }
 
         for ($i = 0; $i < $samples; $i++) {
-            $sample = $this->runChildProcess();
+            $sample = $this->runChildProcess($benchmarkIsolation);
 
             foreach ($sample['results'] as $scenario => $ms) {
                 $measurementsByScenario[$scenario] ??= [];
@@ -120,8 +123,11 @@ class BenchmarkPerformanceCommand extends Command
     /**
      * @return array{generated_at: string, results: array<string, float>}
      */
-    private function runChildProcess(): array
+    private function runChildProcess(BenchmarkIsolation $benchmarkIsolation): array
     {
+        $environment = $benchmarkIsolation->createEnvironment();
+        $databasePath = $environment[BenchmarkIsolation::ENV_DATABASE];
+
         $process = new Process([
             PHP_BINARY,
             'artisan',
@@ -130,24 +136,28 @@ class BenchmarkPerformanceCommand extends Command
             '--json',
             '--rounds='.$this->option('rounds'),
             '--warmup-rounds='.$this->option('warmup-rounds'),
-        ], base_path());
+        ], base_path(), $environment);
 
-        $process->setTimeout(null);
-        $process->mustRun();
+        try {
+            $process->setTimeout(null);
+            $process->mustRun();
 
-        $payload = json_decode(trim($process->getOutput()), true);
+            $payload = json_decode(trim($process->getOutput()), true);
 
-        if (! is_array($payload) || ! isset($payload['results']) || ! is_array($payload['results'])) {
-            throw new \RuntimeException('Unable to decode benchmark child-process output.');
+            if (! is_array($payload) || ! isset($payload['results']) || ! is_array($payload['results'])) {
+                throw new \RuntimeException('Unable to decode benchmark child-process output.');
+            }
+
+            return [
+                'generated_at' => (string) ($payload['generated_at'] ?? now()->toIso8601String()),
+                'results' => array_map(
+                    fn (mixed $value): float => (float) $value,
+                    $payload['results'],
+                ),
+            ];
+        } finally {
+            $benchmarkIsolation->cleanupDatabase($databasePath);
         }
-
-        return [
-            'generated_at' => (string) ($payload['generated_at'] ?? now()->toIso8601String()),
-            'results' => array_map(
-                fn (mixed $value): float => (float) $value,
-                $payload['results'],
-            ),
-        ];
     }
 
     /**
