@@ -261,53 +261,64 @@ new class extends Component {
 >
     {{-- File header --}}
     <div data-testid="file-header" class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
-        <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'" :aria-disabled="viewedLocked" @click="toggleCollapse($event)" class="text-gh-muted hover:text-gh-text transition-colors" :class="viewedLocked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'">
-            <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
-            <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
-        </button>
 
-        <span class="font-mono text-sm truncate" :class="viewedLocked ? 'cursor-not-allowed' : 'cursor-pointer'" @click="toggleCollapse($event)">
-            @if($file['oldPath'])
-                <span class="text-gh-muted">{{ $file['oldPath'] }} &rarr;</span>
+        {{-- Toggle zone: click anywhere here to expand/collapse --}}
+        <div data-testid="toggle-zone"
+             @click="toggleCollapse($event)"
+             :class="viewedLocked ? 'cursor-not-allowed' : 'cursor-pointer'"
+             class="flex items-center gap-2.5 flex-1 min-w-0">
+            <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'"
+                    :aria-disabled="viewedLocked"
+                    class="text-gh-muted hover:text-gh-text transition-colors"
+                    :class="viewedLocked && 'opacity-50'">
+                <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
+                <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
+            </button>
+
+            <span class="font-mono text-sm truncate">
+                @if($file['oldPath'])
+                    <span class="text-gh-muted">{{ $file['oldPath'] }} &rarr;</span>
+                @endif
+                {{ $file['path'] }}
+            </span>
+
+            @if($file['isSymlink'] ?? false)
+                <flux:icon icon="link" variant="outline" class="!size-3.5 text-gh-muted shrink-0" aria-hidden="true" />
+                <span class="font-mono text-xs text-gh-muted">&rarr; {{ $file['symlinkTarget'] }}</span>
             @endif
-            {{ $file['path'] }}
-        </span>
+        </div>
 
-        @if($file['isSymlink'] ?? false)
-            <flux:icon icon="link" variant="outline" class="!size-3.5 text-gh-muted shrink-0" aria-hidden="true" />
-            <span class="font-mono text-xs text-gh-muted">&rarr; {{ $file['symlinkTarget'] }}</span>
-        @endif
-
-        <flux:tooltip content="Copy file name">
-            <flux:button
-                icon="square-2-stack"
-                icon:variant="outline"
-                variant="ghost"
-                size="sm"
-                @click="$dispatch('copy-to-clipboard', { text: filePath })"
-            />
-        </flux:tooltip>
-
-        @if($diffTo === null && ($file['status'] ?? '') !== 'commented')
-            <flux:tooltip content="Discard changes">
+        {{-- Actions toolbar --}}
+        <div class="flex items-center gap-2.5 text-xs shrink-0 font-mono">
+            <flux:tooltip content="Copy file name">
                 <flux:button
-                    icon="arrow-uturn-left"
+                    icon="square-2-stack"
                     icon:variant="outline"
                     variant="ghost"
                     size="sm"
-                    @click="
-                        @if(count($fileComments) > 0)
-                            if (confirm('Discard changes to {{ basename($file['path']) }} and remove {{ count($fileComments) }} comment{{ count($fileComments) === 1 ? '' : 's' }}? You can restore from Trash for 30 minutes.'))
-                        @else
-                            if (confirm('Discard all changes to {{ basename($file['path']) }}? You can restore from Trash for 30 minutes.'))
-                        @endif
-                            $dispatch('discard-file', { fileId: @js($file['id']) })
-                    "
+                    @click="$dispatch('copy-to-clipboard', { text: filePath })"
                 />
             </flux:tooltip>
-        @endif
 
-        <span class="ml-auto flex items-center gap-2.5 text-xs shrink-0 font-mono">
+            @if($diffTo === null && ($file['status'] ?? '') !== 'commented')
+                <flux:tooltip content="Discard changes">
+                    <flux:button
+                        icon="arrow-uturn-left"
+                        icon:variant="outline"
+                        variant="ghost"
+                        size="sm"
+                        @click="
+                            @if(count($fileComments) > 0)
+                                if (confirm('Discard changes to {{ basename($file['path']) }} and remove {{ count($fileComments) }} comment{{ count($fileComments) === 1 ? '' : 's' }}? You can restore from Trash for 30 minutes.'))
+                            @else
+                                if (confirm('Discard all changes to {{ basename($file['path']) }}? You can restore from Trash for 30 minutes.'))
+                            @endif
+                                $dispatch('discard-file', { fileId: @js($file['id']) })
+                        "
+                    />
+                </flux:tooltip>
+            @endif
+
             @if($file['additions'] > 0)
                 <span class="text-gh-green">+{{ $file['additions'] }}</span>
             @endif
@@ -332,7 +343,8 @@ new class extends Component {
                 x-text="$wire.fileComments.length"
                 class="text-[10px] font-mono text-gh-muted tabular-nums"
             ></span>
-        </span>
+        </div>
+
     </div>
 
     {{-- File body --}}
