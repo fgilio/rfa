@@ -70,6 +70,47 @@ test('alt+click file name expands all files', function () {
     $page->assertSee('function greet');
 });
 
+test('clicking toggle zone gap collapses and expands file', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $page->assertSee("'debug'");
+
+    // Get toggle zone dimensions so we can click the empty space past the filename
+    $page->script("
+        window.__zoneDims = (function() {
+            var el = document.querySelector('[data-testid=\"toggle-zone\"]');
+            var r = el.getBoundingClientRect();
+            return [r.width, r.height];
+        })();
+    ");
+    $dims = $page->script('window.__zoneDims');
+
+    // Click near the right edge of the toggle zone (gap area, not filename text)
+    $page->page()->getByTestId('toggle-zone')->first()
+        ->click(['position' => ['x' => intval($dims[0]) - 5, 'y' => intval($dims[1] / 2)]]);
+
+    $page->assertDontSee("'debug'");
+
+    // Click gap again to expand
+    $page->page()->getByTestId('toggle-zone')->first()
+        ->click(['position' => ['x' => intval($dims[0]) - 5, 'y' => intval($dims[1] / 2)]]);
+
+    $page->assertSee("'debug'");
+});
+
+test('copy button click does not collapse file', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $page->assertSee("'debug'");
+
+    $page->page()->getByLabel('Copy file name')->first()->click();
+
+    // Wait past the collapse animation duration (150ms)
+    usleep(300_000);
+
+    $page->assertSee("'debug'");
+});
+
 test('copy file name button dispatches copy event', function () {
     $page = $this->visit($this->projectUrl());
 
