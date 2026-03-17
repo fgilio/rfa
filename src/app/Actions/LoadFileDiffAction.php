@@ -9,6 +9,7 @@ use App\DTOs\FileDiff;
 use App\Exceptions\GitCommandException;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
+use App\Services\MarkdownTableAligner;
 use App\Services\SyntaxHighlightService;
 use Illuminate\Support\Facades\Cache;
 
@@ -18,6 +19,7 @@ final readonly class LoadFileDiffAction
         private GitDiffService $gitDiffService,
         private DiffParser $diffParser,
         private SyntaxHighlightService $syntaxHighlightService,
+        private MarkdownTableAligner $markdownTableAligner,
     ) {}
 
     /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool, syntaxStyles: string} */
@@ -47,6 +49,10 @@ final readonly class LoadFileDiffAction
                 return FileDiff::emptyArray($path, 'modified', tooLarge: false) + ['syntaxStyles' => ''];
             }
 
+            $fileDiff = $fileDiff->withHunks(
+                $this->markdownTableAligner->alignTables($fileDiff->hunks, $fileDiff->path)
+            );
+
             $highlightedHunks = $this->syntaxHighlightService->highlightHunks($fileDiff->hunks, $fileDiff->path);
 
             $css = '';
@@ -59,12 +65,12 @@ final readonly class LoadFileDiffAction
                 }
             }
 
-            return $fileDiff->withHunks($highlightedHunks)->toArray() + ['tooLarge' => false, 'syntaxStyles' => $css];
+            return $fileDiff->withHunks($highlightedHunks)->toArray() + ['tooLarge' => false, 'syntaxStyles' => $css, 'tableAligned' => true];
         };
 
         if ($cacheKey) {
             $cached = Cache::get($cacheKey);
-            if ($cached !== null && array_key_exists('syntaxStyles', $cached) && array_key_exists('isSymlink', $cached)) {
+            if ($cached !== null && array_key_exists('syntaxStyles', $cached) && array_key_exists('isSymlink', $cached) && array_key_exists('tableAligned', $cached)) {
                 return $cached;
             }
             $result = $compute();
