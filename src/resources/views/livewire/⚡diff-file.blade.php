@@ -385,6 +385,13 @@ new class extends Component {
         @elseif($file['isBinary'] && !($file['isImage'] ?? false))
             <div class="px-4 py-8 text-center">
                 <flux:text variant="subtle" size="sm">Binary file not shown</flux:text>
+                @if(($file['fileSize'] ?? null) || ($file['lastModified'] ?? null))
+                    <div class="mt-1">
+                        <flux:text variant="subtle" size="sm">
+                            {{ $file['fileSize'] ?? '' }}@if(($file['fileSize'] ?? null) && ($file['lastModified'] ?? null)) &middot; @endif@if($file['lastModified'] ?? null)modified {{ $file['lastModified'] }}@endif
+                        </flux:text>
+                    </div>
+                @endif
             </div>
         @elseif($file['isBinary'] && ($file['isImage'] ?? false))
             @php

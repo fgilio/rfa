@@ -20,6 +20,7 @@ class FileListEntry
         public readonly ?string $lastModified = null,
         public readonly bool $isSymlink = false,
         public readonly ?string $symlinkTarget = null,
+        public readonly ?string $fileSize = null,
     ) {}
 
     public static function idForPath(string $path): string
@@ -55,6 +56,7 @@ class FileListEntry
             'lastModified' => $this->lastModified,
             'isSymlink' => $this->isSymlink,
             'symlinkTarget' => $this->symlinkTarget,
+            'fileSize' => $this->fileSize,
         ];
     }
 }
