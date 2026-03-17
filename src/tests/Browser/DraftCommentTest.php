@@ -238,7 +238,7 @@ test('drafts alone do not enable submit button', function () {
 });
 
 test('submit with drafts shows confirm dialog', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     // Create finalized comment
     $page->page()->getByTestId('diff-line-number')->first()->click();
