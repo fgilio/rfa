@@ -24,15 +24,11 @@
             dragStartLine: null,
             dragSide: null,
 
-            get viewedLocked() {
-                return this.viewed && this.collapsed;
-            },
-
             toggleCollapse(event) {
                 this.autoExpandedForComment = false;
                 if (event.altKey) {
                     this.$dispatch(this.collapsed ? 'expand-all-files' : 'collapse-all-files');
-                } else if (!this.viewed || !this.collapsed) {
+                } else {
                     this.collapsed = !this.collapsed;
                 }
             },

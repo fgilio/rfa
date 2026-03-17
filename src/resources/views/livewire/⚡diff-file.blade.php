@@ -255,8 +255,8 @@ new class extends Component {
     @mouseup.window="endDrag()"
     @comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"
     @collapse-all-files.window="autoExpandedForComment = false; collapsed = true"
-    @expand-all-files.window="if (!viewed) { autoExpandedForComment = false; collapsed = false }"
-    @expand-file.window="if ($event.detail.id === fileId && !viewed) { autoExpandedForComment = false; collapsed = false }"
+    @expand-all-files.window="autoExpandedForComment = false; collapsed = false"
+    @expand-file.window="if ($event.detail.id === fileId) { autoExpandedForComment = false; collapsed = false }"
     class="group"
 >
     {{-- File header --}}
@@ -265,12 +265,9 @@ new class extends Component {
         {{-- Toggle zone: click anywhere here to expand/collapse --}}
         <div data-testid="toggle-zone"
              @click="toggleCollapse($event)"
-             :class="viewedLocked ? 'cursor-not-allowed' : 'cursor-pointer'"
-             class="flex items-center gap-2.5 flex-1 min-w-0">
+             class="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer">
             <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'"
-                    :aria-disabled="viewedLocked"
-                    class="text-gh-muted hover:text-gh-text transition-colors"
-                    :class="viewedLocked && 'opacity-50'">
+                    class="text-gh-muted hover:text-gh-text transition-colors">
                 <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
                 <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
             </button>
