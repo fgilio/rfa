@@ -51,6 +51,7 @@ test('toArray includes all properties and computed id', function () {
         'lastModified' => null,
         'isSymlink' => false,
         'symlinkTarget' => null,
+        'fileSize' => null,
     ]);
 });
 
