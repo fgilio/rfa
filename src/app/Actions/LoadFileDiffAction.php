@@ -9,7 +9,7 @@ use App\DTOs\FileDiff;
 use App\Exceptions\GitCommandException;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
-use App\Services\MarkdownTableAligner;
+use App\Services\MarkdownTableAlignerService;
 use App\Services\SyntaxHighlightService;
 use Illuminate\Support\Facades\Cache;
 
@@ -19,7 +19,7 @@ final readonly class LoadFileDiffAction
         private GitDiffService $gitDiffService,
         private DiffParser $diffParser,
         private SyntaxHighlightService $syntaxHighlightService,
-        private MarkdownTableAligner $markdownTableAligner,
+        private MarkdownTableAlignerService $markdownTableAligner,
     ) {}
 
     /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool, syntaxStyles: string} */

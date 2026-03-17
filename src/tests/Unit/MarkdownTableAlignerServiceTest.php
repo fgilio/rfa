@@ -2,10 +2,10 @@
 
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
-use App\Services\MarkdownTableAligner;
+use App\Services\MarkdownTableAlignerService;
 
 beforeEach(function () {
-    $this->aligner = new MarkdownTableAligner;
+    $this->aligner = new MarkdownTableAlignerService;
 });
 
 test('returns hunks unchanged for non-markdown files', function () {

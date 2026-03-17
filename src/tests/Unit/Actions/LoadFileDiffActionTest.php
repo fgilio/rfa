@@ -6,7 +6,7 @@ use App\Services\DiffParser;
 use App\Services\GitDiffService;
 use App\Services\GitProcessService;
 use App\Services\IgnoreService;
-use App\Services\MarkdownTableAligner;
+use App\Services\MarkdownTableAlignerService;
 use App\Services\SyntaxHighlightService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
@@ -25,7 +25,7 @@ beforeEach(function () {
 test('returns full DTO array for modified file', function () {
     File::put($this->tmpDir.'/hello.txt', "line1\nline2\n");
 
-    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAligner);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
     $result = $action->handle($this->tmpDir, 'hello.txt');
 
     expect($result)->toHaveKeys(['path', 'status', 'hunks', 'additions', 'deletions', 'isBinary', 'tooLarge'])
@@ -41,7 +41,7 @@ test('returns tooLarge true when diff exceeds limit', function () {
     // Use a very low maxBytes config
     config(['rfa.diff_max_bytes' => 100]);
 
-    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAligner);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
     $result = $action->handle($this->tmpDir, 'hello.txt');
 
     expect($result)->toHaveKeys(['path', 'status', 'oldPath', 'hunks', 'additions', 'deletions', 'isBinary', 'tooLarge'])
@@ -54,7 +54,7 @@ test('returns tooLarge true when diff exceeds limit', function () {
 });
 
 test('returns empty array for empty diff', function () {
-    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAligner);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
     $result = $action->handle($this->tmpDir, 'nonexistent.txt', isUntracked: true);
 
     expect($result['hunks'])->toBe([])
@@ -64,7 +64,7 @@ test('returns empty array for empty diff', function () {
 test('handles untracked file', function () {
     File::put($this->tmpDir.'/newfile.txt', "hello\nworld\n");
 
-    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAligner);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
     $result = $action->handle($this->tmpDir, 'newfile.txt', isUntracked: true);
 
     expect($result)->not->toBeNull()
@@ -80,7 +80,7 @@ test('adds highlightedContent for known file types', function () {
     $this->commitTestRepo($this->tmpDir, 'add php');
     File::put($this->tmpDir.'/hello.php', "<?php\necho 'hello';\n");
 
-    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAligner);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
     $result = $action->handle($this->tmpDir, 'hello.php');
 
     expect($result)->not->toBeNull()
@@ -97,7 +97,7 @@ test('result contains syntaxStyles CSS for known file types', function () {
     $this->commitTestRepo($this->tmpDir, 'add php styles');
     File::put($this->tmpDir.'/hello.php', "<?php\necho 'hello';\n");
 
-    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAligner);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
     $result = $action->handle($this->tmpDir, 'hello.php');
 
     expect($result)->toHaveKey('syntaxStyles')
@@ -111,7 +111,7 @@ test('no highlightedContent for unknown file types', function () {
     $this->commitTestRepo($this->tmpDir, 'add xyz');
     File::put($this->tmpDir.'/data.xyz', "updated content\n");
 
-    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAligner);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
     $result = $action->handle($this->tmpDir, 'data.xyz');
 
     expect($result)->not->toBeNull();
@@ -136,7 +136,7 @@ test('contextLines parameter produces single hunk for full context', function ()
         new GitDiffService(new GitProcessService, new IgnoreService),
         new DiffParser,
         new SyntaxHighlightService,
-        new MarkdownTableAligner,
+        new MarkdownTableAlignerService,
     );
 
     $default = $action->handle($this->tmpDir, 'many.txt');
@@ -168,7 +168,7 @@ test('stale cache without syntaxStyles triggers re-computation', function () {
         'tooLarge' => false,
     ], 3600);
 
-    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAligner);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
     $result = $action->handle($this->tmpDir, 'hello.php', cacheKey: $cacheKey);
 
     expect($result)->toHaveKey('syntaxStyles')
@@ -181,7 +181,7 @@ test('class names in highlightedContent have matching selectors in syntaxStyles'
     $this->commitTestRepo($this->tmpDir, 'add php selectors');
     File::put($this->tmpDir.'/hello.php', "<?php\necho 'hello';\n");
 
-    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAligner);
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
     $result = $action->handle($this->tmpDir, 'hello.php');
 
     $classNames = [];
@@ -211,7 +211,7 @@ test('returns error field when git command fails', function () {
     $gitService->shouldReceive('getFileDiff')
         ->andThrow(new GitCommandException('git diff', 'fatal: bad revision', 128));
 
-    $action = new LoadFileDiffAction($gitService, new DiffParser, new SyntaxHighlightService, new MarkdownTableAligner);
+    $action = new LoadFileDiffAction($gitService, new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
     $result = $action->handle($this->tmpDir, 'hello.txt');
 
     expect($result['error'])->toBe('fatal: bad revision')

@@ -7,7 +7,7 @@ namespace App\Services;
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
 
-class MarkdownTableAligner
+class MarkdownTableAlignerService
 {
     private const MARKDOWN_EXTENSIONS = ['md', 'mdx'];
 
