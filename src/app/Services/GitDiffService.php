@@ -8,6 +8,7 @@ use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Number;
 
 class GitDiffService
 {
@@ -109,6 +110,7 @@ class GitDiffService
                     lastModified: $target->isWorkingDirectory() ? $this->getLastModified($repoPath, $path) : null,
                     isSymlink: $symlinkTarget !== null,
                     symlinkTarget: $symlinkTarget,
+                    fileSize: $target->isWorkingDirectory() ? $this->getHumanFileSize($repoPath, $path) : null,
                 );
             })
             ->values()
@@ -166,6 +168,7 @@ class GitDiffService
                             isBinary: true,
                             isUntracked: true,
                             lastModified: $this->getLastModified($repoPath, $file),
+                            fileSize: $this->getHumanFileSize($repoPath, $file),
                         );
 
                         continue;
@@ -324,6 +327,17 @@ class GitDiffService
         }
 
         return Carbon::createFromTimestamp(File::lastModified($fullPath))->diffForHumans(short: true);
+    }
+
+    private function getHumanFileSize(string $repoPath, string $path): ?string
+    {
+        $fullPath = $repoPath.'/'.$path;
+
+        if (! File::isFile($fullPath)) {
+            return null;
+        }
+
+        return Number::fileSize(File::size($fullPath), precision: 1);
     }
 
     private function symlinkTarget(string $fullPath): ?string
