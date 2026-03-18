@@ -23,6 +23,14 @@
             isDragging: false,
             dragStartLine: null,
             dragSide: null,
+            _dragMouseX: 0,
+            _dragMouseY: 0,
+            _scrollRafId: null,
+            _scrollLastTime: null,
+            _cachedFileHeader: null,
+            _onDragPointerMove: null,
+            _onDragWindowBlur: null,
+            _cursorOutside: false,
 
             toggleCollapse(event) {
                 this.autoExpandedForComment = false;
@@ -62,6 +70,29 @@
                 this.formEndLine = lineNum;
                 this.formSide = side;
                 this.showForm = false;
+
+                this._cachedFileHeader = this.$el.querySelector('[data-testid="file-header"]');
+                this._cursorOutside = false;
+                this._dragMouseX = event.clientX;
+                this._dragMouseY = event.clientY;
+
+                this._onDragPointerMove = (e) => {
+                    if (e.buttons === 0) {
+                        this.endDrag();
+                        return;
+                    }
+                    this._dragMouseX = e.clientX;
+                    this._dragMouseY = e.clientY;
+                    this._cursorOutside = false;
+                    this._ensureScrollLoop();
+                };
+                this._onDragWindowBlur = () => {
+                    this._cursorOutside = true;
+                };
+
+                window.addEventListener('pointermove', this._onDragPointerMove);
+                window.addEventListener('blur', this._onDragWindowBlur);
+                this._ensureScrollLoop();
             },
 
             onDragOver(newLineNum, oldLineNum) {
@@ -74,6 +105,16 @@
 
             endDrag() {
                 if (!this.isDragging) return;
+                this._stopScrollLoop();
+                if (this._onDragPointerMove) {
+                    window.removeEventListener('pointermove', this._onDragPointerMove);
+                    this._onDragPointerMove = null;
+                }
+                if (this._onDragWindowBlur) {
+                    window.removeEventListener('blur', this._onDragWindowBlur);
+                    this._onDragWindowBlur = null;
+                }
+                this._cachedFileHeader = null;
                 this.isDragging = false;
                 this.showForm = true;
                 this.lastClickedLine = this.formEndLine;
@@ -151,6 +192,89 @@
                     this.$wire.dispatch(event, { fileId: this.fileId, side: this.formSide, startLine: this.formLine, endLine: this.formEndLine, body: this.formBody });
                 }
                 this.cancelForm();
+            },
+
+            _ensureScrollLoop() {
+                if (this._scrollRafId) return;
+                this._scrollLastTime = null;
+                this._scrollRafId = requestAnimationFrame((ts) => this._scrollTick(ts));
+            },
+
+            _stopScrollLoop() {
+                if (this._scrollRafId) {
+                    cancelAnimationFrame(this._scrollRafId);
+                    this._scrollRafId = null;
+                }
+                this._scrollLastTime = null;
+            },
+
+            _getScrollSpeed(deltaMs) {
+                const y = this._dragMouseY;
+                const viewportBottom = window.innerHeight;
+
+                // Top edge: area below sticky file header
+                const headerBottom = this._cachedFileHeader
+                    ? this._cachedFileHeader.getBoundingClientRect().bottom
+                    : 0;
+                const edgeZone = 70;
+
+                if (y < headerBottom) {
+                    // Above sticky header: max speed up
+                    return -600 * (deltaMs / 1000);
+                }
+                if (y < headerBottom + edgeZone) {
+                    // Within top edge zone: proportional speed up
+                    const depth = 1 - (y - headerBottom) / edgeZone;
+                    const speed = 100 + depth * 500; // 100-600 px/s
+                    return -speed * (deltaMs / 1000);
+                }
+                if (y > viewportBottom - edgeZone) {
+                    // Within bottom edge zone: proportional speed down
+                    const depth = 1 - (viewportBottom - y) / edgeZone;
+                    const speed = 100 + depth * 500;
+                    return speed * (deltaMs / 1000);
+                }
+
+                return 0;
+            },
+
+            _scrollTick(timestamp) {
+                this._scrollRafId = null;
+
+                if (!this.isDragging || this._cursorOutside) {
+                    this._scrollLastTime = null;
+                    return;
+                }
+
+                const deltaMs = this._scrollLastTime
+                    ? Math.min(timestamp - this._scrollLastTime, 32)
+                    : 16;
+                this._scrollLastTime = timestamp;
+
+                const px = this._getScrollSpeed(deltaMs);
+                if (px === 0) {
+                    this._scrollLastTime = null;
+                    return;
+                }
+
+                window.scrollBy(0, px);
+                this._updateSelectionFromPoint();
+                this._scrollRafId = requestAnimationFrame((ts) => this._scrollTick(ts));
+            },
+
+            _updateSelectionFromPoint() {
+                const el = document.elementFromPoint(this._dragMouseX, this._dragMouseY);
+                if (!el) return;
+                const tr = el.closest('tr.diff-line');
+                if (!tr || !this.$el.contains(tr)) return;
+
+                const lineNum = this.dragSide === 'left'
+                    ? (tr.dataset.lineOld ? parseInt(tr.dataset.lineOld) : null)
+                    : (tr.dataset.lineNew ? parseInt(tr.dataset.lineNew) : null);
+                if (lineNum === null) return;
+
+                this.formLine = Math.min(this.dragStartLine, lineNum);
+                this.formEndLine = Math.max(this.dragStartLine, lineNum);
             },
 
             isLineInSelection(lineNum) {

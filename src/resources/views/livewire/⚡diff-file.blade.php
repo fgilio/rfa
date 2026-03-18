@@ -547,6 +547,8 @@ new class extends Component {
                                 class="diff-line {{ $bgClass }}"
                                 :class="isLineInSelection({{ $lineNum ?? 'null' }}) ? 'line-selected' : ''"
                                 @mouseenter="onDragOver({{ $line['newLineNum'] ?? 'null' }}, {{ $line['oldLineNum'] ?? 'null' }})"
+                                @if($line['newLineNum']) data-line-new="{{ $line['newLineNum'] }}" @endif
+                                @if($line['oldLineNum']) data-line-old="{{ $line['oldLineNum'] }}" @endif
                             >
                                 {{-- Old line number --}}
                                 <td data-testid="diff-line-number" class="diff-line-num w-[1px] px-2 text-right text-gh-muted/50 select-none cursor-pointer {{ $numBgClass }}"
