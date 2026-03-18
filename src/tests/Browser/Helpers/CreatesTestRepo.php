@@ -230,6 +230,30 @@ trait CreatesTestRepo
         }
     }
 
+    protected function setUpScrollableTestRepo(): void
+    {
+        $this->testRepoPath = $this->makeTempRepoPath();
+
+        // 80 lines so the diff overflows any standard viewport
+        $lines = array_map(fn ($i) => sprintf('line %03d: original content here', $i), range(1, 80));
+        File::put($this->testRepoPath.'/scrollable.txt', implode("\n", $lines)."\n");
+
+        $this->initTestRepo($this->testRepoPath);
+        $this->commitTestRepo($this->testRepoPath, 'Initial commit');
+        $this->assertHeadExists();
+
+        // Modify every other line to produce a dense diff
+        $modified = array_map(
+            fn ($i) => $i % 2 === 0
+                ? sprintf('line %03d: modified content here', $i)
+                : sprintf('line %03d: original content here', $i),
+            range(1, 80),
+        );
+        File::put($this->testRepoPath.'/scrollable.txt', implode("\n", $modified)."\n");
+
+        $this->registerTestProject($this->testRepoPath);
+    }
+
     protected function addLargeFile(string $name = 'large.txt', int $bytes = 600_000): void
     {
         File::put($this->testRepoPath.'/'.$name, str_repeat("line of content for large file\n", (int) ceil($bytes / 30)));

@@ -202,3 +202,41 @@ test('collapse event handlers reset autoExpandedForComment', function () {
 
     expect($html)->toContain('@collapse-all-files.window="autoExpandedForComment = false');
 });
+
+// -- Data attributes for auto-scroll selection --
+
+test('added lines have data-line-new but not data-line-old', function () {
+    $html = mountDiffFile($this->file)->html();
+
+    preg_match_all('/<tr[^>]*bg-gh-add-bg[^>]*>/', $html, $matches);
+    expect($matches[0])->not->toBeEmpty();
+
+    foreach ($matches[0] as $row) {
+        expect($row)->toContain('data-line-new="')
+            ->and($row)->not->toContain('data-line-old="');
+    }
+});
+
+test('removed lines have data-line-old but not data-line-new', function () {
+    $html = mountDiffFile($this->file)->html();
+
+    preg_match_all('/<tr[^>]*bg-gh-del-bg[^>]*>/', $html, $matches);
+    expect($matches[0])->not->toBeEmpty();
+
+    foreach ($matches[0] as $row) {
+        expect($row)->toContain('data-line-old="')
+            ->and($row)->not->toContain('data-line-new="');
+    }
+});
+
+test('context lines have both data-line-new and data-line-old', function () {
+    $html = mountDiffFile($this->file)->html();
+
+    preg_match_all('/<tr[^>]*class="diff-line\s*"[^>]*>/', $html, $matches);
+    expect($matches[0])->not->toBeEmpty();
+
+    foreach ($matches[0] as $row) {
+        expect($row)->toContain('data-line-new="')
+            ->and($row)->toContain('data-line-old="');
+    }
+});
