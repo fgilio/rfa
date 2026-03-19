@@ -773,6 +773,7 @@ new #[Layout('layouts.app')] class extends Component {
                         <span class="section-label text-gh-muted">Reviews</span>
                         @if(count($reviewPairs) > 1)
                             <button class="text-gh-muted hover:text-red-400 transition-colors"
+                                aria-label="Delete all review files"
                                 @click="if (confirm('Delete all review files?')) $wire.deleteAllReviewPairs()">
                                 <flux:icon icon="trash" variant="outline" class="!size-4" />
                             </button>
@@ -785,6 +786,7 @@ new #[Layout('layouts.app')] class extends Component {
                                 {{ $pair['displayName'] }}
                             </button>
                             <button class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0 ml-auto"
+                                aria-label="Delete review {{ $pair['basename'] }}"
                                 @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')">
                                 <flux:icon icon="trash" variant="outline" class="!size-4" />
                             </button>
@@ -835,6 +837,7 @@ new #[Layout('layouts.app')] class extends Component {
                             <button
                                 class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text shrink-0"
                                 title="Discard changes"
+                                aria-label="Discard changes for {{ basename($file['path']) }}"
                                 @click.stop="
                                     @php $commentCount = count($this->groupedComments[$file['id']] ?? []); @endphp
                                     @if($commentCount > 0)
@@ -879,10 +882,12 @@ new #[Layout('layouts.app')] class extends Component {
                                 <span class="font-mono text-xs text-gh-muted truncate flex-1" title="{{ $trashed['file_path'] }}">{{ basename($trashed['file_path']) }}</span>
                                 <span class="text-[10px] text-gh-muted tabular-nums" x-text="remaining"></span>
                                 <button @click="$wire.restoreDiscardedFile({{ $trashed['id'] }})" title="Restore"
+                                    aria-label="Restore {{ basename($trashed['file_path']) }}"
                                     class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-green hover:text-green-400 shrink-0">
                                     <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
                                 </button>
-                                <button @click="if (confirm('Permanently delete?')) $wire.permanentlyDeleteTrashed({{ $trashed['id'] }})" title="Delete permanently"
+                                <button @click="if (confirm('Permanently delete {{ basename($trashed['file_path']) }}?')) $wire.permanentlyDeleteTrashed({{ $trashed['id'] }})" title="Delete permanently"
+                                    aria-label="Delete {{ basename($trashed['file_path']) }} permanently"
                                     class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0">
                                     <flux:icon icon="trash" variant="outline" class="!size-3.5" />
                                 </button>

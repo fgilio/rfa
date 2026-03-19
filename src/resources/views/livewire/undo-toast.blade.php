@@ -12,11 +12,13 @@
         },
 
         push(detail) {
+            const ttl = detail.ttl ?? 10;
             this.stack.unshift({
                 type: detail.type,
                 payload: detail.payload,
                 message: detail.message ?? 'Action completed',
-                expiresAt: Date.now() + (detail.ttl ?? 10) * 1000,
+                ttl: ttl,
+                expiresAt: Date.now() + ttl * 1000,
             });
             this.startTicker();
         },
@@ -73,7 +75,7 @@
         {{-- Progress bar --}}
         <div class="w-16 h-0.5 bg-gh-border rounded-full overflow-hidden">
             <div class="h-full bg-gh-muted transition-all duration-1000 ease-linear rounded-full"
-                :style="{ width: (remaining / 10 * 100) + '%' }"></div>
+                :style="{ width: (remaining / current.ttl * 100) + '%' }"></div>
         </div>
         <button @click="dismiss()" class="text-gh-muted hover:text-gh-text" aria-label="Dismiss">
             <flux:icon icon="x-mark" variant="outline" class="!size-3.5" />
