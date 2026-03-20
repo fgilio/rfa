@@ -558,6 +558,20 @@ new #[Layout('layouts.app')] class extends Component {
 <div
     data-testid="review-component"
     x-data="{
+        pendingSaves: 0,
+        init() {
+            const wireId = this.$root.getAttribute('wire:id');
+            Livewire.hook('commit', ({ component, succeed, fail }) => {
+                if (component.id !== wireId) return;
+                this.pendingSaves++;
+                const done = () => { this.pendingSaves--; };
+                succeed(({ snapshot, effect }) => { done(); });
+                fail(done);
+            });
+            window.addEventListener('beforeunload', (e) => {
+                if (this.pendingSaves > 0) e.preventDefault();
+            });
+        },
         activeFile: null,
         viewedFiles: @js((object) collect($sourceFiles)->filter(fn($f) => array_key_exists($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()),
         fileFilter: '',
