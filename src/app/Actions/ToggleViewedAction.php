@@ -33,7 +33,7 @@ final readonly class ToggleViewedAction
         }
 
         $fingerprint = $repoPath !== ''
-            ? $this->gitDiffService->fileDiffFingerprint($repoPath, $filePath, $file['isUntracked'] ?? false, $target)
+            ? $this->gitDiffService->fileDiffFingerprint($repoPath, $filePath, $target)
             : '';
 
         $viewedFiles[$filePath] = $fingerprint;

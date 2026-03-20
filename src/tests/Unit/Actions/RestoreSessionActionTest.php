@@ -121,10 +121,10 @@ test('migrates legacy indexed array to associative with fresh fingerprints', fun
 
     $mock = Mockery::mock(GitDiffService::class);
     $mock->shouldReceive('fileDiffFingerprint')
-        ->with($repoPath, 'a.php', false, null)
+        ->with($repoPath, 'a.php', null)
         ->andReturn('hash-a');
     $mock->shouldReceive('fileDiffFingerprint')
-        ->with($repoPath, 'b.php', false, null)
+        ->with($repoPath, 'b.php', null)
         ->andReturn('hash-b');
     app()->instance(GitDiffService::class, $mock);
 
@@ -151,10 +151,10 @@ test('unmarks viewed file when fingerprint mismatches', function () {
 
     $mock = Mockery::mock(GitDiffService::class);
     $mock->shouldReceive('fileDiffFingerprint')
-        ->with($repoPath, 'a.php', false, null)
+        ->with($repoPath, 'a.php', null)
         ->andReturn('new-hash');
     $mock->shouldReceive('fileDiffFingerprint')
-        ->with($repoPath, 'b.php', false, null)
+        ->with($repoPath, 'b.php', null)
         ->andReturn('still-good');
     app()->instance(GitDiffService::class, $mock);
 
@@ -180,7 +180,7 @@ test('skips fingerprint validation for immutable targets', function () {
     // Mock returns empty string for immutable (no validation needed)
     $mock = Mockery::mock(GitDiffService::class);
     $mock->shouldReceive('fileDiffFingerprint')
-        ->with($repoPath, 'a.php', false, $target)
+        ->with($repoPath, 'a.php', $target)
         ->andReturn('');
     app()->instance(GitDiffService::class, $mock);
 

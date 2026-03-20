@@ -27,11 +27,9 @@ final readonly class RestoreSessionAction
         );
 
         $fileIdMap = [];
-        $untrackedMap = [];
         $currentPathSet = [];
         foreach ($currentFiles as $f) {
             $fileIdMap[$f['path']] = $f['id'];
-            $untrackedMap[$f['path']] = $f['isUntracked'] ?? false;
             $currentPathSet[$f['path']] = true;
         }
 
@@ -45,7 +43,7 @@ final readonly class RestoreSessionAction
             $viewedFiles = [];
             foreach ($rawViewed as $path) {
                 if (isset($currentPathSet[$path])) {
-                    $viewedFiles[$path] = $isImmutable ? '' : $this->gitDiffService->fileDiffFingerprint($repoPath, $path, $untrackedMap[$path] ?? false, $target);
+                    $viewedFiles[$path] = $isImmutable ? '' : $this->gitDiffService->fileDiffFingerprint($repoPath, $path, $target);
                 }
             }
         } else {
@@ -55,7 +53,7 @@ final readonly class RestoreSessionAction
             // Fingerprint validation (skip for immutable targets)
             if (! $isImmutable) {
                 foreach ($viewedFiles as $path => $storedHash) {
-                    $currentHash = $this->gitDiffService->fileDiffFingerprint($repoPath, $path, $untrackedMap[$path] ?? false, $target);
+                    $currentHash = $this->gitDiffService->fileDiffFingerprint($repoPath, $path, $target);
                     if ($storedHash !== '' && $currentHash !== '' && $storedHash !== $currentHash) {
                         unset($viewedFiles[$path]);
                     }
