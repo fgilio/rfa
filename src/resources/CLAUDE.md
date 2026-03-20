@@ -87,7 +87,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `delete-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{commentId}` |
 | `toggle-viewed` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{filePath}` |
 | `comment-updated` | ReviewPage PHP dispatch | DiffFile Alpine `@window` | `{fileId, comments}` |
-| `copy-to-clipboard` | ReviewPage PHP dispatch | ReviewPage Alpine `@window` | `{text}` |
+| `copy-to-clipboard` | DiffFile Alpine/PHP, ReviewPage PHP | ReviewPage Alpine `@window` | `{text}` |
 | `file-viewed-changed` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{id, viewed}` |
 | `collapse-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
