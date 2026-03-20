@@ -1,9 +1,8 @@
 <?php
 
+use App\Actions\GetFileCopyContentAction;
 use App\Actions\LoadFileDiffAction;
 use App\DTOs\DiffTarget;
-use App\Services\GitDiffService;
-use App\Services\GitMetadataService;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
@@ -72,23 +71,14 @@ new class extends Component {
 
     public function copyContent(string $kind): void
     {
-        $target = $this->buildDiffTarget();
-        $text = match ($kind) {
-            'diff' => app(GitDiffService::class)->getFileDiff(
-                $this->repoPath, $this->file['path'],
-                $this->file['isUntracked'] ?? false,
-                target: $target,
-            ),
-            'original' => app(GitMetadataService::class)->getFileContent(
-                $this->repoPath, $this->file['oldPath'] ?? $this->file['path'],
-                $target->from(),
-            ),
-            'new' => app(GitMetadataService::class)->getFileContent(
-                $this->repoPath, $this->file['path'],
-                $target->to() ?? DiffTarget::WORKING_CONTEXT,
-            ),
-            default => null,
-        };
+        $text = app(GetFileCopyContentAction::class)->handle(
+            $kind,
+            $this->repoPath,
+            $this->file['path'],
+            $this->file['isUntracked'] ?? false,
+            $this->buildDiffTarget(),
+            oldPath: $this->file['oldPath'] ?? null,
+        );
 
         if ($text !== null) {
             $this->dispatch('copy-to-clipboard', text: $text);
@@ -333,7 +323,7 @@ new class extends Component {
             @endphp
             @if($showContentCopy)
                 <flux:dropdown position="bottom" align="end">
-                    <flux:button icon="ellipsis-vertical" variant="ghost" size="sm" aria-label="Copy content" />
+                    <flux:button icon="ellipsis-vertical" icon:variant="outline" variant="ghost" size="sm" aria-label="Copy content" />
                     <flux:menu>
                         <flux:menu.item icon="code-bracket" @click="$wire.copyContent('diff')">
                             Copy diff
