@@ -2,6 +2,8 @@
 
 use App\Actions\LoadFileDiffAction;
 use App\DTOs\DiffTarget;
+use App\Services\GitDiffService;
+use App\Services\GitMetadataService;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
@@ -66,6 +68,31 @@ new class extends Component {
         );
 
         $this->ensureCommentedLinesVisible();
+    }
+
+    public function copyContent(string $kind): void
+    {
+        $target = $this->buildDiffTarget();
+        $text = match ($kind) {
+            'diff' => app(GitDiffService::class)->getFileDiff(
+                $this->repoPath, $this->file['path'],
+                $this->file['isUntracked'] ?? false,
+                target: $target,
+            ),
+            'original' => app(GitMetadataService::class)->getFileContent(
+                $this->repoPath, $this->file['oldPath'] ?? $this->file['path'],
+                $target->from(),
+            ),
+            'new' => app(GitMetadataService::class)->getFileContent(
+                $this->repoPath, $this->file['path'],
+                $target->to() ?? DiffTarget::WORKING_CONTEXT,
+            ),
+            default => null,
+        };
+
+        if ($text !== null) {
+            $this->dispatch('copy-to-clipboard', text: $text);
+        }
     }
 
     public function expandContext(): void
@@ -296,6 +323,30 @@ new class extends Component {
                     @click="$dispatch('copy-to-clipboard', { text: filePath })"
                 />
             </flux:tooltip>
+
+            @php
+                $showContentCopy = !($file['isBinary'] ?? false)
+                    && !($file['isSymlink'] ?? false)
+                    && !($diffData['tooLarge'] ?? false);
+                $isAdded = ($file['status'] ?? '') === 'added' || ($file['isUntracked'] ?? false);
+                $isDeleted = ($file['status'] ?? '') === 'deleted';
+            @endphp
+            @if($showContentCopy)
+                <flux:dropdown position="bottom" align="end">
+                    <flux:button icon="ellipsis-vertical" variant="ghost" size="sm" aria-label="Copy content" />
+                    <flux:menu>
+                        <flux:menu.item icon="code-bracket" @click="$wire.copyContent('diff')">
+                            Copy diff
+                        </flux:menu.item>
+                        <flux:menu.item icon="document-minus" @click="$wire.copyContent('original')" :disabled="$isAdded">
+                            Copy original
+                        </flux:menu.item>
+                        <flux:menu.item icon="document-plus" @click="$wire.copyContent('new')" :disabled="$isDeleted">
+                            Copy new
+                        </flux:menu.item>
+                    </flux:menu>
+                </flux:dropdown>
+            @endif
 
             @if($diffTo === null && ($file['status'] ?? '') !== 'commented')
                 <flux:tooltip content="Discard changes">

@@ -126,6 +126,20 @@ test('copy file name button dispatches copy event', function () {
     expect($result)->not->toBeNull();
 });
 
+test('copy content dropdown is visible for text files', function () {
+    $page = $this->visit($this->projectUrl());
+
+    // The dropdown trigger should be present for text files
+    $count = $page->page()->getByLabel('Copy content')->count();
+    expect($count)->toBeGreaterThan(0);
+
+    // Open the dropdown and verify menu items
+    $page->page()->getByLabel('Copy content')->first()->click();
+    $page->page()->getByRole('menuitem', ['name' => 'Copy diff'])->first()->waitFor();
+    $page->page()->getByRole('menuitem', ['name' => 'Copy original'])->first()->waitFor();
+    $page->page()->getByRole('menuitem', ['name' => 'Copy new'])->first()->waitFor();
+});
+
 test('clicking chevron collapses and expands file diff', function () {
     $page = $this->visit($this->projectUrl());
 
