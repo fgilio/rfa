@@ -59,9 +59,9 @@ test('sidebar width persists in localStorage after drag', function () {
         }));
     ");
 
-    $page->page()->waitForFunction("localStorage.getItem('rfa-sidebar-width') !== null");
+    $page->page()->waitForFunction("localStorage.getItem('rfa.sidebarWidth') !== null");
 
-    $stored = $page->page()->evaluate("parseInt(localStorage.getItem('rfa-sidebar-width'))");
+    $stored = $page->page()->evaluate("JSON.parse(localStorage.getItem('rfa.sidebarWidth'))");
     $width = $page->page()->evaluate("document.querySelector('aside').offsetWidth");
 
     expect(abs($stored - $width))->toBeLessThan(5);
@@ -190,6 +190,6 @@ test('double-clicking resize handle resets sidebar to default width', function (
     $width = $page->page()->evaluate("document.querySelector('aside').offsetWidth");
     expect($width)->toBe(288);
 
-    $stored = $page->page()->evaluate("parseInt(localStorage.getItem('rfa-sidebar-width'))");
+    $stored = $page->page()->evaluate("JSON.parse(localStorage.getItem('rfa.sidebarWidth'))");
     expect($stored)->toBe(288);
 });

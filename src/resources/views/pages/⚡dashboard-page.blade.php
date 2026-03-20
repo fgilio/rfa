@@ -38,7 +38,7 @@ new #[Layout('layouts.app')] class extends Component {
         search: '',
         selectedIndex: -1,
         selectedProjectId: null,
-        sortBy: localStorage.getItem('rfa-sort') || 'recent',
+        sortBy: $store.settings.dashboardSort,
         get flatProjects() {
             return Array.from(this.$root.querySelectorAll('[data-project-card]'));
         },
@@ -71,7 +71,7 @@ new #[Layout('layouts.app')] class extends Component {
         },
         setSort(value) {
             this.sortBy = value;
-            localStorage.setItem('rfa-sort', value);
+            $store.settings.dashboardSort = value;
             $wire.loadProjects(value);
         }
     }"

@@ -9,6 +9,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="manifest" href="/manifest.webmanifest" crossorigin="anonymous">
     <script src="/js/tailwind.js"></script>
+    <script src="/js/settings-store.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',

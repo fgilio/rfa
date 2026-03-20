@@ -4,7 +4,7 @@
         Alpine.data('diffFile', ({ fileId, filePath, isViewed }) => ({
             fileId,
             filePath,
-            collapsed: isViewed,
+            collapsed: Alpine.store('settings')?.collapseAll || isViewed,
             viewed: isViewed,
 
             // Comment form state
@@ -35,6 +35,7 @@
             toggleCollapse(event) {
                 this.autoExpandedForComment = false;
                 if (event.altKey) {
+                    Alpine.store('settings').collapseAll = !this.collapsed;
                     this.$dispatch(this.collapsed ? 'expand-all-files' : 'collapse-all-files');
                 } else {
                     this.collapsed = !this.collapsed;

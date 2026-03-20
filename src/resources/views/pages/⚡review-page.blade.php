@@ -562,7 +562,7 @@ new #[Layout('layouts.app')] class extends Component {
         viewedFiles: @js((object) collect($sourceFiles)->filter(fn($f) => array_key_exists($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()),
         fileFilter: '',
         filePaths: @js(collect($sourceFiles)->pluck('path')->all()),
-        sidebarWidth: parseInt(localStorage.getItem('rfa-sidebar-width') || 288),
+        sidebarWidth: $store.settings.sidebarWidth,
         resizing: false,
         fileMatchesFilter(path) {
             return this.fileFilter === '' || path.toLowerCase().includes(this.fileFilter.toLowerCase());
@@ -607,7 +607,7 @@ new #[Layout('layouts.app')] class extends Component {
                 this.resizing = false;
                 this.sidebarWidth = currentWidth;
                 document.body.classList.remove('cursor-col-resize', 'select-none');
-                localStorage.setItem('rfa-sidebar-width', currentWidth);
+                $store.settings.sidebarWidth = currentWidth;
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup', onUp);
             };
@@ -627,8 +627,8 @@ new #[Layout('layouts.app')] class extends Component {
             return;
         }
         if ($event.key === '/') { $refs.fileFilterInput?.focus(); $event.preventDefault(); }
-        if ($event.shiftKey && $event.key === 'C') { $dispatch('collapse-all-files'); $event.preventDefault(); }
-        if ($event.shiftKey && $event.key === 'E') { $dispatch('expand-all-files'); $event.preventDefault(); }
+        if ($event.shiftKey && $event.key === 'C') { $store.settings.collapseAll = true; $dispatch('collapse-all-files'); $event.preventDefault(); }
+        if ($event.shiftKey && $event.key === 'E') { $store.settings.collapseAll = false; $dispatch('expand-all-files'); $event.preventDefault(); }
         @if($commitInfo)
             if ($event.key === '[' && @js($commitInfo['prevHash'])) { Livewire.navigate('/p/{{ $projectSlug }}/c/' + @js($commitInfo['prevHash'])); $event.preventDefault(); }
             if ($event.key === ']' && @js($commitInfo['nextHash'])) { Livewire.navigate('/p/{{ $projectSlug }}/c/' + @js($commitInfo['nextHash'])); $event.preventDefault(); }
@@ -668,11 +668,11 @@ new #[Layout('layouts.app')] class extends Component {
             <span class="w-px h-4 bg-gh-border"></span>
             <flux:tooltip content="Expand all (Shift+E)">
                 <flux:button variant="ghost" size="sm" icon="expand-all" icon:variant="outline"
-                    @click="$dispatch('expand-all-files')" />
+                    @click="$store.settings.collapseAll = false; $dispatch('expand-all-files')" />
             </flux:tooltip>
             <flux:tooltip content="Collapse all (Shift+C)">
                 <flux:button variant="ghost" size="sm" icon="collapse-all" icon:variant="outline"
-                    @click="$dispatch('collapse-all-files')" />
+                    @click="$store.settings.collapseAll = true; $dispatch('collapse-all-files')" />
             </flux:tooltip>
             @if(! $this->isCommitMode())
                 <span class="w-px h-4 bg-gh-border"></span>
@@ -876,7 +876,7 @@ new #[Layout('layouts.app')] class extends Component {
         <div data-testid="sidebar-resize-handle" class="group/resize hidden lg:flex sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-0 cursor-col-resize items-center justify-center z-10 shrink-0"
             style="padding: 0 6px; margin: 0 -6px;"
             @mousedown="startResize($event)"
-            @dblclick="sidebarWidth = 288; localStorage.setItem('rfa-sidebar-width', 288)">
+            @dblclick="sidebarWidth = 288; $store.settings.sidebarWidth = 288">
             <div class="absolute inset-y-0 w-px bg-transparent group-hover/resize:bg-gh-muted/40 transition-colors"></div>
             <div class="absolute px-1 py-1.5 rounded-full bg-gh-surface border border-gh-border shadow-sm opacity-0 group-hover/resize:opacity-100 transition-opacity pointer-events-none flex flex-col items-center gap-[3px]">
                 <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
