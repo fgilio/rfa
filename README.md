@@ -1,82 +1,105 @@
 # rfa - Review For Agent
 
-Local code review tool for AI agent changes. Run `rfa` inside a git repo with uncommitted changes to open a browser diff UI, add comments, and export structured JSON + Markdown for agents.
+macOS (Apple Silicon) desktop app for reviewing AI agent code changes. Open any local git repo, browse diffs with syntax highlighting, add inline comments, and export structured feedback that agents can consume directly.
 
-## Quick Start
+## Install
+
+Download the latest `.dmg` from [GitHub Releases](https://github.com/fgilio/rfa/releases) and drag to Applications.
+
+Builds are currently unsigned. After installing, remove the quarantine attribute before first launch:
 
 ```bash
-cd ~/dev/rfa
-cd src && composer install
-./install
+xattr -cr /Applications/rfa.app
 ```
 
-Installs a symlink at `~/.local/bin/rfa`.
+Auto-updates work normally after that (handled by Electron, independent of code signing).
 
-## Usage
+## Quickstart
+
+1. Open a git repo with `Cmd+O`
+2. Browse diffs, click line numbers to add inline comments
+3. Submit to export review files to `.rfa/` in the reviewed repo
+
+The exported `.md` file is ready to paste into AI tools:
+
+```
+review my comments on these changes in @.rfa/{timestamp}_comments_{hash}.md
+```
+
+## Terminal Helper
+
+The repo includes a `rfa` shell script that opens repos via deep link (not bundled in the `.dmg`):
 
 ```bash
-cd ~/my-project
+# Symlink to PATH
+ln -s ~/dev/rfa/rfa ~/.local/bin/rfa
+
+# Then from any git repo:
 rfa
 ```
 
-Default `rfa` flow:
-- Validates current directory is a git repo
-- Starts (or reuses) local daemon
-- Registers current project
-- Opens browser at `/p/{slug}` review page
-
-Dashboard with registered projects is available at `/`.
-
-## Daemon Commands
-
-```bash
-rfa status   # daemon status + registered projects
-rfa stop     # stop daemon
-rfa dump     # dump sqlite data to CSV
-rfa flush    # delete all saved projects/sessions
-```
-
-## Output
-
-After submit, exports to `.rfa/` in the reviewed repo:
-- `.rfa/{timestamp}_comments_{hash}.json` - Structured comment data
-- `.rfa/{timestamp}_comments_{hash}.md` - Agent-friendly markdown with diff context
-
-Clipboard prompt (best effort browser copy):  
-`review my comments on these changes in @.rfa/{timestamp}_comments_{hash}.md`
-
-You may want to add `.rfa/` to your project's `.gitignore`.
+This launches the app (or focuses it if running) and opens the repo.
 
 ## Features
 
-- Unified diff view with GitHub-style coloring
-- Click line numbers to add inline comments
-- Shift+click for range selection
-- File sidebar with +/- stats
+- Unified diff view with syntax highlighting (Phiki)
+- Inline comments on any changed line; shift+click for range selection
 - Global review comment
-- Registered project dashboard
-- Optional respect of global gitignore rules
+- Commit history browser
+- File sidebar with change stats and grouping
+- Discard/restore individual file changes
+- Session persistence (comments, viewed files, viewport)
+- Export to `.rfa/` in the reviewed repo:
+  - `{timestamp}_comments_{hash}.json` (structured data for automation)
+  - `{timestamp}_comments_{hash}.md` (markdown with full diff context for agents)
+
+You may want to add `.rfa/` to your project's `.gitignore`.
 
 ## Ignore Rules
 
-`rfa` reads `.rfaignore` from repo root for exclude patterns (including glob-style patterns).
+Place a `.rfaignore` file in your repo root to exclude files from the diff view. One pattern per line, glob-style:
 
-This is exclude-focused matching, not full `.gitignore` parity.
+```
+*.generated.ts
+docs/
+vendor/
+```
 
-Always excluded lock files:
-- `package-lock.json`
-- `pnpm-lock.yaml`
-- `yarn.lock`
-- `bun.lock`
-- `composer.lock`
+Always excluded: `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, `composer.lock`.
 
-## Requirements
+## Keyboard Shortcuts
 
-- PHP 8.3+
-- Composer dependencies installed (`cd src && composer install`)
-- git
-- curl
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+O` | Open repository |
+| `Cmd+Enter` | Save comment |
+| `Esc` | Cancel comment |
 
-Optional for `rfa dump` / `rfa flush`: `sqlite3`
+## Development
 
-Works on macOS and Linux.
+Prerequisites: PHP 8.3+, Composer, Node.js 22+, git.
+
+```bash
+cd src
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+composer native:dev
+```
+
+### Tests
+
+```bash
+composer test:lint   # Pint
+composer test:types  # PHPStan
+composer test        # Pest
+```
+
+## Tech Stack
+
+Laravel 12, Livewire 4, Flux UI, Alpine.js, Tailwind CSS, NativePHP Desktop (Electron).
+
+## License
+
+MIT
