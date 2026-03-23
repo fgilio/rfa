@@ -16,3 +16,7 @@ cd src && composer test        # Pest
 ## Running locally
 
 ./rfa
+
+## Releasing
+
+See [.github/CLAUDE.md](.github/CLAUDE.md)
