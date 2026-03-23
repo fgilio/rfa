@@ -8,13 +8,19 @@ use App\Actions\OpenProjectFromPathAction;
 use App\Listeners\HandleDeepLink;
 use App\Listeners\HandleMenuItemClicked;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Native\Desktop\Events\App\OpenedFromURL;
+use Native\Desktop\Events\AutoUpdater\Error as UpdateError;
+use Native\Desktop\Events\AutoUpdater\UpdateAvailable;
+use Native\Desktop\Events\AutoUpdater\UpdateDownloaded;
+use Native\Desktop\Events\AutoUpdater\UpdateNotAvailable;
 use Native\Desktop\Events\Menu\MenuItemClicked;
 use Native\Desktop\Events\Windows\WindowClosed;
 use Native\Desktop\Facades\App;
 use Native\Desktop\Facades\Menu;
 use Native\Desktop\Facades\Window;
+use Native\Desktop\Notification;
 
 class NativeAppServiceProvider implements ProvidesPhpIni
 {
@@ -30,6 +36,33 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             if ($event->id === 'main') {
                 App::quit();
             }
+        });
+
+        Event::listen(UpdateAvailable::class, function (UpdateAvailable $event) {
+            Log::info('Update available', ['version' => $event->version]);
+            Notification::new()
+                ->title('Update Available')
+                ->message("Version {$event->version} is available and downloading.")
+                ->show();
+        });
+
+        Event::listen(UpdateNotAvailable::class, function () {
+            Notification::new()
+                ->title('No Updates')
+                ->message('You are running the latest version.')
+                ->show();
+        });
+
+        Event::listen(UpdateDownloaded::class, function (UpdateDownloaded $event) {
+            Log::info('Update downloaded', ['version' => $event->version]);
+            Notification::new()
+                ->title('Update Ready')
+                ->message("Version {$event->version} will be installed on restart.")
+                ->show();
+        });
+
+        Event::listen(UpdateError::class, function (UpdateError $event) {
+            Log::error('Auto-update error', ['message' => $event->message, 'stack' => $event->stack]);
         });
     }
 
@@ -54,6 +87,8 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                 Menu::label('Open Repository...')
                     ->id('open-repo')
                     ->hotkey('CmdOrCtrl+O'),
+                Menu::label('Check for Updates...')
+                    ->id('check-updates'),
                 Menu::separator(),
                 Menu::quit(),
             )->label('File'),

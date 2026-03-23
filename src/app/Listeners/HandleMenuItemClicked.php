@@ -6,6 +6,7 @@ namespace App\Listeners;
 
 use App\Actions\OpenRepositoryDialogAction;
 use Native\Desktop\Events\Menu\MenuItemClicked;
+use Native\Desktop\Facades\AutoUpdater;
 use Native\Desktop\Facades\Window;
 
 final readonly class HandleMenuItemClicked
@@ -18,12 +19,19 @@ final readonly class HandleMenuItemClicked
     {
         $id = $event->item['id'] ?? null;
 
-        if ($id === 'open-repo') {
-            $project = $this->openRepository->handle();
+        match ($id) {
+            'open-repo' => $this->handleOpenRepo(),
+            'check-updates' => AutoUpdater::checkForUpdates(),
+            default => null,
+        };
+    }
 
-            if ($project) {
-                Window::get('main')->url(route('review-page', ['slug' => $project->slug]));
-            }
+    private function handleOpenRepo(): void
+    {
+        $project = $this->openRepository->handle();
+
+        if ($project) {
+            Window::get('main')->url(route('review-page', ['slug' => $project->slug]));
         }
     }
 }
