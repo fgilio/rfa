@@ -85,6 +85,9 @@ jobs:
           cp .env.example .env
           php artisan key:generate
 
+      - name: Set repository in electron package.json
+        run: node -e "const f='vendor/nativephp/desktop/resources/electron/package.json';const p=JSON.parse(require('fs').readFileSync(f));p.repository='github:fgilio/rfa';require('fs').writeFileSync(f,JSON.stringify(p,null,4))"
+
       - name: Build and publish to GitHub Releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
