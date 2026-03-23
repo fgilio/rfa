@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "fgilio/rfa",
     "type": "project",
-    "description": "Local code review tool for AI agent changes - browser-based diff viewer with structured export.",
+    "description": "Local code review tool for AI agent changes.",
     "keywords": [
         "code-review",
         "ai-agent",
@@ -80,7 +80,7 @@
         ],
         "native:dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -k -c \"#93c5fd,#c4b5fd\" \"php artisan native:run --no-interaction\" \"npm run dev\" --names=app,vite"
+            "php artisan native:run --no-interaction"
         ]
     },
     "extra": {
