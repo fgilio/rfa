@@ -6,9 +6,9 @@ use App\Actions\ServeImageAction;
 use App\Models\Project;
 use Illuminate\Support\Facades\Route;
 
-Route::livewire('/', 'pages::dashboard-page');
-Route::livewire('/p/{slug}/c/{hash}', 'pages::review-page')->where('hash', '[0-9a-fA-F]{4,40}');
-Route::livewire('/p/{slug}/{ref?}/{baseRef?}', 'pages::review-page');
+Route::livewire('/', 'pages::dashboard-page')->name('dashboard');
+Route::livewire('/p/{slug}/c/{hash}', 'pages::review-page')->where('hash', '[0-9a-fA-F]{4,40}')->name('review-page.commit');
+Route::livewire('/p/{slug}/{ref?}/{baseRef?}', 'pages::review-page')->name('review-page');
 
 Route::get('/api/status/{project}', function (int $project) {
     $p = Project::findOrFail($project);

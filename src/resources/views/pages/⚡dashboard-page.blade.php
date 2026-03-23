@@ -13,6 +13,10 @@ new #[Layout('layouts.app')] class extends Component {
 
     public function mount(): void
     {
+        if (config('nativephp-internal.running')) {
+            \Native\Desktop\Facades\Window::get('main')->title('rfa');
+        }
+
         $this->projectGroups = app(ListProjectsAction::class)->handle($this->sortBy);
     }
 
@@ -28,6 +32,7 @@ new #[Layout('layouts.app')] class extends Component {
 
         $this->projectGroups = app(ListProjectsAction::class)->handle($this->sortBy);
     }
+
 };
 ?>
 
@@ -101,13 +106,19 @@ new #[Layout('layouts.app')] class extends Component {
                 <div class="text-center">
                     <p class="rfa-logo text-5xl text-gh-muted/30 mb-6">rfa</p>
                     <flux:heading class="mb-3">No projects registered</flux:heading>
-                    <flux:text variant="subtle" size="sm">Run <code class="font-mono bg-gh-border/50 px-1.5 py-0.5 rounded text-xs">rfa</code> from a git repository to get started</flux:text>
+                    @native
+                        <flux:text variant="subtle" size="sm" class="mb-6">Open a git repository to get started</flux:text>
+                        <livewire:open-repository-button variant="primary" />
+                    @else
+                        <flux:text variant="subtle" size="sm">Run <code class="font-mono bg-gh-border/50 px-1.5 py-0.5 rounded text-xs">rfa</code> from a git repository to get started</flux:text>
+                    @endnative
                 </div>
             </div>
         @else
             <div class="flex items-center justify-between mb-6">
                 <h1 class="rfa-logo text-4xl tracking-brutal-tight">Projects</h1>
                 <div class="flex items-center gap-3">
+                    <livewire:open-repository-button />
                     <flux:button
                         variant="ghost"
                         size="sm"

@@ -151,11 +151,10 @@
     @fluxAppearance
 </head>
 <body class="bg-gh-bg text-gh-text min-h-screen font-display text-sm antialiased">
-    <livewire:update-checker />
     {{ $slot }}
     @fluxScripts
-    @persist('instruckt')
-        <x-instruckt-toolbar />
-    @endpersist
+    @browser
+        @includeIf('partials.instruckt')
+    @endbrowser
 </body>
 </html>

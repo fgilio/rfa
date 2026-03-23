@@ -90,6 +90,11 @@ new #[Layout('layouts.app')] class extends Component {
         $this->projectName = $project['name'];
         $this->projectBranch = $project['branch'] ?? '';
         $this->projectSlug = $project['slug'];
+
+        if (config('nativephp-internal.running')) {
+            \Native\Desktop\Facades\Window::get('main')->title("rfa - {$this->projectName}");
+        }
+
         $this->respectGlobalGitignore = $project['respect_global_gitignore'] ?? true;
         $this->globalGitignorePath = $project['global_gitignore_path'] ?: null;
 

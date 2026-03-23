@@ -13,7 +13,7 @@ pre-commit:
     agents-symlinks:
       run: |
         status=0
-        for claude in $(find . -name CLAUDE.md -not -path './.git/*' -not -path '*/vendor/*'); do
+        for claude in $(find . -name CLAUDE.md -not -path './.git/*' -not -path '*/vendor/*' -not -path '*/nativephp/*' -not -path '*/node_modules/*'); do
           dir=$(dirname "$claude")
           agents="$dir/AGENTS.md"
           if [ ! -L "$agents" ]; then
