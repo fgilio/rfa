@@ -17,21 +17,23 @@ new class extends Component {
 };
 ?>
 
-@native
-    @if($variant === 'primary')
-        <flux:button wire:click="openRepositoryDialog" wire:loading.attr="disabled" variant="primary" size="sm" icon="folder-open" icon:variant="outline">
-            <span wire:loading.remove>Open Repository</span>
-            <span wire:loading>Opening...</span>
-        </flux:button>
-    @else
-        <flux:button
-            wire:click="openRepositoryDialog"
-            wire:loading.attr="disabled"
-            variant="ghost"
-            size="sm"
-            icon="folder-open"
-            icon:variant="outline"
-            class="text-gh-muted hover:text-gh-text"
-        />
-    @endif
-@endnative
+<div>
+    @native
+        @if($variant === 'primary')
+            <flux:button wire:click="openRepositoryDialog" wire:loading.attr="disabled" variant="primary" size="sm" icon="folder-open" icon:variant="outline">
+                <span wire:loading.remove>Open Repository</span>
+                <span wire:loading>Opening...</span>
+            </flux:button>
+        @else
+            <flux:button
+                wire:click="openRepositoryDialog"
+                wire:loading.attr="disabled"
+                variant="ghost"
+                size="sm"
+                icon="folder-open"
+                icon:variant="outline"
+                class="text-gh-muted hover:text-gh-text"
+            />
+        @endif
+    @endnative
+</div>
