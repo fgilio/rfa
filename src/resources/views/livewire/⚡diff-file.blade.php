@@ -109,7 +109,13 @@ new class extends Component {
         $hunks = $this->diffData['hunks'];
 
         // Determine the new-line range for this gap
-        if ($hunkIndex === 0) {
+        $isTrailing = $hunkIndex === count($hunks);
+
+        if ($isTrailing) {
+            $last = $hunks[count($hunks) - 1];
+            $gapNewStart = $last['newStart'] + $last['newCount'];
+            $gapNewEnd = $this->diffData['newFileLineCount'] ?? $gapNewStart;
+        } elseif ($hunkIndex === 0) {
             $gapNewStart = 1;
             $gapNewEnd = $hunks[0]['newStart'] - 1;
         } else {
@@ -154,7 +160,13 @@ new class extends Component {
 
         $gapSize = count($gapLines);
 
-        if ($hunkIndex === 0) {
+        if ($isTrailing) {
+            // Append gap lines to last hunk
+            $lastIdx = count($hunks) - 1;
+            $hunks[$lastIdx]['lines'] = array_merge($hunks[$lastIdx]['lines'], $gapLines);
+            $hunks[$lastIdx]['oldCount'] += $gapSize;
+            $hunks[$lastIdx]['newCount'] += $gapSize;
+        } elseif ($hunkIndex === 0) {
             // Prepend gap lines to first hunk
             $hunks[0]['lines'] = array_merge($gapLines, $hunks[0]['lines']);
             $hunks[0]['oldStart'] -= $gapSize;
@@ -505,7 +517,12 @@ new class extends Component {
             @php
                 $commentsByLine = collect($fileComments)->where('side', '!=', 'file')->groupBy(fn($c) => $c['side'] . ':' . $c['endLine']);
                 $hunks = $diffData['hunks'];
-                $hasGaps = count($hunks) > 1 || (count($hunks) === 1 && $hunks[0]['newStart'] > 1);
+                $lastHunk = end($hunks);
+                $lastHunkEnd = $lastHunk ? $lastHunk['newStart'] + $lastHunk['newCount'] - 1 : 0;
+                $newFileLineCount = $diffData['newFileLineCount'] ?? null;
+                $hasTrailingGap = $newFileLineCount !== null && $lastHunkEnd < $newFileLineCount;
+                $trailingHiddenCount = $hasTrailingGap ? $newFileLineCount - $lastHunkEnd : 0;
+                $hasGaps = count($hunks) > 1 || (count($hunks) === 1 && $hunks[0]['newStart'] > 1) || $hasTrailingGap;
             @endphp
             @if($diffData['syntaxStyles'] ?? '')
                 {!! '<style>' . $diffData['syntaxStyles'] . '</style>' !!}
@@ -649,6 +666,23 @@ new class extends Component {
                             @endforeach
                         @endforeach
                     @endforeach
+
+                    @if($hasTrailingGap)
+                        <tr class="bg-gh-hunk-bg">
+                            <td colspan="4" class="px-4 py-1 text-gh-muted text-xs">
+                                <button
+                                    wire:click="expandGap({{ count($hunks) }})"
+                                    wire:loading.attr="disabled"
+                                    wire:target="expandGap"
+                                    class="text-gh-link hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                                >
+                                    <flux:icon wire:loading wire:target="expandGap" icon="arrow-path" variant="outline" class="animate-spin" />
+                                    <span wire:loading.remove wire:target="expandGap">Expand {{ $trailingHiddenCount }} hidden lines</span>
+                                    <span wire:loading wire:target="expandGap">Expanding...</span>
+                                </button>
+                            </td>
+                        </tr>
+                    @endif
                 </table>
             </div>
         @endif

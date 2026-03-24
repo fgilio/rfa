@@ -204,6 +204,65 @@ test('class names in highlightedContent have matching selectors in syntaxStyles'
     }
 });
 
+// -- newFileLineCount --
+
+test('result includes newFileLineCount for modified file', function () {
+    // hello.txt starts as 1 line, modify to 3 lines
+    File::put($this->tmpDir.'/hello.txt', "line1\nline2\nline3\n");
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
+    $result = $action->handle($this->tmpDir, 'hello.txt');
+
+    expect($result)->toHaveKey('newFileLineCount')
+        ->and($result['newFileLineCount'])->toBe(3);
+});
+
+test('newFileLineCount reflects actual file length beyond last hunk', function () {
+    // Create a 20-line file, modify only line 1 (with default 3 context lines, hunk covers ~4 lines)
+    $lines = array_map(fn ($i) => "line{$i}", range(1, 20));
+    File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
+    $this->commitTestRepo($this->tmpDir, 'add many');
+
+    $lines[0] = 'changed1';
+    File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
+    $result = $action->handle($this->tmpDir, 'many.txt');
+
+    expect($result['newFileLineCount'])->toBe(20);
+
+    // Verify the last hunk ends before the file does (trailing gap exists)
+    $lastHunk = end($result['hunks']);
+    $lastHunkEnd = $lastHunk['newStart'] + $lastHunk['newCount'] - 1;
+    expect($lastHunkEnd)->toBeLessThan(20);
+});
+
+test('stale cache without newFileLineCount triggers re-computation', function () {
+    File::put($this->tmpDir.'/hello.txt', "line1\nline2\n");
+
+    $cacheKey = 'test-stale-no-linecount';
+
+    Cache::put($cacheKey, [
+        'path' => 'hello.txt',
+        'status' => 'modified',
+        'oldPath' => null,
+        'hunks' => [],
+        'additions' => 0,
+        'deletions' => 0,
+        'isBinary' => false,
+        'isSymlink' => false,
+        'tooLarge' => false,
+        'syntaxStyles' => '',
+        'tableAligned' => true,
+    ], 3600);
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
+    $result = $action->handle($this->tmpDir, 'hello.txt', cacheKey: $cacheKey);
+
+    expect($result)->toHaveKey('newFileLineCount')
+        ->and($result['newFileLineCount'])->toBe(2);
+});
+
 // -- git error propagation --
 
 test('returns error field when git command fails', function () {

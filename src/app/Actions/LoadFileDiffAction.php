@@ -65,12 +65,16 @@ final readonly class LoadFileDiffAction
                 }
             }
 
-            return $fileDiff->withHunks($highlightedHunks)->toArray() + ['tooLarge' => false, 'syntaxStyles' => $css, 'tableAligned' => true];
+            $newFileLineCount = $fileDiff->status === 'deleted'
+                ? null
+                : $this->gitDiffService->getNewFileLineCount($repoPath, $path, $target);
+
+            return $fileDiff->withHunks($highlightedHunks)->toArray() + ['tooLarge' => false, 'syntaxStyles' => $css, 'tableAligned' => true, 'newFileLineCount' => $newFileLineCount];
         };
 
         if ($cacheKey) {
             $cached = Cache::get($cacheKey);
-            if ($cached !== null && array_key_exists('syntaxStyles', $cached) && array_key_exists('isSymlink', $cached) && array_key_exists('tableAligned', $cached)) {
+            if ($cached !== null && array_key_exists('syntaxStyles', $cached) && array_key_exists('isSymlink', $cached) && array_key_exists('tableAligned', $cached) && array_key_exists('newFileLineCount', $cached)) {
                 return $cached;
             }
             $result = $compute();

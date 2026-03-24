@@ -318,6 +318,39 @@ class GitDiffService
         return $diff;
     }
 
+    public function getNewFileLineCount(string $repoPath, string $path, ?DiffTarget $target = null): ?int
+    {
+        $target ??= DiffTarget::workingDirectory();
+
+        if ($target->isWorkingDirectory()) {
+            $fullPath = $repoPath.'/'.$path;
+
+            if (! File::isFile($fullPath)) {
+                return null;
+            }
+
+            $content = File::get($fullPath);
+
+            if ($content === '') {
+                return 0;
+            }
+
+            return substr_count($content, "\n") + (str_ends_with($content, "\n") ? 0 : 1);
+        }
+
+        try {
+            $content = $this->git->run($repoPath, ['show', $target->to().':'.$path]);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if ($content === '') {
+            return 0;
+        }
+
+        return substr_count($content, "\n") + (str_ends_with($content, "\n") ? 0 : 1);
+    }
+
     private function getLastModified(string $repoPath, string $path): ?string
     {
         $fullPath = $repoPath.'/'.$path;

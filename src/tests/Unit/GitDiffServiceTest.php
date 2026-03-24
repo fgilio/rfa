@@ -381,6 +381,79 @@ test('getFileDiff returns valid diff for unicode-named file', function () {
         ->and($diff)->toContain('+line2');
 });
 
+// -- getNewFileLineCount tests --
+
+test('getNewFileLineCount returns line count for working directory file', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "line1\nline2\nline3\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/hello.txt', "line1\nline2\nline3\nline4\n");
+
+    $count = $this->service->getNewFileLineCount($this->tmpDir, 'hello.txt');
+
+    expect($count)->toBe(4);
+});
+
+test('getNewFileLineCount handles file without trailing newline', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/hello.txt', "line1\nline2");
+
+    $count = $this->service->getNewFileLineCount($this->tmpDir, 'hello.txt');
+
+    expect($count)->toBe(2);
+});
+
+test('getNewFileLineCount returns null for missing file', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    $count = $this->service->getNewFileLineCount($this->tmpDir, 'nonexistent.txt');
+
+    expect($count)->toBeNull();
+});
+
+test('getNewFileLineCount returns 0 for empty file', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/empty.txt', '');
+
+    $count = $this->service->getNewFileLineCount($this->tmpDir, 'empty.txt');
+
+    expect($count)->toBe(0);
+});
+
+test('getNewFileLineCount returns line count for commit target', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "line1\nline2\nline3\n");
+    $this->commitTestRepo($this->tmpDir, 'three lines');
+
+    $commitHash = trim($this->runTestRepoCommand($this->tmpDir, 'git rev-parse HEAD'));
+    $target = \App\DTOs\DiffTarget::commit($commitHash);
+
+    $count = $this->service->getNewFileLineCount($this->tmpDir, 'hello.txt', $target);
+
+    expect($count)->toBe(3);
+});
+
+test('getNewFileLineCount returns null for deleted file in commit', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    $target = \App\DTOs\DiffTarget::commit(trim($this->runTestRepoCommand($this->tmpDir, 'git rev-parse HEAD')));
+
+    $count = $this->service->getNewFileLineCount($this->tmpDir, 'nonexistent.txt', $target);
+
+    expect($count)->toBeNull();
+});
+
 // -- GitCommandException tests --
 
 test('getFileList throws GitCommandException for non-git directory', function () {
