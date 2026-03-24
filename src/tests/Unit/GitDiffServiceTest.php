@@ -443,3 +443,75 @@ test('getWorkingDirectoryFingerprint is deterministic for same state', function 
 
     expect($hash1)->toBe($hash2);
 });
+
+// -- Empty repo (no commits) tests --
+
+test('getFileList returns untracked files for empty repo with no commits', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "line1\n");
+
+    $entries = $this->service->getFileList($this->tmpDir);
+
+    expect($entries)->toHaveCount(1)
+        ->and($entries[0]->path)->toBe('hello.txt')
+        ->and($entries[0]->isUntracked)->toBeTrue()
+        ->and($entries[0]->additions)->toBe(1);
+});
+
+test('getWorkingDirectoryFingerprint works for empty repo with no commits', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "line1\n");
+
+    $hash = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
+
+    expect($hash)->toBeString()->not->toBeEmpty();
+});
+
+// -- Large untracked file pre-check tests --
+
+test('getFileList skips reading large untracked files for line count', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    config(['rfa.diff_max_bytes' => 100]);
+    File::put($this->tmpDir.'/large.txt', str_repeat("line\n", 50));
+
+    $entries = $this->service->getFileList($this->tmpDir);
+
+    $large = collect($entries)->firstWhere('path', 'large.txt');
+    expect($large)->not->toBeNull()
+        ->and($large->additions)->toBe(0)
+        ->and($large->isUntracked)->toBeTrue()
+        ->and($large->fileSize)->not->toBeNull();
+});
+
+// -- File paths with spaces tests --
+
+test('getFileList returns correct path for untracked file with spaces in name', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/my file.txt', "hello\n");
+
+    $entries = $this->service->getFileList($this->tmpDir);
+
+    expect($entries)->toHaveCount(1)
+        ->and($entries[0]->path)->toBe('my file.txt')
+        ->and($entries[0]->isUntracked)->toBeTrue();
+});
+
+test('getFileDiff returns valid synthetic diff for file with spaces in name', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/my file.txt', "hello\n");
+
+    $diff = $this->service->getFileDiff($this->tmpDir, 'my file.txt', isUntracked: true);
+
+    expect($diff)->toStartWith('diff --git')
+        ->and($diff)->toContain('my file.txt')
+        ->and($diff)->toContain('+hello');
+});

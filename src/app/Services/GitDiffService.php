@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\Exceptions\GitCommandException;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Number;
@@ -23,6 +24,11 @@ class GitDiffService
     public function getFileList(string $repoPath, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
     {
         $target ??= DiffTarget::workingDirectory();
+
+        if ($target->isWorkingDirectory()) {
+            $target = DiffTarget::fromRefs($this->resolveHead($repoPath), null);
+        }
+
         $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
 
         // Get status (M/A/D/R) for tracked changes
@@ -174,6 +180,24 @@ class GitDiffService
                         continue;
                     }
 
+                    $maxBytes = (int) config('rfa.diff_max_bytes', 512_000);
+
+                    if (File::size($fullPath) > $maxBytes) {
+                        $entries[] = new FileListEntry(
+                            path: $file,
+                            status: 'added',
+                            oldPath: null,
+                            additions: 0,
+                            deletions: 0,
+                            isBinary: false,
+                            isUntracked: true,
+                            lastModified: $this->getLastModified($repoPath, $file),
+                            fileSize: $this->getHumanFileSize($repoPath, $file),
+                        );
+
+                        continue;
+                    }
+
                     $content = File::get($fullPath);
                     $lineCount = substr_count($content, "\n") + ($content !== '' && ! str_ends_with($content, "\n") ? 1 : 0);
 
@@ -197,9 +221,10 @@ class GitDiffService
     public function getWorkingDirectoryFingerprint(string $repoPath, ?string $globalGitignorePath = null): string
     {
         $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
+        $head = $this->resolveHead($repoPath);
 
         $nameStatus = $this->git->run($repoPath, [
-            'diff', 'HEAD', '--name-status', '--find-renames',
+            'diff', $head, '--name-status', '--find-renames',
             '--', '.', ...$excludes,
         ]);
 
@@ -350,5 +375,16 @@ class GitDiffService
         $chunk = substr(File::get($path), 0, 8192);
 
         return str_contains($chunk, "\0");
+    }
+
+    private function resolveHead(string $repoPath): string
+    {
+        try {
+            $this->git->run($repoPath, ['rev-parse', '--verify', 'HEAD']);
+
+            return 'HEAD';
+        } catch (GitCommandException) {
+            return DiffTarget::EMPTY_TREE_HASH;
+        }
     }
 }

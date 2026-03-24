@@ -33,9 +33,7 @@ final readonly class DiffTarget
     /** Build from raw ref strings - null $to means working directory */
     public static function fromRefs(string $from, ?string $to): self
     {
-        return $to === null
-            ? self::workingDirectory()
-            : new self(from: $from, to: $to);
+        return new self(from: $from, to: $to);
     }
 
     public function from(): string
