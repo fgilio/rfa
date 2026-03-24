@@ -7,10 +7,13 @@ namespace App\Providers;
 use App\Actions\OpenProjectFromPathAction;
 use App\Listeners\HandleDeepLink;
 use App\Listeners\HandleMenuItemClicked;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Native\Desktop\Events\App\OpenedFromURL;
+use Native\Desktop\Events\AutoUpdater\CheckingForUpdate;
+use Native\Desktop\Events\AutoUpdater\DownloadProgress;
 use Native\Desktop\Events\AutoUpdater\Error as UpdateError;
 use Native\Desktop\Events\AutoUpdater\UpdateAvailable;
 use Native\Desktop\Events\AutoUpdater\UpdateDownloaded;
@@ -38,15 +41,36 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             }
         });
 
+        Event::listen(CheckingForUpdate::class, function () {
+            Cache::put('native-update-state', ['status' => 'checking'], now()->addMinutes(2));
+        });
+
         Event::listen(UpdateAvailable::class, function (UpdateAvailable $event) {
             Log::info('Update available', ['version' => $event->version]);
+
+            $releaseNotes = is_array($event->releaseNotes) ? implode(' ', $event->releaseNotes) : $event->releaseNotes;
+            Cache::put('native-update-state', [
+                'status' => 'downloading',
+                'version' => $event->version,
+                'releaseNotes' => $releaseNotes,
+                'percent' => 0,
+            ]);
+
             Notification::new()
                 ->title('Update Available')
                 ->message("Version {$event->version} is available and downloading.")
                 ->show();
         });
 
+        Event::listen(DownloadProgress::class, function (DownloadProgress $event) {
+            $state = Cache::get('native-update-state', []);
+            $state['status'] = 'downloading';
+            $state['percent'] = (int) round($event->percent);
+            Cache::put('native-update-state', $state);
+        });
+
         Event::listen(UpdateNotAvailable::class, function () {
+            Cache::forget('native-update-state');
             Notification::new()
                 ->title('No Updates')
                 ->message('You are running the latest version.')
@@ -55,6 +79,15 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
         Event::listen(UpdateDownloaded::class, function (UpdateDownloaded $event) {
             Log::info('Update downloaded', ['version' => $event->version]);
+
+            $releaseNotes = is_array($event->releaseNotes) ? implode(' ', $event->releaseNotes) : $event->releaseNotes;
+            Cache::put('native-update-state', [
+                'status' => 'ready',
+                'version' => $event->version,
+                'releaseNotes' => $releaseNotes,
+                'percent' => 100,
+            ]);
+
             Notification::new()
                 ->title('Update Ready')
                 ->message("Version {$event->version} will be installed on restart.")
@@ -63,6 +96,11 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
         Event::listen(UpdateError::class, function (UpdateError $event) {
             Log::error('Auto-update error', ['message' => $event->message, 'stack' => $event->stack]);
+            Cache::put('native-update-state', ['status' => 'error'], now()->addMinutes(5));
+            Notification::new()
+                ->title('Update Error')
+                ->message('Could not check for updates. Try again later.')
+                ->show();
         });
     }
 

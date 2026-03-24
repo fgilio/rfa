@@ -94,7 +94,12 @@ new #[Layout('layouts.app')] class extends Component {
     "
 >
     <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-6 py-4 flex items-center justify-between">
-        <span class="rfa-logo text-2xl">rfa</span>
+        <div class="flex items-baseline gap-2">
+            <span class="rfa-logo text-2xl">rfa</span>
+            @native
+                <span class="font-mono text-xs text-gh-muted">v{{ config('nativephp.version') }}</span>
+            @endnative
+        </div>
         <div class="flex items-center gap-3">
             <livewire:theme-switcher />
         </div>
