@@ -1,6 +1,6 @@
 <?php
 
-use Livewire\Attributes\Layout;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
 use Native\Desktop\Facades\AutoUpdater;
 
@@ -17,9 +17,14 @@ new class extends Component {
 
     public function refreshState(): void
     {
-        $state = cache('native-update-state');
+        $state = Cache::get('native-update-state');
 
         if (! $state) {
+            $this->status = null;
+            $this->version = null;
+            $this->releaseNotes = null;
+            $this->downloadPercent = 0;
+
             return;
         }
 
@@ -31,18 +36,23 @@ new class extends Component {
 
     public function restartAndUpdate(): void
     {
-        AutoUpdater::quitAndInstall();
+        try {
+            AutoUpdater::quitAndInstall();
+        } catch (\Throwable) {
+            Cache::put('native-update-state', ['status' => 'error'], now()->addMinutes(5));
+            $this->status = 'error';
+        }
     }
 
     public function dismiss(): void
     {
-        cache()->forget('native-update-state');
+        Cache::forget('native-update-state');
         $this->status = null;
     }
 };
 ?>
 
-<div wire:poll.30s="refreshState">
+<div wire:poll.{{ $status === 'downloading' ? '3s' : '30s' }}="refreshState">
     @if($status === 'checking')
         <div
             class="bg-gh-surface border-b border-gh-border px-4 py-2 font-mono text-xs text-gh-muted flex items-center justify-center gap-2"

@@ -48,13 +48,13 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         Event::listen(UpdateAvailable::class, function (UpdateAvailable $event) {
             Log::info('Update available', ['version' => $event->version]);
 
-            $releaseNotes = is_array($event->releaseNotes) ? implode(' ', $event->releaseNotes) : $event->releaseNotes;
+            $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
             Cache::put('native-update-state', [
                 'status' => 'downloading',
                 'version' => $event->version,
                 'releaseNotes' => $releaseNotes,
                 'percent' => 0,
-            ]);
+            ], now()->addMinutes(30));
 
             Notification::new()
                 ->title('Update Available')
@@ -66,7 +66,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             $state = Cache::get('native-update-state', []);
             $state['status'] = 'downloading';
             $state['percent'] = (int) round($event->percent);
-            Cache::put('native-update-state', $state);
+            Cache::put('native-update-state', $state, now()->addMinutes(30));
         });
 
         Event::listen(UpdateNotAvailable::class, function () {
@@ -80,13 +80,13 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         Event::listen(UpdateDownloaded::class, function (UpdateDownloaded $event) {
             Log::info('Update downloaded', ['version' => $event->version]);
 
-            $releaseNotes = is_array($event->releaseNotes) ? implode(' ', $event->releaseNotes) : $event->releaseNotes;
+            $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
             Cache::put('native-update-state', [
                 'status' => 'ready',
                 'version' => $event->version,
                 'releaseNotes' => $releaseNotes,
                 'percent' => 100,
-            ]);
+            ], now()->addHours(24));
 
             Notification::new()
                 ->title('Update Ready')
@@ -102,6 +102,12 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                 ->message('Could not check for updates. Try again later.')
                 ->show();
         });
+    }
+
+    /** @param array<string>|string|null $notes */
+    private function normalizeReleaseNotes(array|string|null $notes): ?string
+    {
+        return is_array($notes) ? implode(' ', $notes) : $notes;
     }
 
     private function createWindow(): void
