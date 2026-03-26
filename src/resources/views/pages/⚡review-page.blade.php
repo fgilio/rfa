@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\AddCommentAction;
+use App\Actions\BackfillGlobalGitignoreAction;
 use App\Actions\CleanExpiredTrashAction;
 use App\Actions\DeleteCommentAction;
 use App\Actions\DeleteReviewFilesAction;
@@ -9,7 +10,6 @@ use App\Actions\DiscardFileChangesAction;
 use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
 use App\Actions\GroupReviewFilesAction;
-use App\Actions\BackfillGlobalGitignoreAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
@@ -17,11 +17,11 @@ use App\Actions\RestoreDiscardedFileAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\Actions\ToggleViewedAction;
+use App\Actions\UpdateProjectSettingAction;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
 use App\Exceptions\GitCommandException;
 use App\Support\DiffCacheKey;
-use App\Actions\UpdateProjectSettingAction;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -29,7 +29,8 @@ use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
-new #[Layout('layouts.app')] class extends Component {
+new #[Layout('layouts.app')] class extends Component
+{
     /** @var array<int, array<string, mixed>> */
     public array $files = [];
 
@@ -524,7 +525,7 @@ new #[Layout('layouts.app')] class extends Component {
 
     /**
      * @param  array<int, array<string, mixed>>  $comments
-     * @return array<int, array<string, mixed>>  newly merged comments (empty if none added)
+     * @return array<int, array<string, mixed>> newly merged comments (empty if none added)
      */
     private function mergeComments(array $comments): array
     {
@@ -654,6 +655,10 @@ new #[Layout('layouts.app')] class extends Component {
         @endif
     "
 >
+    @native
+        <livewire:update-banner />
+    @endnative
+
     {{-- Header --}}
     <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
         <div class="flex items-center gap-4">

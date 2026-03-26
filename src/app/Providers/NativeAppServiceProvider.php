@@ -7,10 +7,15 @@ namespace App\Providers;
 use App\Actions\OpenProjectFromPathAction;
 use App\Listeners\HandleDeepLink;
 use App\Listeners\HandleMenuItemClicked;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Native\Desktop\Events\App\OpenedFromURL;
+use Native\Desktop\Events\AutoUpdater\CheckingForUpdate;
+use Native\Desktop\Events\AutoUpdater\DownloadProgress;
 use Native\Desktop\Events\AutoUpdater\Error as UpdateError;
 use Native\Desktop\Events\AutoUpdater\UpdateAvailable;
 use Native\Desktop\Events\AutoUpdater\UpdateDownloaded;
@@ -24,8 +29,15 @@ use Native\Desktop\Notification;
 
 class NativeAppServiceProvider implements ProvidesPhpIni
 {
+    private static bool $nativeDevelopmentDatabaseChecked = false;
+
+    private static bool $compiledViewsClearedForDev = false;
+
     public function boot(): void
     {
+        $this->ensureNativeDevelopmentDatabaseIsMigrated();
+        $this->clearCompiledViewsForDev();
+
         $this->createMenu();
         $this->createWindow();
         $this->processInbox();
@@ -38,15 +50,40 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             }
         });
 
+        Event::listen(CheckingForUpdate::class, function () {
+            Cache::put('native-update-state', [
+                'status' => 'checking',
+                'startedAt' => now()->timestamp,
+                'simulateTerminalState' => config('app.debug'),
+            ], now()->addMinutes(2));
+        });
+
         Event::listen(UpdateAvailable::class, function (UpdateAvailable $event) {
             Log::info('Update available', ['version' => $event->version]);
+
+            $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
+            Cache::put('native-update-state', [
+                'status' => 'downloading',
+                'version' => $event->version,
+                'releaseNotes' => $releaseNotes,
+                'percent' => 0,
+            ], now()->addMinutes(30));
+
             Notification::new()
                 ->title('Update Available')
                 ->message("Version {$event->version} is available and downloading.")
                 ->show();
         });
 
+        Event::listen(DownloadProgress::class, function (DownloadProgress $event) {
+            $state = Cache::get('native-update-state', []);
+            $state['status'] = 'downloading';
+            $state['percent'] = (int) round($event->percent);
+            Cache::put('native-update-state', $state, now()->addMinutes(30));
+        });
+
         Event::listen(UpdateNotAvailable::class, function () {
+            Cache::put('native-update-state', ['status' => 'up-to-date'], now()->addSeconds(10));
             Notification::new()
                 ->title('No Updates')
                 ->message('You are running the latest version.')
@@ -55,6 +92,15 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
         Event::listen(UpdateDownloaded::class, function (UpdateDownloaded $event) {
             Log::info('Update downloaded', ['version' => $event->version]);
+
+            $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
+            Cache::put('native-update-state', [
+                'status' => 'ready',
+                'version' => $event->version,
+                'releaseNotes' => $releaseNotes,
+                'percent' => 100,
+            ], now()->addHours(24));
+
             Notification::new()
                 ->title('Update Ready')
                 ->message("Version {$event->version} will be installed on restart.")
@@ -63,7 +109,18 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
         Event::listen(UpdateError::class, function (UpdateError $event) {
             Log::error('Auto-update error', ['message' => $event->message, 'stack' => $event->stack]);
+            Cache::put('native-update-state', ['status' => 'error'], now()->addMinutes(5));
+            Notification::new()
+                ->title('Update Error')
+                ->message('Could not check for updates. Try again later.')
+                ->show();
         });
+    }
+
+    /** @param array<string>|string|null $notes */
+    private function normalizeReleaseNotes(array|string|null $notes): ?string
+    {
+        return is_array($notes) ? implode(' ', $notes) : $notes;
     }
 
     private function createWindow(): void
@@ -152,5 +209,70 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         return [
             'memory_limit' => '512M',
         ];
+    }
+
+    private function ensureNativeDevelopmentDatabaseIsMigrated(): void
+    {
+        if (! config('app.debug') || ! config('nativephp-internal.running')) {
+            return;
+        }
+
+        if (self::$nativeDevelopmentDatabaseChecked) {
+            return;
+        }
+
+        self::$nativeDevelopmentDatabaseChecked = true;
+
+        $migrator = app('migrator');
+        $repository = app('migration.repository');
+
+        $hasPendingMigrations = $migrator->usingConnection(config('database.default'), function () use ($migrator, $repository): bool {
+            if (! $repository->repositoryExists()) {
+                return true;
+            }
+
+            $migrationFiles = $migrator->getMigrationFiles([
+                database_path('migrations'),
+                ...$migrator->paths(),
+            ]);
+
+            return collect(array_keys($migrationFiles))
+                ->diff($repository->getRan())
+                ->isNotEmpty();
+        });
+
+        if ($hasPendingMigrations) {
+            Artisan::call('native:migrate', ['--force' => true]);
+        }
+    }
+
+    private function clearCompiledViewsForDev(): void
+    {
+        if (! config('app.debug')) {
+            return;
+        }
+
+        if (self::$compiledViewsClearedForDev) {
+            return;
+        }
+
+        collect([
+            storage_path('framework/views'),
+            base_path('storage/framework/views'),
+        ])
+            ->unique()
+            ->filter(fn (string $path) => is_dir($path))
+            ->each(function (string $path): void {
+                collect(File::glob($path.'/*.php') ?: [])
+                    ->each(fn (string $file) => File::delete($file));
+
+                $livewireViewsPath = $path.'/livewire';
+
+                if (is_dir($livewireViewsPath)) {
+                    File::deleteDirectory($livewireViewsPath);
+                }
+            });
+
+        self::$compiledViewsClearedForDev = true;
     }
 }

@@ -73,7 +73,7 @@ Confirm the draft has all expected artifacts:
 
 ### 7. Publish
 
-Ask the user for confirmation before publishing:
+Publish the release immediately (do not leave as draft):
 
 ```bash
 gh release edit vX.Y.Z -R fgilio/rfa --draft=false
