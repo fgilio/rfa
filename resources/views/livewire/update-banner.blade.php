@@ -186,7 +186,9 @@ new class extends Component
     /** @param array<string>|string|null $notes */
     private function normalizeReleaseNotes(array|string|null $notes): ?string
     {
-        return is_array($notes) ? implode(' ', $notes) : $notes;
+        $text = is_array($notes) ? implode(' ', $notes) : $notes;
+
+        return $text ? trim(strip_tags($text)) : $text;
     }
 };
 ?>

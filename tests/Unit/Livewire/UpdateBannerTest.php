@@ -188,6 +188,13 @@ test('native updater events update banner state immediately', function () {
         ->assertSee('Downloading v1.2.0...');
 });
 
+test('strips html from release notes', function () {
+    Livewire::test('update-banner')
+        ->dispatch('native:Native\\Desktop\\Events\\AutoUpdater\\UpdateDownloaded', version: '1.3.0', releaseNotes: '<p>Add search bar</p>')
+        ->assertSet('releaseNotes', 'Add search bar')
+        ->assertDontSee('<p>');
+});
+
 test('does not render a custom renderer message bridge', function () {
     Livewire::test('update-banner')
         ->assertDontSeeHtml('window.__rfaUpdateBannerNativeHandler')
