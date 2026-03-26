@@ -7,6 +7,7 @@ namespace App\Providers;
 use App\Actions\OpenProjectFromPathAction;
 use App\Listeners\HandleDeepLink;
 use App\Listeners\HandleMenuItemClicked;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
@@ -28,12 +29,15 @@ use Native\Desktop\Notification;
 
 class NativeAppServiceProvider implements ProvidesPhpIni
 {
+    private static bool $nativeDevelopmentDatabaseChecked = false;
+
     private static bool $compiledViewsClearedForDev = false;
 
     private static bool $updateStateResetForDev = false;
 
     public function boot(): void
     {
+        $this->ensureNativeDevelopmentDatabaseIsMigrated();
         $this->clearCompiledViewsForDev();
 
         $this->createMenu();
@@ -207,6 +211,41 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         return [
             'memory_limit' => '512M',
         ];
+    }
+
+    private function ensureNativeDevelopmentDatabaseIsMigrated(): void
+    {
+        if (! config('app.debug') || ! config('nativephp-internal.running')) {
+            return;
+        }
+
+        if (self::$nativeDevelopmentDatabaseChecked) {
+            return;
+        }
+
+        self::$nativeDevelopmentDatabaseChecked = true;
+
+        $migrator = app('migrator');
+        $repository = app('migration.repository');
+
+        $hasPendingMigrations = $migrator->usingConnection(config('database.default'), function () use ($migrator, $repository): bool {
+            if (! $repository->repositoryExists()) {
+                return true;
+            }
+
+            $migrationFiles = $migrator->getMigrationFiles([
+                database_path('migrations'),
+                ...$migrator->paths(),
+            ]);
+
+            return collect(array_keys($migrationFiles))
+                ->diff($repository->getRan())
+                ->isNotEmpty();
+        });
+
+        if ($hasPendingMigrations) {
+            Artisan::call('native:migrate', ['--force' => true]);
+        }
     }
 
     private function clearCompiledViewsForDev(): void
