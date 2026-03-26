@@ -33,8 +33,6 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
     private static bool $compiledViewsClearedForDev = false;
 
-    private static bool $updateStateResetForDev = false;
-
     public function boot(): void
     {
         $this->ensureNativeDevelopmentDatabaseIsMigrated();
@@ -276,10 +274,5 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             });
 
         self::$compiledViewsClearedForDev = true;
-
-        if (! self::$updateStateResetForDev) {
-            Cache::forget('native-update-state');
-            self::$updateStateResetForDev = true;
-        }
     }
 }

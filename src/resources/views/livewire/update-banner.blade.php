@@ -193,67 +193,6 @@ new class extends Component
 
 <div
     wire:poll.{{ match(true) { $status === null => '5s', in_array($status, ['checking', 'downloading']) => '2s', default => '30s' } }}="refreshState"
-    x-data
-    x-init="
-        if (window.__rfaUpdateBannerNativeHandler) {
-            window.removeEventListener('message', window.__rfaUpdateBannerNativeHandler);
-        }
-
-        const banner = $wire;
-        const isDebug = @js(config('app.debug'));
-        const normalizeEventName = (name) => (name || '').replace(/^\\\\+/, '');
-
-        window.__rfaUpdateBannerNativeHandler = (event) => {
-            if (event.data?.type !== 'native-event') {
-                return;
-            }
-
-            const eventName = normalizeEventName(event.data.event);
-            const payload = event.data.payload || {};
-
-            if (eventName === 'Native\\Desktop\\Events\\Menu\\MenuItemClicked' && payload.item?.id === 'check-updates') {
-                banner.handleNativeMenuItemClicked(payload.item);
-
-                if (isDebug) {
-                    window.clearTimeout(window.__rfaUpdateBannerDevTimer);
-                    window.__rfaUpdateBannerDevTimer = window.setTimeout(() => banner.refreshState(), 2200);
-                }
-
-                return;
-            }
-
-            if (eventName === 'Native\\Desktop\\Events\\AutoUpdater\\CheckingForUpdate') {
-                banner.handleCheckingForUpdate();
-                return;
-            }
-
-            if (eventName === 'Native\\Desktop\\Events\\AutoUpdater\\UpdateAvailable') {
-                banner.handleUpdateAvailable(payload.version, payload.releaseNotes);
-                return;
-            }
-
-            if (eventName === 'Native\\Desktop\\Events\\AutoUpdater\\DownloadProgress') {
-                banner.handleDownloadProgress(payload.percent);
-                return;
-            }
-
-            if (eventName === 'Native\\Desktop\\Events\\AutoUpdater\\UpdateDownloaded') {
-                banner.handleUpdateDownloaded(payload.version, payload.releaseNotes);
-                return;
-            }
-
-            if (eventName === 'Native\\Desktop\\Events\\AutoUpdater\\UpdateNotAvailable') {
-                banner.handleUpdateNotAvailable();
-                return;
-            }
-
-            if (eventName === 'Native\\Desktop\\Events\\AutoUpdater\\Error') {
-                banner.handleUpdateError();
-            }
-        };
-
-        window.addEventListener('message', window.__rfaUpdateBannerNativeHandler);
-    "
 >
     @if($status === 'checking')
         <div

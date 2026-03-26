@@ -188,6 +188,12 @@ test('native updater events update banner state immediately', function () {
         ->assertSee('Downloading v1.2.0...');
 });
 
+test('does not render a custom renderer message bridge', function () {
+    Livewire::test('update-banner')
+        ->assertDontSeeHtml('window.__rfaUpdateBannerNativeHandler')
+        ->assertDontSeeHtml("window.addEventListener('message'");
+});
+
 test('uses fast polling during download', function () {
     Cache::put('native-update-state', [
         'status' => 'downloading',
