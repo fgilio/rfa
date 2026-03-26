@@ -9,9 +9,6 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -22,9 +19,6 @@ jobs:
 
   types:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -35,9 +29,6 @@ jobs:
 
   test-core:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -52,9 +43,6 @@ jobs:
 
   test-browser:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -85,9 +73,6 @@ jobs:
 
   benchmark-perf:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src
     steps:
       - uses: actions/checkout@v4
         with:
@@ -104,7 +89,15 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git checkout --force ${{ github.event.pull_request.base.sha }}
+            # Handle old src/ layout on base branch
+            if [ -f src/composer.json ] && [ ! -f composer.json ]; then
+              cd src
+            fi
             composer install --no-interaction --prefer-dist
+          fi
+          # Resolve app root (src/ on old commits, . on new)
+          if [ -f src/artisan ] && [ ! -f artisan ]; then
+            cd src
           fi
           cp .env.example .env
           php artisan key:generate

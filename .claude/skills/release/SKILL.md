@@ -22,7 +22,7 @@ Version must be semver with `v` prefix (e.g. `v0.2.0`). Validate the tag doesn't
 
 ### 2. Pre-flight checks
 
-Run from `src/`:
+Run pre-flight checks:
 
 ```bash
 composer test:lint
