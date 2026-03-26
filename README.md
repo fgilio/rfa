@@ -80,7 +80,6 @@ Always excluded: `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`,
 Prerequisites: PHP 8.3+, Composer, Node.js 22+, git.
 
 ```bash
-cd src
 composer install
 cp .env.example .env
 php artisan key:generate

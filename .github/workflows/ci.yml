@@ -9,9 +9,6 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -22,9 +19,6 @@ jobs:
 
   types:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -35,9 +29,6 @@ jobs:
 
   test-core:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -52,9 +43,6 @@ jobs:
 
   test-browser:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -85,9 +73,6 @@ jobs:
 
   benchmark-perf:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: src
     steps:
       - uses: actions/checkout@v4
         with:

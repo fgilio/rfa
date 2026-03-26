@@ -8,7 +8,6 @@ output:
 pre-commit:
   commands:
     lint:
-      root: src/
       run: ./vendor/bin/pint --test
     agents-symlinks:
       run: |
@@ -29,5 +28,4 @@ pre-commit:
 pre-push:
   commands:
     types:
-      root: src/
       run: php -d memory_limit=512M ./vendor/bin/phpstan analyse
