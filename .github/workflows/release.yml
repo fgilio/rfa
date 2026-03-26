@@ -82,6 +82,11 @@ jobs:
           GITHUB_REPO: rfa
           GITHUB_OWNER: fgilio
           NATIVEPHP_APP_VERSION: ${{ steps.version.outputs.value }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          NATIVEPHP_APPLE_ID: ${{ secrets.NATIVEPHP_APPLE_ID }}
+          NATIVEPHP_APPLE_ID_PASS: ${{ secrets.NATIVEPHP_APPLE_ID_PASS }}
+          NATIVEPHP_APPLE_TEAM_ID: ${{ secrets.NATIVEPHP_APPLE_TEAM_ID }}
         run: php artisan native:build mac arm64 --publish --no-interaction
 
       - name: Upload build logs on failure
