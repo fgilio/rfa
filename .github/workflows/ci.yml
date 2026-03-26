@@ -89,7 +89,15 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git checkout --force ${{ github.event.pull_request.base.sha }}
+            # Handle old src/ layout on base branch
+            if [ -f src/composer.json ] && [ ! -f composer.json ]; then
+              cd src
+            fi
             composer install --no-interaction --prefer-dist
+          fi
+          # Resolve app root (src/ on old commits, . on new)
+          if [ -f src/artisan ] && [ ! -f artisan ]; then
+            cd src
           fi
           cp .env.example .env
           php artisan key:generate
