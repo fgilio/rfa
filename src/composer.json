@@ -58,7 +58,7 @@
         "test:types": "./vendor/bin/phpstan analyse --memory-limit=512M",
         "test": [
             "@php artisan config:clear --ansi",
-            "@php artisan test --testsuite=Core"
+            "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Core"
         ],
         "test:arch": "@php artisan test --testsuite=Arch",
         "test:browser": "@php artisan test --testsuite=Browser",
