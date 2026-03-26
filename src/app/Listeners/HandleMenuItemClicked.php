@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Listeners;
 
 use App\Actions\OpenRepositoryDialogAction;
+use Illuminate\Support\Facades\Cache;
 use Native\Desktop\Events\Menu\MenuItemClicked;
 use Native\Desktop\Facades\AutoUpdater;
 use Native\Desktop\Facades\Window;
@@ -21,9 +22,20 @@ final readonly class HandleMenuItemClicked
 
         match ($id) {
             'open-repo' => $this->handleOpenRepo(),
-            'check-updates' => AutoUpdater::checkForUpdates(),
+            'check-updates' => $this->handleCheckUpdates(),
             default => null,
         };
+    }
+
+    private function handleCheckUpdates(): void
+    {
+        Cache::put('native-update-state', [
+            'status' => 'checking',
+            'startedAt' => now()->timestamp,
+            'simulateTerminalState' => config('app.debug'),
+        ], now()->addMinutes(2));
+
+        AutoUpdater::checkForUpdates();
     }
 
     private function handleOpenRepo(): void

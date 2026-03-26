@@ -1,13 +1,18 @@
 <?php
 
 use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Native\Desktop\Facades\AutoUpdater;
 
-new class extends Component {
-    public ?string $status = null; // checking, downloading, ready, error
+new class extends Component
+{
+    public ?string $status = null; // checking, downloading, ready, up-to-date, checked-dev, error
+
     public ?string $version = null;
+
     public ?string $releaseNotes = null;
+
     public int $downloadPercent = 0;
 
     public function mount(): void
@@ -20,18 +25,79 @@ new class extends Component {
         $state = Cache::get('native-update-state');
 
         if (! $state) {
-            $this->status = null;
-            $this->version = null;
-            $this->releaseNotes = null;
-            $this->downloadPercent = 0;
+            $this->resetState();
 
             return;
         }
 
-        $this->status = $state['status'] ?? null;
-        $this->version = $state['version'] ?? null;
-        $this->releaseNotes = $state['releaseNotes'] ?? null;
-        $this->downloadPercent = $state['percent'] ?? 0;
+        $this->applyState($this->resolveDevCheckState($state));
+    }
+
+    #[On('native:Native\\Desktop\\Events\\Menu\\MenuItemClicked')]
+    public function handleNativeMenuItemClicked(array $item): void
+    {
+        if (($item['id'] ?? null) !== 'check-updates') {
+            return;
+        }
+
+        $this->storeState(
+            $this->checkingState(),
+            now()->addMinutes(2),
+        );
+    }
+
+    #[On('native:Native\\Desktop\\Events\\AutoUpdater\\CheckingForUpdate')]
+    public function handleCheckingForUpdate(): void
+    {
+        $this->storeState(
+            $this->checkingState(),
+            now()->addMinutes(2),
+        );
+    }
+
+    #[On('native:Native\\Desktop\\Events\\AutoUpdater\\UpdateAvailable')]
+    public function handleUpdateAvailable(string $version, array|string|null $releaseNotes = null): void
+    {
+        $this->storeState([
+            'status' => 'downloading',
+            'version' => $version,
+            'releaseNotes' => $this->normalizeReleaseNotes($releaseNotes),
+            'percent' => 0,
+        ], now()->addMinutes(30));
+    }
+
+    #[On('native:Native\\Desktop\\Events\\AutoUpdater\\DownloadProgress')]
+    public function handleDownloadProgress(int|float $percent): void
+    {
+        $this->storeState([
+            'status' => 'downloading',
+            'version' => $this->version,
+            'releaseNotes' => $this->releaseNotes,
+            'percent' => (int) round($percent),
+        ], now()->addMinutes(30));
+    }
+
+    #[On('native:Native\\Desktop\\Events\\AutoUpdater\\UpdateDownloaded')]
+    public function handleUpdateDownloaded(string $version, array|string|null $releaseNotes = null): void
+    {
+        $this->storeState([
+            'status' => 'ready',
+            'version' => $version,
+            'releaseNotes' => $this->normalizeReleaseNotes($releaseNotes),
+            'percent' => 100,
+        ], now()->addHours(24));
+    }
+
+    #[On('native:Native\\Desktop\\Events\\AutoUpdater\\UpdateNotAvailable')]
+    public function handleUpdateNotAvailable(): void
+    {
+        $this->storeState(['status' => 'up-to-date'], now()->addSeconds(10));
+    }
+
+    #[On('native:Native\\Desktop\\Events\\AutoUpdater\\Error')]
+    public function handleUpdateError(): void
+    {
+        $this->storeState(['status' => 'error'], now()->addMinutes(5));
     }
 
     public function restartAndUpdate(): void
@@ -47,12 +113,148 @@ new class extends Component {
     public function dismiss(): void
     {
         Cache::forget('native-update-state');
+        $this->resetState();
+    }
+
+    /** @return array<string, mixed> */
+    private function checkingState(): array
+    {
+        return [
+            'status' => 'checking',
+            'startedAt' => now()->timestamp,
+            'simulateTerminalState' => config('app.debug'),
+        ];
+    }
+
+    /** @param array<string, mixed> $state */
+    private function applyState(array $state): void
+    {
+        $this->status = $state['status'] ?? null;
+        $this->version = $state['version'] ?? null;
+        $this->releaseNotes = $state['releaseNotes'] ?? null;
+        $this->downloadPercent = $state['percent'] ?? 0;
+    }
+
+    private function resetState(): void
+    {
         $this->status = null;
+        $this->version = null;
+        $this->releaseNotes = null;
+        $this->downloadPercent = 0;
+    }
+
+    /** @param array<string, mixed> $state */
+    private function storeState(array $state, \DateTimeInterface $ttl): void
+    {
+        Cache::put('native-update-state', $state, $ttl);
+
+        $this->applyState($state);
+    }
+
+    /** @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function resolveDevCheckState(array $state): array
+    {
+        if (! config('app.debug')) {
+            return $state;
+        }
+
+        if (($state['status'] ?? null) !== 'checking') {
+            return $state;
+        }
+
+        if (($state['simulateTerminalState'] ?? false) !== true) {
+            return $state;
+        }
+
+        $startedAt = $state['startedAt'] ?? null;
+
+        if (! is_int($startedAt) || (now()->timestamp - $startedAt) < 2) {
+            return $state;
+        }
+
+        $state = [
+            'status' => 'checked-dev',
+        ];
+
+        Cache::put('native-update-state', $state, now()->addSeconds(20));
+
+        return $state;
+    }
+
+    /** @param array<string>|string|null $notes */
+    private function normalizeReleaseNotes(array|string|null $notes): ?string
+    {
+        return is_array($notes) ? implode(' ', $notes) : $notes;
     }
 };
 ?>
 
-<div wire:poll.{{ $status === 'downloading' ? '3s' : '30s' }}="refreshState">
+<div
+    wire:poll.{{ match(true) { $status === null => '5s', in_array($status, ['checking', 'downloading']) => '2s', default => '30s' } }}="refreshState"
+    x-data
+    x-init="
+        if (window.__rfaUpdateBannerNativeHandler) {
+            window.removeEventListener('message', window.__rfaUpdateBannerNativeHandler);
+        }
+
+        const banner = $wire;
+        const isDebug = @js(config('app.debug'));
+        const normalizeEventName = (name) => (name || '').replace(/^\\\\+/, '');
+
+        window.__rfaUpdateBannerNativeHandler = (event) => {
+            if (event.data?.type !== 'native-event') {
+                return;
+            }
+
+            const eventName = normalizeEventName(event.data.event);
+            const payload = event.data.payload || {};
+
+            if (eventName === 'Native\\Desktop\\Events\\Menu\\MenuItemClicked' && payload.item?.id === 'check-updates') {
+                banner.handleNativeMenuItemClicked(payload.item);
+
+                if (isDebug) {
+                    window.clearTimeout(window.__rfaUpdateBannerDevTimer);
+                    window.__rfaUpdateBannerDevTimer = window.setTimeout(() => banner.refreshState(), 2200);
+                }
+
+                return;
+            }
+
+            if (eventName === 'Native\\Desktop\\Events\\AutoUpdater\\CheckingForUpdate') {
+                banner.handleCheckingForUpdate();
+                return;
+            }
+
+            if (eventName === 'Native\\Desktop\\Events\\AutoUpdater\\UpdateAvailable') {
+                banner.handleUpdateAvailable(payload.version, payload.releaseNotes);
+                return;
+            }
+
+            if (eventName === 'Native\\Desktop\\Events\\AutoUpdater\\DownloadProgress') {
+                banner.handleDownloadProgress(payload.percent);
+                return;
+            }
+
+            if (eventName === 'Native\\Desktop\\Events\\AutoUpdater\\UpdateDownloaded') {
+                banner.handleUpdateDownloaded(payload.version, payload.releaseNotes);
+                return;
+            }
+
+            if (eventName === 'Native\\Desktop\\Events\\AutoUpdater\\UpdateNotAvailable') {
+                banner.handleUpdateNotAvailable();
+                return;
+            }
+
+            if (eventName === 'Native\\Desktop\\Events\\AutoUpdater\\Error') {
+                banner.handleUpdateError();
+            }
+        };
+
+        window.addEventListener('message', window.__rfaUpdateBannerNativeHandler);
+    "
+>
     @if($status === 'checking')
         <div
             class="bg-gh-surface border-b border-gh-border px-4 py-2 font-mono text-xs text-gh-muted flex items-center justify-center gap-2"
@@ -97,6 +299,23 @@ new class extends Component {
             >
                 <flux:icon icon="x-mark" variant="outline" class="!size-3.5" />
             </button>
+        </div>
+    @elseif($status === 'up-to-date')
+        <div
+            class="bg-gh-surface border-b border-gh-border px-4 py-2 font-mono text-xs text-gh-green flex items-center justify-center gap-2"
+            role="status"
+        >
+            <flux:icon icon="check-circle" variant="outline" class="!size-3.5" />
+            You're up to date
+        </div>
+    @elseif($status === 'checked-dev')
+        <div
+            class="bg-gh-surface border-b border-gh-border px-4 py-2 font-mono text-xs text-gh-link flex items-center justify-center gap-3"
+            role="status"
+        >
+            <flux:icon icon="information-circle" variant="outline" class="!size-3.5" />
+            <span>Checked for updates</span>
+            <span class="text-gh-muted">Dev build - NativePHP updater does not complete here.</span>
         </div>
     @elseif($status === 'error')
         <div

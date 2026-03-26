@@ -9,6 +9,7 @@ use App\Listeners\HandleDeepLink;
 use App\Listeners\HandleMenuItemClicked;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Native\Desktop\Contracts\ProvidesPhpIni;
 use Native\Desktop\Events\App\OpenedFromURL;
@@ -27,8 +28,14 @@ use Native\Desktop\Notification;
 
 class NativeAppServiceProvider implements ProvidesPhpIni
 {
+    private static bool $compiledViewsClearedForDev = false;
+
+    private static bool $updateStateResetForDev = false;
+
     public function boot(): void
     {
+        $this->clearCompiledViewsForDev();
+
         $this->createMenu();
         $this->createWindow();
         $this->processInbox();
@@ -42,7 +49,11 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         });
 
         Event::listen(CheckingForUpdate::class, function () {
-            Cache::put('native-update-state', ['status' => 'checking'], now()->addMinutes(2));
+            Cache::put('native-update-state', [
+                'status' => 'checking',
+                'startedAt' => now()->timestamp,
+                'simulateTerminalState' => config('app.debug'),
+            ], now()->addMinutes(2));
         });
 
         Event::listen(UpdateAvailable::class, function (UpdateAvailable $event) {
@@ -70,7 +81,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         });
 
         Event::listen(UpdateNotAvailable::class, function () {
-            Cache::forget('native-update-state');
+            Cache::put('native-update-state', ['status' => 'up-to-date'], now()->addSeconds(10));
             Notification::new()
                 ->title('No Updates')
                 ->message('You are running the latest version.')
@@ -196,5 +207,40 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         return [
             'memory_limit' => '512M',
         ];
+    }
+
+    private function clearCompiledViewsForDev(): void
+    {
+        if (! config('app.debug')) {
+            return;
+        }
+
+        if (self::$compiledViewsClearedForDev) {
+            return;
+        }
+
+        collect([
+            storage_path('framework/views'),
+            base_path('storage/framework/views'),
+        ])
+            ->unique()
+            ->filter(fn (string $path) => is_dir($path))
+            ->each(function (string $path): void {
+                collect(File::glob($path.'/*.php') ?: [])
+                    ->each(fn (string $file) => File::delete($file));
+
+                $livewireViewsPath = $path.'/livewire';
+
+                if (is_dir($livewireViewsPath)) {
+                    File::deleteDirectory($livewireViewsPath);
+                }
+            });
+
+        self::$compiledViewsClearedForDev = true;
+
+        if (! self::$updateStateResetForDev) {
+            Cache::forget('native-update-state');
+            self::$updateStateResetForDev = true;
+        }
     }
 }

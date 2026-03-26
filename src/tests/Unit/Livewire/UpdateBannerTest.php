@@ -6,12 +6,17 @@ use Native\Desktop\Facades\AutoUpdater;
 
 uses(Tests\TestCase::class);
 
+beforeEach(function () {
+    Cache::forget('native-update-state');
+});
+
 test('shows nothing when cache is empty', function () {
     Livewire::test('update-banner')
         ->assertSet('status', null)
         ->assertDontSee('Checking for updates')
         ->assertDontSee('Downloading')
         ->assertDontSee('ready')
+        ->assertDontSee('up to date')
         ->assertDontSee('Update check failed');
 });
 
@@ -52,6 +57,29 @@ test('shows ready state with version and restart button', function () {
         ->assertSee('v1.2.0 ready')
         ->assertSee('Bug fixes and improvements')
         ->assertSee('Restart to update');
+});
+
+test('shows up-to-date state', function () {
+    Cache::put('native-update-state', ['status' => 'up-to-date'], now()->addSeconds(10));
+
+    Livewire::test('update-banner')
+        ->assertSet('status', 'up-to-date')
+        ->assertSeeHtml("You're up to date");
+});
+
+test('shows dev checked state after a simulated dev check settles', function () {
+    config(['app.debug' => true]);
+
+    Cache::put('native-update-state', [
+        'status' => 'checking',
+        'startedAt' => now()->subSeconds(3)->timestamp,
+        'simulateTerminalState' => true,
+    ], now()->addMinutes(2));
+
+    Livewire::test('update-banner')
+        ->assertSet('status', 'checked-dev')
+        ->assertSee('Checked for updates')
+        ->assertSee('Dev build - NativePHP updater does not complete here.');
 });
 
 test('shows error state', function () {
@@ -143,7 +171,24 @@ test('refreshState updates component from cache changes', function () {
         ->assertSet('downloadPercent', 75);
 });
 
-test('uses faster polling during download', function () {
+test('native menu click shows checking state immediately', function () {
+    Livewire::test('update-banner')
+        ->dispatch('native:Native\\Desktop\\Events\\Menu\\MenuItemClicked', item: ['id' => 'check-updates'])
+        ->assertSet('status', 'checking')
+        ->assertSee('Checking for updates...');
+
+    expect(Cache::get('native-update-state')['status'])->toBe('checking');
+});
+
+test('native updater events update banner state immediately', function () {
+    Livewire::test('update-banner')
+        ->dispatch('native:Native\\Desktop\\Events\\AutoUpdater\\UpdateAvailable', version: '1.2.0', releaseNotes: 'Bug fixes')
+        ->assertSet('status', 'downloading')
+        ->assertSet('version', '1.2.0')
+        ->assertSee('Downloading v1.2.0...');
+});
+
+test('uses fast polling during download', function () {
     Cache::put('native-update-state', [
         'status' => 'downloading',
         'version' => '1.2.0',
@@ -151,10 +196,22 @@ test('uses faster polling during download', function () {
     ]);
 
     Livewire::test('update-banner')
-        ->assertSeeHtml('wire:poll.3s');
+        ->assertSeeHtml('wire:poll.2s');
 });
 
-test('uses standard polling when not downloading', function () {
+test('uses fast polling during checking', function () {
+    Cache::put('native-update-state', ['status' => 'checking'], now()->addSeconds(15));
+
+    Livewire::test('update-banner')
+        ->assertSeeHtml('wire:poll.2s');
+});
+
+test('uses idle polling when no state', function () {
+    Livewire::test('update-banner')
+        ->assertSeeHtml('wire:poll.5s');
+});
+
+test('uses standard polling for passive states', function () {
     Cache::put('native-update-state', [
         'status' => 'ready',
         'version' => '1.2.0',

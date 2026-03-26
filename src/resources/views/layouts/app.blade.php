@@ -149,9 +149,6 @@
     @fluxAppearance
 </head>
 <body class="bg-gh-bg text-gh-text min-h-screen font-display text-sm antialiased">
-    @native
-        <livewire:update-banner />
-    @endnative
     {{ $slot }}
     @fluxScripts
     @browser
