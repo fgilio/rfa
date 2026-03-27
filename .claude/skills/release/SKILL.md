@@ -12,13 +12,18 @@ Ship a new version of rfa through the GitHub Actions release pipeline.
 
 ### 1. Determine version
 
-Ask the user what version to release. Suggest the next patch/minor/major based on the latest tag:
+Ask the user what version to release. Suggest the next version based on the latest tag:
 
 ```bash
 git tag --sort=-v:refname | head -5
 ```
 
 Version must be semver with `v` prefix (e.g. `v0.2.0`). Validate the tag doesn't already exist.
+
+Use standard semver to guide the suggestion:
+- **Major** (vX.0.0): breaking changes
+- **Minor** (v0.X.0): new features, capabilities
+- **Patch** (v0.0.X): bug fixes, tweaks, UI polish, performance
 
 ### 2. Pre-flight checks
 
