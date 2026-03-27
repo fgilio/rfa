@@ -72,6 +72,7 @@ jobs:
         run: |
           cp .env.example .env
           php artisan key:generate
+          echo "NATIVEPHP_APP_VERSION=${{ steps.version.outputs.value }}" >> .env
 
       - name: Set repository in electron package.json
         run: node -e "const f='vendor/nativephp/desktop/resources/electron/package.json';const p=JSON.parse(require('fs').readFileSync(f));p.repository='github:fgilio/rfa';require('fs').writeFileSync(f,JSON.stringify(p,null,4))"
