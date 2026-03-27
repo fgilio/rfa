@@ -30,6 +30,13 @@ new class extends Component
             return;
         }
 
+        if (($state['status'] ?? null) === 'ready' && ($state['version'] ?? null) === config('nativephp.version')) {
+            Cache::forget('native-update-state');
+            $this->resetState();
+
+            return;
+        }
+
         $this->applyState($this->resolveDevCheckState($state));
     }
 
