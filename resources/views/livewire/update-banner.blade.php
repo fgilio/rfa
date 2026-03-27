@@ -255,6 +255,13 @@ new class extends Component
         >
             <flux:icon icon="check-circle" variant="outline" class="!size-3.5" />
             You're up to date
+            <button
+                wire:click="dismiss"
+                class="text-gh-muted hover:text-gh-text"
+                aria-label="Dismiss"
+            >
+                <flux:icon icon="x-mark" variant="outline" class="!size-3.5" />
+            </button>
         </div>
     @elseif($status === 'checked-dev')
         <div
