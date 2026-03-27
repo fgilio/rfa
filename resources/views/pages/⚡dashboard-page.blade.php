@@ -1,7 +1,9 @@
 <?php
 
 use App\Actions\ListProjectsAction;
+use App\Actions\OpenProjectFromPathAction;
 use App\Actions\RemoveProjectAction;
+use Flux\Flux;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -33,6 +35,19 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->projectGroups = app(ListProjectsAction::class)->handle($this->sortBy);
     }
+
+    public function registerProject(string $path): void
+    {
+        $project = app(OpenProjectFromPathAction::class)->handle($path);
+
+        if (! $project) {
+            Flux::toast(variant: 'danger', text: 'Not a git repository');
+
+            return;
+        }
+
+        $this->redirect("/p/{$project->slug}");
+    }
 };
 ?>
 
@@ -44,6 +59,8 @@ new #[Layout('layouts.app')] class extends Component
         selectedIndex: -1,
         selectedProjectId: null,
         sortBy: $store.settings.dashboardSort,
+        dragging: false,
+        dragCounter: 0,
         get flatProjects() {
             return Array.from(this.$root.querySelectorAll('[data-project-card]'));
         },
@@ -81,6 +98,20 @@ new #[Layout('layouts.app')] class extends Component
         }
     }"
     x-init="initSort()"
+    @dragenter.window.prevent="dragCounter++; dragging = true"
+    @dragleave.window.prevent="dragCounter--; if (dragCounter <= 0) { dragging = false; dragCounter = 0; }"
+    @dragover.window.prevent
+    @drop.window.prevent="
+        dragging = false;
+        dragCounter = 0;
+        const file = $event.dataTransfer?.files?.[0];
+        if (file) {
+            const path = window.nativeGetFilePath?.(file) || file.path;
+            if (path) {
+                $wire.registerProject(path);
+            }
+        }
+    "
     @keydown.window="
         if ($event.key === 'ArrowDown') { navigate(1); $event.preventDefault(); return; }
         if ($event.key === 'ArrowUp') { navigate(-1); $event.preventDefault(); return; }
@@ -93,6 +124,25 @@ new #[Layout('layouts.app')] class extends Component
         if ($event.key === '/') { $refs.searchInput?.focus(); $event.preventDefault(); }
     "
 >
+    {{-- Drop zone overlay --}}
+    <div
+        x-show="dragging"
+        x-transition:enter="transition ease-out duration-150"
+        x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100"
+        x-transition:leave="transition ease-in duration-100"
+        x-transition:leave-start="opacity-100"
+        x-transition:leave-end="opacity-0"
+        x-cloak
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-gh-bg/90 backdrop-blur-sm pointer-events-none"
+    >
+        <div class="rounded-xl border-2 border-dashed border-gh-link/50 px-16 py-12 text-center">
+            <flux:icon icon="folder-plus" variant="outline" class="size-12 text-gh-link mx-auto mb-4" />
+            <p class="font-display text-lg font-semibold tracking-brutal text-gh-text">Drop folder to add project</p>
+            <p class="font-mono text-xs text-gh-muted mt-1">Must be a git repository</p>
+        </div>
+    </div>
+
     @native
         <livewire:update-banner />
     @endnative
