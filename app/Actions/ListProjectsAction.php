@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Models\Project;
+use App\Models\ReviewSession;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 
 final readonly class ListProjectsAction
 {
@@ -17,12 +17,15 @@ final readonly class ListProjectsAction
     {
         $projects = Project::query()
             ->select('projects.*')
-            ->addSelect(DB::raw(
-                '(SELECT COALESCE(SUM(JSON_ARRAY_LENGTH(comments)), 0) FROM review_sessions WHERE review_sessions.project_id = projects.id AND JSON_ARRAY_LENGTH(comments) > 0) as comment_count'
-            ))
-            ->addSelect(DB::raw(
-                '(SELECT MAX(review_sessions.updated_at) FROM review_sessions WHERE review_sessions.project_id = projects.id) as last_session_at'
-            ))
+            ->addSelect([
+                'comment_count' => ReviewSession::selectRaw('COALESCE(SUM(JSON_ARRAY_LENGTH(comments)), 0)')
+                    ->whereColumn('review_sessions.project_id', 'projects.id')
+                    ->whereRaw('JSON_ARRAY_LENGTH(comments) > 0'),
+                'last_session_at' => ReviewSession::select('updated_at')
+                    ->whereColumn('review_sessions.project_id', 'projects.id')
+                    ->orderByDesc('updated_at')
+                    ->limit(1),
+            ])
             ->get()
             ->map(function ($project) {
                 $data = $project->toArray();

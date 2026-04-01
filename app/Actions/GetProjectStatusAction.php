@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\Exceptions\GitCommandException;
 use App\Services\GitDiffService;
+use Illuminate\Support\Facades\Log;
 
 final readonly class GetProjectStatusAction
 {
@@ -20,7 +21,9 @@ final readonly class GetProjectStatusAction
     {
         try {
             $entries = $this->gitDiffService->getFileList($repoPath, $globalGitignorePath);
-        } catch (GitCommandException) {
+        } catch (GitCommandException $e) {
+            Log::warning('Failed to get project status', ['repoPath' => $repoPath, 'stderr' => $e->stderr]);
+
             return ['dirty' => false, 'fileCount' => 0, 'additions' => 0, 'deletions' => 0];
         }
 
