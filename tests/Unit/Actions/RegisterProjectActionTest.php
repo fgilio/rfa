@@ -2,11 +2,11 @@
 
 use App\Actions\RegisterProjectAction;
 use App\Models\Project;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 beforeEach(function () {
     $this->testRepoPath = $this->createTempDirectory('rfa_register_test_');

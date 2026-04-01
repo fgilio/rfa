@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Models\Project;
+use Illuminate\Support\Facades\File;
 
 final readonly class OpenProjectFromPathAction
 {
@@ -16,7 +17,7 @@ final readonly class OpenProjectFromPathAction
     {
         $realPath = realpath($path);
 
-        if ($realPath === false || ! is_dir($realPath)) {
+        if ($realPath === false || ! File::isDirectory($realPath)) {
             return null;
         }
 

@@ -1,15 +1,15 @@
 <?php
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Pest\Browser\Browsable;
 use Tests\Browser\Helpers\CreatesTestRepo;
 use Tests\Helpers\InteractsWithTestRepositories;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class, Browsable::class, CreatesTestRepo::class)
+uses(TestCase::class, LazilyRefreshDatabase::class, Browsable::class, CreatesTestRepo::class)
     ->in('Browser');
 
-uses(TestCase::class, RefreshDatabase::class)
+uses(TestCase::class, LazilyRefreshDatabase::class)
     ->in('Performance');
 
 uses(InteractsWithTestRepositories::class)

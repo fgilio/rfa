@@ -3,10 +3,10 @@
 use App\Actions\BackfillGlobalGitignoreAction;
 use App\Models\Project;
 use App\Services\GitMetadataService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 test('returns null when git has no global excludes', function () {
     $project = Project::create([

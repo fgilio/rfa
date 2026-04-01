@@ -241,7 +241,7 @@ class GitDiffService
 
         $fullPath = $repoPath.'/'.$path;
 
-        return is_file($fullPath) ? hash_file('xxh128', $fullPath) : '';
+        return File::isFile($fullPath) ? hash_file('xxh128', $fullPath) : '';
     }
 
     public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3, ?DiffTarget $target = null): ?string

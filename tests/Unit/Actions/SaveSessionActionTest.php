@@ -4,10 +4,10 @@ use App\Actions\SaveSessionAction;
 use App\Models\Project;
 use App\Models\ReviewSession;
 use Faker\Factory as Faker;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 beforeEach(function () {
     $this->faker = Faker::create();

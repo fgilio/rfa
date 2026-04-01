@@ -10,26 +10,24 @@ Route::livewire('/', 'pages::dashboard-page')->name('dashboard');
 Route::livewire('/p/{slug}/c/{hash}', 'pages::review-page')->where('hash', '[0-9a-fA-F]{4,40}')->name('review-page.commit');
 Route::livewire('/p/{slug}/{ref?}/{baseRef?}', 'pages::review-page')->name('review-page');
 
-Route::get('/api/status/{project}', function (int $project) {
-    $p = Project::findOrFail($project);
-    $globalGitignorePath = $p->respect_global_gitignore ? $p->global_gitignore_path : null;
+Route::get('/api/status/{project}', function (Project $project) {
+    $globalGitignorePath = $project->respect_global_gitignore ? $project->global_gitignore_path : null;
 
     return response()->json(
-        app(GetProjectStatusAction::class)->handle($p->path, $globalGitignorePath)
+        app(GetProjectStatusAction::class)->handle($project->path, $globalGitignorePath)
     );
-});
+})->name('api.status');
 
-Route::get('/api/changes/{project}', function (int $project) {
-    $p = Project::findOrFail($project);
-    $globalGitignorePath = $p->respect_global_gitignore ? $p->global_gitignore_path : null;
+Route::get('/api/changes/{project}', function (Project $project) {
+    $globalGitignorePath = $project->respect_global_gitignore ? $project->global_gitignore_path : null;
 
-    $fingerprint = app(CheckForChangesAction::class)->handle($p->path, $globalGitignorePath);
+    $fingerprint = app(CheckForChangesAction::class)->handle($project->path, $globalGitignorePath);
 
     return response()->json(['fingerprint' => $fingerprint]);
-});
+})->name('api.changes');
 
-Route::get('/api/image/{project}/{ref}/{path}', function (int $project, string $ref, string $path) {
-    $result = app(ServeImageAction::class)->handle($project, $path, $ref);
+Route::get('/api/image/{project}/{ref}/{path}', function (Project $project, string $ref, string $path) {
+    $result = app(ServeImageAction::class)->handle($project->id, $path, $ref);
 
     if ($result === null) {
         abort(404);
@@ -39,4 +37,4 @@ Route::get('/api/image/{project}/{ref}/{path}', function (int $project, string $
         'Content-Type' => $result['mimeType'],
         'Cache-Control' => 'no-store',
     ]);
-})->where('path', '.*');
+})->where('path', '.*')->name('api.image');

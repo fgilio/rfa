@@ -159,13 +159,13 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     {
         $dir = self::inboxDir();
 
-        if (! is_dir($dir)) {
+        if (! File::isDirectory($dir)) {
             return;
         }
 
-        $files = glob($dir.'/*.path');
+        $files = File::glob($dir.'/*.path');
 
-        if ($files === false || $files === []) {
+        if ($files === []) {
             return;
         }
 
@@ -174,13 +174,13 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         $latest = array_pop($files);
 
         foreach ($files as $stale) {
-            @unlink($stale);
+            File::delete($stale);
         }
 
-        $contents = @file_get_contents($latest);
-        @unlink($latest);
+        $contents = rescue(fn () => File::get($latest));
+        File::delete($latest);
 
-        if ($contents === false) {
+        if ($contents === null) {
             return;
         }
 
@@ -261,14 +261,14 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             base_path('storage/framework/views'),
         ])
             ->unique()
-            ->filter(fn (string $path) => is_dir($path))
+            ->filter(fn (string $path) => File::isDirectory($path))
             ->each(function (string $path): void {
                 collect(File::glob($path.'/*.php') ?: [])
                     ->each(fn (string $file) => File::delete($file));
 
                 $livewireViewsPath = $path.'/livewire';
 
-                if (is_dir($livewireViewsPath)) {
+                if (File::isDirectory($livewireViewsPath)) {
                     File::deleteDirectory($livewireViewsPath);
                 }
             });

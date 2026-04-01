@@ -3,10 +3,10 @@
 use App\Actions\RemoveProjectAction;
 use App\Models\Project;
 use App\Models\ReviewSession;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 test('deletes project by ID', function () {
     $project = Project::create([

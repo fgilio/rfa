@@ -4,12 +4,12 @@ use App\Actions\DiscardFileChangesAction;
 use App\Models\Project;
 use App\Models\TrashedFile;
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_discard_test_');

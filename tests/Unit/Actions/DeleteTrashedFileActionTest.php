@@ -3,11 +3,11 @@
 use App\Actions\DeleteTrashedFileAction;
 use App\Models\Project;
 use App\Models\TrashedFile;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 beforeEach(function () {
     $this->project = Project::create([
