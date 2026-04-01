@@ -1,13 +1,15 @@
 <?php
 
+use App\DTOs\DiffTarget;
 use App\Exceptions\GitCommandException;
 use App\Services\GitDiffService;
 use App\Services\GitProcessService;
 use App\Services\IgnoreService;
 use Faker\Factory as Faker;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->faker = Faker::create();
@@ -435,7 +437,7 @@ test('getNewFileLineCount returns line count for commit target', function () {
     $this->commitTestRepo($this->tmpDir, 'three lines');
 
     $commitHash = trim($this->runTestRepoCommand($this->tmpDir, 'git rev-parse HEAD'));
-    $target = \App\DTOs\DiffTarget::commit($commitHash);
+    $target = DiffTarget::commit($commitHash);
 
     $count = $this->service->getNewFileLineCount($this->tmpDir, 'hello.txt', $target);
 
@@ -447,7 +449,7 @@ test('getNewFileLineCount returns null for deleted file in commit', function () 
     File::put($this->tmpDir.'/hello.txt', "ok\n");
     $this->commitTestRepo($this->tmpDir, 'initial');
 
-    $target = \App\DTOs\DiffTarget::commit(trim($this->runTestRepoCommand($this->tmpDir, 'git rev-parse HEAD')));
+    $target = DiffTarget::commit(trim($this->runTestRepoCommand($this->tmpDir, 'git rev-parse HEAD')));
 
     $count = $this->service->getNewFileLineCount($this->tmpDir, 'nonexistent.txt', $target);
 

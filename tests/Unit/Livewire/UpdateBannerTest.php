@@ -3,8 +3,9 @@
 use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Native\Desktop\Facades\AutoUpdater;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     Cache::forget('native-update-state');

@@ -5,8 +5,9 @@ use App\Services\GitDiffService;
 use App\Services\GitProcessService;
 use App\Services\IgnoreService;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_changes_test_');

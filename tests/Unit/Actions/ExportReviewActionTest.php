@@ -2,8 +2,9 @@
 
 use App\Actions\ExportReviewAction;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_export_action_test_');

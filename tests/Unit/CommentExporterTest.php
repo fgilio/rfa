@@ -6,8 +6,9 @@ use App\Services\CommentExporter;
 use App\Services\MarkdownFormatter;
 use Faker\Factory as Faker;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->faker = Faker::create();

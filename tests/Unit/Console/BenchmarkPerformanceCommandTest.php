@@ -4,8 +4,9 @@ use App\Models\Project;
 use App\Models\ReviewSession;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->originalDbConnection = getenv('DB_CONNECTION') ?: null;

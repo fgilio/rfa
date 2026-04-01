@@ -3,8 +3,9 @@
 use App\Actions\ToggleViewedAction;
 use App\Services\GitDiffService;
 use Faker\Factory as Faker;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->faker = Faker::create();

@@ -78,7 +78,7 @@ final readonly class DiscardFileChangesAction
     ): void {
         match (true) {
             $status === 'added' && $isUntracked => File::delete($fullPath),
-            $status === 'added' && ! $isUntracked => $this->git->run($repoPath, ['rm', '-f', '--', $path]),
+            $status === 'added' => $this->git->run($repoPath, ['rm', '-f', '--', $path]),
             $status === 'renamed' => $this->git->run($repoPath, ['restore', '--source=HEAD', '--staged', '--worktree', '--', $oldPath, $path]),
             default => $this->git->run($repoPath, ['restore', '--source=HEAD', '--staged', '--worktree', '--', $path]),
         };

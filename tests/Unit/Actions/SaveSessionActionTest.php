@@ -5,8 +5,9 @@ use App\Models\Project;
 use App\Models\ReviewSession;
 use Faker\Factory as Faker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->faker = Faker::create();

@@ -2,8 +2,9 @@
 
 use App\Actions\BuildDiffContextAction;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_context_test_');

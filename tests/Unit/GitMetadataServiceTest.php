@@ -3,8 +3,9 @@
 use App\Services\GitMetadataService;
 use App\Services\GitProcessService;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->service = new GitMetadataService(new GitProcessService);

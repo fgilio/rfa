@@ -4,8 +4,9 @@ use App\Actions\GetBranchListAction;
 use App\Services\GitMetadataService;
 use App\Services\GitProcessService;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_branchlist_test_');

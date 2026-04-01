@@ -4,8 +4,9 @@ use App\Actions\ServeImageAction;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_serve_image_');

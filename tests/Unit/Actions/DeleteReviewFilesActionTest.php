@@ -3,8 +3,9 @@
 use App\Actions\DeleteReviewFilesAction;
 use Faker\Factory as Faker;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->faker = Faker::create();

@@ -4,6 +4,7 @@ namespace Tests\Browser\Helpers;
 
 use App\Actions\RegisterProjectAction;
 use Illuminate\Support\Facades\File;
+use Pest\Browser\Api\PendingAwaitablePage;
 use Tests\Helpers\InteractsWithTestRepositories;
 
 trait CreatesTestRepo
@@ -292,7 +293,7 @@ trait CreatesTestRepo
     }
 
     /** Visit the project page and wait for lazy-loaded diffs to finish loading. */
-    protected function visitAndLoad(string $url): \Pest\Browser\Api\PendingAwaitablePage
+    protected function visitAndLoad(string $url): PendingAwaitablePage
     {
         $page = $this->visit($url);
         $page->waitForEvent('networkidle');

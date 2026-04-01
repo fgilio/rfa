@@ -2,8 +2,9 @@
 
 use App\Services\DiffParser;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->parser = new DiffParser;

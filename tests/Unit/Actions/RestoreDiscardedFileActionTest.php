@@ -4,11 +4,13 @@ use App\Actions\DiscardFileChangesAction;
 use App\Actions\RestoreDiscardedFileAction;
 use App\Models\Project;
 use App\Models\TrashedFile;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_restore_test_');
@@ -137,7 +139,7 @@ test('deletes storage file on restore', function () {
 
 test('throws on invalid trash id', function () {
     $this->restoreAction->handle(99999, $this->tmpDir, $this->project->id);
-})->throws(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+})->throws(ModelNotFoundException::class);
 
 // -- project scoping --
 
@@ -154,7 +156,7 @@ test('rejects trash entry from another project', function () {
 
     // Try to restore using a different project's ID
     $this->restoreAction->handle($trashed->id, $this->tmpDir, $otherProject->id);
-})->throws(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+})->throws(ModelNotFoundException::class);
 
 // -- expiry enforcement --
 
@@ -166,4 +168,4 @@ test('rejects expired trash entry', function () {
     $trashed->update(['expires_at' => now()->subMinute()]);
 
     $this->restoreAction->handle($trashed->id, $this->tmpDir, $this->project->id);
-})->throws(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+})->throws(ModelNotFoundException::class);

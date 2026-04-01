@@ -18,7 +18,7 @@ test('rejects absolute paths', function (string $path) {
 })->with([
     '/etc/passwd',
     '/tmp/file.txt',
-])->throws(\InvalidArgumentException::class);
+])->throws(InvalidArgumentException::class);
 
 test('rejects path traversal', function (string $path) {
     PathGuard::assertRelative($path);
@@ -27,4 +27,4 @@ test('rejects path traversal', function (string $path) {
     'foo/../../etc/passwd',
     '..',
     'foo/../bar',
-])->throws(\InvalidArgumentException::class);
+])->throws(InvalidArgumentException::class);

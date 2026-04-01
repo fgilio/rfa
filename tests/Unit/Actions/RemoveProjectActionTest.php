@@ -4,8 +4,9 @@ use App\Actions\RemoveProjectAction;
 use App\Models\Project;
 use App\Models\ReviewSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 test('deletes project by ID', function () {
     $project = Project::create([

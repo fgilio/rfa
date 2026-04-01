@@ -3,11 +3,13 @@
 use App\Actions\DiscardFileChangesAction;
 use App\Models\Project;
 use App\Models\TrashedFile;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_discard_test_');
@@ -39,7 +41,7 @@ test('discards modified file and creates trash record', function () {
         ->and($trashed->file_path)->toBe('file.txt')
         ->and($trashed->file_status)->toBe('modified')
         ->and($trashed->project_id)->toBe($this->project->id)
-        ->and($trashed->expires_at)->toBeInstanceOf(\Carbon\Carbon::class);
+        ->and($trashed->expires_at)->toBeInstanceOf(Carbon::class);
 
     // File should be restored to original
     expect(File::get($this->tmpDir.'/file.txt'))->toBe("original\n");
@@ -157,11 +159,11 @@ test('stores null comments when empty', function () {
 
 test('rejects path traversal', function () {
     $this->action->handle($this->tmpDir, '../etc/passwd', 'modified', $this->project->id);
-})->throws(\InvalidArgumentException::class);
+})->throws(InvalidArgumentException::class);
 
 test('rejects absolute path', function () {
     $this->action->handle($this->tmpDir, '/etc/passwd', 'modified', $this->project->id);
-})->throws(\InvalidArgumentException::class);
+})->throws(InvalidArgumentException::class);
 
 // -- cleanup on failure --
 
@@ -173,7 +175,7 @@ test('cleans up trash record on git failure', function () {
 
     try {
         $this->action->handle($this->tmpDir, 'nonexistent.txt', 'modified', $this->project->id);
-    } catch (\Throwable) {
+    } catch (Throwable) {
         // expected
     }
 

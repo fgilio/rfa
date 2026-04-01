@@ -4,8 +4,9 @@ use App\Actions\RegisterProjectAction;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
     $this->testRepoPath = $this->createTempDirectory('rfa_register_test_');
@@ -63,5 +64,5 @@ test('throws on non-git directory', function () {
     $nonGit = $this->createTempDirectory('rfa_nongit_');
 
     expect(fn () => app(RegisterProjectAction::class)->handle($nonGit))
-        ->toThrow(\RuntimeException::class);
+        ->toThrow(RuntimeException::class);
 });

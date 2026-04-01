@@ -10,8 +10,9 @@ use App\Services\MarkdownTableAlignerService;
 use App\Services\SyntaxHighlightService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_action_test_');

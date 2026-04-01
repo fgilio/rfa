@@ -3,8 +3,10 @@
 use App\Actions\ResolveProjectAction;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 test('returns project array for valid slug', function () {
     $project = Project::create([
@@ -26,4 +28,4 @@ test('returns project array for valid slug', function () {
 
 test('aborts 404 for unknown slug', function () {
     app(ResolveProjectAction::class)->handle('nonexistent');
-})->throws(\Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class);
+})->throws(NotFoundHttpException::class);

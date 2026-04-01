@@ -2,8 +2,9 @@
 
 use App\Providers\NativeAppServiceProvider;
 use Illuminate\Support\Facades\Cache;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     config(['app.debug' => true]);

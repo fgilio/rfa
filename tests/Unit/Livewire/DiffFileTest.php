@@ -5,9 +5,11 @@ use App\Console\Benchmark\DiffFixtureFactory;
 use App\DTOs\DiffTarget;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->file = DiffFixtureFactory::fileEntry('src/Test.php');
@@ -27,7 +29,7 @@ beforeEach(function () {
     });
 });
 
-function mountDiffFile(array $file, array $comments = [], bool $loadDiff = true): \Livewire\Features\SupportTesting\Testable
+function mountDiffFile(array $file, array $comments = [], bool $loadDiff = true): Testable
 {
     $component = Livewire::test('diff-file', [
         'file' => $file,

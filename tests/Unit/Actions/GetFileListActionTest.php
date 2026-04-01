@@ -7,8 +7,9 @@ use App\Services\IgnoreService;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_filelist_test_');

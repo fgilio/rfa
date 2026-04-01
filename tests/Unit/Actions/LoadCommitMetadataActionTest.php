@@ -4,8 +4,9 @@ use App\Actions\LoadCommitMetadataAction;
 use App\DTOs\CommitEntry;
 use App\DTOs\DiffTarget;
 use App\Services\GitMetadataService;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 test('returns metadata for valid commit', function () {
     $commit = new CommitEntry(
