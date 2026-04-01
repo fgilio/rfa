@@ -28,4 +28,4 @@ pre-commit:
 pre-push:
   commands:
     types:
-      run: php -d memory_limit=512M ./vendor/bin/phpstan analyse
+      run: php85 -d memory_limit=512M ./vendor/bin/phpstan analyse
