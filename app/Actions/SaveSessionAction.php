@@ -16,7 +16,7 @@ final readonly class SaveSessionAction
     public function handle(string $repoPath, array $comments, array $viewedFiles, string $globalComment, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT): void
     {
         ReviewSession::updateOrCreate(
-            ReviewSession::scopeKey($repoPath, $projectId, $contextFingerprint),
+            ReviewSession::lookupKey($repoPath, $projectId, $contextFingerprint),
             [
                 'repo_path' => $repoPath,
                 'viewed_files' => $viewedFiles,

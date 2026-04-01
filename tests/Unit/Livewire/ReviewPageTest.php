@@ -9,11 +9,11 @@ use App\Actions\SaveSessionAction;
 use App\DTOs\DiffTarget;
 use App\Models\Project;
 use App\Services\GitDiffService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 beforeEach(function () {
     $this->files = [
@@ -40,7 +40,7 @@ beforeEach(function () {
     {
         public function __construct(private Project $project) {}
 
-        public function handle(string $slug): array
+        public function handle(string $slug): ?array
         {
             return $this->project->toArray();
         }

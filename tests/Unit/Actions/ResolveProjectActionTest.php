@@ -2,11 +2,10 @@
 
 use App\Actions\ResolveProjectAction;
 use App\Models\Project;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
 
-uses(TestCase::class, RefreshDatabase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 test('returns project array for valid slug', function () {
     $project = Project::create([
@@ -26,6 +25,8 @@ test('returns project array for valid slug', function () {
     expect($result['path'])->toBe('/tmp/my-project');
 });
 
-test('aborts 404 for unknown slug', function () {
-    app(ResolveProjectAction::class)->handle('nonexistent');
-})->throws(NotFoundHttpException::class);
+test('returns null for unknown slug', function () {
+    $result = app(ResolveProjectAction::class)->handle('nonexistent');
+
+    expect($result)->toBeNull();
+});

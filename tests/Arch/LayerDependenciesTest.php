@@ -46,10 +46,11 @@ arch('models do not depend on other app layers')
         'App\Livewire',
     ]);
 
-arch('models are only used in actions and console benchmark tooling')
+arch('models are only used in actions, other models, and console benchmark tooling')
     ->expect('App\Models')
     ->toOnlyBeUsedIn([
         'App\Actions',
+        'App\Models',
         'App\Console\Benchmark',
     ]);
 

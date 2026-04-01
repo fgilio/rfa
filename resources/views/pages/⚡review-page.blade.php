@@ -85,7 +85,7 @@ new #[Layout('layouts.app')] class extends Component
 
     public function mount(string $slug, ?string $hash = null, ?string $ref = null, ?string $baseRef = null): void
     {
-        $project = app(ResolveProjectAction::class)->handle($slug);
+        $project = app(ResolveProjectAction::class)->handle($slug) ?? abort(404);
         $this->repoPath = $project['path'];
         $this->projectId = $project['id'];
         $this->projectName = $project['name'];

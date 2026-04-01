@@ -22,7 +22,7 @@ final readonly class RestoreSessionAction
     public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT, ?DiffTarget $target = null): array
     {
         $session = ReviewSession::firstOrCreate(
-            ReviewSession::scopeKey($repoPath, $projectId, $contextFingerprint),
+            ReviewSession::lookupKey($repoPath, $projectId, $contextFingerprint),
             ['repo_path' => $repoPath],
         );
 

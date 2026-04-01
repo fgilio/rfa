@@ -9,16 +9,10 @@ use App\Models\Project;
 final readonly class ResolveProjectAction
 {
     /**
-     * @return array<string, mixed>
+     * @return array<string, mixed>|null
      */
-    public function handle(string $slug): array
+    public function handle(string $slug): ?array
     {
-        $project = Project::where('slug', $slug)->first();
-
-        if (! $project) {
-            abort(404);
-        }
-
-        return $project->toArray();
+        return Project::where('slug', $slug)->first()?->toArray();
     }
 }
