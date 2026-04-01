@@ -7,6 +7,7 @@ namespace App\Services;
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
 use App\Support\GrammarMap;
+use Illuminate\Support\Facades\Log;
 use Phiki\Grammar\Grammar;
 use Phiki\Phiki;
 use Phiki\Theme\ParsedTheme;
@@ -169,7 +170,9 @@ class SyntaxHighlightService
             }
 
             return $result;
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            Log::warning('Syntax highlighting failed', ['error' => $e->getMessage()]);
+
             return [];
         }
     }

@@ -9,6 +9,7 @@ use App\DTOs\CommitEntry;
 use App\DTOs\DiffTarget;
 use App\Exceptions\GitCommandException;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 
 class GitMetadataService
 {
@@ -20,7 +21,9 @@ class GitMetadataService
     {
         try {
             $raw = trim($this->git->run($repoPath, ['config', '--global', 'core.excludesFile']));
-        } catch (GitCommandException) {
+        } catch (GitCommandException $e) {
+            Log::warning('Failed to resolve global excludes file', ['repo' => $repoPath, 'error' => $e->getMessage()]);
+
             return null;
         }
 
@@ -106,7 +109,9 @@ class GitMetadataService
 
         try {
             return $this->git->run($repoPath, ['show', $ref.':'.$path]);
-        } catch (GitCommandException) {
+        } catch (GitCommandException $e) {
+            Log::warning('Failed to read file content from git', ['repo' => $repoPath, 'ref' => $ref, 'path' => $path, 'error' => $e->getMessage()]);
+
             return null;
         }
     }
@@ -121,7 +126,9 @@ class GitMetadataService
             $resolved = trim($this->git->run($repoPath, ['rev-parse', '--verify', $ref.'^{commit}']));
 
             return $resolved !== '' ? $resolved : null;
-        } catch (GitCommandException) {
+        } catch (GitCommandException $e) {
+            Log::warning('Failed to resolve git ref', ['repo' => $repoPath, 'ref' => $ref, 'error' => $e->getMessage()]);
+
             return null;
         }
     }
@@ -133,7 +140,9 @@ class GitMetadataService
             $output = trim($this->git->run($repoPath, ['rev-parse', $hash.'^@']));
 
             return $output !== '' ? explode("\n", $output) : [];
-        } catch (GitCommandException) {
+        } catch (GitCommandException $e) {
+            Log::warning('Failed to get commit parents', ['repo' => $repoPath, 'hash' => $hash, 'error' => $e->getMessage()]);
+
             return [];
         }
     }
@@ -146,7 +155,9 @@ class GitMetadataService
             ]));
 
             return $output !== '' ? $output : null;
-        } catch (GitCommandException) {
+        } catch (GitCommandException $e) {
+            Log::warning('Failed to get child commit', ['repo' => $repoPath, 'hash' => $hash, 'error' => $e->getMessage()]);
+
             return null;
         }
     }
@@ -210,7 +221,9 @@ class GitMetadataService
 
         try {
             $output = $this->git->run($repoPath, $args);
-        } catch (GitCommandException) {
+        } catch (GitCommandException $e) {
+            Log::warning('Failed to get commit log', ['repo' => $repoPath, 'error' => $e->getMessage()]);
+
             return [];
         }
 

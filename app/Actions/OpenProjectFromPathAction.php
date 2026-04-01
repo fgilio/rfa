@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\Models\Project;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 
 final readonly class OpenProjectFromPathAction
 {
@@ -23,7 +24,9 @@ final readonly class OpenProjectFromPathAction
 
         try {
             return $this->register->handle($realPath);
-        } catch (\RuntimeException) {
+        } catch (\RuntimeException $e) {
+            Log::warning('Failed to register project from path', ['path' => $path, 'error' => $e->getMessage()]);
+
             return null;
         }
     }
