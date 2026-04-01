@@ -85,6 +85,10 @@ class GitMetadataService
 
     public function getFileContent(string $repoPath, string $path, string $ref = DiffTarget::WORKING_CONTEXT): ?string
     {
+        if ($this->looksLikeFlag($ref)) {
+            return null;
+        }
+
         if ($ref === DiffTarget::WORKING_CONTEXT) {
             $fullPath = $repoPath.'/'.$path;
 
@@ -109,7 +113,7 @@ class GitMetadataService
 
     public function resolveRef(string $repoPath, string $ref): ?string
     {
-        if (str_starts_with($ref, '-')) {
+        if ($this->looksLikeFlag($ref)) {
             return null;
         }
 
@@ -224,5 +228,10 @@ class GitMetadataService
             ))
             ->values()
             ->all();
+    }
+
+    private function looksLikeFlag(string $ref): bool
+    {
+        return str_starts_with($ref, '-');
     }
 }

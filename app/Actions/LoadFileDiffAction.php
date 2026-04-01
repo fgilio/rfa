@@ -12,6 +12,7 @@ use App\Services\GitDiffService;
 use App\Services\MarkdownTableAlignerService;
 use App\Services\SyntaxHighlightService;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 final readonly class LoadFileDiffAction
 {
@@ -31,8 +32,10 @@ final readonly class LoadFileDiffAction
             try {
                 $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, contextLines: $contextLines, target: $target);
             } catch (GitCommandException $e) {
+                Log::warning('Git diff failed', ['path' => $path, 'stderr' => $e->stderr]);
+
                 return FileDiff::emptyArray($path, 'modified', tooLarge: false)
-                    + ['error' => $e->stderr ?: $e->getMessage(), 'syntaxStyles' => ''];
+                    + ['error' => 'Failed to load diff for this file.', 'syntaxStyles' => ''];
             }
 
             if ($rawDiff === null) {

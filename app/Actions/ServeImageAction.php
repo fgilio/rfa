@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\Models\Project;
 use App\Services\GitMetadataService;
+use App\Support\PathGuard;
 
 final readonly class ServeImageAction
 {
@@ -16,6 +17,8 @@ final readonly class ServeImageAction
     /** @return array{content: string, mimeType: string}|null */
     public function handle(int $projectId, string $path, string $ref): ?array
     {
+        PathGuard::assertRelative($path);
+
         $project = Project::findOrFail($projectId);
 
         $content = $this->gitMetadataService->getFileContent($project->path, $path, $ref);

@@ -274,7 +274,7 @@ test('returns error field when git command fails', function () {
     $action = new LoadFileDiffAction($gitService, new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService);
     $result = $action->handle($this->tmpDir, 'hello.txt');
 
-    expect($result['error'])->toBe('fatal: bad revision')
+    expect($result['error'])->toBe('Failed to load diff for this file.')
         ->and($result['hunks'])->toBe([])
         ->and($result['tooLarge'])->toBeFalse();
 });

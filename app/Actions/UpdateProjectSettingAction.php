@@ -8,9 +8,15 @@ use App\Models\Project;
 
 final readonly class UpdateProjectSettingAction
 {
+    private const ALLOWED_ATTRIBUTES = ['respect_global_gitignore'];
+
     /** @param array<string, mixed> $attributes */
     public function handle(int $projectId, array $attributes): void
     {
-        Project::where('id', $projectId)->update($attributes);
+        $safe = array_intersect_key($attributes, array_flip(self::ALLOWED_ATTRIBUTES));
+
+        if ($safe !== []) {
+            Project::where('id', $projectId)->update($safe);
+        }
     }
 }
