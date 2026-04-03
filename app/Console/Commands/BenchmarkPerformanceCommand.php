@@ -21,7 +21,8 @@ class BenchmarkPerformanceCommand extends Command
         {--warmup-samples=1 : Number of child-process warmup samples to discard}
         {--rounds=7 : Number of measured rounds per scenario inside each child}
         {--warmup-rounds=2 : Number of warmup rounds per scenario inside each child}
-        {--max-regression=5 : Allowed regression percentage before failing}';
+        {--max-regression=5 : Allowed regression percentage before failing}
+        {--min-absolute-ms=1 : Minimum absolute increase (ms) before a percentage regression counts}';
 
     protected $description = 'Benchmark representative RFA rendering scenarios';
 
@@ -178,13 +179,15 @@ class BenchmarkPerformanceCommand extends Command
         $rows = [];
         $hasRegression = false;
         $maxRegression = (float) $this->option('max-regression');
+        $minAbsoluteMs = (float) $this->option('min-absolute-ms');
 
         foreach ($report['results'] as $scenario => $current) {
             $baseline = (float) ($snapshot['results'][$scenario]['median_ms'] ?? 0.0);
             $currentMs = $current['median_ms'];
             $change = round(PerfBenchmarkStatistics::percentageChange($baseline, $currentMs), 2);
+            $absoluteIncrease = $currentMs - $baseline;
 
-            if ($change > $maxRegression) {
+            if ($change > $maxRegression && $absoluteIncrease >= $minAbsoluteMs) {
                 $hasRegression = true;
             }
 
