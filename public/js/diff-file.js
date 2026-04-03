@@ -61,7 +61,7 @@
                 const comments = this.$wire.fileComments || [];
                 const existingDraft = comments.find(c => c.isDraft && c.side === side && c.startLine !== null && lineNum >= c.startLine && lineNum <= (c.endLine ?? c.startLine));
                 if (existingDraft) {
-                    this.editDraft(existingDraft);
+                    this.editComment(existingDraft);
                     return;
                 }
                 this.isDragging = true;
@@ -155,7 +155,7 @@
                 this.submitComment(true);
             },
 
-            editDraft(comment) {
+            editComment(comment) {
                 this.formBody = comment.body;
                 this.formLine = comment.startLine;
                 this.formEndLine = comment.endLine;

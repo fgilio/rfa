@@ -406,7 +406,7 @@ new class extends Component {
             </template>
             @foreach($fileComments as $comment)
                 @if($comment['side'] === 'file')
-                    <div x-data @if($comment['isDraft'] ?? false) x-show="editingCommentId !== '{{ $comment['id'] }}'" @endif>
+                    <div x-data x-show="editingCommentId !== '{{ $comment['id'] }}'">
                         <x-comment-display :comment="$comment" border-class="border-b" />
                     </div>
                 @endif
@@ -422,7 +422,7 @@ new class extends Component {
         @endphp
         @if($unplacedComments->isNotEmpty())
             @foreach($unplacedComments as $comment)
-                <div x-data @if($comment['isDraft'] ?? false) x-show="editingCommentId !== '{{ $comment['id'] }}'" @endif>
+                <div x-data x-show="editingCommentId !== '{{ $comment['id'] }}'">
                     <x-comment-display :comment="$comment" border-class="border-b" />
                 </div>
             @endforeach
@@ -658,7 +658,7 @@ new class extends Component {
                                 }
                             @endphp
                             @foreach($lineComments as $comment)
-                                <tr x-data @if($comment['isDraft'] ?? false) x-show="editingCommentId !== '{{ $comment['id'] }}'" @endif>
+                                <tr x-data x-show="editingCommentId !== '{{ $comment['id'] }}'">
                                     <td colspan="4" class="p-0">
                                         <x-comment-display :comment="$comment" border-class="border-y" />
                                     </td>
