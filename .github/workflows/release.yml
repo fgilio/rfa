@@ -77,6 +77,9 @@ jobs:
       - name: Set repository in electron package.json
         run: node -e "const f='vendor/nativephp/desktop/resources/electron/package.json';const p=JSON.parse(require('fs').readFileSync(f));p.repository='github:fgilio/rfa';require('fs').writeFileSync(f,JSON.stringify(p,null,4))"
 
+      - name: Fix NativePHP npm ci incompatibility with patched package.json
+        run: sed -i '' "s/->run('npm ci'/->run('npm install'/" vendor/nativephp/desktop/src/Drivers/Electron/Commands/BuildCommand.php
+
       - name: Build and publish to GitHub Releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
