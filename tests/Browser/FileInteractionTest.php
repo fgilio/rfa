@@ -187,9 +187,9 @@ test('shift+e expands all files', function () {
 });
 
 test('checking reviewed updates sidebar indicator', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
-    $page->page()->getByLabel('Reviewed')->first()->click();
+    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
 
     $page->assertSee('1/3 reviewed');
 });
