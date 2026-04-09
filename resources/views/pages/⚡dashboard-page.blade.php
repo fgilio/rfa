@@ -6,6 +6,7 @@ use App\Actions\RemoveProjectAction;
 use Flux\Flux;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
+use Native\Desktop\Facades\Shell;
 
 new #[Layout('layouts.app')] class extends Component
 {
@@ -47,6 +48,18 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $this->redirect("/p/{$project->slug}");
+    }
+
+    private const ALLOWED_EXTERNAL_URLS = [
+        'https://x.com/fgili0',
+        'https://github.com/fgilio/rfa',
+    ];
+
+    public function openExternal(string $url): void
+    {
+        if (in_array($url, self::ALLOWED_EXTERNAL_URLS, true)) {
+            Shell::openExternal($url);
+        }
     }
 };
 ?>
@@ -171,6 +184,16 @@ new #[Layout('layouts.app')] class extends Component
                     @else
                         <flux:text variant="subtle" size="sm">Run <code class="font-mono bg-gh-border/50 px-1.5 py-0.5 rounded text-xs">rfa</code> from a git repository to get started</flux:text>
                     @endnative
+
+                    <div class="mt-8 space-y-1">
+                        <x-external-link href="https://x.com/fgili0" class="inline-flex items-center gap-1 font-mono text-xs text-gh-muted hover:text-gh-text transition-colors">
+                            Made by Franco Gilio
+                            <flux:icon icon="arrow-up-right" variant="micro" class="size-3" />
+                        </x-external-link>
+                        <p class="font-mono text-[11px] text-gh-muted/60">
+                            DMs open · <x-external-link href="https://github.com/fgilio/rfa" class="hover:text-gh-muted transition-colors">PRs welcome</x-external-link>
+                        </p>
+                    </div>
                 </div>
             </div>
         @else
@@ -320,6 +343,15 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                 </div>
             @endforeach
+
         @endif
     </main>
+
+    @if(!empty($projectGroups))
+        <footer class="fixed bottom-0 inset-x-0 py-2 flex items-center justify-center gap-1.5 font-mono text-[11px] text-gh-muted/40">
+            <x-external-link href="https://x.com/fgili0" class="hover:text-gh-muted transition-colors">Franco Gilio</x-external-link>
+            <span>&middot;</span>
+            <x-external-link href="https://github.com/fgilio/rfa" class="hover:text-gh-muted transition-colors">PRs welcome</x-external-link>
+        </footer>
+    @endif
 </div>
