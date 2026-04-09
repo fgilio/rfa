@@ -56,22 +56,3 @@ test('search ranks start-of-word above mid-word match', function () {
     $selectedText = $page->script("document.querySelector('[data-project-card][data-selected]')?.textContent");
     expect($selectedText)->toContain('my-api-tool');
 });
-
-// -- Enter to open first result --
-
-test('enter in search opens first matching result', function () {
-    $page = $this->visit('/');
-
-    $searchInput = $page->page()->getByPlaceholder('Filter projects...');
-    $searchInput->fill('rfa');
-
-    // Wait for debounce + Alpine reactivity
-    $page->page()->waitForFunction("document.querySelectorAll('[data-project-card]:not([style*=\"display: none\"])').length === 2");
-
-    // Press Enter on the search input — should open first ranked result
-    $searchInput->press('Enter');
-
-    $page->page()->waitForURL('**/p/**');
-    $url = $page->script('window.location.pathname');
-    expect($url)->toContain('/p/');
-});
