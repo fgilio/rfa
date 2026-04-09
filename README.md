@@ -53,7 +53,7 @@ This launches the app (or focuses it if running) and opens the repo.
   - `{timestamp}_comments_{hash}.json` (structured data for automation)
   - `{timestamp}_comments_{hash}.md` (markdown with full diff context for agents)
 
-You may want to add `.rfa/` to your project's `.gitignore`.
+RFA automatically adds `.rfa/` to your repo's `.git/info/exclude` on first export, so review files won't appear in `git status`.
 
 ## Ignore Rules
 

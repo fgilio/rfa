@@ -10,6 +10,7 @@ use App\Actions\DiscardFileChangesAction;
 use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
 use App\Actions\GroupReviewFilesAction;
+use App\Actions\ScanReviewFilesAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
@@ -123,6 +124,7 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $this->refreshFileList();
+        $this->scanReviewFiles();
 
         $target = $this->buildDiffTarget();
         $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target->contextKey(), $target);
@@ -430,8 +432,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->exportResult = $result['clipboard'];
         $this->submitted = true;
 
-        // Refresh file list to include newly created review files
-        $this->refreshFileList(clearCache: false);
+        $this->scanReviewFiles();
 
         Flux::toast(variant: 'success', heading: 'Review submitted', text: $this->exportResult);
         $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
@@ -462,12 +463,6 @@ new #[Layout('layouts.app')] class extends Component
             array_filter($this->reviewPairs, fn ($p) => $p['basename'] !== $basename)
         );
 
-        $this->files = array_values(
-            array_filter($this->files, function ($f) use ($basename) {
-                return \App\DTOs\ReviewFilePair::extractBasename($f['path']) !== $basename;
-            })
-        );
-
         Flux::toast(text: 'Review deleted', variant: 'success');
     }
 
@@ -480,12 +475,6 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         app(DeleteReviewFilesAction::class)->handle($this->repoPath, $basenames);
-
-        $this->files = array_values(
-            array_filter($this->files, function ($f) {
-                return \App\DTOs\ReviewFilePair::extractBasename($f['path']) === null;
-            })
-        );
 
         $this->reviewPairs = [];
 
@@ -513,8 +502,12 @@ new #[Layout('layouts.app')] class extends Component
     private function groupFiles(): void
     {
         $grouped = app(GroupReviewFilesAction::class)->handle($this->files);
-        $this->reviewPairs = $grouped['reviewPairs'];
         $this->sourceFiles = $grouped['sourceFiles'];
+    }
+
+    private function scanReviewFiles(): void
+    {
+        $this->reviewPairs = app(ScanReviewFilesAction::class)->handle($this->repoPath);
     }
 
     private function dispatchFileComments(string $fileId): void

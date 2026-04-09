@@ -6,6 +6,7 @@ use App\Actions\GetFileListAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
+use App\Actions\ScanReviewFilesAction;
 use App\DTOs\DiffTarget;
 use App\Models\Project;
 use App\Services\GitDiffService;
@@ -188,27 +189,29 @@ test('mount backfills empty string gitignore path from git config', function () 
 // -- Submit review refreshes file list --
 
 test('submitReview refreshes file list and populates reviewPairs', function () {
-    $sourceFiles = $this->files;
-
-    $reviewFiles = [
-        ['id' => 'rev-json', 'path' => '.rfa/20260227_173000_comments_abcd1234.json', 'status' => 'added', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false],
-        ['id' => 'rev-md', 'path' => '.rfa/20260227_173000_comments_abcd1234.md', 'status' => 'added', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false],
+    $basename = '20260227_173000_comments_abcd1234';
+    $reviewPair = [
+        'id' => 'review-'.hash('xxh128', $basename),
+        'basename' => $basename,
+        'displayName' => 'Feb 27, 5:30 PM',
+        'jsonFile' => ['id' => 'file-'.hash('xxh128', ".rfa/{$basename}.json"), 'path' => ".rfa/{$basename}.json", 'status' => 'added', 'oldPath' => null, 'additions' => 0, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => true, 'isImage' => false, 'lastModified' => null, 'isSymlink' => false, 'symlinkTarget' => null, 'fileSize' => null],
+        'mdFile' => ['id' => 'file-'.hash('xxh128', ".rfa/{$basename}.md"), 'path' => ".rfa/{$basename}.md", 'status' => 'added', 'oldPath' => null, 'additions' => 0, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => true, 'isImage' => false, 'lastModified' => null, 'isSymlink' => false, 'symlinkTarget' => null, 'fileSize' => null],
+        'createdAt' => '2026-02-27T17:30:00+00:00',
+        'createdAtHuman' => '1 month ago',
     ];
 
     $counter = (object) ['value' => 0];
-    app()->bind(GetFileListAction::class, function () use ($sourceFiles, $reviewFiles, $counter) {
-        return new class($sourceFiles, $reviewFiles, $counter)
+    app()->bind(ScanReviewFilesAction::class, function () use ($reviewPair, $counter) {
+        return new class($reviewPair, $counter)
         {
-            public function __construct(private array $sourceFiles, private array $reviewFiles, private object $counter) {}
+            public function __construct(private array $reviewPair, private object $counter) {}
 
-            public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+            public function handle(string $repoPath): array
             {
                 $this->counter->value++;
 
-                // First call (mount): source files only. Subsequent calls: source + review files.
-                return $this->counter->value <= 1
-                    ? $this->sourceFiles
-                    : array_merge($this->sourceFiles, $this->reviewFiles);
+                // First call (mount): empty. Subsequent calls: review pair exists.
+                return $this->counter->value <= 1 ? [] : [$this->reviewPair];
             }
         };
     });

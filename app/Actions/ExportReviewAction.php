@@ -12,6 +12,7 @@ final readonly class ExportReviewAction
     public function __construct(
         private BuildDiffContextAction $buildDiffContextAction,
         private CommentExporter $commentExporter,
+        private EnsureRfaGitExcludeAction $ensureGitExclude,
     ) {}
 
     /**
@@ -25,6 +26,10 @@ final readonly class ExportReviewAction
 
         $diffContext = $this->buildDiffContextAction->handle($repoPath, $comments, $files);
 
-        return $this->commentExporter->export($repoPath, $commentDTOs, $globalComment, $diffContext);
+        $result = $this->commentExporter->export($repoPath, $commentDTOs, $globalComment, $diffContext);
+
+        $this->ensureGitExclude->handle($repoPath);
+
+        return $result;
     }
 }
