@@ -305,6 +305,30 @@ function mountMultiHunkDiffFile(array $diffData, array $file, ?array $fullDiff =
     return $component;
 }
 
+function buildContextHunk(int $startLine, int $lineCount = 3): array
+{
+    $lines = [];
+    for ($i = 0; $i < $lineCount; $i++) {
+        $lineNum = $startLine + $i;
+        $lines[] = [
+            'type' => 'context',
+            'content' => "// line {$lineNum}",
+            'oldLineNum' => $lineNum,
+            'newLineNum' => $lineNum,
+            'highlightedContent' => "// line {$lineNum}",
+        ];
+    }
+
+    return [
+        'header' => '@@ hunk @@',
+        'oldStart' => $startLine,
+        'oldCount' => $lineCount,
+        'newStart' => $startLine,
+        'newCount' => $lineCount,
+        'lines' => $lines,
+    ];
+}
+
 test('tiered expand buttons render for middle gap larger than 15 lines', function () {
     // 2-hunk fixture has a 20-line gap between hunks (lines 9-28)
     $diffData = DiffFixtureFactory::diffData(hunks: 2, path: 'src/Test.php');
@@ -320,30 +344,12 @@ test('tiered expand buttons render for middle gap larger than 15 lines', functio
 });
 
 test('single expand button renders for gap of 15 or fewer lines', function () {
-    // Build a custom 2-hunk diff with a 10-line gap
     $diffData = DiffFixtureFactory::diffData(hunks: 1, path: 'src/Test.php');
     $hunk0 = $diffData['hunks'][0];
-
-    // Create second hunk starting 10 lines after the first
-    $hunk1Start = $hunk0['newStart'] + $hunk0['newCount'] + 10;
-    $hunk1 = [
-        'header' => '@@ hunk2 @@',
-        'oldStart' => $hunk1Start,
-        'oldCount' => 3,
-        'newStart' => $hunk1Start,
-        'newCount' => 3,
-        'lines' => [
-            ['type' => 'context', 'content' => '// a', 'oldLineNum' => $hunk1Start, 'newLineNum' => $hunk1Start, 'highlightedContent' => '// a'],
-            ['type' => 'context', 'content' => '// b', 'oldLineNum' => $hunk1Start + 1, 'newLineNum' => $hunk1Start + 1, 'highlightedContent' => '// b'],
-            ['type' => 'context', 'content' => '// c', 'oldLineNum' => $hunk1Start + 2, 'newLineNum' => $hunk1Start + 2, 'highlightedContent' => '// c'],
-        ],
-    ];
-
-    $diffData['hunks'][] = $hunk1;
+    $diffData['hunks'][] = buildContextHunk($hunk0['newStart'] + $hunk0['newCount'] + 10);
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
-    // Should show single button, no tiered expand
     expect($html)->toContain('Expand 10 hidden lines')
         ->and($html)->not->toContain('expandGap(1, 15)');
 });
@@ -376,6 +382,41 @@ test('tiered expand buttons render for trailing gap larger than 15 lines', funct
         ->and($html)->toContain('hidden lines');
 });
 
+test('exactly 15-line gap shows single expand button with no tiers', function () {
+    $diffData = DiffFixtureFactory::diffData(hunks: 1, path: 'src/Test.php');
+    $hunk0 = $diffData['hunks'][0];
+    $diffData['hunks'][] = buildContextHunk($hunk0['newStart'] + $hunk0['newCount'] + 15);
+
+    $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
+
+    expect($html)->toContain('Expand 15 hidden lines')
+        ->and($html)->not->toContain('expandGap(1, 15)');
+});
+
+test('16-line gap shows first tier', function () {
+    $diffData = DiffFixtureFactory::diffData(hunks: 1, path: 'src/Test.php');
+    $hunk0 = $diffData['hunks'][0];
+    $diffData['hunks'][] = buildContextHunk($hunk0['newStart'] + $hunk0['newCount'] + 16);
+
+    $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
+
+    expect($html)->toContain('expandGap(1, 15)')
+        ->and($html)->toContain('expandGap(1)')
+        ->and($html)->toContain('16')
+        ->and($html)->toContain('hidden lines');
+});
+
+test('1-line gap shows single expand button', function () {
+    $diffData = DiffFixtureFactory::diffData(hunks: 1, path: 'src/Test.php');
+    $hunk0 = $diffData['hunks'][0];
+    $diffData['hunks'][] = buildContextHunk($hunk0['newStart'] + $hunk0['newCount'] + 1);
+
+    $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
+
+    expect($html)->toContain('Expand 1 hidden lines')
+        ->and($html)->not->toContain('&middot;');
+});
+
 test('partial middle gap expansion preserves separate hunks', function () {
     $diffData = DiffFixtureFactory::diffData(hunks: 2, path: 'src/Test.php');
     $fullDiff = buildFullContextDiff(36, 'src/Test.php');
@@ -389,13 +430,14 @@ test('partial middle gap expansion preserves separate hunks', function () {
     $instance->expandGap(1, 15);
 
     $result = $ref->getValue($instance);
-    // Should still have 2 hunks (not merged)
     expect($result['hunks'])->toHaveCount(2);
-    // Previous hunk should have grown by 15
     expect($result['hunks'][0]['newCount'])->toBe($diffData['hunks'][0]['newCount'] + 15);
-    // Remaining gap should be 5 lines
     $remainingGap = $result['hunks'][1]['newStart'] - ($result['hunks'][0]['newStart'] + $result['hunks'][0]['newCount']);
     expect($remainingGap)->toBe(5);
+    // Lines 9-23 (top of gap) appended to hunk 0
+    $originalLineCount = count($diffData['hunks'][0]['lines']);
+    expect($result['hunks'][0]['lines'][$originalLineCount]['newLineNum'])->toBe(9);
+    expect($result['hunks'][0]['lines'][$originalLineCount + 14]['newLineNum'])->toBe(23);
 });
 
 test('full middle gap expansion merges hunks into one', function () {
@@ -407,11 +449,14 @@ test('full middle gap expansion merges hunks into one', function () {
     $ref = new ReflectionProperty($instance, 'diffData');
     $ref->setValue($instance, $diffData);
 
-    // Expand all (no lineCount) - should merge hunks
     $instance->expandGap(1);
 
     $result = $ref->getValue($instance);
     expect($result['hunks'])->toHaveCount(1);
+    $newLineNums = array_column($result['hunks'][0]['lines'], 'newLineNum');
+    foreach (range(9, 28) as $expected) {
+        expect($newLineNums)->toContain($expected);
+    }
 });
 
 test('partial leading gap expansion shrinks the gap', function () {
@@ -427,13 +472,14 @@ test('partial leading gap expansion shrinks the gap', function () {
     $ref = new ReflectionProperty($instance, 'diffData');
     $ref->setValue($instance, $diffData);
 
-    // Expand 15 of the 24-line leading gap
     $instance->expandGap(0, 15);
 
     $result = $ref->getValue($instance);
-    // newStart should decrease by 15: 25 - 15 = 10
     expect($result['hunks'][0]['newStart'])->toBe(10)
         ->and($result['hunks'][0]['newCount'])->toBe($diffData['hunks'][0]['newCount'] + 15);
+    // Lines 10-24 (bottom of gap, closest to hunk) prepended
+    expect($result['hunks'][0]['lines'][0]['newLineNum'])->toBe(10);
+    expect($result['hunks'][0]['lines'][14]['newLineNum'])->toBe(24);
 });
 
 test('partial trailing gap expansion appends to last hunk', function () {
@@ -449,14 +495,15 @@ test('partial trailing gap expansion appends to last hunk', function () {
 
     $originalNewCount = $diffData['hunks'][0]['newCount'];
 
-    // Hunk covers lines 1-8, trailing gap is 42 lines. Expand 15.
     $instance->expandGap(1, 15);
 
     $result = $ref->getValue($instance);
-    // Last hunk should have grown by 15 lines
     expect($result['hunks'][0]['newCount'])->toBe($originalNewCount + 15);
-    // Remaining trailing gap: 50 - (8 + 15) = 27 lines
     $lastHunk = $result['hunks'][0];
     $remainingGap = $result['newFileLineCount'] - ($lastHunk['newStart'] + $lastHunk['newCount'] - 1);
     expect($remainingGap)->toBe(27);
+    // Lines 9-23 (top of gap) appended
+    $originalLineCount = count($diffData['hunks'][0]['lines']);
+    expect($result['hunks'][0]['lines'][$originalLineCount]['newLineNum'])->toBe(9);
+    expect($result['hunks'][0]['lines'][$originalLineCount + 14]['newLineNum'])->toBe(23);
 });
