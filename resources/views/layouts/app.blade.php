@@ -182,6 +182,7 @@
         </button>
     </div>
 
+    <livewire:keepalive />
     {{ $slot }}
     @fluxScripts
     <script src="/js/page-search.js"></script>

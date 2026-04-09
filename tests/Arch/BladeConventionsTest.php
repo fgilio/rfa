@@ -50,6 +50,12 @@ test('flux:button and flux:input with icon prop use outline variant', function (
     expect($violations)->toBeEmpty();
 });
 
+test('app layout includes keepalive component', function () {
+    $layout = dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php';
+    $content = file_get_contents($layout);
+    expect($content)->toContain('<livewire:keepalive');
+});
+
 test('no hardcoded dark class on html element', function () {
     $violations = [];
     foreach (bladeFiles() as $file) {
