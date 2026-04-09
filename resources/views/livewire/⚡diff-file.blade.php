@@ -569,25 +569,28 @@ new class extends Component {
                     @endif
 
                     @foreach($diffData['hunks'] as $hunkIndex => $hunk)
-                        {{-- Hunk separator with expand button --}}
-                        @if($hunkIndex > 0 || $hunk['header'] !== '')
+                        {{-- Gap row with expand controls --}}
+                        @if($hunkIndex > 0 || $hunk['newStart'] > 1)
                             <tr class="bg-gh-hunk-bg">
-                                <td colspan="4" class="px-4 py-1 text-gh-muted text-xs">
+                                <td colspan="4" class="py-1.5 text-center text-xs border-y border-dashed border-gh-border/20">
                                     @if($hunkIndex > 0)
                                         @php
                                             $prevHunk = $hunks[$hunkIndex - 1];
                                             $hiddenCount = $hunk['newStart'] - ($prevHunk['newStart'] + $prevHunk['newCount']);
                                         @endphp
                                         <x-tiered-expand-gap :hunk-index="$hunkIndex" :hidden-count="$hiddenCount" :expand-tiers="$expandTiers" />
-                                    @elseif($hunk['newStart'] > 1)
+                                    @else
                                         @php $hiddenCount = $hunk['newStart'] - 1; @endphp
                                         <x-tiered-expand-gap :hunk-index="0" :hidden-count="$hiddenCount" :expand-tiers="$expandTiers" />
-                                    @else
-                                        @@ -{{ $hunk['oldStart'] }} +{{ $hunk['newStart'] }} @@
                                     @endif
-                                    @if($hunk['header'])
-                                        <span class="text-gh-muted/60">{{ $hunk['header'] }}</span>
-                                    @endif
+                                </td>
+                            </tr>
+                        @elseif($hunk['header'] !== '')
+                            {{-- Hunk header only (no gap) --}}
+                            <tr class="bg-gh-hunk-bg">
+                                <td colspan="4" class="px-4 py-1 text-gh-muted text-xs">
+                                    @@ -{{ $hunk['oldStart'] }} +{{ $hunk['newStart'] }} @@
+                                    <span class="text-gh-muted/60">{{ $hunk['header'] }}</span>
                                 </td>
                             </tr>
                         @endif
@@ -674,7 +677,7 @@ new class extends Component {
 
                     @if($hasTrailingGap)
                         <tr class="bg-gh-hunk-bg">
-                            <td colspan="4" class="px-4 py-1 text-gh-muted text-xs">
+                            <td colspan="4" class="py-1.5 text-center text-xs border-y border-dashed border-gh-border/20">
                                 <x-tiered-expand-gap :hunk-index="count($hunks)" :hidden-count="$trailingHiddenCount" :expand-tiers="$expandTiers" />
                             </td>
                         </tr>
