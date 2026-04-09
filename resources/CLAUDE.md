@@ -73,7 +73,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `clearAllComments` | Yes | Dispatches comment-updated + undo-available events |
 | `restoreComments` | Yes | Dispatches comment-updated events to affected files |
 | `updatedGlobalComment` | Yes | No UI change needed server-side |
-| `toggleViewed` | Yes | Sidebar state managed client-side via Alpine |
+| `toggleReviewed` | Yes | Sidebar state managed client-side via Alpine |
 | `submitReview` | No | Replaces entire submit bar UI (submitted state) |
 | `discardFileChanges` | No | Structural change: file removed from list, trash updated |
 | `restoreDiscardedFile` | No | Structural change: file reappears in list |
@@ -85,10 +85,10 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 |---|---|---|---|
 | `add-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{fileId, side, startLine, endLine, body}` |
 | `delete-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{commentId}` |
-| `toggle-viewed` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{filePath}` |
+| `toggle-reviewed` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{filePath}` |
 | `comment-updated` | ReviewPage PHP dispatch | DiffFile Alpine `@window` | `{fileId, comments}` |
 | `copy-to-clipboard` | DiffFile Alpine/PHP, ReviewPage PHP | ReviewPage Alpine `@window` | `{text}` |
-| `file-viewed-changed` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{id, viewed}` |
+| `file-reviewed-changed` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{id, reviewed}` |
 | `collapse-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-file` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | `{id}` |

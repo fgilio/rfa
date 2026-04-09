@@ -17,16 +17,16 @@ beforeEach(function () {
 test('creates session when none exists', function () {
     $repoPath = '/tmp/'.$this->faker->word();
     $comments = [['id' => 'c-1', 'file' => 'f.php', 'body' => $this->faker->sentence()]];
-    $viewedFiles = ['f.php'];
+    $reviewedFiles = ['f.php'];
     $globalComment = $this->faker->sentence();
 
-    app(SaveSessionAction::class)->handle($repoPath, $comments, $viewedFiles, $globalComment);
+    app(SaveSessionAction::class)->handle($repoPath, $comments, $reviewedFiles, $globalComment);
 
     $session = ReviewSession::where('repo_path', $repoPath)->first();
 
     expect($session)->not->toBeNull();
     expect($session->comments)->toBe($comments);
-    expect($session->viewed_files)->toBe($viewedFiles);
+    expect($session->viewed_files)->toBe($reviewedFiles);
     expect($session->global_comment)->toBe($globalComment);
 });
 

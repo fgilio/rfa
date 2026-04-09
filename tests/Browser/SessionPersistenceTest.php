@@ -33,13 +33,13 @@ test('global comment persists after page reload', function () {
     expect($value)->toBe('Global persisted note');
 });
 
-test('viewed files persist after page reload', function () {
+test('reviewed files persist after page reload', function () {
     $page = $this->visit($this->projectUrl());
 
-    $page->page()->getByLabel('Viewed')->first()->click();
+    $page->page()->getByLabel('Reviewed')->first()->click();
     // Wait for Livewire round-trip to complete before refreshing
-    $page->assertSee('1/3 viewed');
+    $page->assertSee('1/3 reviewed');
 
     $page->refresh();
-    $page->assertSee('1/3 viewed');
+    $page->assertSee('1/3 reviewed');
 });

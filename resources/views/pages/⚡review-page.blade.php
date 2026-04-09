@@ -63,7 +63,7 @@ new #[Layout('layouts.app')] class extends Component
     public ?string $gitError = null;
 
     /** @var array<string, string> */
-    public array $viewedFiles = [];
+    public array $reviewedFiles = [];
 
     public ?string $activeFileId = null;
 
@@ -129,7 +129,7 @@ new #[Layout('layouts.app')] class extends Component
         $target = $this->buildDiffTarget();
         $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target->contextKey(), $target);
         $this->comments = $session['comments'];
-        $this->viewedFiles = $session['viewedFiles'];
+        $this->reviewedFiles = $session['reviewedFiles'];
         $this->globalComment = $session['globalComment'];
 
         if (! empty($session['orphanedPaths'])) {
@@ -192,7 +192,7 @@ new #[Layout('layouts.app')] class extends Component
         $target = $this->buildDiffTarget();
         $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target->contextKey(), $target);
         $this->comments = $session['comments'];
-        $this->viewedFiles = $session['viewedFiles'];
+        $this->reviewedFiles = $session['reviewedFiles'];
 
         if (! empty($session['orphanedPaths'])) {
             $this->injectOrphanedFiles($session['orphanedPaths']);
@@ -356,8 +356,8 @@ new #[Layout('layouts.app')] class extends Component
         $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
         Cache::forget(DiffCacheKey::for($projectKey, $fileId, $this->buildDiffTarget()->contextKey()));
 
-        // Prune viewed state for the discarded file
-        unset($this->viewedFiles[$file['path']]);
+        // Prune reviewed state for the discarded file
+        unset($this->reviewedFiles[$file['path']]);
 
         $this->refreshFileList();
         $this->saveSession();
@@ -401,16 +401,16 @@ new #[Layout('layouts.app')] class extends Component
         };
     }
 
-    #[On('toggle-viewed')]
-    public function toggleViewed(string $filePath): void
+    #[On('toggle-reviewed')]
+    public function toggleReviewed(string $filePath): void
     {
-        $result = app(ToggleViewedAction::class)->handle($this->viewedFiles, $filePath, $this->files, $this->repoPath, $this->buildDiffTarget());
+        $result = app(ToggleViewedAction::class)->handle($this->reviewedFiles, $filePath, $this->files, $this->repoPath, $this->buildDiffTarget());
 
         if ($result === null) {
             return;
         }
 
-        $this->viewedFiles = $result;
+        $this->reviewedFiles = $result;
         $this->saveSession();
         $this->skipRender();
     }
@@ -441,11 +441,11 @@ new #[Layout('layouts.app')] class extends Component
         $affectedFileIds = collect($this->comments)->pluck('fileId')->unique();
         $this->comments = array_values(array_filter($this->comments, fn ($c) => $c['isDraft'] ?? false));
         $this->globalComment = '';
-        $this->viewedFiles = [];
+        $this->reviewedFiles = [];
         $this->saveSession();
 
         $affectedFileIds->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
-        $this->dispatch('reset-viewed-files');
+        $this->dispatch('reset-reviewed-files');
     }
 
     /** @return array<string, array<int, array<string, mixed>>> */
@@ -538,7 +538,7 @@ new #[Layout('layouts.app')] class extends Component
 
     private function saveSession(): void
     {
-        app(SaveSessionAction::class)->handle($this->repoPath, $this->comments, $this->viewedFiles, $this->globalComment, $this->projectId, $this->buildDiffTarget()->contextKey());
+        app(SaveSessionAction::class)->handle($this->repoPath, $this->comments, $this->reviewedFiles, $this->globalComment, $this->projectId, $this->buildDiffTarget()->contextKey());
     }
 
     private function loadTrashedFiles(): void
@@ -572,13 +572,17 @@ new #[Layout('layouts.app')] class extends Component
             });
         },
         activeFile: null,
-        viewedFiles: @js((object) collect($sourceFiles)->filter(fn($f) => array_key_exists($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()),
+        reviewedFiles: @js((object) collect($sourceFiles)->filter(fn($f) => array_key_exists($f['path'], $reviewedFiles))->pluck('id')->flip()->map(fn() => true)->all()),
+        hideReviewed: false,
         fileFilter: '',
         filePaths: @js(collect($sourceFiles)->pluck('path')->all()),
+        fileIds: @js(collect($sourceFiles)->pluck('id')->all()),
         sidebarWidth: $store.settings.sidebarWidth,
         resizing: false,
-        fileMatchesFilter(path) {
-            return this.fileFilter === '' || path.toLowerCase().includes(this.fileFilter.toLowerCase());
+        fileMatchesFilter(path, fileId) {
+            if (this.fileFilter !== '' && !path.toLowerCase().includes(this.fileFilter.toLowerCase())) return false;
+            if (fileId && this.hideReviewed && this.reviewedFiles[fileId]) return false;
+            return true;
         },
         scrollToFile(id) {
             this.activeFile = id;
@@ -629,8 +633,8 @@ new #[Layout('layouts.app')] class extends Component
             document.addEventListener('mouseup', onUp);
         }
     }"
-    @file-viewed-changed.window="viewedFiles[$event.detail.id] = $event.detail.viewed"
-    @reset-viewed-files.window="viewedFiles = {}"
+    @file-reviewed-changed.window="reviewedFiles[$event.detail.id] = $event.detail.reviewed"
+    @reset-reviewed-files.window="reviewedFiles = {}"
     @copy-to-clipboard.window="
         navigator.clipboard.writeText($event.detail.text).catch(() => {});
     "
@@ -664,14 +668,16 @@ new #[Layout('layouts.app')] class extends Component
         </div>
         <div class="flex items-center gap-3 text-xs">
             <span class="font-mono text-gh-muted"
-                x-text="fileFilter === ''
+                x-text="fileFilter === '' && !hideReviewed
                     ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
-                    : filePaths.filter(p => fileMatchesFilter(p)).length + '/{{ count($sourceFiles) }} files'"
+                    : filePaths.filter((p, i) => fileMatchesFilter(p, fileIds[i])).length + '/{{ count($sourceFiles) }} files'"
             >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</span>
             <span class="font-mono text-gh-muted"
-                x-show="Object.values(viewedFiles).filter(Boolean).length > 0"
-                x-text="Object.values(viewedFiles).filter(Boolean).length + '/{{ count($sourceFiles) }} viewed'"
+                x-show="Object.values(reviewedFiles).filter(Boolean).length > 0"
+                x-text="Object.values(reviewedFiles).filter(Boolean).length + '/{{ count($sourceFiles) }} reviewed'"
                 x-cloak></span>
+            <flux:checkbox x-model="hideReviewed" label="Hide reviewed" class="text-xs"
+                x-show="Object.values(reviewedFiles).filter(Boolean).length > 0" x-cloak />
             @if(count($reviewPairs) > 0)
                 <span class="font-mono text-xs text-gh-muted px-1.5 py-0.5 rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
             @endif
@@ -816,7 +822,7 @@ new #[Layout('layouts.app')] class extends Component
                         };
                     @endphp
                     <div
-                        x-show="fileMatchesFilter(@js($file['path']))"
+                        x-show="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}')"
                         class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-colors"
                         :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-link/10 text-gh-link' : 'text-gh-muted'"
                     >
@@ -827,7 +833,7 @@ new #[Layout('layouts.app')] class extends Component
                             @endif
                             <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['isSymlink'] ?? false) ? ' -> ' . $file['symlinkTarget'] : '' }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
                         </button>
-                        <flux:icon icon="check" variant="outline" x-show="viewedFiles['{{ $file['id'] }}']"
+                        <flux:icon icon="check" variant="outline" x-show="reviewedFiles['{{ $file['id'] }}']"
                             class="text-gh-green shrink-0" x-cloak />
                         @if(! $this->isCommitMode() && $file['status'] !== 'commented')
                             <button
@@ -955,7 +961,7 @@ new #[Layout('layouts.app')] class extends Component
                                         :file="$pair['jsonFile']"
                                         :load-delay="0"
                                         :file-comments="$this->groupedComments[$pair['jsonFile']['id']] ?? []"
-                                        :is-viewed="array_key_exists($pair['jsonFile']['path'], $viewedFiles)"
+                                        :is-reviewed="array_key_exists($pair['jsonFile']['path'], $reviewedFiles)"
                                         :repo-path="$repoPath"
                                         :project-id="$projectId"
                                         :diff-from="$diffFrom"
@@ -968,7 +974,7 @@ new #[Layout('layouts.app')] class extends Component
                                         :file="$pair['mdFile']"
                                         :load-delay="0"
                                         :file-comments="$this->groupedComments[$pair['mdFile']['id']] ?? []"
-                                        :is-viewed="array_key_exists($pair['mdFile']['path'], $viewedFiles)"
+                                        :is-reviewed="array_key_exists($pair['mdFile']['path'], $reviewedFiles)"
                                         :repo-path="$repoPath"
                                         :project-id="$projectId"
                                         :diff-from="$diffFrom"
@@ -983,13 +989,13 @@ new #[Layout('layouts.app')] class extends Component
                 {{-- Source Files --}}
                 @php $singleFile = count($sourceFiles) === 1 && count($reviewPairs) === 0; @endphp
                 @foreach($sourceFiles as $file)
-                    <div id="{{ $file['id'] }}" class="border-b border-gh-border" x-show="fileMatchesFilter(@js($file['path']))">
+                    <div id="{{ $file['id'] }}" class="border-b border-gh-border" x-show="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}')">
                         <livewire:diff-file
                             :key="$file['id']"
                             :file="$file"
                             :load-delay="(int) (floor($loop->index / 15) * 100)"
                             :file-comments="$this->groupedComments[$file['id']] ?? []"
-                            :is-viewed="array_key_exists($file['path'], $viewedFiles)"
+                            :is-reviewed="array_key_exists($file['path'], $reviewedFiles)"
                             :single-file="$singleFile"
                             :repo-path="$repoPath"
                             :project-id="$projectId"

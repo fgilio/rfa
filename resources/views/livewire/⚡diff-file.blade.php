@@ -29,7 +29,7 @@ new class extends Component {
     #[Locked]
     public ?string $diffTo = null;
 
-    public bool $isViewed = false;
+    public bool $isReviewed = false;
 
     public bool $singleFile = false;
 
@@ -215,7 +215,7 @@ new class extends Component {
     x-data="diffFile({
         fileId: @js($file['id']),
         filePath: @js($file['path']),
-        isViewed: @js($isViewed ?? false),
+        isReviewed: @js($isReviewed ?? false),
         singleFile: @js($singleFile ?? false),
     })"
     @mouseup.window="endDrag()"
@@ -312,7 +312,7 @@ new class extends Component {
             @if($file['deletions'] > 0)
                 <span class="text-gh-red">-{{ $file['deletions'] }}</span>
             @endif
-            <flux:checkbox x-model="viewed" @change="onViewedChange()" label="Viewed" class="text-xs" />
+            <flux:checkbox x-model="reviewed" @change="onReviewedChange()" label="Reviewed" class="text-xs" />
             <flux:tooltip content="Add file comment">
                 <flux:button
                     x-ref="fileCommentBtn"
