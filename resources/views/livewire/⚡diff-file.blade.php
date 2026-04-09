@@ -30,6 +30,8 @@ new class extends Component {
 
     public bool $isViewed = false;
 
+    public bool $singleFile = false;
+
     /** @var array<int, array<string, mixed>> */
     public array $fileComments = [];
 
@@ -280,6 +282,7 @@ new class extends Component {
         fileId: @js($file['id']),
         filePath: @js($file['path']),
         isViewed: @js($isViewed ?? false),
+        singleFile: @js($singleFile ?? false),
     })"
     @mouseup.window="endDrag()"
     @comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"

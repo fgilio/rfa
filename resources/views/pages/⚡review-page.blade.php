@@ -981,6 +981,7 @@ new #[Layout('layouts.app')] class extends Component
                 @endif
 
                 {{-- Source Files --}}
+                @php $singleFile = count($sourceFiles) === 1 && count($reviewPairs) === 0; @endphp
                 @foreach($sourceFiles as $file)
                     <div id="{{ $file['id'] }}" class="border-b border-gh-border" x-show="fileMatchesFilter(@js($file['path']))">
                         <livewire:diff-file
@@ -989,6 +990,7 @@ new #[Layout('layouts.app')] class extends Component
                             :load-delay="(int) (floor($loop->index / 15) * 100)"
                             :file-comments="$this->groupedComments[$file['id']] ?? []"
                             :is-viewed="array_key_exists($file['path'], $viewedFiles)"
+                            :single-file="$singleFile"
                             :repo-path="$repoPath"
                             :project-id="$projectId"
                             :diff-from="$diffFrom"

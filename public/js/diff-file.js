@@ -1,10 +1,10 @@
 // Alpine component for livewire/⚡diff-file.blade.php
 (function () {
     function init() {
-        Alpine.data('diffFile', ({ fileId, filePath, isViewed }) => ({
+        Alpine.data('diffFile', ({ fileId, filePath, isViewed, singleFile = false }) => ({
             fileId,
             filePath,
-            collapsed: Alpine.store('settings')?.collapseAll || isViewed,
+            collapsed: singleFile ? false : (Alpine.store('settings')?.collapseAll || isViewed),
             viewed: isViewed,
 
             // Comment form state
