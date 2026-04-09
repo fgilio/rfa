@@ -188,7 +188,7 @@ new #[Layout('layouts.app')] class extends Component
                     <div class="mt-8 space-y-1">
                         <x-external-link href="https://x.com/fgili0" class="inline-flex items-center gap-1 font-mono text-xs text-gh-muted hover:text-gh-text transition-colors">
                             Made by Franco Gilio
-                            <flux:icon icon="arrow-up-right" variant="micro" class="size-3" />
+                            <flux:icon icon="arrow-up-right" variant="outline" class="size-3" />
                         </x-external-link>
                         <p class="font-mono text-[11px] text-gh-muted/60">
                             DMs open · <x-external-link href="https://github.com/fgilio/rfa" class="hover:text-gh-muted transition-colors">PRs welcome</x-external-link>
