@@ -162,7 +162,7 @@ new #[Layout('layouts.app')] class extends Component
     @keydown.window="
         if ($event.key === 'ArrowDown') { navigate(1); $event.preventDefault(); return; }
         if ($event.key === 'ArrowUp') { navigate(-1); $event.preventDefault(); return; }
-        if ($event.key === 'Enter' && selectedIndex >= 0) { openSelected(); $event.preventDefault(); return; }
+        if ($event.key === 'Enter') { if (selectedIndex >= 0) { openSelected(); $event.preventDefault(); return; } if (search !== '') { openFirst(); $event.preventDefault(); return; } }
         if ($event.target.tagName === 'INPUT' || $event.target.tagName === 'TEXTAREA' || $event.target.isContentEditable) {
             if ($event.key === 'Escape' && $event.target.tagName === 'INPUT') { search = ''; selectedIndex = -1; selectedProjectId = null; $event.target.blur(); $event.preventDefault(); }
             return;
