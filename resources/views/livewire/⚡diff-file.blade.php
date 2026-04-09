@@ -142,11 +142,12 @@ new class extends Component {
             }
         }
 
-        // Fetch full-context diff to get the hidden lines with syntax highlighting
+        // Fetch full-context diff (cached so sequential partial expansions reuse it)
         $fullDiff = app(LoadFileDiffAction::class)->handle(
             $this->repoPath,
             $this->file['path'],
             $this->file['isUntracked'] ?? false,
+            cacheKey: $this->diffCacheKey().':full-context',
             contextLines: 99999,
             target: $this->buildDiffTarget(),
         );
@@ -576,63 +577,11 @@ new class extends Component {
                                         @php
                                             $prevHunk = $hunks[$hunkIndex - 1];
                                             $hiddenCount = $hunk['newStart'] - ($prevHunk['newStart'] + $prevHunk['newCount']);
-                                            $applicableTiers = collect($expandTiers)->filter(fn ($t) => $t < $hiddenCount)->values();
                                         @endphp
-                                        @if($applicableTiers->isEmpty())
-                                            <button
-                                                wire:click="expandGap({{ $hunkIndex }})"
-                                                wire:loading.attr="disabled"
-                                                wire:target="expandGap"
-                                                class="text-gh-link hover:underline inline-flex items-center gap-1 disabled:opacity-50"
-                                            >
-                                                <flux:icon wire:loading wire:target="expandGap" icon="arrow-path" variant="outline" class="animate-spin" />
-                                                <span wire:loading.remove wire:target="expandGap">Expand {{ $hiddenCount }} hidden lines</span>
-                                                <span wire:loading wire:target="expandGap">Expanding...</span>
-                                            </button>
-                                        @else
-                                            <span wire:loading.remove wire:target="expandGap" class="inline-flex items-center gap-0.5">
-                                                <span class="text-gh-muted">Expand</span>
-                                                @foreach($applicableTiers as $tier)
-                                                    <button wire:click="expandGap({{ $hunkIndex }}, {{ $tier }})" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $tier }}</button>
-                                                    <span class="text-gh-muted/50">&middot;</span>
-                                                @endforeach
-                                                <button wire:click="expandGap({{ $hunkIndex }})" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $hiddenCount }} <span class="text-gh-muted">hidden lines</span></button>
-                                            </span>
-                                            <span wire:loading wire:target="expandGap" class="inline-flex items-center gap-1">
-                                                <flux:icon icon="arrow-path" variant="outline" class="animate-spin" />
-                                                Expanding...
-                                            </span>
-                                        @endif
+                                        <x-tiered-expand-gap :hunk-index="$hunkIndex" :hidden-count="$hiddenCount" :expand-tiers="$expandTiers" />
                                     @elseif($hunk['newStart'] > 1)
-                                        @php
-                                            $hiddenCount = $hunk['newStart'] - 1;
-                                            $applicableTiers = collect($expandTiers)->filter(fn ($t) => $t < $hiddenCount)->values();
-                                        @endphp
-                                        @if($applicableTiers->isEmpty())
-                                            <button
-                                                wire:click="expandGap(0)"
-                                                wire:loading.attr="disabled"
-                                                wire:target="expandGap"
-                                                class="text-gh-link hover:underline inline-flex items-center gap-1 disabled:opacity-50"
-                                            >
-                                                <flux:icon wire:loading wire:target="expandGap" icon="arrow-path" variant="outline" class="animate-spin" />
-                                                <span wire:loading.remove wire:target="expandGap">Expand {{ $hiddenCount }} hidden lines</span>
-                                                <span wire:loading wire:target="expandGap">Expanding...</span>
-                                            </button>
-                                        @else
-                                            <span wire:loading.remove wire:target="expandGap" class="inline-flex items-center gap-0.5">
-                                                <span class="text-gh-muted">Expand</span>
-                                                @foreach($applicableTiers as $tier)
-                                                    <button wire:click="expandGap(0, {{ $tier }})" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $tier }}</button>
-                                                    <span class="text-gh-muted/50">&middot;</span>
-                                                @endforeach
-                                                <button wire:click="expandGap(0)" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $hiddenCount }} <span class="text-gh-muted">hidden lines</span></button>
-                                            </span>
-                                            <span wire:loading wire:target="expandGap" class="inline-flex items-center gap-1">
-                                                <flux:icon icon="arrow-path" variant="outline" class="animate-spin" />
-                                                Expanding...
-                                            </span>
-                                        @endif
+                                        @php $hiddenCount = $hunk['newStart'] - 1; @endphp
+                                        <x-tiered-expand-gap :hunk-index="0" :hidden-count="$hiddenCount" :expand-tiers="$expandTiers" />
                                     @else
                                         @@ -{{ $hunk['oldStart'] }} +{{ $hunk['newStart'] }} @@
                                     @endif
@@ -724,34 +673,9 @@ new class extends Component {
                     @endforeach
 
                     @if($hasTrailingGap)
-                        @php $trailingApplicableTiers = collect($expandTiers)->filter(fn ($t) => $t < $trailingHiddenCount)->values(); @endphp
                         <tr class="bg-gh-hunk-bg">
                             <td colspan="4" class="px-4 py-1 text-gh-muted text-xs">
-                                @if($trailingApplicableTiers->isEmpty())
-                                    <button
-                                        wire:click="expandGap({{ count($hunks) }})"
-                                        wire:loading.attr="disabled"
-                                        wire:target="expandGap"
-                                        class="text-gh-link hover:underline inline-flex items-center gap-1 disabled:opacity-50"
-                                    >
-                                        <flux:icon wire:loading wire:target="expandGap" icon="arrow-path" variant="outline" class="animate-spin" />
-                                        <span wire:loading.remove wire:target="expandGap">Expand {{ $trailingHiddenCount }} hidden lines</span>
-                                        <span wire:loading wire:target="expandGap">Expanding...</span>
-                                    </button>
-                                @else
-                                    <span wire:loading.remove wire:target="expandGap" class="inline-flex items-center gap-0.5">
-                                        <span class="text-gh-muted">Expand</span>
-                                        @foreach($trailingApplicableTiers as $tier)
-                                            <button wire:click="expandGap({{ count($hunks) }}, {{ $tier }})" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $tier }}</button>
-                                            <span class="text-gh-muted/50">&middot;</span>
-                                        @endforeach
-                                        <button wire:click="expandGap({{ count($hunks) }})" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $trailingHiddenCount }} <span class="text-gh-muted">hidden lines</span></button>
-                                    </span>
-                                    <span wire:loading wire:target="expandGap" class="inline-flex items-center gap-1">
-                                        <flux:icon icon="arrow-path" variant="outline" class="animate-spin" />
-                                        Expanding...
-                                    </span>
-                                @endif
+                                <x-tiered-expand-gap :hunk-index="count($hunks)" :hidden-count="$trailingHiddenCount" :expand-tiers="$expandTiers" />
                             </td>
                         </tr>
                     @endif
