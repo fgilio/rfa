@@ -82,12 +82,35 @@ new #[Layout('layouts.app')] class extends Component
             return Array.from(this.$root.querySelectorAll('[data-project-card]'));
         },
         get visibleProjects() {
-            return this.flatProjects.filter(el => el.style.display !== 'none');
+            return this.flatProjects
+                .filter(el => el.style.display !== 'none')
+                .sort((a, b) => {
+                    const ag = parseInt(a.closest('[data-group-wrapper]')?.style.order) || 0;
+                    const bg = parseInt(b.closest('[data-group-wrapper]')?.style.order) || 0;
+                    return ag - bg;
+                });
+        },
+        rankMatch(name, branch, path) {
+            if (this.search === '') return 0;
+            const q = this.search.toLowerCase();
+            const n = name.toLowerCase();
+            const b = (branch || '').toLowerCase();
+            const p = path.toLowerCase();
+            const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const ws = new RegExp('(?:^|[^a-z0-9])' + esc);
+            if (n === q) return 0;
+            if (n.startsWith(q)) return 1;
+            if (ws.test(n)) return 2;
+            if (b === q || b.startsWith(q)) return 3;
+            if (ws.test(b)) return 4;
+            if (ws.test(p)) return 5;
+            if (n.includes(q)) return 6;
+            if (b.includes(q)) return 7;
+            if (p.includes(q)) return 8;
+            return Infinity;
         },
         matchesSearch(name, branch, path) {
-            if (this.search === '') return true;
-            const q = this.search.toLowerCase();
-            return name.toLowerCase().includes(q) || (branch && branch.toLowerCase().includes(q)) || path.toLowerCase().includes(q);
+            return this.rankMatch(name, branch, path) !== Infinity;
         },
         navigate(dir) {
             const visible = this.visibleProjects;
@@ -100,6 +123,13 @@ new #[Layout('layouts.app')] class extends Component
             const visible = this.visibleProjects;
             if (this.selectedIndex >= 0 && this.selectedIndex < visible.length) {
                 const link = visible[this.selectedIndex]?.querySelector('a[data-project-link]');
+                if (link) window.location.href = link.href;
+            }
+        },
+        openFirst() {
+            const visible = this.visibleProjects;
+            if (visible.length) {
+                const link = visible[0]?.querySelector('a[data-project-link]');
                 if (link) window.location.href = link.href;
             }
         },
@@ -211,7 +241,8 @@ new #[Layout('layouts.app')] class extends Component
                         x-on:click="setSort(sortBy === 'recent' ? 'alpha' : 'recent')"
                         class="text-gh-muted hover:text-gh-text font-mono text-xs"
                     >
-                        <span x-text="sortBy === 'recent' ? 'A-Z' : 'Recent'"></span>
+                        <flux:icon icon="arrows-up-down" variant="outline" class="size-3.5" />
+                        <span x-text="sortBy === 'recent' ? 'Recent' : 'A-Z'"></span>
                     </flux:button>
                 </div>
             </div>
@@ -227,6 +258,7 @@ new #[Layout('layouts.app')] class extends Component
                     x-ref="searchInput"
                     autofocus
                     @keydown.escape="search = ''; selectedIndex = -1; selectedProjectId = null; $el.blur()"
+                    @keydown.enter.prevent.stop="selectedIndex >= 0 ? openSelected() : (search !== '' && openFirst())"
                     @input="selectedIndex = -1; selectedProjectId = null"
                 />
                 @php
@@ -247,11 +279,17 @@ new #[Layout('layouts.app')] class extends Component
             </div>
 
             @php $projectIndex = 0; @endphp
+            <div class="flex flex-col gap-8">
             @foreach($projectGroups as $commonDir => $projects)
                 @php
                     $groupSearchData = collect($projects)->map(fn($p) => [$p['name'], $p['branch'] ?? '', $p['path']])->values()->all();
                 @endphp
-                <div wire:key="group-{{ md5($commonDir) }}" class="mb-8" x-show="@js($groupSearchData).some(([n, b, p]) => matchesSearch(n, b, p))">
+                <div
+                    wire:key="group-{{ md5($commonDir) }}"
+                    data-group-wrapper
+                    x-show="@js($groupSearchData).some(([n, b, p]) => matchesSearch(n, b, p))"
+                    :style="search ? 'order: ' + Math.min(...@js($groupSearchData).map(([n, b, p]) => rankMatch(n, b, p))) : ''"
+                >
                     @if(count($projects) > 1)
                         <p class="section-label text-gh-muted mb-3 font-mono truncate">{{ $commonDir }}</p>
                     @endif
@@ -347,7 +385,7 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                 </div>
             @endforeach
-
+            </div>
         @endif
     </main>
 
