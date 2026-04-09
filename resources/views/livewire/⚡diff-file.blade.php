@@ -596,8 +596,7 @@ new class extends Component {
                                                     <button wire:click="expandGap({{ $hunkIndex }}, {{ $tier }})" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $tier }}</button>
                                                     <span class="text-gh-muted/50">&middot;</span>
                                                 @endforeach
-                                                <button wire:click="expandGap({{ $hunkIndex }})" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $hiddenCount }}</button>
-                                                <span class="text-gh-muted">hidden lines</span>
+                                                <button wire:click="expandGap({{ $hunkIndex }})" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $hiddenCount }} <span class="text-gh-muted">hidden lines</span></button>
                                             </span>
                                             <span wire:loading wire:target="expandGap" class="inline-flex items-center gap-1">
                                                 <flux:icon icon="arrow-path" variant="outline" class="animate-spin" />
@@ -627,8 +626,7 @@ new class extends Component {
                                                     <button wire:click="expandGap(0, {{ $tier }})" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $tier }}</button>
                                                     <span class="text-gh-muted/50">&middot;</span>
                                                 @endforeach
-                                                <button wire:click="expandGap(0)" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $hiddenCount }}</button>
-                                                <span class="text-gh-muted">hidden lines</span>
+                                                <button wire:click="expandGap(0)" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $hiddenCount }} <span class="text-gh-muted">hidden lines</span></button>
                                             </span>
                                             <span wire:loading wire:target="expandGap" class="inline-flex items-center gap-1">
                                                 <flux:icon icon="arrow-path" variant="outline" class="animate-spin" />
@@ -747,8 +745,7 @@ new class extends Component {
                                             <button wire:click="expandGap({{ count($hunks) }}, {{ $tier }})" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $tier }}</button>
                                             <span class="text-gh-muted/50">&middot;</span>
                                         @endforeach
-                                        <button wire:click="expandGap({{ count($hunks) }})" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $trailingHiddenCount }}</button>
-                                        <span class="text-gh-muted">hidden lines</span>
+                                        <button wire:click="expandGap({{ count($hunks) }})" wire:loading.attr="disabled" wire:target="expandGap" class="text-gh-link hover:underline disabled:opacity-50">{{ $trailingHiddenCount }} <span class="text-gh-muted">hidden lines</span></button>
                                     </span>
                                     <span wire:loading wire:target="expandGap" class="inline-flex items-center gap-1">
                                         <flux:icon icon="arrow-path" variant="outline" class="animate-spin" />
