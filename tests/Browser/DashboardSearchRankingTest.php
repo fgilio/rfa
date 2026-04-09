@@ -62,13 +62,14 @@ test('search ranks start-of-word above mid-word match', function () {
 test('enter in search opens first matching result', function () {
     $page = $this->visit('/');
 
-    $page->page()->getByPlaceholder('Filter projects...')->fill('rfa');
+    $searchInput = $page->page()->getByPlaceholder('Filter projects...');
+    $searchInput->fill('rfa');
 
     // Wait for debounce + Alpine reactivity
     $page->page()->waitForFunction("document.querySelectorAll('[data-project-card]:not([style*=\"display: none\"])').length === 2");
 
-    // Press Enter without selecting via arrows — should open first ranked result
-    $this->pressGlobalKey($page, 'Enter');
+    // Press Enter on the search input — should open first ranked result
+    $searchInput->press('Enter');
 
     $page->page()->waitForURL('**/p/**');
     $url = $page->script('window.location.pathname');
