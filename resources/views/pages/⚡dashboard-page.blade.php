@@ -288,7 +288,7 @@ new #[Layout('layouts.app')] class extends Component
                     wire:key="group-{{ md5($commonDir) }}"
                     data-group-wrapper
                     x-show="@js($groupSearchData).some(([n, b, p]) => matchesSearch(n, b, p))"
-                    :style="search ? 'order: ' + Math.min(...@js($groupSearchData).map(([n, b, p]) => rankMatch(n, b, p))) : ''"
+                    :style="search ? { order: Math.min(...@js($groupSearchData).map(([n, b, p]) => rankMatch(n, b, p))) } : {}"
                 >
                     @if(count($projects) > 1)
                         <p class="section-label text-gh-muted mb-3 font-mono truncate">{{ $commonDir }}</p>
