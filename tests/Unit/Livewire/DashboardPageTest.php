@@ -82,7 +82,7 @@ test('shows comment count when project has review comments', function () {
         'project_id' => $project->id,
         'repo_path' => '/tmp/my-app',
         'context_fingerprint' => 'abc123',
-        'viewed_files' => [],
+        'reviewed_files' => [],
         'comments' => [
             ['id' => 1, 'body' => 'Fix this'],
             ['id' => 2, 'body' => 'And this'],

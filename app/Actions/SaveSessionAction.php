@@ -19,7 +19,7 @@ final readonly class SaveSessionAction
             ReviewSession::lookupKey($repoPath, $projectId, $contextFingerprint),
             [
                 'repo_path' => $repoPath,
-                'viewed_files' => $reviewedFiles,
+                'reviewed_files' => $reviewedFiles,
                 'comments' => $comments,
                 'global_comment' => $globalComment,
             ]

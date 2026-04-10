@@ -14,7 +14,7 @@ class ReviewSession extends Model
     /** @use HasFactory<ReviewSessionFactory> */
     use HasFactory;
 
-    protected $fillable = ['repo_path', 'project_id', 'context_fingerprint', 'viewed_files', 'comments', 'global_comment'];
+    protected $fillable = ['repo_path', 'project_id', 'context_fingerprint', 'reviewed_files', 'comments', 'global_comment'];
 
     /** @return array<string, int|string> */
     public static function lookupKey(string $repoPath, ?int $projectId, string $contextFingerprint): array
@@ -33,7 +33,7 @@ class ReviewSession extends Model
     protected function casts(): array
     {
         return [
-            'viewed_files' => 'array',
+            'reviewed_files' => 'array',
             'comments' => 'array',
         ];
     }

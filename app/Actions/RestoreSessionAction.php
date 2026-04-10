@@ -33,21 +33,21 @@ final readonly class RestoreSessionAction
             $currentPathSet[$f['path']] = true;
         }
 
-        /** @var array<int|string, string> $rawViewed */
-        $rawViewed = $session->viewed_files ?? [];
+        /** @var array<int|string, string> $rawReviewed */
+        $rawReviewed = $session->reviewed_files ?? [];
         $isImmutable = $target !== null && $target->isImmutable();
 
         // Legacy compat: convert indexed array to associative with fresh fingerprints
-        if ($rawViewed !== [] && array_is_list($rawViewed)) {
+        if ($rawReviewed !== [] && array_is_list($rawReviewed)) {
             $reviewedFiles = [];
-            foreach ($rawViewed as $path) {
+            foreach ($rawReviewed as $path) {
                 if (isset($currentPathSet[$path])) {
                     $reviewedFiles[$path] = $isImmutable ? '' : $this->gitDiffService->fileDiffFingerprint($repoPath, $path, $target);
                 }
             }
         } else {
             /** @var array<string, string> $reviewedFiles */
-            $reviewedFiles = array_intersect_key($rawViewed, $currentPathSet);
+            $reviewedFiles = array_intersect_key($rawReviewed, $currentPathSet);
 
             // Fingerprint validation (skip for immutable targets)
             if (! $isImmutable) {

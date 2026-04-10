@@ -93,7 +93,7 @@ test('benchmark command does not delete app projects or review sessions', functi
         'repo_path' => '/tmp/keep-me',
         'project_id' => $project->id,
         'context_fingerprint' => 'working',
-        'viewed_files' => ['app.php' => 'hash'],
+        'reviewed_files' => ['app.php' => 'hash'],
         'comments' => [['id' => 'comment-1', 'file' => 'app.php']],
         'global_comment' => 'Keep this session',
     ]);

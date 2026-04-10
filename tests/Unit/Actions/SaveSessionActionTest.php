@@ -26,13 +26,13 @@ test('creates session when none exists', function () {
 
     expect($session)->not->toBeNull();
     expect($session->comments)->toBe($comments);
-    expect($session->viewed_files)->toBe($reviewedFiles);
+    expect($session->reviewed_files)->toBe($reviewedFiles);
     expect($session->global_comment)->toBe($globalComment);
 });
 
 test('updates existing session', function () {
     $repoPath = '/tmp/'.$this->faker->word();
-    ReviewSession::create(['repo_path' => $repoPath, 'comments' => [], 'viewed_files' => [], 'global_comment' => '']);
+    ReviewSession::create(['repo_path' => $repoPath, 'comments' => [], 'reviewed_files' => [], 'global_comment' => '']);
 
     $newComments = [['id' => 'c-2', 'file' => 'a.php', 'body' => 'updated']];
     $reviewedFiles = ['a.php' => 'hash-a'];
@@ -42,7 +42,7 @@ test('updates existing session', function () {
     $session = ReviewSession::where('repo_path', $repoPath)->first();
     expect(ReviewSession::where('repo_path', $repoPath)->count())->toBe(1);
     expect($session->comments)->toBe($newComments);
-    expect($session->viewed_files)->toBe($reviewedFiles);
+    expect($session->reviewed_files)->toBe($reviewedFiles);
 });
 
 test('keys by project_id when provided', function () {

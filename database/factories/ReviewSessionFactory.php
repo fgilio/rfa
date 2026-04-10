@@ -24,7 +24,7 @@ class ReviewSessionFactory extends Factory
             'project_id' => Project::factory(),
             'repo_path' => '/tmp/'.fake()->unique()->slug(2),
             'context_fingerprint' => 'working',
-            'viewed_files' => [],
+            'reviewed_files' => [],
             'comments' => [],
             'global_comment' => '',
         ];
