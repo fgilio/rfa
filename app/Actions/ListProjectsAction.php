@@ -7,6 +7,7 @@ namespace App\Actions;
 use App\Models\Project;
 use App\Models\ReviewSession;
 use Carbon\Carbon;
+use Illuminate\Support\Str;
 
 final readonly class ListProjectsAction
 {
@@ -48,17 +49,17 @@ final readonly class ListProjectsAction
         $search = trim($search);
         if ($search !== '') {
             $projects = $projects
-                ->map(fn (array $p) => $p + ['_rank' => self::rankMatch($p['name'], $p['branch'] ?? '', $p['path'], $search)])
-                ->filter(fn (array $p) => $p['_rank'] < PHP_INT_MAX)
-                ->sortBy('_rank');
+                ->map(fn (array $p) => ['rank' => self::rankMatch($p['name'], $p['branch'] ?? '', $p['path'], $search), 'project' => $p])
+                ->filter(fn (array $pair) => $pair['rank'] !== null)
+                ->sortBy([
+                    fn (array $a, array $b) => $a['rank'] <=> $b['rank'],
+                    fn (array $a, array $b) => Str::lower($a['project']['name']) <=> Str::lower($b['project']['name']),
+                ])
+                ->map(fn (array $pair) => $pair['project']);
 
             $groups = $projects
                 ->groupBy('git_common_dir')
-                ->map(fn ($group) => $group->map(function (array $p) {
-                    unset($p['_rank']);
-
-                    return $p;
-                })->values()->all())
+                ->map(fn ($group) => $group->values()->all())
                 ->all();
 
             return ['groups' => $groups, 'total' => $total];
@@ -82,48 +83,46 @@ final readonly class ListProjectsAction
     }
 
     /**
-     * Rank a project against a search query. Lower = better match. PHP_INT_MAX = no match.
+     * Rank a project against a search query. Lower = better match. null = no match.
      *
-     * Tiers: 0=name exact, 1=name prefix, 2=name word-start, 3=branch exact/prefix,
-     * 4=branch word-start, 5=path word-start, 6=name substring, 7=branch substring, 8=path substring.
+     * Score = tier * 10 + field (field: 0=name, 1=branch, 2=path).
+     * Tier 0: exact name. Tier 1: starts-with / word-boundary. Tier 2: substring.
      */
-    public static function rankMatch(string $name, string $branch, string $path, string $query): int
+    private static function rankMatch(string $name, string $branch, string $path, string $query): ?int
     {
-        $q = mb_strtolower($query);
-        $n = mb_strtolower($name);
-        $b = mb_strtolower($branch);
-        $p = mb_strtolower($path);
-        $esc = preg_quote($q, '/');
-        $ws = '/(?:^|[^a-z0-9])'.$esc.'/';
+        $lowerQuery = Str::lower($query);
+        $lowerName = Str::lower($name);
+        $lowerBranch = Str::lower($branch);
+        $lowerPath = Str::lower($path);
+        $wordBoundaryPattern = '/(?:^|[^a-z0-9])'.preg_quote($lowerQuery, '/').'/';
 
-        if ($n === $q) {
+        // Tier 0: exact name
+        if ($lowerName === $lowerQuery) {
             return 0;
         }
-        if (str_starts_with($n, $q)) {
-            return 1;
+
+        // Tier 1: starts-with or word-boundary (score 10 + field)
+        if (str_starts_with($lowerName, $lowerQuery) || preg_match($wordBoundaryPattern, $lowerName)) {
+            return 10;
         }
-        if (preg_match($ws, $n)) {
-            return 2;
+        if (str_starts_with($lowerBranch, $lowerQuery) || preg_match($wordBoundaryPattern, $lowerBranch)) {
+            return 11;
         }
-        if ($b === $q || str_starts_with($b, $q)) {
-            return 3;
-        }
-        if (preg_match($ws, $b)) {
-            return 4;
-        }
-        if (preg_match($ws, $p)) {
-            return 5;
-        }
-        if (str_contains($n, $q)) {
-            return 6;
-        }
-        if (str_contains($b, $q)) {
-            return 7;
-        }
-        if (str_contains($p, $q)) {
-            return 8;
+        if (preg_match($wordBoundaryPattern, $lowerPath)) {
+            return 12;
         }
 
-        return PHP_INT_MAX;
+        // Tier 2: substring (score 20 + field)
+        if (str_contains($lowerName, $lowerQuery)) {
+            return 20;
+        }
+        if (str_contains($lowerBranch, $lowerQuery)) {
+            return 21;
+        }
+        if (str_contains($lowerPath, $lowerQuery)) {
+            return 22;
+        }
+
+        return null;
     }
 }
