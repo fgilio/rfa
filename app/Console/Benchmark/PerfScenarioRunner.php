@@ -191,7 +191,7 @@ final class PerfScenarioRunner
         {
             /**
              * @param  array<int, array<string, mixed>>  $currentFiles
-             * @return array{comments: array<int, mixed>, reviewedFiles: array<string, string>, globalComment: string}
+             * @return array{comments: array<int, array<string, mixed>>, reviewedFiles: array<string, string>, globalComment: string, orphanedPaths: array<int, string>}
              */
             public function handle(
                 string $repoPath,
@@ -199,7 +199,7 @@ final class PerfScenarioRunner
                 ?int $projectId = null,
                 string $contextFingerprint = DiffTarget::WORKING_CONTEXT,
             ): array {
-                return ['comments' => [], 'reviewedFiles' => [], 'globalComment' => ''];
+                return ['comments' => [], 'reviewedFiles' => [], 'globalComment' => '', 'orphanedPaths' => []];
             }
         });
 
