@@ -69,7 +69,13 @@ final readonly class ScanDirectoryAction
             }
 
             try {
-                $newProjects[] = $this->register->handle($path);
+                $project = $this->register->handle($path);
+                $newProjects[] = [
+                    'name' => $project->name,
+                    'path' => $project->path,
+                    'slug' => $project->slug,
+                    'branch' => $project->branch,
+                ];
             } catch (\RuntimeException $e) {
                 $errors[$path] = $e->getMessage();
             }
@@ -81,7 +87,6 @@ final readonly class ScanDirectoryAction
             alreadyTracked: $existingProjects->count(),
             failed: count($errors),
             newProjects: $newProjects,
-            existingProjects: $existingProjects->all(),
             errors: $errors,
         );
     }

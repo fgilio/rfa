@@ -53,9 +53,8 @@ test('skips already tracked repos', function () {
     expect($result->found)->toBe(2);
     expect($result->registered)->toBe(1);
     expect($result->alreadyTracked)->toBe(1);
-    expect($result->existingProjects)->toHaveCount(1);
     expect($result->newProjects)->toHaveCount(1);
-    expect($result->newProjects[0]->name)->toBe('repo-b');
+    expect($result->newProjects[0]['name'])->toBe('repo-b');
 });
 
 // -- filtering --
@@ -97,7 +96,7 @@ test('skips child whose top-level resolves to a different path', function () {
     // Only the real repo root should be found, not the symlinked subdir
     expect($result->found)->toBe(1);
     expect($result->registered)->toBe(1);
-    expect($result->newProjects[0]->name)->toBe('real-repo');
+    expect($result->newProjects[0]['name'])->toBe('real-repo');
 });
 
 // -- edge cases --

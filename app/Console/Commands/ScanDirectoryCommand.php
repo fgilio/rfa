@@ -34,7 +34,7 @@ class ScanDirectoryCommand extends Command
         if ($result->registered > 0) {
             $this->table(
                 ['Name', 'Path', 'Branch'],
-                collect($result->newProjects)->map(fn ($p) => [$p->name, $p->path, $p->branch]),
+                collect($result->newProjects)->map(fn ($p) => [$p['name'], $p['path'], $p['branch']]),
             );
         }
 

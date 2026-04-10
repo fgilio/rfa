@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
-use App\Models\Project;
-
 class ScanDirectoryResult
 {
     /**
-     * @param  Project[]  $newProjects
-     * @param  Project[]  $existingProjects
+     * @param  array<int, array{name: string, path: string, slug: string, branch: string}>  $newProjects
      * @param  array<string, string>  $errors
      */
     public function __construct(
@@ -19,7 +16,6 @@ class ScanDirectoryResult
         public readonly int $alreadyTracked,
         public readonly int $failed,
         public readonly array $newProjects = [],
-        public readonly array $existingProjects = [],
         public readonly array $errors = [],
     ) {}
 
@@ -31,6 +27,7 @@ class ScanDirectoryResult
             'registered' => $this->registered,
             'alreadyTracked' => $this->alreadyTracked,
             'failed' => $this->failed,
+            'newProjects' => $this->newProjects,
             'errors' => $this->errors,
         ];
     }
