@@ -1,5 +1,9 @@
 # RFA Project Conventions
 
+## Local Desktop App
+
+RFA runs as a local NativePHP desktop app. Server-side operations have negligible latency, so prefer Livewire server-side logic over complex client-side (Alpine/JS) alternatives for filtering, sorting, and state management.
+
 ## PHP / Laravel
 
 - Use `Storage` facade for user-generated or external file operations
