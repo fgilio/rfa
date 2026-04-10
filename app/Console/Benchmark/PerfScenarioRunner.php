@@ -181,7 +181,7 @@ final class PerfScenarioRunner
             public function __construct(private readonly Project $project) {}
 
             /** @return array<string, mixed> */
-            public function handle(string $slug): array
+            public function handle(string $slug, bool $touch = false): array
             {
                 return $this->project->toArray();
             }

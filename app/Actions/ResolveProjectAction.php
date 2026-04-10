@@ -11,8 +11,18 @@ final readonly class ResolveProjectAction
     /**
      * @return array<string, mixed>|null
      */
-    public function handle(string $slug): ?array
+    public function handle(string $slug, bool $touch = false): ?array
     {
-        return Project::where('slug', $slug)->first()?->toArray();
+        $project = Project::where('slug', $slug)->first();
+
+        if ($project === null) {
+            return null;
+        }
+
+        if ($touch) {
+            $project->touch();
+        }
+
+        return $project->toArray();
     }
 }

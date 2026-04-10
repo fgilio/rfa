@@ -17,14 +17,13 @@ use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreDiscardedFileAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
-use App\Actions\ToggleViewedAction;
+use App\Actions\ToggleReviewedAction;
 use App\Actions\UpdateProjectSettingAction;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
 use App\Exceptions\GitCommandException;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
@@ -87,8 +86,7 @@ new #[Layout('layouts.app')] class extends Component
 
     public function mount(string $slug, ?string $hash = null, ?string $ref = null, ?string $baseRef = null): void
     {
-        $project = app(ResolveProjectAction::class)->handle($slug) ?? abort(404);
-        DB::table('projects')->where('id', $project['id'])->update(['updated_at' => now()]);
+        $project = app(ResolveProjectAction::class)->handle($slug, touch: true) ?? abort(404);
         $this->repoPath = $project['path'];
         $this->projectId = $project['id'];
         $this->projectName = $project['name'];
@@ -405,7 +403,7 @@ new #[Layout('layouts.app')] class extends Component
     #[On('toggle-reviewed')]
     public function toggleReviewed(string $filePath): void
     {
-        $result = app(ToggleViewedAction::class)->handle($this->reviewedFiles, $filePath, $this->files, $this->repoPath, $this->buildDiffTarget());
+        $result = app(ToggleReviewedAction::class)->handle($this->reviewedFiles, $filePath, $this->files, $this->repoPath, $this->buildDiffTarget());
 
         if ($result === null) {
             return;

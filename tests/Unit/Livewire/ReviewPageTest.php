@@ -41,7 +41,7 @@ beforeEach(function () {
     {
         public function __construct(private Project $project) {}
 
-        public function handle(string $slug): ?array
+        public function handle(string $slug, bool $touch = false): ?array
         {
             return $this->project->toArray();
         }
