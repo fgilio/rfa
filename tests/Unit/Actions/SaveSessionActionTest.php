@@ -35,11 +35,14 @@ test('updates existing session', function () {
     ReviewSession::create(['repo_path' => $repoPath, 'comments' => [], 'viewed_files' => [], 'global_comment' => '']);
 
     $newComments = [['id' => 'c-2', 'file' => 'a.php', 'body' => 'updated']];
+    $reviewedFiles = ['a.php' => 'hash-a'];
 
-    app(SaveSessionAction::class)->handle($repoPath, $newComments, ['a.php'], 'global');
+    app(SaveSessionAction::class)->handle($repoPath, $newComments, $reviewedFiles, 'global');
 
+    $session = ReviewSession::where('repo_path', $repoPath)->first();
     expect(ReviewSession::where('repo_path', $repoPath)->count())->toBe(1);
-    expect(ReviewSession::where('repo_path', $repoPath)->first()->comments)->toBe($newComments);
+    expect($session->comments)->toBe($newComments);
+    expect($session->viewed_files)->toBe($reviewedFiles);
 });
 
 test('keys by project_id when provided', function () {
