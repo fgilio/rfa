@@ -29,7 +29,7 @@ new class extends Component {
     #[Locked]
     public ?string $diffTo = null;
 
-    public bool $isViewed = false;
+    public bool $isReviewed = false;
 
     public bool $singleFile = false;
 
@@ -215,7 +215,7 @@ new class extends Component {
     x-data="diffFile({
         fileId: @js($file['id']),
         filePath: @js($file['path']),
-        isViewed: @js($isViewed ?? false),
+        isReviewed: @js($isReviewed ?? false),
         singleFile: @js($singleFile ?? false),
     })"
     @mouseup.window="endDrag()"
@@ -252,44 +252,45 @@ new class extends Component {
         </div>
 
         {{-- Actions toolbar --}}
-        <div class="flex items-center gap-2.5 text-xs shrink-0 font-mono">
-            <flux:tooltip content="Copy file name">
+        <div class="flex items-center gap-2 text-xs shrink-0 font-mono">
+            {{-- Secondary actions: ghost icons, brighten on hover --}}
+            <div class="flex items-center gap-0.5 opacity-30 group-hover:opacity-100 transition-opacity">
                 <flux:button
+                    tooltip="Copy file name"
                     icon="square-2-stack"
                     icon:variant="outline"
                     variant="ghost"
                     size="sm"
                     @click="$dispatch('copy-to-clipboard', { text: filePath })"
                 />
-            </flux:tooltip>
 
-            @php
-                $showContentCopy = !($file['isBinary'] ?? false)
-                    && !($file['isSymlink'] ?? false)
-                    && !($diffData['tooLarge'] ?? false);
-                $isAdded = ($file['status'] ?? '') === 'added' || ($file['isUntracked'] ?? false);
-                $isDeleted = ($file['status'] ?? '') === 'deleted';
-            @endphp
-            @if($showContentCopy)
-                <flux:dropdown position="bottom" align="end">
-                    <flux:button icon="ellipsis-vertical" icon:variant="outline" variant="ghost" size="sm" aria-label="Copy content" />
-                    <flux:menu>
-                        <flux:menu.item icon="code-bracket" @click="$wire.copyContent('diff')">
-                            Copy diff
-                        </flux:menu.item>
-                        <flux:menu.item icon="document-minus" @click="$wire.copyContent('original')" :disabled="$isAdded">
-                            Copy original
-                        </flux:menu.item>
-                        <flux:menu.item icon="document-plus" @click="$wire.copyContent('new')" :disabled="$isDeleted">
-                            Copy new
-                        </flux:menu.item>
-                    </flux:menu>
-                </flux:dropdown>
-            @endif
+                @php
+                    $showContentCopy = !($file['isBinary'] ?? false)
+                        && !($file['isSymlink'] ?? false)
+                        && !($diffData['tooLarge'] ?? false);
+                    $isAdded = ($file['status'] ?? '') === 'added' || ($file['isUntracked'] ?? false);
+                    $isDeleted = ($file['status'] ?? '') === 'deleted';
+                @endphp
+                @if($showContentCopy)
+                    <flux:dropdown position="bottom" align="end">
+                        <flux:button icon="ellipsis-vertical" icon:variant="outline" variant="ghost" size="sm" aria-label="Copy content" />
+                        <flux:menu>
+                            <flux:menu.item icon="code-bracket" @click="$wire.copyContent('diff')">
+                                Copy diff
+                            </flux:menu.item>
+                            <flux:menu.item icon="document-minus" @click="$wire.copyContent('original')" :disabled="$isAdded">
+                                Copy original
+                            </flux:menu.item>
+                            <flux:menu.item icon="document-plus" @click="$wire.copyContent('new')" :disabled="$isDeleted">
+                                Copy new
+                            </flux:menu.item>
+                        </flux:menu>
+                    </flux:dropdown>
+                @endif
 
-            @if($diffTo === null && ($file['status'] ?? '') !== 'commented')
-                <flux:tooltip content="Discard changes">
+                @if($diffTo === null && ($file['status'] ?? '') !== 'commented')
                     <flux:button
+                        tooltip="Discard changes"
                         icon="arrow-uturn-left"
                         icon:variant="outline"
                         variant="ghost"
@@ -303,8 +304,8 @@ new class extends Component {
                                 $dispatch('discard-file', { fileId: @js($file['id']) })
                         "
                     />
-                </flux:tooltip>
-            @endif
+                @endif
+            </div>
 
             @if($file['additions'] > 0)
                 <span class="text-gh-green">+{{ $file['additions'] }}</span>
@@ -312,24 +313,30 @@ new class extends Component {
             @if($file['deletions'] > 0)
                 <span class="text-gh-red">-{{ $file['deletions'] }}</span>
             @endif
-            <flux:checkbox x-model="viewed" @change="onViewedChange()" label="Viewed" class="text-xs" />
-            <flux:tooltip content="Add file comment">
+
+            {{-- Comment indicator: ghost when no comments, full when comments exist --}}
+            <div class="flex items-center gap-0.5"
+                 :class="$wire.fileComments.length === 0 && 'opacity-30 group-hover:opacity-100 transition-opacity'"
                 <flux:button
                     x-ref="fileCommentBtn"
+                    tooltip="Add file comment"
+                    aria-label="Add file comment"
                     icon="chat-bubble-left"
                     icon:variant="outline"
                     variant="ghost"
                     size="sm"
-                    aria-label="Add file comment"
                     @click="openFileComment()"
-                    class="ml-2"
                 />
+                <span
+                    x-show="$wire.fileComments.length"
+                    x-text="$wire.fileComments.length"
+                    class="text-[10px] font-mono text-gh-muted tabular-nums"
+                ></span>
+            </div>
+
+            <flux:tooltip content="Mark as reviewed">
+                <flux:checkbox x-model="reviewed" @change="onReviewedChange()" aria-label="Reviewed" class="cursor-pointer" />
             </flux:tooltip>
-            <span
-                x-show="$wire.fileComments.length"
-                x-text="$wire.fileComments.length"
-                class="text-[10px] font-mono text-gh-muted tabular-nums"
-            ></span>
         </div>
 
     </div>

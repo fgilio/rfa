@@ -17,7 +17,7 @@ final readonly class RestoreSessionAction
 
     /**
      * @param  array<int, array<string, mixed>>  $currentFiles
-     * @return array{comments: array<int, array<string, mixed>>, viewedFiles: array<string, string>, globalComment: string, orphanedPaths: array<int, string>}
+     * @return array{comments: array<int, array<string, mixed>>, reviewedFiles: array<string, string>, globalComment: string, orphanedPaths: array<int, string>}
      */
     public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT, ?DiffTarget $target = null): array
     {
@@ -33,29 +33,28 @@ final readonly class RestoreSessionAction
             $currentPathSet[$f['path']] = true;
         }
 
-        // Restore viewed files
         /** @var array<int|string, string> $rawViewed */
         $rawViewed = $session->viewed_files ?? [];
         $isImmutable = $target !== null && $target->isImmutable();
 
         // Legacy compat: convert indexed array to associative with fresh fingerprints
         if ($rawViewed !== [] && array_is_list($rawViewed)) {
-            $viewedFiles = [];
+            $reviewedFiles = [];
             foreach ($rawViewed as $path) {
                 if (isset($currentPathSet[$path])) {
-                    $viewedFiles[$path] = $isImmutable ? '' : $this->gitDiffService->fileDiffFingerprint($repoPath, $path, $target);
+                    $reviewedFiles[$path] = $isImmutable ? '' : $this->gitDiffService->fileDiffFingerprint($repoPath, $path, $target);
                 }
             }
         } else {
-            /** @var array<string, string> $viewedFiles */
-            $viewedFiles = array_intersect_key($rawViewed, $currentPathSet);
+            /** @var array<string, string> $reviewedFiles */
+            $reviewedFiles = array_intersect_key($rawViewed, $currentPathSet);
 
             // Fingerprint validation (skip for immutable targets)
             if (! $isImmutable) {
-                foreach ($viewedFiles as $path => $storedHash) {
+                foreach ($reviewedFiles as $path => $storedHash) {
                     $currentHash = $this->gitDiffService->fileDiffFingerprint($repoPath, $path, $target);
                     if ($storedHash !== '' && $currentHash !== '' && $storedHash !== $currentHash) {
-                        unset($viewedFiles[$path]);
+                        unset($reviewedFiles[$path]);
                     }
                 }
             }
@@ -87,7 +86,7 @@ final readonly class RestoreSessionAction
 
         return [
             'comments' => $comments,
-            'viewedFiles' => $viewedFiles,
+            'reviewedFiles' => $reviewedFiles,
             'globalComment' => $session->global_comment ?? '',
             'orphanedPaths' => $orphanedPaths,
         ];

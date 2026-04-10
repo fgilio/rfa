@@ -24,13 +24,13 @@ beforeEach(function () {
     $this->action = app(ToggleViewedAction::class);
 });
 
-test('adds file to viewed list with fingerprint', function () {
+test('adds file to reviewed list with fingerprint', function () {
     $result = $this->action->handle([], 'a.php', $this->knownFiles, '/tmp/repo');
 
     expect($result)->toBe(['a.php' => 'mock-hash']);
 });
 
-test('removes file from viewed list', function () {
+test('removes file from reviewed list', function () {
     $result = $this->action->handle(['a.php' => 'hash1', 'b.php' => 'hash2'], 'a.php', $this->knownFiles, '/tmp/repo');
 
     expect($result)->toBe(['b.php' => 'hash2']);

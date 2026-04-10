@@ -63,13 +63,13 @@ beforeEach(function () {
     {
         public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT, ?DiffTarget $target = null): array
         {
-            return ['comments' => [], 'viewedFiles' => [], 'globalComment' => '', 'orphanedPaths' => []];
+            return ['comments' => [], 'reviewedFiles' => [], 'globalComment' => '', 'orphanedPaths' => []];
         }
     });
 
     app()->bind(SaveSessionAction::class, fn () => new class
     {
-        public function handle(string $repoPath, array $comments, array $viewedFiles, string $globalComment, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT): void {}
+        public function handle(string $repoPath, array $comments, array $reviewedFiles, string $globalComment, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT): void {}
     });
 
     // Mock GitDiffService to avoid real git calls
@@ -87,16 +87,16 @@ beforeEach(function () {
     });
 });
 
-test('toggleViewed updates viewedFiles state', function () {
+test('toggleReviewed updates reviewedFiles state', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
-        ->dispatch('toggle-viewed', filePath: 'src/Foo.php');
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php');
 
-    expect($component->get('viewedFiles'))->toBe(['src/Foo.php' => 'mock-hash']);
+    expect($component->get('reviewedFiles'))->toBe(['src/Foo.php' => 'mock-hash']);
 });
 
-test('toggleViewed skips parent re-render', function () {
+test('toggleReviewed skips parent re-render', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
-        ->dispatch('toggle-viewed', filePath: 'src/Foo.php');
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php');
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
 });

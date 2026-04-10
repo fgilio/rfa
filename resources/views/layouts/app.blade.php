@@ -132,6 +132,9 @@
         ::-webkit-scrollbar-thumb { background: var(--gh-scrollbar-thumb); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--gh-scrollbar-hover); }
 
+        /* Prevent Flux menu scroll-lock from hiding scrollbar and causing layout shift */
+        html { overflow-y: scroll !important; }
+
         /* Fix checkbox visibility in dark mode */
         .dark [data-flux-checkbox-indicator] {
             border-color: rgb(var(--gh-border));

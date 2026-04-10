@@ -23,7 +23,7 @@ test('creates session when none exists and returns defaults', function () {
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
 
     expect($result['comments'])->toBeEmpty();
-    expect($result['viewedFiles'])->toBeEmpty();
+    expect($result['reviewedFiles'])->toBeEmpty();
     expect($result['globalComment'])->toBe('');
     expect($result['orphanedPaths'])->toBeEmpty();
     expect(ReviewSession::where('repo_path', $repoPath)->exists())->toBeTrue();
@@ -56,7 +56,7 @@ test('restores comments and tracks orphaned paths', function () {
     expect($result['comments'][1]['file'])->toBe('gone.php');
     expect($result['comments'][1]['fileId'])->toBe('file-'.hash('xxh128', 'gone.php'));
     expect($result['orphanedPaths'])->toBe(['gone.php']);
-    expect($result['viewedFiles'])->toBe(['exists.php' => 'somehash']);
+    expect($result['reviewedFiles'])->toBe(['exists.php' => 'somehash']);
     expect($result['globalComment'])->toBe('hello');
 });
 
@@ -131,12 +131,12 @@ test('migrates legacy indexed array to associative with fresh fingerprints', fun
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
 
-    expect($result['viewedFiles'])->toBe(['a.php' => 'hash-a', 'b.php' => 'hash-b']);
+    expect($result['reviewedFiles'])->toBe(['a.php' => 'hash-a', 'b.php' => 'hash-b']);
 });
 
 // -- Fingerprint validation --
 
-test('unmarks viewed file when fingerprint mismatches', function () {
+test('unmarks reviewed file when fingerprint mismatches', function () {
     $repoPath = '/tmp/'.$this->faker->word();
     ReviewSession::create([
         'repo_path' => $repoPath,
@@ -161,7 +161,7 @@ test('unmarks viewed file when fingerprint mismatches', function () {
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
 
-    expect($result['viewedFiles'])->toBe(['b.php' => 'still-good']);
+    expect($result['reviewedFiles'])->toBe(['b.php' => 'still-good']);
 });
 
 test('skips fingerprint validation for immutable targets', function () {
@@ -187,5 +187,5 @@ test('skips fingerprint validation for immutable targets', function () {
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files, null, $target->contextKey(), $target);
 
-    expect($result['viewedFiles'])->toBe(['a.php' => '']);
+    expect($result['reviewedFiles'])->toBe(['a.php' => '']);
 });

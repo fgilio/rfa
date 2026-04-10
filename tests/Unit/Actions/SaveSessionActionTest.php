@@ -17,16 +17,16 @@ beforeEach(function () {
 test('creates session when none exists', function () {
     $repoPath = '/tmp/'.$this->faker->word();
     $comments = [['id' => 'c-1', 'file' => 'f.php', 'body' => $this->faker->sentence()]];
-    $viewedFiles = ['f.php'];
+    $reviewedFiles = ['f.php' => 'hash-f'];
     $globalComment = $this->faker->sentence();
 
-    app(SaveSessionAction::class)->handle($repoPath, $comments, $viewedFiles, $globalComment);
+    app(SaveSessionAction::class)->handle($repoPath, $comments, $reviewedFiles, $globalComment);
 
     $session = ReviewSession::where('repo_path', $repoPath)->first();
 
     expect($session)->not->toBeNull();
     expect($session->comments)->toBe($comments);
-    expect($session->viewed_files)->toBe($viewedFiles);
+    expect($session->viewed_files)->toBe($reviewedFiles);
     expect($session->global_comment)->toBe($globalComment);
 });
 
@@ -35,11 +35,14 @@ test('updates existing session', function () {
     ReviewSession::create(['repo_path' => $repoPath, 'comments' => [], 'viewed_files' => [], 'global_comment' => '']);
 
     $newComments = [['id' => 'c-2', 'file' => 'a.php', 'body' => 'updated']];
+    $reviewedFiles = ['a.php' => 'hash-a'];
 
-    app(SaveSessionAction::class)->handle($repoPath, $newComments, ['a.php'], 'global');
+    app(SaveSessionAction::class)->handle($repoPath, $newComments, $reviewedFiles, 'global');
 
+    $session = ReviewSession::where('repo_path', $repoPath)->first();
     expect(ReviewSession::where('repo_path', $repoPath)->count())->toBe(1);
-    expect(ReviewSession::where('repo_path', $repoPath)->first()->comments)->toBe($newComments);
+    expect($session->comments)->toBe($newComments);
+    expect($session->viewed_files)->toBe($reviewedFiles);
 });
 
 test('keys by project_id when provided', function () {

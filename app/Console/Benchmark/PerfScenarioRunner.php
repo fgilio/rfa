@@ -191,7 +191,7 @@ final class PerfScenarioRunner
         {
             /**
              * @param  array<int, array<string, mixed>>  $currentFiles
-             * @return array{comments: array<int, mixed>, viewedFiles: array<int, mixed>, globalComment: string}
+             * @return array{comments: array<int, array<string, mixed>>, reviewedFiles: array<string, string>, globalComment: string, orphanedPaths: array<int, string>}
              */
             public function handle(
                 string $repoPath,
@@ -199,20 +199,20 @@ final class PerfScenarioRunner
                 ?int $projectId = null,
                 string $contextFingerprint = DiffTarget::WORKING_CONTEXT,
             ): array {
-                return ['comments' => [], 'viewedFiles' => [], 'globalComment' => ''];
+                return ['comments' => [], 'reviewedFiles' => [], 'globalComment' => '', 'orphanedPaths' => []];
             }
         });
 
         $this->app->bind(SaveSessionAction::class, fn () => new class
         {
             /**
-             * @param  array<int, mixed>  $comments
-             * @param  array<int, mixed>  $viewedFiles
+             * @param  array<int, array<string, mixed>>  $comments
+             * @param  array<string, string>  $reviewedFiles
              */
             public function handle(
                 string $repoPath,
                 array $comments,
-                array $viewedFiles,
+                array $reviewedFiles,
                 string $globalComment,
                 ?int $projectId = null,
                 string $contextFingerprint = DiffTarget::WORKING_CONTEXT,

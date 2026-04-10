@@ -63,7 +63,7 @@ new #[Layout('layouts.app')] class extends Component
     public ?string $gitError = null;
 
     /** @var array<string, string> */
-    public array $viewedFiles = [];
+    public array $reviewedFiles = [];
 
     public ?string $activeFileId = null;
 
@@ -129,7 +129,7 @@ new #[Layout('layouts.app')] class extends Component
         $target = $this->buildDiffTarget();
         $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target->contextKey(), $target);
         $this->comments = $session['comments'];
-        $this->viewedFiles = $session['viewedFiles'];
+        $this->reviewedFiles = $session['reviewedFiles'];
         $this->globalComment = $session['globalComment'];
 
         if (! empty($session['orphanedPaths'])) {
@@ -192,7 +192,7 @@ new #[Layout('layouts.app')] class extends Component
         $target = $this->buildDiffTarget();
         $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target->contextKey(), $target);
         $this->comments = $session['comments'];
-        $this->viewedFiles = $session['viewedFiles'];
+        $this->reviewedFiles = $session['reviewedFiles'];
 
         if (! empty($session['orphanedPaths'])) {
             $this->injectOrphanedFiles($session['orphanedPaths']);
@@ -356,8 +356,7 @@ new #[Layout('layouts.app')] class extends Component
         $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
         Cache::forget(DiffCacheKey::for($projectKey, $fileId, $this->buildDiffTarget()->contextKey()));
 
-        // Prune viewed state for the discarded file
-        unset($this->viewedFiles[$file['path']]);
+        unset($this->reviewedFiles[$file['path']]);
 
         $this->refreshFileList();
         $this->saveSession();
@@ -401,16 +400,16 @@ new #[Layout('layouts.app')] class extends Component
         };
     }
 
-    #[On('toggle-viewed')]
-    public function toggleViewed(string $filePath): void
+    #[On('toggle-reviewed')]
+    public function toggleReviewed(string $filePath): void
     {
-        $result = app(ToggleViewedAction::class)->handle($this->viewedFiles, $filePath, $this->files, $this->repoPath, $this->buildDiffTarget());
+        $result = app(ToggleViewedAction::class)->handle($this->reviewedFiles, $filePath, $this->files, $this->repoPath, $this->buildDiffTarget());
 
         if ($result === null) {
             return;
         }
 
-        $this->viewedFiles = $result;
+        $this->reviewedFiles = $result;
         $this->saveSession();
         $this->skipRender();
     }
@@ -441,11 +440,11 @@ new #[Layout('layouts.app')] class extends Component
         $affectedFileIds = collect($this->comments)->pluck('fileId')->unique();
         $this->comments = array_values(array_filter($this->comments, fn ($c) => $c['isDraft'] ?? false));
         $this->globalComment = '';
-        $this->viewedFiles = [];
+        $this->reviewedFiles = [];
         $this->saveSession();
 
         $affectedFileIds->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
-        $this->dispatch('reset-viewed-files');
+        $this->dispatch('reset-reviewed-files');
     }
 
     /** @return array<string, array<int, array<string, mixed>>> */
@@ -538,7 +537,7 @@ new #[Layout('layouts.app')] class extends Component
 
     private function saveSession(): void
     {
-        app(SaveSessionAction::class)->handle($this->repoPath, $this->comments, $this->viewedFiles, $this->globalComment, $this->projectId, $this->buildDiffTarget()->contextKey());
+        app(SaveSessionAction::class)->handle($this->repoPath, $this->comments, $this->reviewedFiles, $this->globalComment, $this->projectId, $this->buildDiffTarget()->contextKey());
     }
 
     private function loadTrashedFiles(): void
@@ -572,13 +571,19 @@ new #[Layout('layouts.app')] class extends Component
             });
         },
         activeFile: null,
-        viewedFiles: @js((object) collect($sourceFiles)->filter(fn($f) => array_key_exists($f['path'], $viewedFiles))->pluck('id')->flip()->map(fn() => true)->all()),
+        reviewedFiles: @js((object) collect($sourceFiles)->filter(fn($f) => array_key_exists($f['path'], $reviewedFiles))->pluck('id')->flip()->map(fn() => true)->all()),
+        hideReviewed: false,
         fileFilter: '',
-        filePaths: @js(collect($sourceFiles)->pluck('path')->all()),
+        sourceFileEntries: @js(collect($sourceFiles)->map(fn($f) => ['id' => $f['id'], 'path' => $f['path']])->values()->all()),
         sidebarWidth: $store.settings.sidebarWidth,
         resizing: false,
-        fileMatchesFilter(path) {
-            return this.fileFilter === '' || path.toLowerCase().includes(this.fileFilter.toLowerCase());
+        get reviewedCount() {
+            return Object.values(this.reviewedFiles).filter(Boolean).length;
+        },
+        fileMatchesFilter(path, fileId) {
+            if (this.fileFilter !== '' && !path.toLowerCase().includes(this.fileFilter.toLowerCase())) return false;
+            if (this.hideReviewed && this.reviewedFiles[fileId]) return false;
+            return true;
         },
         scrollToFile(id) {
             this.activeFile = id;
@@ -629,8 +634,8 @@ new #[Layout('layouts.app')] class extends Component
             document.addEventListener('mouseup', onUp);
         }
     }"
-    @file-viewed-changed.window="viewedFiles[$event.detail.id] = $event.detail.viewed"
-    @reset-viewed-files.window="viewedFiles = {}"
+    @file-reviewed-changed.window="reviewedFiles[$event.detail.id] = $event.detail.reviewed"
+    @reset-reviewed-files.window="reviewedFiles = {}"
     @copy-to-clipboard.window="
         navigator.clipboard.writeText($event.detail.text).catch(() => {});
     "
@@ -662,37 +667,62 @@ new #[Layout('layouts.app')] class extends Component
                 <livewire:branch-explorer :repo-path="$repoPath" :current-branch="$projectBranch" :project-slug="$projectSlug" :active-commit-hash="$diffTo" />
             @endif
         </div>
-        <div class="flex items-center gap-3 text-xs">
+        <div class="flex items-center gap-2.5 text-xs">
+            {{-- Stats --}}
             <span class="font-mono text-gh-muted"
-                x-text="fileFilter === ''
+                x-text="fileFilter === '' && !hideReviewed
                     ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
-                    : filePaths.filter(p => fileMatchesFilter(p)).length + '/{{ count($sourceFiles) }} files'"
+                    : sourceFileEntries.filter(f => fileMatchesFilter(f.path, f.id)).length + '/{{ count($sourceFiles) }} files'"
             >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</span>
-            <span class="font-mono text-gh-muted"
-                x-show="Object.values(viewedFiles).filter(Boolean).length > 0"
-                x-text="Object.values(viewedFiles).filter(Boolean).length + '/{{ count($sourceFiles) }} viewed'"
-                x-cloak></span>
+            <span class="font-mono text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
+            <span class="font-mono text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
+
+            {{-- Reviewed progress --}}
+            <div x-show="reviewedCount > 0" x-cloak class="flex items-center gap-1.5">
+                <span class="w-px h-3.5 bg-gh-border"></span>
+                <div class="flex flex-col items-center min-w-[2.5rem]">
+                    <span class="font-mono text-gh-muted" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
+                    <div class="w-full h-0.5 bg-gh-border/50 rounded-full overflow-hidden mt-0.5">
+                        <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
+                    </div>
+                </div>
+            </div>
+
             @if(count($reviewPairs) > 0)
                 <span class="font-mono text-xs text-gh-muted px-1.5 py-0.5 rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
             @endif
-            <span class="font-mono text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
-            <span class="font-mono text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
-            @if(! $this->isCommitMode())
-                <span class="w-px h-4 bg-gh-border"></span>
-                <flux:checkbox wire:model.live="respectGlobalGitignore"
-                    label="Global .gitignore" class="text-xs" />
-            @endif
+
             <span class="w-px h-4 bg-gh-border"></span>
-            <flux:tooltip content="Expand all (Shift+E)">
+
+            {{-- Hide reviewed toggle --}}
+            <div x-show="reviewedCount > 0" x-cloak class="grid place-items-center">
+                <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
+                    tooltip="Hide reviewed"
+                    class="col-start-1 row-start-1"
+                    @click="hideReviewed = true"
+                    x-show="!hideReviewed" />
+                <flux:button variant="ghost" size="sm" icon="eye" icon:variant="outline"
+                    tooltip="Show all files"
+                    class="col-start-1 row-start-1"
+                    @click="hideReviewed = false"
+                    x-show="hideReviewed" x-cloak />
+            </div>
+
+            {{-- Expand/Collapse toggle --}}
+            <div class="grid place-items-center">
                 <flux:button variant="ghost" size="sm" icon="expand-all" icon:variant="outline"
-                    @click="$store.settings.collapseAll = false; $dispatch('expand-all-files')" />
-            </flux:tooltip>
-            <flux:tooltip content="Collapse all (Shift+C)">
+                    tooltip="Expand all (Shift+E)"
+                    class="col-start-1 row-start-1"
+                    @click="$store.settings.collapseAll = false; $dispatch('expand-all-files')"
+                    x-show="$store.settings.collapseAll" x-cloak />
                 <flux:button variant="ghost" size="sm" icon="collapse-all" icon:variant="outline"
-                    @click="$store.settings.collapseAll = true; $dispatch('collapse-all-files')" />
-            </flux:tooltip>
+                    tooltip="Collapse all (Shift+C)"
+                    class="col-start-1 row-start-1"
+                    @click="$store.settings.collapseAll = true; $dispatch('collapse-all-files')"
+                    x-show="!$store.settings.collapseAll" />
+            </div>
+
             @if(! $this->isCommitMode())
-                <span class="w-px h-4 bg-gh-border"></span>
                 <div data-testid="change-polling" x-data="{
                     hasChanges: false,
                     fingerprint: null,
@@ -718,10 +748,8 @@ new #[Layout('layouts.app')] class extends Component
                         window.location.reload();
                     }
                 }" x-init="startPolling()" @fingerprint-reset.window="fingerprint = null; hasChanges = false" class="relative flex items-center">
-                    <flux:tooltip content="Refresh page">
-                        <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
-                            @click="refresh()" />
-                    </flux:tooltip>
+                    <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
+                        tooltip="Refresh page" @click="refresh()" />
                     <span x-show="hasChanges" x-cloak
                         class="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -729,7 +757,22 @@ new #[Layout('layouts.app')] class extends Component
                     </span>
                 </div>
             @endif
+
             <span class="w-px h-4 bg-gh-border"></span>
+
+            {{-- Settings --}}
+            @if(! $this->isCommitMode())
+                <flux:dropdown position="bottom" align="end">
+                    <flux:button variant="ghost" size="sm" icon="cog-6-tooth" icon:variant="outline"
+                        aria-label="Settings" />
+                    <flux:menu>
+                        <flux:menu.item keep-open>
+                            <flux:checkbox wire:model.live="respectGlobalGitignore" label="Global .gitignore" class="text-xs whitespace-nowrap" />
+                        </flux:menu.item>
+                    </flux:menu>
+                </flux:dropdown>
+            @endif
+
             <livewire:theme-switcher />
         </div>
     </header>
@@ -816,7 +859,7 @@ new #[Layout('layouts.app')] class extends Component
                         };
                     @endphp
                     <div
-                        x-show="fileMatchesFilter(@js($file['path']))"
+                        x-show="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}')"
                         class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-colors"
                         :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-link/10 text-gh-link' : 'text-gh-muted'"
                     >
@@ -827,7 +870,7 @@ new #[Layout('layouts.app')] class extends Component
                             @endif
                             <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['isSymlink'] ?? false) ? ' -> ' . $file['symlinkTarget'] : '' }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
                         </button>
-                        <flux:icon icon="check" variant="outline" x-show="viewedFiles['{{ $file['id'] }}']"
+                        <flux:icon icon="check" variant="outline" x-show="reviewedFiles['{{ $file['id'] }}']"
                             class="text-gh-green shrink-0" x-cloak />
                         @if(! $this->isCommitMode() && $file['status'] !== 'commented')
                             <button
@@ -955,7 +998,7 @@ new #[Layout('layouts.app')] class extends Component
                                         :file="$pair['jsonFile']"
                                         :load-delay="0"
                                         :file-comments="$this->groupedComments[$pair['jsonFile']['id']] ?? []"
-                                        :is-viewed="array_key_exists($pair['jsonFile']['path'], $viewedFiles)"
+                                        :is-reviewed="array_key_exists($pair['jsonFile']['path'], $reviewedFiles)"
                                         :repo-path="$repoPath"
                                         :project-id="$projectId"
                                         :diff-from="$diffFrom"
@@ -968,7 +1011,7 @@ new #[Layout('layouts.app')] class extends Component
                                         :file="$pair['mdFile']"
                                         :load-delay="0"
                                         :file-comments="$this->groupedComments[$pair['mdFile']['id']] ?? []"
-                                        :is-viewed="array_key_exists($pair['mdFile']['path'], $viewedFiles)"
+                                        :is-reviewed="array_key_exists($pair['mdFile']['path'], $reviewedFiles)"
                                         :repo-path="$repoPath"
                                         :project-id="$projectId"
                                         :diff-from="$diffFrom"
@@ -983,13 +1026,13 @@ new #[Layout('layouts.app')] class extends Component
                 {{-- Source Files --}}
                 @php $singleFile = count($sourceFiles) === 1 && count($reviewPairs) === 0; @endphp
                 @foreach($sourceFiles as $file)
-                    <div id="{{ $file['id'] }}" class="border-b border-gh-border" x-show="fileMatchesFilter(@js($file['path']))">
+                    <div id="{{ $file['id'] }}" class="border-b border-gh-border" x-show="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}')">
                         <livewire:diff-file
                             :key="$file['id']"
                             :file="$file"
                             :load-delay="(int) (floor($loop->index / 15) * 100)"
                             :file-comments="$this->groupedComments[$file['id']] ?? []"
-                            :is-viewed="array_key_exists($file['path'], $viewedFiles)"
+                            :is-reviewed="array_key_exists($file['path'], $reviewedFiles)"
                             :single-file="$singleFile"
                             :repo-path="$repoPath"
                             :project-id="$projectId"

@@ -14,11 +14,11 @@ final readonly class ToggleViewedAction
     ) {}
 
     /**
-     * @param  array<string, string>  $viewedFiles
+     * @param  array<string, string>  $reviewedFiles
      * @param  array<int, array<string, mixed>>  $knownFiles
      * @return array<string, string>|null
      */
-    public function handle(array $viewedFiles, string $filePath, array $knownFiles, string $repoPath = '', ?DiffTarget $target = null): ?array
+    public function handle(array $reviewedFiles, string $filePath, array $knownFiles, string $repoPath = '', ?DiffTarget $target = null): ?array
     {
         $file = collect($knownFiles)->firstWhere('path', $filePath);
 
@@ -26,18 +26,18 @@ final readonly class ToggleViewedAction
             return null;
         }
 
-        if (array_key_exists($filePath, $viewedFiles)) {
-            unset($viewedFiles[$filePath]);
+        if (array_key_exists($filePath, $reviewedFiles)) {
+            unset($reviewedFiles[$filePath]);
 
-            return $viewedFiles;
+            return $reviewedFiles;
         }
 
         $fingerprint = $repoPath !== ''
             ? $this->gitDiffService->fileDiffFingerprint($repoPath, $filePath, $target)
             : '';
 
-        $viewedFiles[$filePath] = $fingerprint;
+        $reviewedFiles[$filePath] = $fingerprint;
 
-        return $viewedFiles;
+        return $reviewedFiles;
     }
 }

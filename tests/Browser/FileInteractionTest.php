@@ -186,12 +186,12 @@ test('shift+e expands all files', function () {
     $page->assertSee('function greet');
 });
 
-test('checking viewed updates sidebar indicator', function () {
-    $page = $this->visit($this->projectUrl());
+test('checking reviewed updates sidebar indicator', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
 
-    $page->page()->getByLabel('Viewed')->first()->click();
+    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
 
-    $page->assertSee('1/3 viewed');
+    $page->assertSee('1/3 reviewed');
 });
 
 test('clicking sidebar file scrolls to it', function () {

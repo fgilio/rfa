@@ -1,11 +1,11 @@
 // Alpine component for livewire/⚡diff-file.blade.php
 (function () {
     function init() {
-        Alpine.data('diffFile', ({ fileId, filePath, isViewed, singleFile = false }) => ({
+        Alpine.data('diffFile', ({ fileId, filePath, isReviewed, singleFile = false }) => ({
             fileId,
             filePath,
-            collapsed: singleFile ? false : (Alpine.store('settings')?.collapseAll || isViewed),
-            viewed: isViewed,
+            collapsed: singleFile ? false : (Alpine.store('settings')?.collapseAll || isReviewed),
+            reviewed: isReviewed,
 
             // Comment form state
             formLine: null,
@@ -284,10 +284,10 @@
                 return lineNum >= this.formLine && lineNum <= (this.formEndLine ?? this.formLine);
             },
 
-            onViewedChange() {
-                this.collapsed = this.viewed;
-                this.$dispatch('file-viewed-changed', { id: this.fileId, viewed: this.viewed });
-                this.$wire.dispatch('toggle-viewed', { filePath: this.filePath });
+            onReviewedChange() {
+                this.collapsed = this.reviewed;
+                this.$dispatch('file-reviewed-changed', { id: this.fileId, reviewed: this.reviewed });
+                this.$wire.dispatch('toggle-reviewed', { filePath: this.filePath });
             },
         }));
     }
