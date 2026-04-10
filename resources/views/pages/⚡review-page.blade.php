@@ -667,39 +667,62 @@ new #[Layout('layouts.app')] class extends Component
                 <livewire:branch-explorer :repo-path="$repoPath" :current-branch="$projectBranch" :project-slug="$projectSlug" :active-commit-hash="$diffTo" />
             @endif
         </div>
-        <div class="flex items-center gap-3 text-xs">
+        <div class="flex items-center gap-2.5 text-xs">
+            {{-- Stats --}}
             <span class="font-mono text-gh-muted"
                 x-text="fileFilter === '' && !hideReviewed
                     ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
                     : sourceFileEntries.filter(f => fileMatchesFilter(f.path, f.id)).length + '/{{ count($sourceFiles) }} files'"
             >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</span>
-            <span class="font-mono text-gh-muted"
-                x-show="reviewedCount > 0"
-                x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"
-                x-cloak></span>
-            <flux:checkbox x-model="hideReviewed" label="Hide reviewed" class="text-xs"
-                x-show="reviewedCount > 0" x-cloak />
+            <span class="font-mono text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
+            <span class="font-mono text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
+
+            {{-- Reviewed progress --}}
+            <div x-show="reviewedCount > 0" x-cloak class="flex items-center gap-1.5">
+                <span class="w-px h-3.5 bg-gh-border"></span>
+                <div class="flex flex-col items-center min-w-[2.5rem]">
+                    <span class="font-mono text-gh-muted" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
+                    <div class="w-full h-0.5 bg-gh-border/50 rounded-full overflow-hidden mt-0.5">
+                        <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
+                    </div>
+                </div>
+            </div>
+
             @if(count($reviewPairs) > 0)
                 <span class="font-mono text-xs text-gh-muted px-1.5 py-0.5 rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
             @endif
-            <span class="font-mono text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
-            <span class="font-mono text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
-            @if(! $this->isCommitMode())
-                <span class="w-px h-4 bg-gh-border"></span>
-                <flux:checkbox wire:model.live="respectGlobalGitignore"
-                    label="Global .gitignore" class="text-xs" />
-            @endif
+
             <span class="w-px h-4 bg-gh-border"></span>
-            <flux:tooltip content="Expand all (Shift+E)">
+
+            {{-- Hide reviewed toggle --}}
+            <div x-show="reviewedCount > 0" x-cloak class="grid place-items-center">
+                <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
+                    tooltip="Hide reviewed"
+                    class="col-start-1 row-start-1"
+                    @click="hideReviewed = true"
+                    x-show="!hideReviewed" />
+                <flux:button variant="ghost" size="sm" icon="eye" icon:variant="outline"
+                    tooltip="Show all files"
+                    class="col-start-1 row-start-1"
+                    @click="hideReviewed = false"
+                    x-show="hideReviewed" x-cloak />
+            </div>
+
+            {{-- Expand/Collapse toggle --}}
+            <div class="grid place-items-center">
                 <flux:button variant="ghost" size="sm" icon="expand-all" icon:variant="outline"
-                    @click="$store.settings.collapseAll = false; $dispatch('expand-all-files')" />
-            </flux:tooltip>
-            <flux:tooltip content="Collapse all (Shift+C)">
+                    tooltip="Expand all (Shift+E)"
+                    class="col-start-1 row-start-1"
+                    @click="$store.settings.collapseAll = false; $dispatch('expand-all-files')"
+                    x-show="$store.settings.collapseAll" x-cloak />
                 <flux:button variant="ghost" size="sm" icon="collapse-all" icon:variant="outline"
-                    @click="$store.settings.collapseAll = true; $dispatch('collapse-all-files')" />
-            </flux:tooltip>
+                    tooltip="Collapse all (Shift+C)"
+                    class="col-start-1 row-start-1"
+                    @click="$store.settings.collapseAll = true; $dispatch('collapse-all-files')"
+                    x-show="!$store.settings.collapseAll" />
+            </div>
+
             @if(! $this->isCommitMode())
-                <span class="w-px h-4 bg-gh-border"></span>
                 <div data-testid="change-polling" x-data="{
                     hasChanges: false,
                     fingerprint: null,
@@ -725,10 +748,8 @@ new #[Layout('layouts.app')] class extends Component
                         window.location.reload();
                     }
                 }" x-init="startPolling()" @fingerprint-reset.window="fingerprint = null; hasChanges = false" class="relative flex items-center">
-                    <flux:tooltip content="Refresh page">
-                        <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
-                            @click="refresh()" />
-                    </flux:tooltip>
+                    <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
+                        tooltip="Refresh page" @click="refresh()" />
                     <span x-show="hasChanges" x-cloak
                         class="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -736,7 +757,22 @@ new #[Layout('layouts.app')] class extends Component
                     </span>
                 </div>
             @endif
+
             <span class="w-px h-4 bg-gh-border"></span>
+
+            {{-- Settings --}}
+            @if(! $this->isCommitMode())
+                <flux:dropdown position="bottom" align="end">
+                    <flux:button variant="ghost" size="sm" icon="cog-6-tooth" icon:variant="outline"
+                        aria-label="Settings" />
+                    <flux:menu>
+                        <flux:menu.item keep-open>
+                            <flux:checkbox wire:model.live="respectGlobalGitignore" label="Global .gitignore" class="text-xs whitespace-nowrap" />
+                        </flux:menu.item>
+                    </flux:menu>
+                </flux:dropdown>
+            @endif
+
             <livewire:theme-switcher />
         </div>
     </header>
