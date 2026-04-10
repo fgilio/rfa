@@ -191,7 +191,7 @@ final class PerfScenarioRunner
         {
             /**
              * @param  array<int, array<string, mixed>>  $currentFiles
-             * @return array{comments: array<int, mixed>, reviewedFiles: array<int, mixed>, globalComment: string}
+             * @return array{comments: array<int, mixed>, reviewedFiles: array<string, string>, globalComment: string}
              */
             public function handle(
                 string $repoPath,
@@ -206,8 +206,8 @@ final class PerfScenarioRunner
         $this->app->bind(SaveSessionAction::class, fn () => new class
         {
             /**
-             * @param  array<int, mixed>  $comments
-             * @param  array<int, mixed>  $reviewedFiles
+             * @param  array<int, array<string, mixed>>  $comments
+             * @param  array<string, string>  $reviewedFiles
              */
             public function handle(
                 string $repoPath,

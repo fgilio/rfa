@@ -17,7 +17,7 @@ beforeEach(function () {
 test('creates session when none exists', function () {
     $repoPath = '/tmp/'.$this->faker->word();
     $comments = [['id' => 'c-1', 'file' => 'f.php', 'body' => $this->faker->sentence()]];
-    $reviewedFiles = ['f.php'];
+    $reviewedFiles = ['f.php' => 'hash-f'];
     $globalComment = $this->faker->sentence();
 
     app(SaveSessionAction::class)->handle($repoPath, $comments, $reviewedFiles, $globalComment);
