@@ -188,15 +188,12 @@ test('discard button hidden for commented status', function () {
     expect($html)->not->toContain('discard-file');
 });
 
-test('discard confirm mentions comment count', function () {
-    $comments = [
-        ['id' => 'c1', 'fileId' => $this->file['id'], 'file' => 'src/Test.php', 'side' => 'file', 'startLine' => null, 'endLine' => null, 'body' => 'A'],
-        ['id' => 'c2', 'fileId' => $this->file['id'], 'file' => 'src/Test.php', 'side' => 'file', 'startLine' => null, 'endLine' => null, 'body' => 'B'],
-    ];
+test('discard button dispatches directly without confirm', function () {
+    $html = mountDiffFile($this->file, loadDiff: false)->html();
 
-    $html = mountDiffFile($this->file, $comments, loadDiff: false)->html();
-
-    expect($html)->toContain('remove 2 comments');
+    expect($html)
+        ->toContain('discard-file')
+        ->not->toContain('confirm(');
 });
 
 test('collapse event handlers reset autoExpandedForComment', function () {

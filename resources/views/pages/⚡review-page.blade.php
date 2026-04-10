@@ -386,7 +386,11 @@ new #[Layout('layouts.app')] class extends Component
         $this->saveSession();
         $this->loadTrashedFiles();
 
-        $this->dispatch('undo-available', type: 'discard', payload: $trashRecord->id, message: 'Changes discarded');
+        $commentCount = count($fileComments);
+        $message = $commentCount > 0
+            ? 'Discarded '.basename($file['path']).' — '.$commentCount.' comment'.($commentCount === 1 ? '' : 's').' removed'
+            : 'Discarded '.basename($file['path']);
+        $this->dispatch('undo-available', type: 'discard', payload: $trashRecord->id, message: $message);
         $this->dispatch('fingerprint-reset');
     }
 
@@ -910,15 +914,7 @@ new #[Layout('layouts.app')] class extends Component
                             <button
                                 class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text shrink-0"
                                 title="Discard changes"
-                                @click.stop="
-                                    @php $commentCount = count($this->groupedComments[$file['id']] ?? []); @endphp
-                                    @if($commentCount > 0)
-                                        if (confirm('Discard changes to {{ basename($file['path']) }} and remove {{ $commentCount }} comment{{ $commentCount === 1 ? '' : 's' }}? You can restore from Trash for 30 minutes.'))
-                                    @else
-                                        if (confirm('Discard all changes to {{ basename($file['path']) }}? You can restore from Trash for 30 minutes.'))
-                                    @endif
-                                        $wire.discardFileChanges('{{ $file['id'] }}')
-                                "
+                                @click.stop="$wire.discardFileChanges('{{ $file['id'] }}')"
                             >
                                 <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
                             </button>

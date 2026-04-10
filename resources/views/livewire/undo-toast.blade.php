@@ -66,16 +66,20 @@
     data-testid="undo-toast"
     class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50"
 >
-    <div class="bg-gh-surface border border-gh-border rounded px-4 py-2.5 font-mono text-xs flex items-center gap-3 shadow-lg">
-        <span x-text="current?.message" class="text-gh-text"></span>
+    <div class="bg-gh-surface border border-gh-border rounded font-mono text-xs flex items-center gap-3 shadow-lg"
+        :class="current?.type === 'discard' ? 'px-5 py-3 min-w-[360px] border-l-2 border-l-amber-500' : 'px-4 py-2.5'">
+        <span x-text="current?.message" class="text-gh-text" :class="current?.type === 'discard' ? 'flex-1' : ''"></span>
         <button @click="undo()" class="text-gh-link hover:underline font-medium" data-testid="undo-button">Undo</button>
+        <template x-if="current?.type === 'discard'">
+            <button @click="dismiss()" class="text-gh-muted hover:text-gh-text font-medium" data-testid="undo-ok-button">OK</button>
+        </template>
         <span class="text-gh-muted" x-text="remaining + 's'"></span>
         {{-- Progress bar --}}
         <div class="w-16 h-0.5 bg-gh-border rounded-full overflow-hidden">
             <div class="h-full bg-gh-muted transition-all duration-1000 ease-linear rounded-full"
                 :style="{ width: (remaining / 10 * 100) + '%' }"></div>
         </div>
-        <button @click="dismiss()" class="text-gh-muted hover:text-gh-text" aria-label="Dismiss">
+        <button @click="dismiss()" class="text-gh-muted hover:text-gh-text" aria-label="Dismiss" x-show="current?.type !== 'discard'">
             <flux:icon icon="x-mark" variant="outline" class="!size-3.5" />
         </button>
     </div>
