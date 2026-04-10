@@ -20,6 +20,7 @@ use App\Actions\SaveSessionAction;
 use App\Actions\ToggleViewedAction;
 use App\Actions\UpdateProjectSettingAction;
 use App\DTOs\DiffTarget;
+use App\Models\Project;
 use App\DTOs\FileListEntry;
 use App\Exceptions\GitCommandException;
 use App\Support\DiffCacheKey;
@@ -87,6 +88,7 @@ new #[Layout('layouts.app')] class extends Component
     public function mount(string $slug, ?string $hash = null, ?string $ref = null, ?string $baseRef = null): void
     {
         $project = app(ResolveProjectAction::class)->handle($slug) ?? abort(404);
+        Project::where('id', $project['id'])->update(['updated_at' => now()]);
         $this->repoPath = $project['path'];
         $this->projectId = $project['id'];
         $this->projectName = $project['name'];
