@@ -33,7 +33,6 @@ final readonly class RestoreSessionAction
             $currentPathSet[$f['path']] = true;
         }
 
-        // Restore reviewed files
         /** @var array<int|string, string> $rawViewed */
         $rawViewed = $session->viewed_files ?? [];
         $isImmutable = $target !== null && $target->isImmutable();

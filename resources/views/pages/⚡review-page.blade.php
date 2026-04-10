@@ -356,7 +356,6 @@ new #[Layout('layouts.app')] class extends Component
         $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
         Cache::forget(DiffCacheKey::for($projectKey, $fileId, $this->buildDiffTarget()->contextKey()));
 
-        // Prune reviewed state for the discarded file
         unset($this->reviewedFiles[$file['path']]);
 
         $this->refreshFileList();
@@ -575,13 +574,15 @@ new #[Layout('layouts.app')] class extends Component
         reviewedFiles: @js((object) collect($sourceFiles)->filter(fn($f) => array_key_exists($f['path'], $reviewedFiles))->pluck('id')->flip()->map(fn() => true)->all()),
         hideReviewed: false,
         fileFilter: '',
-        filePaths: @js(collect($sourceFiles)->pluck('path')->all()),
-        fileIds: @js(collect($sourceFiles)->pluck('id')->all()),
+        sourceFileEntries: @js(collect($sourceFiles)->map(fn($f) => ['id' => $f['id'], 'path' => $f['path']])->values()->all()),
         sidebarWidth: $store.settings.sidebarWidth,
         resizing: false,
+        get reviewedCount() {
+            return Object.values(this.reviewedFiles).filter(Boolean).length;
+        },
         fileMatchesFilter(path, fileId) {
             if (this.fileFilter !== '' && !path.toLowerCase().includes(this.fileFilter.toLowerCase())) return false;
-            if (fileId && this.hideReviewed && this.reviewedFiles[fileId]) return false;
+            if (this.hideReviewed && this.reviewedFiles[fileId]) return false;
             return true;
         },
         scrollToFile(id) {
@@ -670,14 +671,14 @@ new #[Layout('layouts.app')] class extends Component
             <span class="font-mono text-gh-muted"
                 x-text="fileFilter === '' && !hideReviewed
                     ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
-                    : filePaths.filter((p, i) => fileMatchesFilter(p, fileIds[i])).length + '/{{ count($sourceFiles) }} files'"
+                    : sourceFileEntries.filter(f => fileMatchesFilter(f.path, f.id)).length + '/{{ count($sourceFiles) }} files'"
             >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</span>
             <span class="font-mono text-gh-muted"
-                x-show="Object.values(reviewedFiles).filter(Boolean).length > 0"
-                x-text="Object.values(reviewedFiles).filter(Boolean).length + '/{{ count($sourceFiles) }} reviewed'"
+                x-show="reviewedCount > 0"
+                x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"
                 x-cloak></span>
             <flux:checkbox x-model="hideReviewed" label="Hide reviewed" class="text-xs"
-                x-show="Object.values(reviewedFiles).filter(Boolean).length > 0" x-cloak />
+                x-show="reviewedCount > 0" x-cloak />
             @if(count($reviewPairs) > 0)
                 <span class="font-mono text-xs text-gh-muted px-1.5 py-0.5 rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
             @endif
