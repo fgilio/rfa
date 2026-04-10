@@ -320,6 +320,7 @@ new class extends Component {
                 <flux:button
                     x-ref="fileCommentBtn"
                     tooltip="Add file comment"
+                    aria-label="Add file comment"
                     icon="chat-bubble-left"
                     icon:variant="outline"
                     variant="ghost"
