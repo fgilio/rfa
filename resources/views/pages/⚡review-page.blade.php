@@ -17,7 +17,7 @@ use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreDiscardedFileAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
-use App\Actions\ToggleViewedAction;
+use App\Actions\ToggleReviewedAction;
 use App\Actions\UpdateProjectSettingAction;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
@@ -84,9 +84,25 @@ new #[Layout('layouts.app')] class extends Component
     #[Locked]
     public ?array $commitInfo = null;
 
+    /*
+    |----------------------------------------------------------------------
+    | Responsibility clusters (5):
+    |   1. Initialization & Diff Context  (mount..refreshFileList)
+    |   2. Comment Management             (addComment..restoreComments)
+    |   3. Trash & Discard                (discardFileChanges..undo)
+    |   4. Review State & Export           (toggleReviewed..submitReview)
+    |   5. Computed, Helpers & Persistence (groupedComments..loadTrashedFiles)
+    |
+    | Shared deps: $files, $comments, $reviewedFiles, saveSession()
+    | Extraction blocker: 1+N hydration (see resources/CLAUDE.md)
+    |----------------------------------------------------------------------
+    */
+
+    // region: Initialization & Diff Context
+
     public function mount(string $slug, ?string $hash = null, ?string $ref = null, ?string $baseRef = null): void
     {
-        $project = app(ResolveProjectAction::class)->handle($slug) ?? abort(404);
+        $project = app(ResolveProjectAction::class)->handle($slug, touch: true) ?? abort(404);
         $this->repoPath = $project['path'];
         $this->projectId = $project['id'];
         $this->projectName = $project['name'];
@@ -198,6 +214,10 @@ new #[Layout('layouts.app')] class extends Component
             $this->injectOrphanedFiles($session['orphanedPaths']);
         }
     }
+
+    // endregion: Initialization & Diff Context
+
+    // region: Comment Management
 
     #[On('add-comment')]
     public function addComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body): void
@@ -314,6 +334,10 @@ new #[Layout('layouts.app')] class extends Component
         $this->skipRender();
     }
 
+    // endregion: Comment Management
+
+    // region: Trash & Discard
+
     #[On('discard-file')]
     public function discardFileChanges(string $fileId): void
     {
@@ -400,10 +424,14 @@ new #[Layout('layouts.app')] class extends Component
         };
     }
 
+    // endregion: Trash & Discard
+
+    // region: Review State & Export
+
     #[On('toggle-reviewed')]
     public function toggleReviewed(string $filePath): void
     {
-        $result = app(ToggleViewedAction::class)->handle($this->reviewedFiles, $filePath, $this->files, $this->repoPath, $this->buildDiffTarget());
+        $result = app(ToggleReviewedAction::class)->handle($this->reviewedFiles, $filePath, $this->files, $this->repoPath, $this->buildDiffTarget());
 
         if ($result === null) {
             return;
@@ -446,6 +474,10 @@ new #[Layout('layouts.app')] class extends Component
         $affectedFileIds->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
         $this->dispatch('reset-reviewed-files');
     }
+
+    // endregion: Review State & Export
+
+    // region: Computed, Helpers & Persistence
 
     /** @return array<string, array<int, array<string, mixed>>> */
     #[Computed]
@@ -550,6 +582,8 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->trashedFiles = app(CleanExpiredTrashAction::class)->handle($this->projectId);
     }
+
+    // endregion: Computed, Helpers & Persistence
 };
 ?>
 

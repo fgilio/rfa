@@ -37,7 +37,7 @@ test('restores comments and tracks orphaned paths', function () {
             ['id' => 'c-1', 'file' => 'exists.php', 'fileId' => 'old-id'],
             ['id' => 'c-2', 'file' => 'gone.php', 'fileId' => 'old-id-2'],
         ],
-        'viewed_files' => ['exists.php' => 'somehash'],
+        'reviewed_files' => ['exists.php' => 'somehash'],
         'global_comment' => 'hello',
     ]);
 
@@ -67,7 +67,7 @@ test('remaps fileId to current file list', function () {
         'comments' => [
             ['id' => 'c-1', 'file' => 'f.php', 'fileId' => 'stale-id'],
         ],
-        'viewed_files' => [],
+        'reviewed_files' => [],
         'global_comment' => '',
     ]);
 
@@ -92,7 +92,7 @@ test('keys by project_id when provided', function () {
         'repo_path' => '/tmp/test-proj',
         'project_id' => $project->id,
         'comments' => [['id' => 'c-1', 'file' => 'f.php', 'fileId' => 'x']],
-        'viewed_files' => [],
+        'reviewed_files' => [],
         'global_comment' => 'from project',
     ]);
 
@@ -111,7 +111,7 @@ test('migrates legacy indexed array to associative with fresh fingerprints', fun
     ReviewSession::create([
         'repo_path' => $repoPath,
         'comments' => [],
-        'viewed_files' => ['a.php', 'b.php', 'gone.php'],
+        'reviewed_files' => ['a.php', 'b.php', 'gone.php'],
         'global_comment' => '',
     ]);
 
@@ -141,7 +141,7 @@ test('unmarks reviewed file when fingerprint mismatches', function () {
     ReviewSession::create([
         'repo_path' => $repoPath,
         'comments' => [],
-        'viewed_files' => ['a.php' => 'old-hash', 'b.php' => 'still-good'],
+        'reviewed_files' => ['a.php' => 'old-hash', 'b.php' => 'still-good'],
         'global_comment' => '',
     ]);
 
@@ -172,7 +172,7 @@ test('skips fingerprint validation for immutable targets', function () {
         'repo_path' => $repoPath,
         'context_fingerprint' => $target->contextKey(),
         'comments' => [],
-        'viewed_files' => ['a.php' => ''],
+        'reviewed_files' => ['a.php' => ''],
         'global_comment' => '',
     ]);
 

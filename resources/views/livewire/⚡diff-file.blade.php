@@ -317,6 +317,7 @@ new class extends Component {
             {{-- Comment indicator: ghost when no comments, full when comments exist --}}
             <div class="flex items-center gap-0.5"
                  :class="$wire.fileComments.length === 0 && 'opacity-30 group-hover:opacity-100 transition-opacity'"
+            >
                 <flux:button
                     x-ref="fileCommentBtn"
                     tooltip="Add file comment"

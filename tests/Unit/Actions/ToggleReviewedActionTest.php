@@ -1,6 +1,6 @@
 <?php
 
-use App\Actions\ToggleViewedAction;
+use App\Actions\ToggleReviewedAction;
 use App\Services\GitDiffService;
 use Faker\Factory as Faker;
 use Tests\TestCase;
@@ -21,7 +21,7 @@ beforeEach(function () {
     $mock->shouldReceive('fileDiffFingerprint')->andReturn('mock-hash');
     app()->instance(GitDiffService::class, $mock);
 
-    $this->action = app(ToggleViewedAction::class);
+    $this->action = app(ToggleReviewedAction::class);
 });
 
 test('adds file to reviewed list with fingerprint', function () {

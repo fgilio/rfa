@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('review_sessions', function (Blueprint $table) {
             $table->id();
             $table->string('repo_path')->unique();
-            $table->json('viewed_files')->default('[]');
+            $table->json('reviewed_files')->default('[]');
             $table->json('comments')->default('[]');
             $table->text('global_comment')->default('');
             $table->timestamps();

@@ -7,7 +7,7 @@ namespace App\Actions;
 use App\DTOs\DiffTarget;
 use App\Services\GitDiffService;
 
-final readonly class ToggleViewedAction
+final readonly class ToggleReviewedAction
 {
     public function __construct(
         private GitDiffService $gitDiffService,

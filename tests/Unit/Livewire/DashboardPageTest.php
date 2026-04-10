@@ -82,7 +82,7 @@ test('shows comment count when project has review comments', function () {
         'project_id' => $project->id,
         'repo_path' => '/tmp/my-app',
         'context_fingerprint' => 'abc123',
-        'viewed_files' => [],
+        'reviewed_files' => [],
         'comments' => [
             ['id' => 1, 'body' => 'Fix this'],
             ['id' => 2, 'body' => 'And this'],
@@ -106,6 +106,83 @@ test('renders search input and keyboard hints', function () {
     Livewire::test('pages::dashboard-page')
         ->assertSee('Filter projects...')
         ->assertSee('1 project');
+});
+
+// -- Server-side search --
+
+test('search filters projects by name', function () {
+    Project::create([
+        'slug' => 'rfa',
+        'name' => 'rfa',
+        'path' => '/tmp/rfa',
+        'git_common_dir' => '/tmp/rfa/.git',
+        'is_worktree' => false,
+        'branch' => 'main',
+    ]);
+
+    Project::create([
+        'slug' => 'farfalla',
+        'name' => 'farfalla',
+        'path' => '/tmp/farfalla',
+        'git_common_dir' => '/tmp/farfalla/.git',
+        'is_worktree' => false,
+        'branch' => 'main',
+    ]);
+
+    Project::create([
+        'slug' => 'unrelated',
+        'name' => 'unrelated',
+        'path' => '/tmp/unrelated',
+        'git_common_dir' => '/tmp/unrelated/.git',
+        'is_worktree' => false,
+        'branch' => 'main',
+    ]);
+
+    Livewire::test('pages::dashboard-page')
+        ->set('search', 'rfa')
+        ->assertSee('rfa')
+        ->assertSee('farfalla')
+        ->assertDontSee('unrelated');
+});
+
+test('search shows match count', function () {
+    Project::create([
+        'slug' => 'rfa',
+        'name' => 'rfa',
+        'path' => '/tmp/rfa',
+        'git_common_dir' => '/tmp/rfa/.git',
+        'is_worktree' => false,
+        'branch' => 'main',
+    ]);
+
+    Project::create([
+        'slug' => 'other',
+        'name' => 'other',
+        'path' => '/tmp/other',
+        'git_common_dir' => '/tmp/other/.git',
+        'is_worktree' => false,
+        'branch' => 'main',
+    ]);
+
+    Livewire::test('pages::dashboard-page')
+        ->set('search', 'rfa')
+        ->assertSee('1/2 projects');
+});
+
+test('search with no results shows no matching projects', function () {
+    Project::create([
+        'slug' => 'my-app',
+        'name' => 'My App',
+        'path' => '/tmp/my-app',
+        'git_common_dir' => '/tmp/my-app/.git',
+        'is_worktree' => false,
+        'branch' => 'main',
+    ]);
+
+    Livewire::test('pages::dashboard-page')
+        ->set('search', 'zzzzzzz')
+        ->assertSee('No matching projects')
+        ->assertSee('0/1 project');
 });
 
 // -- registerProject (drag-and-drop) --

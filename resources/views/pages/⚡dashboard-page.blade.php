@@ -14,7 +14,11 @@ new #[Layout('layouts.app')] class extends Component
     /** @var array<string, array<int, array<string, mixed>>> */
     public array $projectGroups = [];
 
+    public int $totalProjects = 0;
+
     public string $sortBy = 'recent';
+
+    public string $search = '';
 
     public function mount(): void
     {
@@ -22,7 +26,12 @@ new #[Layout('layouts.app')] class extends Component
             \Native\Desktop\Facades\Window::get('main')->title('rfa');
         }
 
-        $this->projectGroups = app(ListProjectsAction::class)->handle($this->sortBy);
+        $this->refreshProjects();
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->refreshProjects();
     }
 
     #[On('projects-changed')]
@@ -31,14 +40,21 @@ new #[Layout('layouts.app')] class extends Component
         if ($sortBy !== '') {
             $this->sortBy = $sortBy;
         }
-        $this->projectGroups = app(ListProjectsAction::class)->handle($this->sortBy);
+        $this->refreshProjects();
     }
 
     public function removeProject(int $projectId): void
     {
         app(RemoveProjectAction::class)->handle($projectId);
 
-        $this->projectGroups = app(ListProjectsAction::class)->handle($this->sortBy);
+        $this->refreshProjects();
+    }
+
+    private function refreshProjects(): void
+    {
+        $result = app(ListProjectsAction::class)->handle($this->sortBy, $this->search);
+        $this->projectGroups = $result['groups'];
+        $this->totalProjects = $result['total'];
     }
 
     public function registerProject(string $path): void
@@ -72,34 +88,32 @@ new #[Layout('layouts.app')] class extends Component
     class="min-h-screen"
     wire:poll.30s="loadProjects('{{ $sortBy }}')"
     x-data="{
-        search: '',
         selectedIndex: -1,
         selectedProjectId: null,
         sortBy: $store.settings.dashboardSort,
         dragging: false,
         dragCounter: 0,
-        get flatProjects() {
+        get allProjects() {
             return Array.from(this.$root.querySelectorAll('[data-project-card]'));
         },
-        get visibleProjects() {
-            return this.flatProjects.filter(el => el.style.display !== 'none');
-        },
-        matchesSearch(name, branch, path) {
-            if (this.search === '') return true;
-            const q = this.search.toLowerCase();
-            return name.toLowerCase().includes(q) || (branch && branch.toLowerCase().includes(q)) || path.toLowerCase().includes(q);
-        },
         navigate(dir) {
-            const visible = this.visibleProjects;
-            if (!visible.length) return;
-            this.selectedIndex = Math.max(0, Math.min(visible.length - 1, this.selectedIndex + dir));
-            this.selectedProjectId = visible[this.selectedIndex]?.dataset.projectId ?? null;
-            visible[this.selectedIndex]?.scrollIntoView({ block: 'nearest' });
+            const cards = this.allProjects;
+            if (!cards.length) return;
+            this.selectedIndex = Math.max(0, Math.min(cards.length - 1, this.selectedIndex + dir));
+            this.selectedProjectId = cards[this.selectedIndex]?.dataset.projectId ?? null;
+            cards[this.selectedIndex]?.scrollIntoView({ block: 'nearest' });
         },
         openSelected() {
-            const visible = this.visibleProjects;
-            if (this.selectedIndex >= 0 && this.selectedIndex < visible.length) {
-                const link = visible[this.selectedIndex]?.querySelector('a[data-project-link]');
+            const cards = this.allProjects;
+            if (this.selectedIndex >= 0 && this.selectedIndex < cards.length) {
+                const link = cards[this.selectedIndex]?.querySelector('a[data-project-link]');
+                if (link) window.location.href = link.href;
+            }
+        },
+        openFirst() {
+            const cards = this.allProjects;
+            if (cards.length) {
+                const link = cards[0]?.querySelector('a[data-project-link]');
                 if (link) window.location.href = link.href;
             }
         },
@@ -134,7 +148,7 @@ new #[Layout('layouts.app')] class extends Component
         if ($event.key === 'ArrowUp') { navigate(-1); $event.preventDefault(); return; }
         if ($event.key === 'Enter' && selectedIndex >= 0) { openSelected(); $event.preventDefault(); return; }
         if ($event.target.tagName === 'INPUT' || $event.target.tagName === 'TEXTAREA' || $event.target.isContentEditable) {
-            if ($event.key === 'Escape' && $event.target.tagName === 'INPUT') { search = ''; selectedIndex = -1; selectedProjectId = null; $event.target.blur(); $event.preventDefault(); }
+            if ($event.key === 'Escape' && $event.target.tagName === 'INPUT') { $wire.set('search', ''); selectedIndex = -1; selectedProjectId = null; $event.target.blur(); $event.preventDefault(); }
             return;
         }
         if ($event.key === 'Escape') { selectedIndex = -1; selectedProjectId = null; $event.preventDefault(); return; }
@@ -177,7 +191,7 @@ new #[Layout('layouts.app')] class extends Component
     </header>
 
     <main class="max-w-2xl mx-auto py-16 px-6">
-        @if(empty($projectGroups))
+        @if($totalProjects === 0)
             <div class="flex items-center justify-center h-[60vh]">
                 <div class="text-center">
                     <p class="rfa-logo text-5xl text-gh-muted/30 mb-6">rfa</p>
@@ -211,14 +225,15 @@ new #[Layout('layouts.app')] class extends Component
                         x-on:click="setSort(sortBy === 'recent' ? 'alpha' : 'recent')"
                         class="text-gh-muted hover:text-gh-text font-mono text-xs"
                     >
-                        <span x-text="sortBy === 'recent' ? 'A-Z' : 'Recent'"></span>
+                        <flux:icon icon="arrows-up-down" variant="outline" class="size-3.5" />
+                        <span x-text="sortBy === 'recent' ? 'Recent' : 'A-Z'"></span>
                     </flux:button>
                 </div>
             </div>
 
             <div class="mb-6">
                 <flux:input
-                    x-model.debounce.150ms="search"
+                    wire:model.live.debounce.250ms="search"
                     placeholder="Filter projects..."
                     icon="magnifying-glass"
                     icon:variant="outline"
@@ -226,32 +241,35 @@ new #[Layout('layouts.app')] class extends Component
                     variant="filled"
                     x-ref="searchInput"
                     autofocus
-                    @keydown.escape="search = ''; selectedIndex = -1; selectedProjectId = null; $el.blur()"
+                    @keydown.escape="$wire.set('search', ''); selectedIndex = -1; selectedProjectId = null; $el.blur()"
+                    @keydown.enter.prevent.stop="selectedIndex >= 0 ? openSelected() : ($wire.search !== '' && openFirst())"
                     @input="selectedIndex = -1; selectedProjectId = null"
                 />
-                @php
-                    $totalProjects = collect($projectGroups)->flatten(1)->count();
-                @endphp
+                @php $matchCount = collect($projectGroups)->flatten(1)->count(); @endphp
                 <div class="flex items-center justify-between mt-2">
-                    <span
-                        class="font-mono text-xs text-gh-muted"
-                        x-text="search === ''
-                            ? '{{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}'
-                            : visibleProjects.length + '/{{ $totalProjects }} projects'"
-                    >{{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}</span>
-                    <span class="font-mono text-xs text-gh-muted/50" x-show="search === ''">
-                        <kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">/</kbd> search
-                        <kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px] ml-2">&uarr;</kbd><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">&darr;</kbd> navigate
+                    <span class="font-mono text-xs text-gh-muted">
+                        @if($search !== '')
+                            {{ $matchCount }}/{{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}
+                        @else
+                            {{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}
+                        @endif
                     </span>
+                    @if($search === '')
+                        <span class="font-mono text-xs text-gh-muted/50">
+                            <kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">/</kbd> search
+                            <kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px] ml-2">&uarr;</kbd><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">&darr;</kbd> navigate
+                        </span>
+                    @endif
                 </div>
             </div>
 
             @php $projectIndex = 0; @endphp
+            @if($search !== '' && empty($projectGroups))
+                <p class="text-center font-mono text-sm text-gh-muted py-12">No matching projects</p>
+            @endif
+            <div class="flex flex-col gap-8">
             @foreach($projectGroups as $commonDir => $projects)
-                @php
-                    $groupSearchData = collect($projects)->map(fn($p) => [$p['name'], $p['branch'] ?? '', $p['path']])->values()->all();
-                @endphp
-                <div wire:key="group-{{ md5($commonDir) }}" class="mb-8" x-show="@js($groupSearchData).some(([n, b, p]) => matchesSearch(n, b, p))">
+                <div wire:key="group-{{ md5($commonDir) }}">
                     @if(count($projects) > 1)
                         <p class="section-label text-gh-muted mb-3 font-mono truncate">{{ $commonDir }}</p>
                     @endif
@@ -273,8 +291,7 @@ new #[Layout('layouts.app')] class extends Component
                                         .then(d => { status = d; loading = false; })
                                         .catch(() => { loading = false; });
                                 }, {{ $projectIndex * 100 }})"
-                                x-show="matchesSearch(@js($project['name']), @js($project['branch'] ?? ''), @js($project['path']))"
-                                :data-selected="selectedProjectId === $el.dataset.projectId"
+                                    :data-selected="selectedProjectId === $el.dataset.projectId"
                                 :class="selectedProjectId && selectedProjectId === $el.dataset.projectId ? 'ring-1 ring-gh-link/40' : ''"
                                 class="rounded-lg border border-gh-border hover:border-gh-text/30 bg-gh-surface transition-all"
                             >
@@ -347,11 +364,11 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                 </div>
             @endforeach
-
+            </div>
         @endif
     </main>
 
-    @if(!empty($projectGroups))
+    @if($totalProjects > 0)
         <footer class="fixed bottom-0 inset-x-0 py-2 flex items-center justify-center gap-1.5 font-mono text-[11px] text-gh-muted/40">
             <x-external-link href="https://x.com/fgili0" class="hover:text-gh-muted transition-colors">Franco Gilio</x-external-link>
             <span>&middot;</span>

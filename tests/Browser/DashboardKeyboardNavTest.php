@@ -71,17 +71,17 @@ test('escape clears selection', function () {
 test('search and arrow nav on filtered results', function () {
     $page = $this->visit('/');
 
-    // Type a filter that matches only one project
+    // Type a filter that matches only one project (server-side filtering)
     $page->page()->getByPlaceholder('Filter projects...')->fill('beta');
 
-    // Wait for 150ms debounce + Alpine reactivity to hide non-matching cards
-    $page->page()->waitForFunction("document.querySelectorAll('[data-project-card]:not([style*=\"display: none\"])').length === 1");
+    // Wait for Livewire to re-render with only the matching project
+    $page->page()->waitForFunction("document.querySelectorAll('[data-project-card]').length === 1");
 
     $this->pressGlobalKey($page, 'ArrowDown');
 
-    // Wait for selection to land on the visible card (atomic check avoids race between reads)
+    // Wait for selection to land on the visible card
     $page->page()->waitForFunction("
-        document.querySelector('[data-project-card]:not([style*=\"display: none\"])[data-selected]') !== null
+        document.querySelector('[data-project-card][data-selected]') !== null
     ");
 
     $selectedId = $page->script("document.querySelector('[data-testid=\"project-card\"][data-selected]')?.dataset.projectId");
