@@ -67,7 +67,7 @@
     class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50"
 >
     <div class="bg-gh-surface border border-gh-border rounded font-mono text-xs flex items-center gap-3 shadow-lg"
-        :class="current?.type === 'discard' ? 'px-5 py-3 min-w-[360px] border-l-2 border-l-amber-500' : 'px-4 py-2.5'">
+        :class="current?.type === 'discard' ? 'px-5 py-3 min-w-[360px] border-l-2 border-l-gh-accent' : 'px-4 py-2.5'">
         <span x-text="current?.message" class="text-gh-text" :class="current?.type === 'discard' ? 'flex-1' : ''"></span>
         <button @click="undo()" class="text-gh-link hover:underline font-medium" data-testid="undo-button">Undo</button>
         <template x-if="current?.type === 'discard'">
