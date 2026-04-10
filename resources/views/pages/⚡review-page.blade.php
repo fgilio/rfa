@@ -386,7 +386,11 @@ new #[Layout('layouts.app')] class extends Component
         $this->saveSession();
         $this->loadTrashedFiles();
 
-        $this->dispatch('undo-available', type: 'discard', payload: $trashRecord->id, message: 'Changes discarded');
+        $commentCount = count($fileComments);
+        $message = $commentCount > 0
+            ? 'Discarded '.basename($file['path']).' — '.$commentCount.' comment'.($commentCount === 1 ? '' : 's').' removed'
+            : 'Discarded '.basename($file['path']);
+        $this->dispatch('undo-available', type: 'discard', payload: $trashRecord->id, message: $message);
         $this->dispatch('fingerprint-reset');
     }
 
@@ -908,17 +912,9 @@ new #[Layout('layouts.app')] class extends Component
                             class="text-gh-green shrink-0" x-cloak />
                         @if(! $this->isCommitMode() && $file['status'] !== 'commented')
                             <button
-                                class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text shrink-0"
+                                class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text shrink-0 data-loading:pointer-events-none data-loading:opacity-50"
                                 title="Discard changes"
-                                @click.stop="
-                                    @php $commentCount = count($this->groupedComments[$file['id']] ?? []); @endphp
-                                    @if($commentCount > 0)
-                                        if (confirm('Discard changes to {{ basename($file['path']) }} and remove {{ $commentCount }} comment{{ $commentCount === 1 ? '' : 's' }}? You can restore from Trash for 30 minutes.'))
-                                    @else
-                                        if (confirm('Discard all changes to {{ basename($file['path']) }}? You can restore from Trash for 30 minutes.'))
-                                    @endif
-                                        $wire.discardFileChanges('{{ $file['id'] }}')
-                                "
+                                wire:click.stop="discardFileChanges('{{ $file['id'] }}')"
                             >
                                 <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
                             </button>

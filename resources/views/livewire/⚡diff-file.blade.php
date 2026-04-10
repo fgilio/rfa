@@ -295,14 +295,8 @@ new class extends Component {
                         icon:variant="outline"
                         variant="ghost"
                         size="sm"
-                        @click="
-                            @if(count($fileComments) > 0)
-                                if (confirm('Discard changes to {{ basename($file['path']) }} and remove {{ count($fileComments) }} comment{{ count($fileComments) === 1 ? '' : 's' }}? You can restore from Trash for 30 minutes.'))
-                            @else
-                                if (confirm('Discard all changes to {{ basename($file['path']) }}? You can restore from Trash for 30 minutes.'))
-                            @endif
-                                $dispatch('discard-file', { fileId: @js($file['id']) })
-                        "
+                        class="data-loading:pointer-events-none data-loading:opacity-50"
+                        wire:click="$dispatch('discard-file', { fileId: @js($file['id']) })"
                     />
                 @endif
             </div>
