@@ -56,6 +56,12 @@ test('app layout includes keepalive component', function () {
     expect($content)->toContain('<livewire:keepalive');
 });
 
+test('keepalive component uses wire:poll.keep-alive', function () {
+    $component = dirname(__DIR__, 2).'/resources/views/livewire/keepalive.blade.php';
+    $content = file_get_contents($component);
+    expect($content)->toMatch('/wire:poll\.\d+s\.keep-alive/');
+});
+
 test('no hardcoded dark class on html element', function () {
     $violations = [];
     foreach (bladeFiles() as $file) {
