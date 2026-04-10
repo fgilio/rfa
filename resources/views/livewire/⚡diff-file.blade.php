@@ -295,7 +295,8 @@ new class extends Component {
                         icon:variant="outline"
                         variant="ghost"
                         size="sm"
-                        @click="$dispatch('discard-file', { fileId: @js($file['id']) })"
+                        class="data-loading:pointer-events-none data-loading:opacity-50"
+                        wire:click="$dispatch('discard-file', { fileId: @js($file['id']) })"
                     />
                 @endif
             </div>

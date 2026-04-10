@@ -1,6 +1,8 @@
 <?php
 
 use App\Actions\BackfillGlobalGitignoreAction;
+use App\Actions\CleanExpiredTrashAction;
+use App\Actions\DiscardFileChangesAction;
 use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
 use App\Actions\ResolveProjectAction;
@@ -9,6 +11,7 @@ use App\Actions\SaveSessionAction;
 use App\Actions\ScanReviewFilesAction;
 use App\DTOs\DiffTarget;
 use App\Models\Project;
+use App\Models\TrashedFile;
 use App\Services\GitDiffService;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Livewire\Livewire;
@@ -348,5 +351,79 @@ test('deleteComment dispatches undo-available with deleted comment', function ()
     $component->assertDispatched('undo-available', fn ($name, $params) => $params['type'] === 'delete'
         && count($params['payload']) === 1
         && $params['payload'][0]['id'] === $commentId
+    );
+});
+
+// -- Discard file undo-available --
+
+test('discardFileChanges dispatches undo-available with file name', function () {
+    $trashRecord = TrashedFile::create([
+        'project_id' => $this->project->id,
+        'file_path' => 'src/Foo.php',
+        'file_status' => 'modified',
+        'expires_at' => now()->addMinutes(30),
+    ]);
+
+    app()->bind(DiscardFileChangesAction::class, fn () => new class($trashRecord)
+    {
+        public function __construct(private TrashedFile $record) {}
+
+        public function handle(string $repoPath, string $path, string $status, int $projectId, ?string $oldPath = null, bool $isUntracked = false, bool $isSymlink = false, array $comments = []): TrashedFile
+        {
+            return $this->record;
+        }
+    });
+
+    app()->bind(CleanExpiredTrashAction::class, fn () => new class
+    {
+        public function handle(int $projectId): array
+        {
+            return [];
+        }
+    });
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('discard-file', fileId: 'abc123');
+
+    $component->assertDispatched('undo-available', fn ($name, $params) => $params['type'] === 'discard'
+        && $params['payload'] === $trashRecord->id
+        && str_contains($params['message'], 'Foo.php')
+    );
+});
+
+test('discardFileChanges includes comment count in undo message', function () {
+    $trashRecord = TrashedFile::create([
+        'project_id' => $this->project->id,
+        'file_path' => 'src/Foo.php',
+        'file_status' => 'modified',
+        'expires_at' => now()->addMinutes(30),
+    ]);
+
+    app()->bind(DiscardFileChangesAction::class, fn () => new class($trashRecord)
+    {
+        public function __construct(private TrashedFile $record) {}
+
+        public function handle(string $repoPath, string $path, string $status, int $projectId, ?string $oldPath = null, bool $isUntracked = false, bool $isSymlink = false, array $comments = []): TrashedFile
+        {
+            return $this->record;
+        }
+    });
+
+    app()->bind(CleanExpiredTrashAction::class, fn () => new class
+    {
+        public function handle(int $projectId): array
+        {
+            return [];
+        }
+    });
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Review note')
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 5, endLine: 5, body: 'Another note')
+        ->dispatch('discard-file', fileId: 'abc123');
+
+    $component->assertDispatched('undo-available', fn ($name, $params) => $params['type'] === 'discard'
+        && str_contains($params['message'], 'Foo.php')
+        && str_contains($params['message'], '2 comments removed')
     );
 });

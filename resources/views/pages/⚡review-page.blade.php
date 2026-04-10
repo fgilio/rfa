@@ -912,9 +912,9 @@ new #[Layout('layouts.app')] class extends Component
                             class="text-gh-green shrink-0" x-cloak />
                         @if(! $this->isCommitMode() && $file['status'] !== 'commented')
                             <button
-                                class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text shrink-0"
+                                class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text shrink-0 data-loading:pointer-events-none data-loading:opacity-50"
                                 title="Discard changes"
-                                @click.stop="$wire.discardFileChanges('{{ $file['id'] }}')"
+                                wire:click.stop="discardFileChanges('{{ $file['id'] }}')"
                             >
                                 <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
                             </button>
