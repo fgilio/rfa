@@ -5,6 +5,7 @@ use App\Actions\OpenProjectFromPathAction;
 use App\Actions\RemoveProjectAction;
 use Flux\Flux;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Native\Desktop\Facades\Shell;
 
@@ -24,9 +25,12 @@ new #[Layout('layouts.app')] class extends Component
         $this->projectGroups = app(ListProjectsAction::class)->handle($this->sortBy);
     }
 
-    public function loadProjects(string $sortBy = 'recent'): void
+    #[On('projects-changed')]
+    public function loadProjects(string $sortBy = ''): void
     {
-        $this->sortBy = $sortBy;
+        if ($sortBy !== '') {
+            $this->sortBy = $sortBy;
+        }
         $this->projectGroups = app(ListProjectsAction::class)->handle($this->sortBy);
     }
 
@@ -179,8 +183,8 @@ new #[Layout('layouts.app')] class extends Component
                     <p class="rfa-logo text-5xl text-gh-muted/30 mb-6">rfa</p>
                     <flux:heading class="mb-3">No projects registered</flux:heading>
                     @native
-                        <flux:text variant="subtle" size="sm" class="mb-6">Open a git repository to get started</flux:text>
-                        <livewire:open-repository-button variant="primary" />
+                        <flux:text variant="subtle" size="sm" class="mb-6">Open a git repository or scan a folder to get started</flux:text>
+                        <livewire:add-project-menu variant="expanded" />
                     @else
                         <flux:text variant="subtle" size="sm">Run <code class="font-mono bg-gh-border/50 px-1.5 py-0.5 rounded text-xs">rfa</code> from a git repository to get started</flux:text>
                     @endnative
@@ -200,7 +204,7 @@ new #[Layout('layouts.app')] class extends Component
             <div class="flex items-center justify-between mb-6">
                 <h1 class="rfa-logo text-4xl tracking-brutal-tight">Projects</h1>
                 <div class="flex items-center gap-3">
-                    <livewire:open-repository-button />
+                    <livewire:add-project-menu />
                     <flux:button
                         variant="ghost"
                         size="sm"
