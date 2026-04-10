@@ -938,13 +938,12 @@ new #[Layout('layouts.app')] class extends Component
                                 x-init="
                                     const update = () => {
                                         const ms = expiresAt - Date.now();
-                                        if (ms <= 0) { remaining = 'expired'; return; }
+                                        if (ms <= 0) { remaining = 'expired'; clearInterval($el._iv); return; }
                                         const m = Math.ceil(ms / 60000);
                                         remaining = m < 1 ? '< 1m' : m + 'm';
                                     };
                                     update();
-                                    const iv = setInterval(update, 15000);
-                                    $cleanup(() => clearInterval(iv));
+                                    $el._iv = setInterval(update, 15000);
                                 "
                             >
                                 <span class="font-mono text-xs text-gh-muted truncate flex-1" title="{{ $trashed['file_path'] }}">{{ basename($trashed['file_path']) }}</span>
