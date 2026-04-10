@@ -242,3 +242,140 @@ test('context lines have both data-line-new and data-line-old', function () {
             ->and($row)->toContain('data-line-old="');
     }
 });
+
+// -- Tiered expand buttons --
+
+function mountMultiHunkDiffFile(array $diffData, array $file): Testable
+{
+    app()->bind(LoadFileDiffAction::class, fn () => new class($diffData)
+    {
+        public function __construct(private array $diffData) {}
+
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null): array
+        {
+            return $this->diffData;
+        }
+    });
+
+    $component = Livewire::test('diff-file', [
+        'file' => $file,
+        'repoPath' => '/tmp/test',
+        'projectId' => 0,
+        'fileComments' => [],
+    ]);
+
+    $component->call('loadFileDiff');
+
+    return $component;
+}
+
+function buildContextHunk(int $startLine, int $lineCount = 3): array
+{
+    $lines = [];
+    for ($i = 0; $i < $lineCount; $i++) {
+        $lineNum = $startLine + $i;
+        $lines[] = [
+            'type' => 'context',
+            'content' => "// line {$lineNum}",
+            'oldLineNum' => $lineNum,
+            'newLineNum' => $lineNum,
+            'highlightedContent' => "// line {$lineNum}",
+        ];
+    }
+
+    return [
+        'header' => '@@ hunk @@',
+        'oldStart' => $startLine,
+        'oldCount' => $lineCount,
+        'newStart' => $startLine,
+        'newCount' => $lineCount,
+        'lines' => $lines,
+    ];
+}
+
+test('tiered expand buttons render for middle gap larger than 15 lines', function () {
+    // 2-hunk fixture has a 20-line gap between hunks (lines 9-28)
+    $diffData = DiffFixtureFactory::diffData(hunks: 2, path: 'src/Test.php');
+
+    $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
+
+    // Should show tiered buttons: "Expand 15  20 hidden lines"
+    expect($html)->toContain('expandGap(1, 15)')
+        ->and($html)->toContain('expandGap(1)')
+        ->and($html)->toContain('20')
+        ->and($html)->toContain('hidden lines');
+});
+
+test('single expand button renders for gap of 15 or fewer lines', function () {
+    $diffData = DiffFixtureFactory::diffData(hunks: 1, path: 'src/Test.php');
+    $hunk0 = $diffData['hunks'][0];
+    $diffData['hunks'][] = buildContextHunk($hunk0['newStart'] + $hunk0['newCount'] + 10);
+
+    $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
+
+    expect($html)->toContain('Expand 10 hidden lines')
+        ->and($html)->not->toContain('expandGap(1, 15)');
+});
+
+test('tiered expand buttons render for leading gap larger than 15 lines', function () {
+    // Create a single hunk that starts at line 25 (leading gap of 24 lines)
+    $diffData = DiffFixtureFactory::diffData(hunks: 1, path: 'src/Test.php');
+    $diffData['hunks'][0]['newStart'] = 25;
+    $diffData['hunks'][0]['oldStart'] = 25;
+
+    $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
+
+    // Should show tiered buttons for leading gap: "Expand 15 · 24 hidden lines"
+    expect($html)->toContain('expandGap(0, 15)')
+        ->and($html)->toContain('expandGap(0)')
+        ->and($html)->toContain('24')
+        ->and($html)->toContain('hidden lines');
+});
+
+test('tiered expand buttons render for trailing gap larger than 15 lines', function () {
+    $diffData = DiffFixtureFactory::diffData(hunks: 1, path: 'src/Test.php');
+    // File has 50 lines total, hunk covers lines 1-8, trailing gap is 42 lines
+    $diffData['newFileLineCount'] = 50;
+
+    $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
+
+    // Should show tiered buttons for trailing gap
+    expect($html)->toContain('expandGap(1, 15)')
+        ->and($html)->toContain('expandGap(1)')
+        ->and($html)->toContain('hidden lines');
+});
+
+test('exactly 15-line gap shows single expand button with no tiers', function () {
+    $diffData = DiffFixtureFactory::diffData(hunks: 1, path: 'src/Test.php');
+    $hunk0 = $diffData['hunks'][0];
+    $diffData['hunks'][] = buildContextHunk($hunk0['newStart'] + $hunk0['newCount'] + 15);
+
+    $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
+
+    expect($html)->toContain('Expand 15 hidden lines')
+        ->and($html)->not->toContain('expandGap(1, 15)');
+});
+
+test('16-line gap shows first tier', function () {
+    $diffData = DiffFixtureFactory::diffData(hunks: 1, path: 'src/Test.php');
+    $hunk0 = $diffData['hunks'][0];
+    $diffData['hunks'][] = buildContextHunk($hunk0['newStart'] + $hunk0['newCount'] + 16);
+
+    $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
+
+    expect($html)->toContain('expandGap(1, 15)')
+        ->and($html)->toContain('expandGap(1)')
+        ->and($html)->toContain('16')
+        ->and($html)->toContain('hidden lines');
+});
+
+test('1-line gap shows single expand button', function () {
+    $diffData = DiffFixtureFactory::diffData(hunks: 1, path: 'src/Test.php');
+    $hunk0 = $diffData['hunks'][0];
+    $diffData['hunks'][] = buildContextHunk($hunk0['newStart'] + $hunk0['newCount'] + 1);
+
+    $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
+
+    expect($html)->toContain('Expand 1 hidden lines')
+        ->and($html)->not->toContain('&middot;');
+});
