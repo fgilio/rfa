@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\ExpandDiffGapAction;
 use App\Actions\GetFileCopyContentAction;
 use App\Actions\LoadFileDiffAction;
 use App\DTOs\DiffTarget;
@@ -106,48 +107,11 @@ new class extends Component {
             return;
         }
 
-        $hunks = $this->diffData['hunks'];
-
-        // Determine the new-line range for this gap
-        $isTrailing = $hunkIndex === count($hunks);
-
-        if ($isTrailing) {
-            $last = $hunks[count($hunks) - 1];
-            $gapNewStart = $last['newStart'] + $last['newCount'];
-            $gapNewEnd = $this->diffData['newFileLineCount'] ?? $gapNewStart;
-        } elseif ($hunkIndex === 0) {
-            $gapNewStart = 1;
-            $gapNewEnd = $hunks[0]['newStart'] - 1;
-        } else {
-            $prev = $hunks[$hunkIndex - 1];
-            $gapNewStart = $prev['newStart'] + $prev['newCount'];
-            $gapNewEnd = $hunks[$hunkIndex]['newStart'] - 1;
-        }
-
-        if ($gapNewStart > $gapNewEnd) {
-            return;
-        }
-
-        // Narrow range for partial expansion
-        $totalGapSize = $gapNewEnd - $gapNewStart + 1;
-        $isPartial = $lineCount !== null && $lineCount < $totalGapSize;
-
-        if ($isPartial) {
-            if ($hunkIndex === 0) {
-                // Leading: expand bottom of gap (closest to first hunk)
-                $gapNewStart = $gapNewEnd - $lineCount + 1;
-            } else {
-                // Middle or trailing: expand top of gap (closest to prev/last hunk)
-                $gapNewEnd = $gapNewStart + $lineCount - 1;
-            }
-        }
-
-        // Fetch full-context diff (cached so sequential partial expansions reuse it)
         $fullDiff = app(LoadFileDiffAction::class)->handle(
             $this->repoPath,
             $this->file['path'],
             $this->file['isUntracked'] ?? false,
-            cacheKey: $this->diffCacheKey().':full-context',
+            cacheKey: $this->diffCacheKey(':full-context'),
             contextLines: 99999,
             target: $this->buildDiffTarget(),
         );
@@ -156,70 +120,18 @@ new class extends Component {
             return;
         }
 
-        // Extract gap lines from the full diff's single hunk by newLineNum
-        $gapLines = collect($fullDiff['hunks'][0]['lines'])
-            ->filter(function (array $line) use ($gapNewStart, $gapNewEnd): bool {
-                $num = $line['newLineNum'] ?? null;
+        $this->diffData['hunks'] = app(ExpandDiffGapAction::class)->handle(
+            hunks: $this->diffData['hunks'],
+            hunkIndex: $hunkIndex,
+            fullDiffLines: $fullDiff['hunks'][0]['lines'],
+            lineCount: $lineCount,
+            newFileLineCount: $this->diffData['newFileLineCount'] ?? null,
+        );
 
-                return $num !== null
-                    && $num >= $gapNewStart
-                    && $num <= $gapNewEnd
-                    && $line['type'] === 'context';
-            })
-            ->values()
-            ->all();
-
-        if (empty($gapLines)) {
-            return;
-        }
-
-        $gapSize = count($gapLines);
-
-        if ($isTrailing) {
-            // Append gap lines to last hunk
-            $lastIdx = count($hunks) - 1;
-            $hunks[$lastIdx]['lines'] = array_merge($hunks[$lastIdx]['lines'], $gapLines);
-            $hunks[$lastIdx]['oldCount'] += $gapSize;
-            $hunks[$lastIdx]['newCount'] += $gapSize;
-        } elseif ($hunkIndex === 0) {
-            // Prepend gap lines to first hunk
-            $hunks[0]['lines'] = array_merge($gapLines, $hunks[0]['lines']);
-            $hunks[0]['oldStart'] -= $gapSize;
-            $hunks[0]['oldCount'] += $gapSize;
-            $hunks[0]['newStart'] -= $gapSize;
-            $hunks[0]['newCount'] += $gapSize;
-        } else {
-            if ($isPartial) {
-                // Partial: append to prev hunk only, leave curr hunk for remaining gap
-                $hunks[$hunkIndex - 1]['lines'] = array_merge($hunks[$hunkIndex - 1]['lines'], $gapLines);
-                $hunks[$hunkIndex - 1]['oldCount'] += $gapSize;
-                $hunks[$hunkIndex - 1]['newCount'] += $gapSize;
-            } else {
-                // Full: merge prevHunk + gapLines + currentHunk -> single hunk
-                $prev = $hunks[$hunkIndex - 1];
-                $curr = $hunks[$hunkIndex];
-
-                $merged = [
-                    'header' => $prev['header'],
-                    'oldStart' => $prev['oldStart'],
-                    'oldCount' => $prev['oldCount'] + $gapSize + $curr['oldCount'],
-                    'newStart' => $prev['newStart'],
-                    'newCount' => $prev['newCount'] + $gapSize + $curr['newCount'],
-                    'lines' => array_merge($prev['lines'], $gapLines, $curr['lines']),
-                ];
-
-                array_splice($hunks, $hunkIndex - 1, 2, [$merged]);
-            }
-        }
-
-        $this->diffData['hunks'] = $hunks;
-
-        // Merge syntax styles from the full diff
         if (! empty($fullDiff['syntaxStyles'])) {
             $this->diffData['syntaxStyles'] = ($this->diffData['syntaxStyles'] ?? '').$fullDiff['syntaxStyles'];
         }
 
-        // Update cache with expanded state
         Cache::put($this->diffCacheKey(), $this->diffData, now()->addHours($this->buildDiffTarget()->cacheTtlHours()));
     }
 
@@ -278,11 +190,11 @@ new class extends Component {
         return $this->cachedTarget ??= DiffTarget::fromRefs($this->diffFrom, $this->diffTo);
     }
 
-    private function diffCacheKey(): string
+    private function diffCacheKey(string $variant = ''): string
     {
         $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
 
-        return DiffCacheKey::for($projectKey, $this->file['id'], $this->buildDiffTarget()->contextKey());
+        return DiffCacheKey::for($projectKey, $this->file['id'], $this->buildDiffTarget()->contextKey().$variant);
     }
 
     public function render(): \Illuminate\Contracts\View\View
@@ -545,7 +457,6 @@ new class extends Component {
                 $hasTrailingGap = $newFileLineCount !== null && $lastHunkEnd < $newFileLineCount;
                 $trailingHiddenCount = $hasTrailingGap ? $newFileLineCount - $lastHunkEnd : 0;
                 $hasGaps = count($hunks) > 1 || (count($hunks) === 1 && $hunks[0]['newStart'] > 1) || $hasTrailingGap;
-                $expandTiers = [15, 50, 100];
             @endphp
             @if($diffData['syntaxStyles'] ?? '')
                 {!! '<style>' . $diffData['syntaxStyles'] . '</style>' !!}
@@ -578,10 +489,10 @@ new class extends Component {
                                             $prevHunk = $hunks[$hunkIndex - 1];
                                             $hiddenCount = $hunk['newStart'] - ($prevHunk['newStart'] + $prevHunk['newCount']);
                                         @endphp
-                                        <x-tiered-expand-gap :hunk-index="$hunkIndex" :hidden-count="$hiddenCount" :expand-tiers="$expandTiers" />
+                                        <x-tiered-expand-gap :hunk-index="$hunkIndex" :hidden-count="$hiddenCount" />
                                     @else
                                         @php $hiddenCount = $hunk['newStart'] - 1; @endphp
-                                        <x-tiered-expand-gap :hunk-index="0" :hidden-count="$hiddenCount" :expand-tiers="$expandTiers" />
+                                        <x-tiered-expand-gap :hunk-index="0" :hidden-count="$hiddenCount" />
                                     @endif
                                 </td>
                             </tr>
@@ -678,7 +589,7 @@ new class extends Component {
                     @if($hasTrailingGap)
                         <tr class="bg-gh-hunk-bg">
                             <td colspan="4" class="py-1.5 text-center text-xs border-y border-dashed border-gh-border/20">
-                                <x-tiered-expand-gap :hunk-index="count($hunks)" :hidden-count="$trailingHiddenCount" :expand-tiers="$expandTiers" />
+                                <x-tiered-expand-gap :hunk-index="count($hunks)" :hidden-count="$trailingHiddenCount" />
                             </td>
                         </tr>
                     @endif
