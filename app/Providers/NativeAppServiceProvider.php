@@ -154,9 +154,13 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                 Menu::quit(),
             )->label(config('app.name')),
             Menu::make(
-                Menu::label('Open Repository...')
+                Menu::label('Add Single Repository...')
                     ->id('open-repo')
-                    ->hotkey('CmdOrCtrl+O'),
+                    ->hotkey('CmdOrCtrl+O')
+                    ->icon(resource_path('icons/add-repoTemplate.png')),
+                Menu::label('Scan Folder for Repos...')
+                    ->id('scan-directory')
+                    ->icon(resource_path('icons/scan-folderTemplate.png')),
             )->label('File'),
             Menu::edit(),
             Menu::view(),

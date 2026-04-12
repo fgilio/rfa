@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Listeners;
 
 use App\Actions\OpenRepositoryDialogAction;
+use App\Actions\ScanDirectoryDialogAction;
 use Illuminate\Support\Facades\Cache;
 use Native\Desktop\Events\Menu\MenuItemClicked;
 use Native\Desktop\Facades\AutoUpdater;
@@ -14,6 +15,7 @@ final readonly class HandleMenuItemClicked
 {
     public function __construct(
         private OpenRepositoryDialogAction $openRepository,
+        private ScanDirectoryDialogAction $scanDirectory,
     ) {}
 
     public function handle(MenuItemClicked $event): void
@@ -22,6 +24,7 @@ final readonly class HandleMenuItemClicked
 
         match ($id) {
             'open-repo' => $this->handleOpenRepo(),
+            'scan-directory' => $this->scanDirectory->handle(),
             'check-updates' => $this->handleCheckUpdates(),
             default => null,
         };
