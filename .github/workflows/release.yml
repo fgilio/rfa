@@ -49,7 +49,7 @@ jobs:
 
   build:
     needs: [lint, types, test]
-    runs-on: macos-14
+    runs-on: macos-15-xlarge
     steps:
       - uses: actions/checkout@v6
 
