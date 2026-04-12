@@ -139,15 +139,24 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     private function createMenu(): void
     {
         Menu::create(
-            Menu::app(),
+            Menu::make(
+                Menu::about(),
+                Menu::separator(),
+                Menu::label('Check for Updates...')
+                    ->id('check-updates')
+                    ->icon(resource_path('icons/check-updatesTemplate.png')),
+                Menu::link(config('nativephp.website').'/releases', 'See Releases...')
+                    ->openInBrowser()
+                    ->icon(resource_path('icons/see-releasesTemplate.png')),
+                Menu::separator(),
+                Menu::hide(),
+                Menu::separator(),
+                Menu::quit(),
+            )->label(config('app.name')),
             Menu::make(
                 Menu::label('Open Repository...')
                     ->id('open-repo')
                     ->hotkey('CmdOrCtrl+O'),
-                Menu::label('Check for Updates...')
-                    ->id('check-updates'),
-                Menu::separator(),
-                Menu::quit(),
             )->label('File'),
             Menu::edit(),
             Menu::view(),
