@@ -76,7 +76,41 @@ Confirm the draft has all expected artifacts:
 - `latest-mac.yml`
 - blockmap files
 
-### 7. Publish
+### 7. Write release notes
+
+Generate release notes from the commits since the previous tag:
+
+```bash
+git log <prev-tag>..vX.Y.Z --oneline --no-merges
+```
+
+Write concise, user-facing notes following this format:
+
+```markdown
+## What's new
+- **Feature name** — One-line description
+
+## Improvements
+- Description of improvement
+
+## Fixes
+- Description of fix
+```
+
+Rules:
+- Group into **What's new**, **Improvements**, **Fixes** (omit empty sections)
+- Bold the feature/fix name, then a brief description
+- Skip internal commits (CI, refactoring, tests, deps) unless user-visible
+- One line per item, no fluff
+- For patch releases with 1-2 changes, keep it very short
+
+Update the draft release with the notes:
+
+```bash
+gh release edit vX.Y.Z -R fgilio/rfa --notes "..."
+```
+
+### 8. Publish
 
 Publish the release immediately (do not leave as draft):
 
