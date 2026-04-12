@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Actions\OpenProjectFromPathAction;
+use App\Actions\ResolveStartupRouteAction;
 use App\Listeners\HandleDeepLink;
 use App\Listeners\HandleMenuItemClicked;
 use Illuminate\Support\Facades\Artisan;
@@ -125,6 +126,8 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
     private function createWindow(): void
     {
+        $route = app(ResolveStartupRouteAction::class)->handle();
+
         Window::open('main')
             ->title('rfa')
             ->width(1280)
@@ -132,7 +135,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->minWidth(800)
             ->minHeight(600)
             ->backgroundColor('#0d1117')
-            ->route('dashboard')
+            ->route($route['name'], $route['params'])
             ->rememberState();
     }
 

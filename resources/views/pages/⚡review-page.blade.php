@@ -14,6 +14,7 @@ use App\Actions\ScanReviewFilesAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
+use App\Actions\ResolveStartupRouteAction;
 use App\Actions\RestoreDiscardedFileAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
@@ -108,6 +109,10 @@ new #[Layout('layouts.app')] class extends Component
         $this->projectName = $project['name'];
         $this->projectBranch = $project['branch'] ?? '';
         $this->projectSlug = $project['slug'];
+
+        if (Cache::get(ResolveStartupRouteAction::CACHE_KEY) !== $slug) {
+            Cache::forever(ResolveStartupRouteAction::CACHE_KEY, $slug);
+        }
 
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title("rfa - {$this->projectName}");

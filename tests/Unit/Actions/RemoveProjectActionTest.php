@@ -1,9 +1,11 @@
 <?php
 
 use App\Actions\RemoveProjectAction;
+use App\Actions\ResolveStartupRouteAction;
 use App\Models\Project;
 use App\Models\ReviewSession;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
@@ -48,4 +50,25 @@ test('cascading delete removes associated review session', function () {
 
     expect(Project::find($project->id))->toBeNull();
     expect(ReviewSession::find($session->id))->toBeNull();
+});
+
+test('clears last-opened cache when removing that project', function () {
+    $project = Project::factory()->create(['slug' => 'cached-project']);
+
+    Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'cached-project');
+
+    app(RemoveProjectAction::class)->handle($project->id);
+
+    expect(Cache::get(ResolveStartupRouteAction::CACHE_KEY))->toBeNull();
+});
+
+test('preserves last-opened cache when removing a different project', function () {
+    $projectA = Project::factory()->create(['slug' => 'project-a']);
+    $projectB = Project::factory()->create(['slug' => 'project-b']);
+
+    Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'project-a');
+
+    app(RemoveProjectAction::class)->handle($projectB->id);
+
+    expect(Cache::get(ResolveStartupRouteAction::CACHE_KEY))->toBe('project-a');
 });
