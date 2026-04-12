@@ -697,10 +697,11 @@ new #[Layout('layouts.app')] class extends Component
 
     {{-- Header --}}
     <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
-        <div class="flex items-center gap-4">
-            <a href="/" class="hover:opacity-70 transition-opacity"><span class="rfa-logo text-xl">rfa</span></a>
-            <span class="text-gh-border select-none">/</span>
-            <span class="font-medium tracking-brutal text-sm">{{ $projectName }}</span>
+        <div class="flex items-center gap-2.5">
+            <a href="/" class="text-gh-muted hover:text-gh-text transition-colors" aria-label="Back to projects">
+                <flux:icon icon="chevron-left" variant="outline" class="!size-4" />
+            </a>
+            <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
             @if($projectBranch)
                 <livewire:branch-explorer :repo-path="$repoPath" :current-branch="$projectBranch" :project-slug="$projectSlug" :active-commit-hash="$diffTo" />
             @endif
