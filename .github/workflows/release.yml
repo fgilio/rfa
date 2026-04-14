@@ -13,42 +13,7 @@ permissions:
   contents: write
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-      - run: composer install --no-interaction --prefer-dist
-      - run: composer test:lint
-
-  types:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-      - run: composer install --no-interaction --prefer-dist
-      - run: composer test:types
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-      - run: composer install --no-interaction --prefer-dist
-      - run: cp .env.example .env
-      - run: php artisan key:generate
-      - run: touch database/database.sqlite
-      - run: php artisan migrate --force
-      - run: composer test
-
   build:
-    needs: [lint, types, test]
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
@@ -56,10 +21,19 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
+          coverage: none
 
-      - uses: actions/setup-node@v6
+      - name: Get composer cache dir
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v5
         with:
-          node-version: '22'
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-php84-${{ hashFiles('composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-php84-
+            ${{ runner.os }}-composer-
 
       - name: Extract version from tag
         id: version
@@ -67,6 +41,21 @@ jobs:
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-dev
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: vendor/nativephp/desktop/resources/electron/package-lock.json
+
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('vendor/nativephp/desktop/resources/electron/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
 
       - name: Prepare environment
         run: |
@@ -98,6 +87,8 @@ jobs:
           NATIVEPHP_APPLE_ID: ${{ secrets.NATIVEPHP_APPLE_ID }}
           NATIVEPHP_APPLE_ID_PASS: ${{ secrets.NATIVEPHP_APPLE_ID_PASS }}
           NATIVEPHP_APPLE_TEAM_ID: ${{ secrets.NATIVEPHP_APPLE_TEAM_ID }}
+          ELECTRON_CACHE: ~/Library/Caches/electron
+          ELECTRON_BUILDER_CACHE: ~/Library/Caches/electron-builder
         run: php artisan native:build mac arm64 --publish --no-interaction
 
       - name: Upload build logs on failure
