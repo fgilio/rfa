@@ -7,8 +7,9 @@ git tag v1.2.0
 git push --tags
 ```
 
-- CI gate (lint, types, test) runs on Ubuntu first
-- Build runs on `macos-14` (arm64), publishes to GitHub Releases as **draft**
+- Server-side ruleset "Protect release tags" rejects `v*` tag pushes on any SHA without green CI (all 5 checks: lint, types, test-core, test-browser, benchmark-perf). Admin bypass enabled for yanking bad tags.
+- CI gate (lint, types, test) also runs in-workflow on Ubuntu before the macOS build
+- Build runs on `macos-15` (arm64), publishes to GitHub Releases as **draft**
 - Publish the draft via `gh release edit vX.Y.Z --draft=false`
 - Tag must be `vX.Y.Z` (semver with `v` prefix). Version injected from tag automatically.
 

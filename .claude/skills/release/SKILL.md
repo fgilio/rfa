@@ -8,6 +8,15 @@ user_invocable: true
 
 Ship a new version of rfa through the GitHub Actions release pipeline.
 
+## Release gating
+
+Two GitHub rulesets guard the pipeline server-side:
+
+- **"Protect main"** (branch ruleset on `main`): requires PR + all 5 CI checks green (`lint`, `types`, `test-core`, `test-browser`, `benchmark-perf`). Admin bypass enabled for emergency direct pushes.
+- **"Protect release tags"** (tag ruleset on `v*`): same 5 checks must be green on the tagged SHA. `git push --tags` is rejected by GitHub if CI isn't green on that SHA. Admin bypass enabled so mistaken tags can be deleted (`git push --delete origin vX.Y.Z`).
+
+If pre-flight fails locally, the tag push will also fail at the server. Don't bypass.
+
 ## Steps
 
 ### 1. Determine version
