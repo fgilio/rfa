@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Cache;
 
 final readonly class ResolveStartupRouteAction
 {
-    public const string CACHE_KEY = 'last-opened-project-slug';
+    private const string CACHE_KEY = 'last-opened-project-slug';
 
     public function handle(): string
     {
@@ -35,15 +35,22 @@ final readonly class ResolveStartupRouteAction
         return route('no-projects');
     }
 
-    /** Clears the last-opened slug if it matches. Returns true when cleared. */
-    public function forgetIfLastOpened(string $slug): bool
+    public function lastOpenedSlug(): ?string
     {
-        if (Cache::get(self::CACHE_KEY) !== $slug) {
-            return false;
+        return Cache::get(self::CACHE_KEY);
+    }
+
+    public function rememberLastOpened(string $slug): void
+    {
+        if (Cache::get(self::CACHE_KEY) === $slug) {
+            return;
         }
 
-        Cache::forget(self::CACHE_KEY);
+        Cache::forever(self::CACHE_KEY, $slug);
+    }
 
-        return true;
+    public function forgetLastOpened(): void
+    {
+        Cache::forget(self::CACHE_KEY);
     }
 }

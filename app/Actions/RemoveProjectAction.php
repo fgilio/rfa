@@ -22,14 +22,10 @@ final readonly class RemoveProjectAction
             return null;
         }
 
-        $wasLastOpened = $this->resolveStartupRoute->forgetIfLastOpened($project->slug);
+        $wasLastOpened = $this->resolveStartupRoute->lastOpenedSlug() === $project->slug;
 
         $project->delete();
 
-        if ($wasLastOpened) {
-            return $this->resolveStartupRoute->handle();
-        }
-
-        return null;
+        return $wasLastOpened ? $this->resolveStartupRoute->handle() : null;
     }
 }

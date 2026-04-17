@@ -110,9 +110,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->projectBranch = $project['branch'] ?? '';
         $this->projectSlug = $project['slug'];
 
-        if (Cache::get(ResolveStartupRouteAction::CACHE_KEY) !== $slug) {
-            Cache::forever(ResolveStartupRouteAction::CACHE_KEY, $slug);
-        }
+        app(ResolveStartupRouteAction::class)->rememberLastOpened($slug);
 
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title("rfa - {$this->projectName}");

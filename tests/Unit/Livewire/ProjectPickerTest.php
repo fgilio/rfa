@@ -3,7 +3,6 @@
 use App\Actions\ResolveStartupRouteAction;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
-use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -106,7 +105,7 @@ test('removeProject redirects to next target when removing the current project',
     $current = Project::factory()->create(['slug' => 'current', 'updated_at' => now()->subHour()]);
     Project::factory()->create(['slug' => 'surviving', 'updated_at' => now()]);
 
-    Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'current');
+    app(ResolveStartupRouteAction::class)->rememberLastOpened('current');
 
     Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current'])
         ->call('removeProject', $current->id)
@@ -118,7 +117,7 @@ test('removeProject redirects to next target when removing the current project',
 test('removeProject redirects to no-projects when removing the last project', function () {
     $only = Project::factory()->create(['slug' => 'only']);
 
-    Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'only');
+    app(ResolveStartupRouteAction::class)->rememberLastOpened('only');
 
     Livewire::test('project-picker', ['currentSlug' => 'only', 'projectName' => 'Only'])
         ->call('removeProject', $only->id)
@@ -131,7 +130,7 @@ test('removeProject refreshes list when removing a non-current project', functio
     $keep = Project::factory()->create(['slug' => 'keep']);
     $gone = Project::factory()->create(['slug' => 'gone']);
 
-    Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'keep');
+    app(ResolveStartupRouteAction::class)->rememberLastOpened('keep');
 
     Livewire::test('project-picker', ['currentSlug' => 'keep', 'projectName' => 'Keep'])
         ->assertSet('totalProjects', 2)
