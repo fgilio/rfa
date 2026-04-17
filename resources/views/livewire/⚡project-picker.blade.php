@@ -56,12 +56,6 @@ class extends Component
 
     public function selectProject(string $slug): void
     {
-        if ($slug === $this->currentSlug) {
-            $this->dispatch('project-picker:close');
-
-            return;
-        }
-
         $this->redirect(route('review-page', ['slug' => $slug]));
     }
 
@@ -94,6 +88,7 @@ class extends Component
     x-data="{
         open: false,
         selectedIndex: -1,
+        currentSlug: @js($currentSlug),
         toggle() {
             this.open ? this.close() : this.openPanel();
         },
@@ -106,6 +101,9 @@ class extends Component
         close() {
             this.open = false;
             this.selectedIndex = -1;
+        },
+        selectSlug(slug) {
+            slug === this.currentSlug ? this.close() : $wire.selectProject(slug);
         },
         rows() {
             return Array.from(this.$refs.rowList?.querySelectorAll('[data-project-picker-row]') ?? []);
@@ -122,7 +120,7 @@ class extends Component
             const rows = this.rows();
             const index = this.selectedIndex >= 0 ? this.selectedIndex : 0;
             const slug = rows[index]?.dataset.slug;
-            if (slug) $wire.selectProject(slug);
+            if (slug) this.selectSlug(slug);
         },
         isHotkey(e) {
             return (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k';
@@ -228,7 +226,7 @@ class extends Component
                                     'bg-gh-link/5 border-l-2 border-l-gh-link' => $project['slug'] === $currentSlug,
                                 ])
                                 :class="selectedIndex === {{ $rowIndex }} ? 'bg-gh-text/10' : 'hover:bg-gh-border/30'"
-                                @click="$wire.selectProject('{{ $project['slug'] }}')"
+                                @click="selectSlug('{{ $project['slug'] }}')"
                                 @mouseenter="selectedIndex = {{ $rowIndex }}"
                             >
                                 <div class="flex items-center justify-between gap-3">

@@ -40,15 +40,6 @@ test('selectProject redirects to review-page for a different project', function 
         ->assertRedirect(route('review-page', ['slug' => 'other']));
 });
 
-test('selectProject on current project dispatches close instead of redirecting', function () {
-    Project::factory()->create(['slug' => 'current']);
-
-    Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current'])
-        ->call('selectProject', 'current')
-        ->assertNoRedirect()
-        ->assertDispatched('project-picker:close');
-});
-
 test('removeProject redirects to next target when removing the current project', function () {
     $current = Project::factory()->create(['slug' => 'current', 'updated_at' => now()->subHour()]);
     Project::factory()->create(['slug' => 'surviving', 'updated_at' => now()]);
