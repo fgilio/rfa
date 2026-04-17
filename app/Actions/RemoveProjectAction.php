@@ -9,19 +9,33 @@ use Illuminate\Support\Facades\Cache;
 
 final readonly class RemoveProjectAction
 {
-    public function handle(int $projectId): void
+    public function __construct(private ResolveStartupRouteAction $resolveStartupRoute) {}
+
+    /**
+     * Remove a project. When the removed project was the last-opened one,
+     * returns the next route to navigate to so the caller can redirect.
+     *
+     * @return array{name: string, params: array<string, string>}|null
+     */
+    public function handle(int $projectId): ?array
     {
         $project = Project::find($projectId);
 
         if (! $project) {
-            return;
+            return null;
         }
 
         $slug = $project->slug;
+        $wasLastOpened = Cache::get(ResolveStartupRouteAction::CACHE_KEY) === $slug;
+
         $project->delete();
 
-        if (Cache::get(ResolveStartupRouteAction::CACHE_KEY) === $slug) {
+        if ($wasLastOpened) {
             Cache::forget(ResolveStartupRouteAction::CACHE_KEY);
+
+            return $this->resolveStartupRoute->handle();
         }
+
+        return null;
     }
 }

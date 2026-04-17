@@ -20,15 +20,16 @@ test('deletes project by ID', function () {
         'branch' => 'main',
     ]);
 
-    app(RemoveProjectAction::class)->handle($project->id);
+    $result = app(RemoveProjectAction::class)->handle($project->id);
 
     expect(Project::find($project->id))->toBeNull();
+    expect($result)->toBeNull();
 });
 
 test('no-op when project does not exist', function () {
-    app(RemoveProjectAction::class)->handle(9999);
+    $result = app(RemoveProjectAction::class)->handle(9999);
 
-    expect(true)->toBeTrue();
+    expect($result)->toBeNull();
 });
 
 test('cascading delete removes associated review session', function () {
@@ -71,4 +72,36 @@ test('preserves last-opened cache when removing a different project', function (
     app(RemoveProjectAction::class)->handle($projectB->id);
 
     expect(Cache::get(ResolveStartupRouteAction::CACHE_KEY))->toBe('project-a');
+});
+
+test('returns next route when removing the last-opened project leaves another behind', function () {
+    $current = Project::factory()->create(['slug' => 'current', 'updated_at' => now()->subHour()]);
+    Project::factory()->create(['slug' => 'surviving', 'updated_at' => now()]);
+
+    Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'current');
+
+    $result = app(RemoveProjectAction::class)->handle($current->id);
+
+    expect($result)->toBe(['name' => 'review-page', 'params' => ['slug' => 'surviving']]);
+});
+
+test('returns no-projects route when removing the only project', function () {
+    $only = Project::factory()->create(['slug' => 'only']);
+
+    Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'only');
+
+    $result = app(RemoveProjectAction::class)->handle($only->id);
+
+    expect($result)->toBe(['name' => 'no-projects', 'params' => []]);
+});
+
+test('returns null when removing a non-current project', function () {
+    $projectA = Project::factory()->create(['slug' => 'project-a']);
+    $projectB = Project::factory()->create(['slug' => 'project-b']);
+
+    Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'project-a');
+
+    $result = app(RemoveProjectAction::class)->handle($projectB->id);
+
+    expect($result)->toBeNull();
 });

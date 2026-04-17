@@ -6,7 +6,7 @@ use App\Actions\ServeImageAction;
 use App\Models\Project;
 use Illuminate\Support\Facades\Route;
 
-Route::livewire('/', 'pages::dashboard-page')->name('dashboard');
+Route::livewire('/', 'pages::no-projects-page')->name('no-projects');
 Route::livewire('/p/{slug}/c/{hash}', 'pages::review-page')->where('hash', '[0-9a-fA-F]{4,40}')->name('review-page.commit');
 Route::livewire('/p/{slug}/{ref?}/{baseRef?}', 'pages::review-page')->name('review-page');
 
