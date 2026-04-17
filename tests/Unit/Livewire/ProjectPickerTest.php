@@ -64,6 +64,7 @@ test('search filters the project list', function () {
     ]);
 
     Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'Anchor'])
+        ->call('refreshProjects')
         ->set('search', 'zyxwvu')
         ->assertSet('totalProjects', 2)
         ->assertSee('zyxwvu-included')
@@ -171,4 +172,22 @@ test('projects-changed refreshes the list once the picker has been opened', func
 
     $component->dispatch('projects-changed')
         ->assertSet('totalProjects', 2);
+});
+
+test('setting sortBy before open does not eagerly hydrate', function () {
+    Project::factory()->create(['slug' => 'a']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'a', 'projectName' => 'A'])
+        ->set('sortBy', 'alpha')
+        ->assertSet('loaded', false)
+        ->assertSet('totalProjects', 0);
+});
+
+test('setting search before open does not eagerly hydrate', function () {
+    Project::factory()->create(['slug' => 'a']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'a', 'projectName' => 'A'])
+        ->set('search', 'anything')
+        ->assertSet('loaded', false)
+        ->assertSet('totalProjects', 0);
 });

@@ -27,11 +27,19 @@ new class extends Component
 
     public function updatedSearch(): void
     {
+        if (! $this->loaded) {
+            return;
+        }
+
         $this->refreshProjects();
     }
 
     public function updatedSortBy(): void
     {
+        if (! $this->loaded) {
+            return;
+        }
+
         $this->refreshProjects();
     }
 
