@@ -59,11 +59,6 @@ test('escape closes the picker', function () {
 
     $this->pressGlobalKey($page, 'Escape');
 
+    // waitForFunction blocks until the dialog is hidden (offsetParent === null means display: none).
     $page->page()->waitForFunction("document.querySelector('[role=\"dialog\"][aria-label=\"Switch project\"]')?.offsetParent === null");
-
-    $visible = $page->script("
-        const panel = document.querySelector('[role=\"dialog\"][aria-label=\"Switch project\"]');
-        panel ? panel.offsetParent !== null : false
-    ");
-    expect($visible)->toBe(false);
 });

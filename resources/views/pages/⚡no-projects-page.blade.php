@@ -59,7 +59,7 @@ new #[Layout('layouts.app')] class extends Component
     <main class="flex-1 flex items-center justify-center px-6">
         <div class="text-center">
             <p class="rfa-logo text-5xl text-gh-muted/30 mb-6">rfa</p>
-            <flux:heading class="mb-3">No projects yet</flux:heading>
+            <flux:heading class="mb-3 font-display tracking-brutal">No projects yet</flux:heading>
             @native
                 <flux:text variant="subtle" size="sm" class="mb-6">Open a git repository or scan a folder to get started</flux:text>
                 <livewire:add-project-menu variant="expanded" />

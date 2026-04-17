@@ -14,7 +14,7 @@ test('renders the no-projects empty state', function () {
 });
 
 test('no-projects route serves the empty state page', function () {
-    $this->get('/no-projects')->assertSee('No projects yet');
+    $this->get(route('no-projects'))->assertSee('No projects yet');
 });
 
 test('root route redirects to no-projects when no projects exist', function () {

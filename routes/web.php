@@ -5,9 +5,10 @@ use App\Actions\GetProjectStatusAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\ServeImageAction;
 use App\Models\Project;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
+Route::get('/', function (): RedirectResponse {
     $route = app(ResolveStartupRouteAction::class)->handle();
 
     return redirect()->route($route['name'], $route['params']);

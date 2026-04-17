@@ -87,16 +87,19 @@ new class extends Component
         openPanel() {
             this.open = true;
             this.selectedIndex = -1;
-            if (!$wire.loaded) $wire.refreshProjects();
-            this.$nextTick(() => this.$refs.searchInput?.focus());
+            if ($wire.search !== '') $wire.set('search', '');
+            if (!$wire.loaded) {
+                $wire.refreshProjects().then(() => this.$nextTick(() => this.$refs.searchInput?.focus()));
+            } else {
+                this.$nextTick(() => this.$refs.searchInput?.focus());
+            }
         },
         close() {
             this.open = false;
             this.selectedIndex = -1;
-            if ($wire.search !== '') $wire.set('search', '');
         },
         rows() {
-            return Array.from(document.querySelectorAll('[data-project-picker-row]'));
+            return Array.from(this.$refs.rowList?.querySelectorAll('[data-project-picker-row]') ?? []);
         },
         navigate(dir) {
             const rows = this.rows();
@@ -155,56 +158,70 @@ new class extends Component
                 role="dialog"
                 aria-label="Switch project"
             >
-                {{-- Search + controls --}}
-                <div class="p-3 border-b border-gh-border flex items-center gap-2 shrink-0">
-                    <div class="flex-1">
-                        <flux:input
+                @if(! $loaded)
+                    {{-- Lightweight skeleton until first open triggers refreshProjects --}}
+                    <div class="p-3 border-b border-gh-border shrink-0">
+                        <input
                             x-ref="searchInput"
-                            wire:model.live.debounce.200ms="search"
-                            @input="selectedIndex = -1"
+                            type="text"
                             placeholder="Switch to project..."
-                            icon="magnifying-glass"
-                            icon:variant="outline"
-                            size="sm"
-                            variant="filled"
+                            disabled
+                            class="w-full text-sm py-1.5 px-3 rounded-lg bg-zinc-800/5 dark:bg-white/10 text-zinc-700 dark:text-zinc-200 placeholder-zinc-500 dark:placeholder-white/60"
                         />
                     </div>
-                    @php $nextSort = $sortBy === 'recent' ? 'alpha' : 'recent'; @endphp
-                    <flux:button
-                        variant="ghost"
-                        size="sm"
-                        x-on:click="$store.settings.dashboardSort = @js($nextSort); $wire.set('sortBy', @js($nextSort))"
-                        class="text-gh-muted hover:text-gh-text font-mono text-xs shrink-0"
-                        tooltip="Toggle sort"
-                    >
-                        <flux:icon icon="arrows-up-down" variant="outline" class="!size-3.5" />
-                        <span>{{ $sortBy === 'recent' ? 'Recent' : 'A–Z' }}</span>
-                    </flux:button>
-                    <livewire:add-project-menu />
-                </div>
-
-                {{-- List --}}
-                <div class="overflow-y-auto flex-1">
-                    @php $matchCount = collect($projectGroups)->flatten(1)->count(); @endphp
-
-                    @if(! $loaded)
-                        <div class="px-4 py-10 text-center">
-                            <p class="font-mono text-xs text-gh-muted">Loading…</p>
+                    <div class="flex-1 px-4 py-10 text-center" x-ref="rowList">
+                        <p class="font-mono text-xs text-gh-muted">Loading…</p>
+                    </div>
+                    <div class="px-3 py-2 border-t border-gh-border shrink-0 bg-gh-surface/50">&nbsp;</div>
+                @else
+                    {{-- Search + controls --}}
+                    <div class="p-3 border-b border-gh-border flex items-center gap-2 shrink-0">
+                        <div class="flex-1">
+                            <flux:input
+                                x-ref="searchInput"
+                                wire:model.live.debounce.200ms="search"
+                                @input="selectedIndex = -1"
+                                placeholder="Switch to project..."
+                                icon="magnifying-glass"
+                                icon:variant="outline"
+                                size="sm"
+                                variant="filled"
+                            />
                         </div>
-                    @elseif($matchCount === 0)
-                        <div class="px-4 py-10 text-center">
-                            <p class="font-mono text-xs text-gh-muted">
-                                @if($search !== '')
-                                    No matching projects
-                                @else
-                                    No projects yet
-                                @endif
-                            </p>
-                        </div>
-                    @endif
+                        @php $nextSort = $sortBy === 'recent' ? 'alpha' : 'recent'; @endphp
+                        <flux:button
+                            variant="ghost"
+                            size="sm"
+                            x-on:click="$store.settings.dashboardSort = @js($nextSort); $wire.set('sortBy', @js($nextSort))"
+                            class="text-gh-muted hover:text-gh-text font-mono text-xs shrink-0"
+                            tooltip="Toggle sort"
+                        >
+                            <flux:icon icon="arrows-up-down" variant="outline" class="!size-3.5" />
+                            <span>{{ $sortBy === 'recent' ? 'Recent' : 'A–Z' }}</span>
+                        </flux:button>
+                        @native
+                            <livewire:add-project-menu />
+                        @endnative
+                    </div>
 
-                    @php $rowIndex = 0; @endphp
-                    @foreach($projectGroups as $commonDir => $projects)
+                    {{-- List --}}
+                    <div class="overflow-y-auto flex-1" x-ref="rowList">
+                        @php $matchCount = collect($projectGroups)->flatten(1)->count(); @endphp
+
+                        @if($matchCount === 0)
+                            <div class="px-4 py-10 text-center">
+                                <p class="font-mono text-xs text-gh-muted">
+                                    @if($search !== '')
+                                        No matching projects
+                                    @else
+                                        No projects yet
+                                    @endif
+                                </p>
+                            </div>
+                        @endif
+
+                        @php $rowIndex = 0; @endphp
+                        @foreach($projectGroups as $commonDir => $projects)
                         <div wire:key="picker-group-{{ md5($commonDir) }}">
                             @if(count($projects) > 1)
                                 <div class="px-3 pt-3 pb-1">
@@ -255,7 +272,7 @@ new class extends Component
                                                 icon:variant="outline"
                                                 wire:click.stop="removeProject({{ $project['id'] }})"
                                                 wire:confirm="Remove this project from the list?"
-                                                class="text-gh-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                class="text-gh-muted hover:text-red-500 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                                                 tooltip="Remove project"
                                             />
                                         </div>
@@ -266,25 +283,24 @@ new class extends Component
                             @endforeach
                         </div>
                     @endforeach
-                </div>
+                    </div>
 
-                {{-- Footer hints --}}
-                <div class="px-3 py-2 border-t border-gh-border flex items-center justify-between shrink-0 bg-gh-surface/50">
-                    <span class="font-mono text-[11px] text-gh-muted">
-                        @if(! $loaded)
-                            &nbsp;
-                        @elseif($search !== '')
-                            {{ $matchCount }}/{{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}
-                        @else
-                            {{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}
-                        @endif
-                    </span>
-                    <span class="font-mono text-[11px] text-gh-muted/60 flex items-center gap-2">
-                        <span><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">↑</kbd><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">↓</kbd> nav</span>
-                        <span><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">↵</kbd> open</span>
-                        <span><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">esc</kbd> close</span>
-                    </span>
-                </div>
+                    {{-- Footer hints --}}
+                    <div class="px-3 py-2 border-t border-gh-border flex items-center justify-between shrink-0 bg-gh-surface/50">
+                        <span class="font-mono text-[11px] text-gh-muted">
+                            @if($search !== '')
+                                {{ $matchCount }}/{{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}
+                            @else
+                                {{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}
+                            @endif
+                        </span>
+                        <span class="font-mono text-[11px] text-gh-muted/60 flex items-center gap-2">
+                            <span><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">↑</kbd><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">↓</kbd> nav</span>
+                            <span><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">↵</kbd> open</span>
+                            <span><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">esc</kbd> close</span>
+                        </span>
+                    </div>
+                @endif
             </div>
         </div>
     </template>

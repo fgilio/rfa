@@ -24,7 +24,10 @@ final readonly class ResolveStartupRouteAction
             Cache::forget(self::CACHE_KEY);
         }
 
-        $mostRecent = Project::query()->orderByDesc('updated_at')->first();
+        $mostRecent = Project::query()
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->first();
 
         if ($mostRecent) {
             return ['name' => 'review-page', 'params' => ['slug' => $mostRecent->slug]];

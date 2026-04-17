@@ -123,6 +123,18 @@ test('removeProject redirects to next target when removing the current project',
     expect(Project::find($current->id))->toBeNull();
 });
 
+test('removeProject redirects to no-projects when removing the last project', function () {
+    $only = Project::factory()->create(['slug' => 'only']);
+
+    Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'only');
+
+    Livewire::test('project-picker', ['currentSlug' => 'only', 'projectName' => 'Only'])
+        ->call('removeProject', $only->id)
+        ->assertRedirect(route('no-projects'));
+
+    expect(Project::find($only->id))->toBeNull();
+});
+
 test('removeProject refreshes list when removing a non-current project', function () {
     $keep = Project::factory()->create(['slug' => 'keep']);
     $gone = Project::factory()->create(['slug' => 'gone']);
