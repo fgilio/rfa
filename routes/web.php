@@ -2,11 +2,18 @@
 
 use App\Actions\CheckForChangesAction;
 use App\Actions\GetProjectStatusAction;
+use App\Actions\ResolveStartupRouteAction;
 use App\Actions\ServeImageAction;
 use App\Models\Project;
 use Illuminate\Support\Facades\Route;
 
-Route::livewire('/', 'pages::no-projects-page')->name('no-projects');
+Route::get('/', function () {
+    $route = app(ResolveStartupRouteAction::class)->handle();
+
+    return redirect()->route($route['name'], $route['params']);
+})->name('home');
+
+Route::livewire('/no-projects', 'pages::no-projects-page')->name('no-projects');
 Route::livewire('/p/{slug}/c/{hash}', 'pages::review-page')->where('hash', '[0-9a-fA-F]{4,40}')->name('review-page.commit');
 Route::livewire('/p/{slug}/{ref?}/{baseRef?}', 'pages::review-page')->name('review-page');
 

@@ -23,10 +23,7 @@ new class extends Component
 
     public int $totalProjects = 0;
 
-    public function mount(): void
-    {
-        $this->refreshProjects();
-    }
+    public bool $loaded = false;
 
     public function updatedSearch(): void
     {
@@ -44,6 +41,7 @@ new class extends Component
         $result = app(ListProjectsAction::class)->handle($this->sortBy, $this->search);
         $this->projectGroups = $result['groups'];
         $this->totalProjects = $result['total'];
+        $this->loaded = true;
     }
 
     public function selectProject(string $slug): void
@@ -89,6 +87,7 @@ new class extends Component
         openPanel() {
             this.open = true;
             this.selectedIndex = -1;
+            if (!$wire.loaded) $wire.refreshProjects();
             this.$nextTick(() => this.$refs.searchInput?.focus());
         },
         close() {
@@ -188,7 +187,11 @@ new class extends Component
                 <div class="overflow-y-auto flex-1">
                     @php $matchCount = collect($projectGroups)->flatten(1)->count(); @endphp
 
-                    @if($matchCount === 0)
+                    @if(! $loaded)
+                        <div class="px-4 py-10 text-center">
+                            <p class="font-mono text-xs text-gh-muted">Loading…</p>
+                        </div>
+                    @elseif($matchCount === 0)
                         <div class="px-4 py-10 text-center">
                             <p class="font-mono text-xs text-gh-muted">
                                 @if($search !== '')
@@ -268,7 +271,9 @@ new class extends Component
                 {{-- Footer hints --}}
                 <div class="px-3 py-2 border-t border-gh-border flex items-center justify-between shrink-0 bg-gh-surface/50">
                     <span class="font-mono text-[11px] text-gh-muted">
-                        @if($search !== '')
+                        @if(! $loaded)
+                            &nbsp;
+                        @elseif($search !== '')
                             {{ $matchCount }}/{{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}
                         @else
                             {{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}

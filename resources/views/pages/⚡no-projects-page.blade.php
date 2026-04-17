@@ -1,6 +1,8 @@
 <?php
 
+use App\Actions\ResolveStartupRouteAction;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Native\Desktop\Facades\Shell;
 
@@ -10,6 +12,16 @@ new #[Layout('layouts.app')] class extends Component
     {
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title('rfa');
+        }
+    }
+
+    #[On('projects-changed')]
+    public function redirectIfProjectRegistered(): void
+    {
+        $route = app(ResolveStartupRouteAction::class)->handle();
+
+        if ($route['name'] !== 'no-projects') {
+            $this->redirect(route($route['name'], $route['params']));
         }
     }
 

@@ -9,7 +9,15 @@ use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
-test('mounts with current project and loads list', function () {
+test('does not load projects on mount', function () {
+    Project::factory()->create(['slug' => 'a']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'a', 'projectName' => 'A'])
+        ->assertSet('loaded', false)
+        ->assertSet('totalProjects', 0);
+});
+
+test('refreshProjects loads the list on demand', function () {
     Project::create([
         'slug' => 'current',
         'name' => 'Current',
@@ -29,6 +37,8 @@ test('mounts with current project and loads list', function () {
     ]);
 
     Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current'])
+        ->call('refreshProjects')
+        ->assertSet('loaded', true)
         ->assertSet('totalProjects', 2)
         ->assertSee('Current')
         ->assertSee('Other');
@@ -120,6 +130,7 @@ test('removeProject refreshes list when removing a non-current project', functio
     Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'keep');
 
     Livewire::test('project-picker', ['currentSlug' => 'keep', 'projectName' => 'Keep'])
+        ->call('refreshProjects')
         ->assertSet('totalProjects', 2)
         ->call('removeProject', $gone->id)
         ->assertNoRedirect()
@@ -130,9 +141,11 @@ test('responds to projects-changed event by refreshing', function () {
     Project::factory()->create(['slug' => 'a']);
 
     $component = Livewire::test('project-picker', ['currentSlug' => 'a', 'projectName' => 'A'])
-        ->assertSet('totalProjects', 1);
+        ->assertSet('loaded', false);
 
     Project::factory()->create(['slug' => 'b']);
 
-    $component->dispatch('projects-changed')->assertSet('totalProjects', 2);
+    $component->dispatch('projects-changed')
+        ->assertSet('loaded', true)
+        ->assertSet('totalProjects', 2);
 });
