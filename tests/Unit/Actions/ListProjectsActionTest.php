@@ -9,7 +9,7 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 
 function searchNames(string $query): array
 {
-    return collect(app(ListProjectsAction::class)->handle('recent', $query)['groups'])->flatten(1)->pluck('name')->all();
+    return collect(app(ListProjectsAction::class)->handle('recent', $query)->groups)->flatten(1)->pluck('name')->all();
 }
 
 // -- search ranking --
@@ -57,7 +57,8 @@ test('handle filters projects by search', function () {
     $result = app(ListProjectsAction::class)->handle('recent', 'rfa');
 
     expect(searchNames('rfa'))->toBe(['rfa'])
-        ->and($result['total'])->toBe(2);
+        ->and($result->total)->toBe(2)
+        ->and($result->matchCount)->toBe(1);
 });
 
 test('handle ranks exact match above substring', function () {
@@ -73,5 +74,6 @@ test('handle returns all projects when search is empty', function () {
 
     $result = app(ListProjectsAction::class)->handle('recent', '');
 
-    expect($result['total'])->toBe(2);
+    expect($result->total)->toBe(2)
+        ->and($result->matchCount)->toBe(2);
 });

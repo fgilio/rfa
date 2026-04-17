@@ -26,6 +26,8 @@ class extends Component
 
     public int $totalProjects = 0;
 
+    public int $matchCount = 0;
+
     public function mount(): void
     {
         $this->refreshProjects();
@@ -45,8 +47,9 @@ class extends Component
     public function refreshProjects(): void
     {
         $result = app(ListProjectsAction::class)->handle($this->sortBy, $this->search);
-        $this->projectGroups = $result['groups'];
-        $this->totalProjects = $result['total'];
+        $this->projectGroups = $result->groups;
+        $this->totalProjects = $result->total;
+        $this->matchCount = $result->matchCount;
     }
 
     public function selectProject(string $slug): void
@@ -195,8 +198,6 @@ class extends Component
                 </div>
 
                 <div class="overflow-y-auto flex-1" x-ref="rowList">
-                    @php $matchCount = collect($projectGroups)->flatten(1)->count(); @endphp
-
                     @if($matchCount === 0)
                         <div class="px-4 py-10 text-center">
                             <p class="font-mono text-xs text-gh-muted">

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\ProjectListResult;
 use App\Models\Project;
 use App\Models\ReviewSession;
 use Carbon\Carbon;
@@ -11,10 +12,7 @@ use Illuminate\Support\Str;
 
 final readonly class ListProjectsAction
 {
-    /**
-     * @return array{groups: array<string, array<int, array<string, mixed>>>, total: int}
-     */
-    public function handle(string $sortBy = 'recent', string $search = ''): array
+    public function handle(string $sortBy = 'recent', string $search = ''): ProjectListResult
     {
         $projects = Project::query()
             ->select('projects.*')
@@ -57,12 +55,14 @@ final readonly class ListProjectsAction
                 ])
                 ->map(fn (array $pair) => $pair['project']);
 
+            $matchCount = $projects->count();
+
             $groups = $projects
                 ->groupBy('git_common_dir')
                 ->map(fn ($group) => $group->values()->all())
                 ->all();
 
-            return ['groups' => $groups, 'total' => $total];
+            return new ProjectListResult($groups, $total, $matchCount);
         }
 
         if ($sortBy === 'alpha') {
@@ -79,7 +79,7 @@ final readonly class ListProjectsAction
             ->map(fn ($group) => $group->values()->all())
             ->all();
 
-        return ['groups' => $groups, 'total' => $total];
+        return new ProjectListResult($groups, $total, $total);
     }
 
     /**
