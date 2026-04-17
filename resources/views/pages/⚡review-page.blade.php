@@ -707,7 +707,7 @@ new #[Layout('layouts.app')] class extends Component
                 <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
             @endnative
             @if($projectBranch)
-                <span class="font-display text-base leading-none text-gh-muted/40 select-none -mt-[3px]" aria-hidden="true">/</span>
+                <x-header-separator />
                 <livewire:branch-explorer :repo-path="$repoPath" :current-branch="$projectBranch" :project-slug="$projectSlug" :active-commit-hash="$diffTo" />
             @endif
         </div>

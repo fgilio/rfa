@@ -67,19 +67,16 @@ new class extends Component {
     @keydown.window="handleKeydown($event)"
 >
     {{-- Trigger: inline branch segment --}}
-    <flux:tooltip content="Switch branch">
-        <button
-            @click="openPanel()"
-            class="group inline-flex items-center gap-1 text-xs font-mono leading-none text-gh-muted hover:text-gh-text transition-colors cursor-pointer"
-            aria-label="Switch branch"
-            aria-haspopup="dialog"
-            :aria-expanded="open"
-        >
-            <flux:icon icon="share" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
-            <span class="tracking-tight">{{ $currentBranch }}</span>
-            <flux:icon icon="chevron-down" variant="outline" class="!size-3 text-gh-muted/60 group-hover:text-gh-text transition-colors" />
-        </button>
-    </flux:tooltip>
+    <x-header-picker-trigger
+        tooltip="Switch branch"
+        aria-label="Switch branch"
+        variant="mono"
+        x-on:click="openPanel()"
+        x-bind:aria-expanded="open"
+    >
+        <flux:icon icon="share" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
+        <span class="tracking-tight">{{ $currentBranch }}</span>
+    </x-header-picker-trigger>
 
     {{-- Overlay panel --}}
     <template x-teleport="body">

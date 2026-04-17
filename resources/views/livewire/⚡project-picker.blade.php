@@ -144,19 +144,15 @@ class extends Component
         if ($event.key === 'Enter' && inSearch) { $event.preventDefault(); openSelected(); return; }
     "
 >
-    <flux:tooltip content="Switch project · ⌘K">
-        <button
-            type="button"
-            @click="toggle()"
-            class="group inline-flex items-center gap-1 font-display font-bold tracking-brutal-tight text-base leading-none cursor-pointer hover:text-gh-link transition-colors"
-            aria-label="Switch project (⌘K)"
-            aria-haspopup="dialog"
-            :aria-expanded="open"
-        >
-            <span>{{ $projectName }}</span>
-            <flux:icon icon="chevron-down" variant="outline" class="!size-3 text-gh-muted group-hover:text-gh-link transition-colors" />
-        </button>
-    </flux:tooltip>
+    <x-header-picker-trigger
+        tooltip="Switch project · ⌘K"
+        aria-label="Switch project (⌘K)"
+        variant="display"
+        x-on:click="toggle()"
+        x-bind:aria-expanded="open"
+    >
+        <span>{{ $projectName }}</span>
+    </x-header-picker-trigger>
 
     <template x-teleport="body">
         <div x-show="open" x-cloak class="fixed inset-0 z-[60]" @click.self="close()">
