@@ -9,7 +9,7 @@ beforeEach(function () {
 test('clicking the header project name opens the picker', function () {
     $slug = $this->testProjectSlugs[0];
 
-    $page = $this->visit('/p/'.$slug);
+    $page = $this->visitAndLoad('/p/'.$slug);
 
     $page->page()->getByRole('button', ['name' => 'Switch project'])->click();
 
@@ -22,7 +22,7 @@ test('clicking the header project name opens the picker', function () {
 test('cmd+k opens the picker', function () {
     $slug = $this->testProjectSlugs[0];
 
-    $page = $this->visit('/p/'.$slug);
+    $page = $this->visitAndLoad('/p/'.$slug);
 
     $this->pressGlobalKey($page, 'k', ['metaKey' => true]);
 
@@ -37,7 +37,7 @@ test('cmd+k opens the picker', function () {
 test('search filters picker rows', function () {
     $slug = $this->testProjectSlugs[0];
 
-    $page = $this->visit('/p/'.$slug);
+    $page = $this->visitAndLoad('/p/'.$slug);
 
     $this->pressGlobalKey($page, 'k', ['metaKey' => true]);
     $page->page()->waitForFunction("document.querySelectorAll('[data-project-picker-row]').length === 3");
@@ -52,7 +52,7 @@ test('search filters picker rows', function () {
 test('escape closes the picker', function () {
     $slug = $this->testProjectSlugs[0];
 
-    $page = $this->visit('/p/'.$slug);
+    $page = $this->visitAndLoad('/p/'.$slug);
 
     $this->pressGlobalKey($page, 'k', ['metaKey' => true]);
     $page->page()->waitForFunction("document.querySelectorAll('[data-project-picker-row]').length > 0");
