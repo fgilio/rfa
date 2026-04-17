@@ -9,15 +9,9 @@ use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
-test('does not load projects on mount', function () {
-    Project::factory()->create(['slug' => 'a']);
+beforeEach(fn () => Livewire::withoutLazyLoading());
 
-    Livewire::test('project-picker', ['currentSlug' => 'a', 'projectName' => 'A'])
-        ->assertSet('loaded', false)
-        ->assertSet('totalProjects', 0);
-});
-
-test('refreshProjects loads the list on demand', function () {
+test('mount loads the project list', function () {
     Project::create([
         'slug' => 'current',
         'name' => 'Current',
@@ -37,8 +31,6 @@ test('refreshProjects loads the list on demand', function () {
     ]);
 
     Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current'])
-        ->call('refreshProjects')
-        ->assertSet('loaded', true)
         ->assertSet('totalProjects', 2)
         ->assertSee('Current')
         ->assertSee('Other');
@@ -64,7 +56,6 @@ test('search filters the project list', function () {
     ]);
 
     Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'Anchor'])
-        ->call('refreshProjects')
         ->set('search', 'zyxwvu')
         ->assertSet('totalProjects', 2)
         ->assertSee('zyxwvu-included')
@@ -143,51 +134,20 @@ test('removeProject refreshes list when removing a non-current project', functio
     Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'keep');
 
     Livewire::test('project-picker', ['currentSlug' => 'keep', 'projectName' => 'Keep'])
-        ->call('refreshProjects')
         ->assertSet('totalProjects', 2)
         ->call('removeProject', $gone->id)
         ->assertNoRedirect()
         ->assertSet('totalProjects', 1);
 });
 
-test('projects-changed is a no-op until the picker has been opened', function () {
-    Project::factory()->create(['slug' => 'a']);
-
-    Livewire::test('project-picker', ['currentSlug' => 'a', 'projectName' => 'A'])
-        ->assertSet('loaded', false)
-        ->dispatch('projects-changed')
-        ->assertSet('loaded', false)
-        ->assertSet('totalProjects', 0);
-});
-
-test('projects-changed refreshes the list once the picker has been opened', function () {
+test('projects-changed refreshes the list', function () {
     Project::factory()->create(['slug' => 'a']);
 
     $component = Livewire::test('project-picker', ['currentSlug' => 'a', 'projectName' => 'A'])
-        ->call('refreshProjects')
-        ->assertSet('loaded', true)
         ->assertSet('totalProjects', 1);
 
     Project::factory()->create(['slug' => 'b']);
 
     $component->dispatch('projects-changed')
         ->assertSet('totalProjects', 2);
-});
-
-test('setting sortBy before open does not eagerly hydrate', function () {
-    Project::factory()->create(['slug' => 'a']);
-
-    Livewire::test('project-picker', ['currentSlug' => 'a', 'projectName' => 'A'])
-        ->set('sortBy', 'alpha')
-        ->assertSet('loaded', false)
-        ->assertSet('totalProjects', 0);
-});
-
-test('setting search before open does not eagerly hydrate', function () {
-    Project::factory()->create(['slug' => 'a']);
-
-    Livewire::test('project-picker', ['currentSlug' => 'a', 'projectName' => 'A'])
-        ->set('search', 'anything')
-        ->assertSet('loaded', false)
-        ->assertSet('totalProjects', 0);
 });
