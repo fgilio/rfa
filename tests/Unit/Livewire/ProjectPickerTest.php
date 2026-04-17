@@ -149,15 +149,26 @@ test('removeProject refreshes list when removing a non-current project', functio
         ->assertSet('totalProjects', 1);
 });
 
-test('responds to projects-changed event by refreshing', function () {
+test('projects-changed is a no-op until the picker has been opened', function () {
+    Project::factory()->create(['slug' => 'a']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'a', 'projectName' => 'A'])
+        ->assertSet('loaded', false)
+        ->dispatch('projects-changed')
+        ->assertSet('loaded', false)
+        ->assertSet('totalProjects', 0);
+});
+
+test('projects-changed refreshes the list once the picker has been opened', function () {
     Project::factory()->create(['slug' => 'a']);
 
     $component = Livewire::test('project-picker', ['currentSlug' => 'a', 'projectName' => 'A'])
-        ->assertSet('loaded', false);
+        ->call('refreshProjects')
+        ->assertSet('loaded', true)
+        ->assertSet('totalProjects', 1);
 
     Project::factory()->create(['slug' => 'b']);
 
     $component->dispatch('projects-changed')
-        ->assertSet('loaded', true)
         ->assertSet('totalProjects', 2);
 });

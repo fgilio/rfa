@@ -36,6 +36,15 @@ new class extends Component
     }
 
     #[On('projects-changed')]
+    public function projectsChanged(): void
+    {
+        if (! $this->loaded) {
+            return;
+        }
+
+        $this->refreshProjects();
+    }
+
     public function refreshProjects(): void
     {
         $result = app(ListProjectsAction::class)->handle($this->sortBy, $this->search);
@@ -131,7 +140,6 @@ new class extends Component
         if ($event.key === 'Enter' && inSearch) { $event.preventDefault(); openSelected(); return; }
     "
 >
-    {{-- Trigger: current project button --}}
     <button
         type="button"
         @click="toggle()"
@@ -145,13 +153,10 @@ new class extends Component
         <kbd class="ml-1 px-1 py-0.5 rounded border border-gh-border font-mono text-[10px] text-gh-muted/70 opacity-0 group-hover:opacity-100 transition-opacity">⌘K</kbd>
     </button>
 
-    {{-- Popover --}}
     <template x-teleport="body">
         <div x-show="open" x-cloak class="fixed inset-0 z-[60]" @click.self="close()">
-            {{-- Backdrop --}}
             <div class="absolute inset-0 bg-black/30" @click="close()"></div>
 
-            {{-- Panel --}}
             <div
                 class="fixed top-[calc(var(--header-h,56px)+6px)] left-4 z-[61] w-[460px] max-w-[calc(100vw-32px)] max-h-[70vh] bg-gh-bg border border-gh-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
                 @click.stop
@@ -159,7 +164,6 @@ new class extends Component
                 aria-label="Switch project"
             >
                 @if(! $loaded)
-                    {{-- Lightweight skeleton until first open triggers refreshProjects --}}
                     <div class="p-3 border-b border-gh-border shrink-0">
                         <input
                             x-ref="searchInput"
@@ -174,7 +178,6 @@ new class extends Component
                     </div>
                     <div class="px-3 py-2 border-t border-gh-border shrink-0 bg-gh-surface/50">&nbsp;</div>
                 @else
-                    {{-- Search + controls --}}
                     <div class="p-3 border-b border-gh-border flex items-center gap-2 shrink-0">
                         <div class="flex-1">
                             <flux:input
@@ -204,7 +207,6 @@ new class extends Component
                         @endnative
                     </div>
 
-                    {{-- List --}}
                     <div class="overflow-y-auto flex-1" x-ref="rowList">
                         @php $matchCount = collect($projectGroups)->flatten(1)->count(); @endphp
 
@@ -241,7 +243,6 @@ new class extends Component
                                 >
                                     <div class="flex items-center justify-between gap-3">
                                         <div class="flex items-center gap-2.5 min-w-0">
-                                            {{-- Current/status indicator --}}
                                             <span class="shrink-0 w-3.5 flex items-center justify-center">
                                                 @if($project['slug'] === $currentSlug)
                                                     <flux:icon icon="check" variant="outline" class="!size-3.5 text-gh-link" />
@@ -285,7 +286,6 @@ new class extends Component
                     @endforeach
                     </div>
 
-                    {{-- Footer hints --}}
                     <div class="px-3 py-2 border-t border-gh-border flex items-center justify-between shrink-0 bg-gh-surface/50">
                         <span class="font-mono text-[11px] text-gh-muted">
                             @if($search !== '')
