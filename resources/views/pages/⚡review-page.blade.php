@@ -702,13 +702,14 @@ new #[Layout('layouts.app')] class extends Component
 
     {{-- Header --}}
     <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
-        <div class="flex items-center gap-2.5">
+        <div class="flex items-center gap-2">
             @native
                 <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" />
             @else
                 <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
             @endnative
             @if($projectBranch)
+                <span class="font-display text-base leading-none text-gh-muted/40 select-none -mt-[3px]" aria-hidden="true">/</span>
                 <livewire:branch-explorer :repo-path="$repoPath" :current-branch="$projectBranch" :project-slug="$projectSlug" :active-commit-hash="$diffTo" />
             @endif
         </div>

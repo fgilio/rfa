@@ -148,18 +148,19 @@ new class extends Component
         if ($event.key === 'Enter' && inSearch) { $event.preventDefault(); openSelected(); return; }
     "
 >
-    <button
-        type="button"
-        @click="toggle()"
-        class="group inline-flex items-center gap-1.5 font-display font-bold tracking-brutal-tight text-base cursor-pointer hover:text-gh-link transition-colors"
-        aria-label="Switch project"
-        aria-haspopup="dialog"
-        :aria-expanded="open"
-    >
-        <span>{{ $projectName }}</span>
-        <flux:icon icon="chevron-down" variant="outline" class="!size-3.5 text-gh-muted group-hover:text-gh-link transition-colors" />
-        <kbd class="ml-1 px-1 py-0.5 rounded border border-gh-border font-mono text-[10px] text-gh-muted/70 opacity-0 group-hover:opacity-100 transition-opacity">⌘K</kbd>
-    </button>
+    <flux:tooltip content="Switch project · ⌘K">
+        <button
+            type="button"
+            @click="toggle()"
+            class="group inline-flex items-center gap-1 font-display font-bold tracking-brutal-tight text-base leading-none cursor-pointer hover:text-gh-link transition-colors"
+            aria-label="Switch project (⌘K)"
+            aria-haspopup="dialog"
+            :aria-expanded="open"
+        >
+            <span>{{ $projectName }}</span>
+            <flux:icon icon="chevron-down" variant="outline" class="!size-3 text-gh-muted group-hover:text-gh-link transition-colors" />
+        </button>
+    </flux:tooltip>
 
     <template x-teleport="body">
         <div x-show="open" x-cloak class="fixed inset-0 z-[60]" @click.self="close()">
@@ -244,7 +245,17 @@ new class extends Component
                                     wire:key="picker-project-{{ $project['id'] }}"
                                     data-project-picker-row
                                     data-slug="{{ $project['slug'] }}"
-                                    class="group px-3 py-2.5 border-b border-gh-border/50 last:border-b-0 cursor-pointer transition-colors"
+                                    x-data="{ status: null, loaded: false }"
+                                    x-intersect.once="setTimeout(() => {
+                                        fetch('/api/status/{{ $project['id'] }}')
+                                            .then(r => r.json())
+                                            .then(d => { status = d; loaded = true; })
+                                            .catch(() => { loaded = true; });
+                                    }, {{ $rowIndex * 40 }})"
+                                    @class([
+                                        'group px-3 py-2.5 border-b border-gh-border/50 last:border-b-0 cursor-pointer transition-colors',
+                                        'bg-gh-link/5 border-l-2 border-l-gh-link' => $project['slug'] === $currentSlug,
+                                    ])
                                     :class="selectedIndex === {{ $rowIndex }} ? 'bg-gh-text/10' : 'hover:bg-gh-border/30'"
                                     @click="$wire.selectProject('{{ $project['slug'] }}')"
                                     @mouseenter="selectedIndex = {{ $rowIndex }}"
@@ -258,7 +269,10 @@ new class extends Component
                                                     <span class="h-1.5 w-1.5 rounded-full bg-gh-muted/30"></span>
                                                 @endif
                                             </span>
-                                            <span class="font-semibold tracking-brutal text-sm truncate">{{ $project['name'] }}</span>
+                                            <span @class([
+                                                'font-semibold tracking-brutal text-sm truncate',
+                                                'text-gh-link' => $project['slug'] === $currentSlug,
+                                            ])>{{ $project['name'] }}</span>
                                             @if($project['is_worktree'])
                                                 <flux:badge size="sm" color="yellow">worktree</flux:badge>
                                             @endif
@@ -273,6 +287,10 @@ new class extends Component
                                                     {{ $project['comment_count'] }}
                                                 </span>
                                             @endif
+                                            <span x-show="loaded && status?.dirty" x-cloak>
+                                                <span class="text-gh-green" x-text="'+' + (status?.additions || 0)"></span>
+                                                <span class="text-gh-red" x-text="'-' + (status?.deletions || 0)"></span>
+                                            </span>
                                             <span class="text-gh-muted/70">{{ $project['last_active_ago'] }}</span>
                                             <flux:button
                                                 variant="ghost"
