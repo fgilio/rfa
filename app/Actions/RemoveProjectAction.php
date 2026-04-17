@@ -12,11 +12,9 @@ final readonly class RemoveProjectAction
 
     /**
      * Remove a project. When the removed project was the last-opened one,
-     * returns the next route to navigate to so the caller can redirect.
-     *
-     * @return array{name: string, params: array<string, string>}|null
+     * returns a URL for the next route so the caller can redirect.
      */
-    public function handle(int $projectId): ?array
+    public function handle(int $projectId): ?string
     {
         $project = Project::find($projectId);
 

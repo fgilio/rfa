@@ -9,9 +9,8 @@ use Tests\TestCase;
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
 test('returns no-projects when no cache and no projects exist', function () {
-    $result = app(ResolveStartupRouteAction::class)->handle();
-
-    expect($result)->toBe(['name' => 'no-projects', 'params' => []]);
+    expect(app(ResolveStartupRouteAction::class)->handle())
+        ->toBe(route('no-projects'));
 });
 
 test('returns review-page when cached slug exists in DB', function () {
@@ -19,9 +18,8 @@ test('returns review-page when cached slug exists in DB', function () {
 
     Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'my-project');
 
-    $result = app(ResolveStartupRouteAction::class)->handle();
-
-    expect($result)->toBe(['name' => 'review-page', 'params' => ['slug' => 'my-project']]);
+    expect(app(ResolveStartupRouteAction::class)->handle())
+        ->toBe(route('review-page', ['slug' => 'my-project']));
 });
 
 test('returns most-recent project and forgets stale slug when cached project was deleted', function () {
@@ -29,18 +27,16 @@ test('returns most-recent project and forgets stale slug when cached project was
 
     Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'deleted-project');
 
-    $result = app(ResolveStartupRouteAction::class)->handle();
-
-    expect($result)->toBe(['name' => 'review-page', 'params' => ['slug' => 'surviving-project']]);
+    expect(app(ResolveStartupRouteAction::class)->handle())
+        ->toBe(route('review-page', ['slug' => 'surviving-project']));
     expect(Cache::get(ResolveStartupRouteAction::CACHE_KEY))->toBeNull();
 });
 
 test('returns no-projects and forgets stale slug when cache stale and no projects exist', function () {
     Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'deleted-project');
 
-    $result = app(ResolveStartupRouteAction::class)->handle();
-
-    expect($result)->toBe(['name' => 'no-projects', 'params' => []]);
+    expect(app(ResolveStartupRouteAction::class)->handle())
+        ->toBe(route('no-projects'));
     expect(Cache::get(ResolveStartupRouteAction::CACHE_KEY))->toBeNull();
 });
 
@@ -48,7 +44,6 @@ test('returns most-recent project when no cache and projects exist', function ()
     Project::factory()->create(['slug' => 'older', 'updated_at' => now()->subHour()]);
     Project::factory()->create(['slug' => 'newer', 'updated_at' => now()]);
 
-    $result = app(ResolveStartupRouteAction::class)->handle();
-
-    expect($result)->toBe(['name' => 'review-page', 'params' => ['slug' => 'newer']]);
+    expect(app(ResolveStartupRouteAction::class)->handle())
+        ->toBe(route('review-page', ['slug' => 'newer']));
 });

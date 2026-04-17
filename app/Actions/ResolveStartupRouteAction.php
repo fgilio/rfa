@@ -11,13 +11,12 @@ final readonly class ResolveStartupRouteAction
 {
     public const string CACHE_KEY = 'last-opened-project-slug';
 
-    /** @return array{name: string, params: array<string, string>} */
-    public function handle(): array
+    public function handle(): string
     {
         $lastSlug = Cache::get(self::CACHE_KEY);
 
         if ($lastSlug && Project::where('slug', $lastSlug)->exists()) {
-            return ['name' => 'review-page', 'params' => ['slug' => $lastSlug]];
+            return route('review-page', ['slug' => $lastSlug]);
         }
 
         if ($lastSlug) {
@@ -30,10 +29,10 @@ final readonly class ResolveStartupRouteAction
             ->first();
 
         if ($mostRecent) {
-            return ['name' => 'review-page', 'params' => ['slug' => $mostRecent->slug]];
+            return route('review-page', ['slug' => $mostRecent->slug]);
         }
 
-        return ['name' => 'no-projects', 'params' => []];
+        return route('no-projects');
     }
 
     /** Clears the last-opened slug if it matches. Returns true when cleared. */

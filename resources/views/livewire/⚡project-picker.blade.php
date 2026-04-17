@@ -62,10 +62,10 @@ class extends Component
 
     public function removeProject(int $projectId): void
     {
-        $next = app(RemoveProjectAction::class)->handle($projectId);
+        $nextUrl = app(RemoveProjectAction::class)->handle($projectId);
 
-        if ($next !== null) {
-            $this->redirect(route($next['name'], $next['params']));
+        if ($nextUrl !== null) {
+            $this->redirect($nextUrl);
 
             return;
         }

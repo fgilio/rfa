@@ -18,10 +18,10 @@ new #[Layout('layouts.app')] class extends Component
     #[On('projects-changed')]
     public function redirectIfProjectRegistered(): void
     {
-        $route = app(ResolveStartupRouteAction::class)->handle();
+        $url = app(ResolveStartupRouteAction::class)->handle();
 
-        if ($route['name'] !== 'no-projects') {
-            $this->redirect(route($route['name'], $route['params']));
+        if ($url !== route('no-projects')) {
+            $this->redirect($url);
         }
     }
 

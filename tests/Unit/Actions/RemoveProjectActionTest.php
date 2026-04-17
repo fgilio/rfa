@@ -82,7 +82,7 @@ test('returns next route when removing the last-opened project leaves another be
 
     $result = app(RemoveProjectAction::class)->handle($current->id);
 
-    expect($result)->toBe(['name' => 'review-page', 'params' => ['slug' => 'surviving']]);
+    expect($result)->toBe(route('review-page', ['slug' => 'surviving']));
 });
 
 test('returns no-projects route when removing the only project', function () {
@@ -92,7 +92,7 @@ test('returns no-projects route when removing the only project', function () {
 
     $result = app(RemoveProjectAction::class)->handle($only->id);
 
-    expect($result)->toBe(['name' => 'no-projects', 'params' => []]);
+    expect($result)->toBe(route('no-projects'));
 });
 
 test('returns null when removing a non-current project', function () {
