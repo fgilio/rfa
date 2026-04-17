@@ -29,7 +29,7 @@ test('cascading delete removes associated review session', function () {
 
     $session = ReviewSession::create([
         'project_id' => $project->id,
-        'repo_path' => '/tmp/test',
+        'repo_path' => $project->path,
     ]);
 
     app(RemoveProjectAction::class)->handle($project->id);

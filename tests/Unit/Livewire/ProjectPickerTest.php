@@ -11,23 +11,8 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 beforeEach(fn () => Livewire::withoutLazyLoading());
 
 test('mount loads the project list', function () {
-    Project::create([
-        'slug' => 'current',
-        'name' => 'Current',
-        'path' => '/tmp/current',
-        'git_common_dir' => '/tmp/current/.git',
-        'is_worktree' => false,
-        'branch' => 'main',
-    ]);
-
-    Project::create([
-        'slug' => 'other',
-        'name' => 'Other',
-        'path' => '/tmp/other',
-        'git_common_dir' => '/tmp/other/.git',
-        'is_worktree' => false,
-        'branch' => 'main',
-    ]);
+    Project::factory()->create(['slug' => 'current', 'name' => 'Current']);
+    Project::factory()->create(['slug' => 'other', 'name' => 'Other']);
 
     Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current'])
         ->assertSet('totalProjects', 2)
@@ -36,23 +21,8 @@ test('mount loads the project list', function () {
 });
 
 test('search filters the project list', function () {
-    Project::create([
-        'slug' => 'zyxwvu-included',
-        'name' => 'zyxwvu-included',
-        'path' => '/tmp/zyxwvu',
-        'git_common_dir' => '/tmp/zyxwvu/.git',
-        'is_worktree' => false,
-        'branch' => 'main',
-    ]);
-
-    Project::create([
-        'slug' => 'qponml-excluded',
-        'name' => 'qponml-excluded',
-        'path' => '/tmp/qponml',
-        'git_common_dir' => '/tmp/qponml/.git',
-        'is_worktree' => false,
-        'branch' => 'main',
-    ]);
+    Project::factory()->create(['slug' => 'zyxwvu-included', 'name' => 'zyxwvu-included']);
+    Project::factory()->create(['slug' => 'qponml-excluded', 'name' => 'qponml-excluded']);
 
     Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'Anchor'])
         ->set('search', 'zyxwvu')
@@ -62,23 +32,8 @@ test('search filters the project list', function () {
 });
 
 test('selectProject redirects to review-page for a different project', function () {
-    Project::create([
-        'slug' => 'current',
-        'name' => 'Current',
-        'path' => '/tmp/current',
-        'git_common_dir' => '/tmp/current/.git',
-        'is_worktree' => false,
-        'branch' => 'main',
-    ]);
-
-    Project::create([
-        'slug' => 'other',
-        'name' => 'Other',
-        'path' => '/tmp/other',
-        'git_common_dir' => '/tmp/other/.git',
-        'is_worktree' => false,
-        'branch' => 'main',
-    ]);
+    Project::factory()->create(['slug' => 'current']);
+    Project::factory()->create(['slug' => 'other']);
 
     Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current'])
         ->call('selectProject', 'other')
@@ -86,14 +41,7 @@ test('selectProject redirects to review-page for a different project', function 
 });
 
 test('selectProject on current project dispatches close instead of redirecting', function () {
-    Project::create([
-        'slug' => 'current',
-        'name' => 'Current',
-        'path' => '/tmp/current',
-        'git_common_dir' => '/tmp/current/.git',
-        'is_worktree' => false,
-        'branch' => 'main',
-    ]);
+    Project::factory()->create(['slug' => 'current']);
 
     Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current'])
         ->call('selectProject', 'current')
@@ -127,7 +75,7 @@ test('removeProject redirects to no-projects when removing the last project', fu
 });
 
 test('removeProject refreshes list when removing a non-current project', function () {
-    $keep = Project::factory()->create(['slug' => 'keep']);
+    Project::factory()->create(['slug' => 'keep']);
     $gone = Project::factory()->create(['slug' => 'gone']);
 
     app(ResolveStartupRouteAction::class)->rememberLastOpened('keep');
