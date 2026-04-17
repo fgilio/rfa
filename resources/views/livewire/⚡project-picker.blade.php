@@ -5,6 +5,7 @@ use App\Actions\RemoveProjectAction;
 use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Session;
 use Livewire\Component;
 
 new
@@ -19,6 +20,7 @@ class extends Component
 
     public string $search = '';
 
+    #[Session('project-picker.sort-by')]
     public string $sortBy = 'recent';
 
     /** @var array<string, array<int, array<string, mixed>>> */
@@ -92,12 +94,6 @@ class extends Component
     x-data="{
         open: false,
         selectedIndex: -1,
-        init() {
-            const stored = this.$store.settings?.dashboardSort;
-            if (stored && stored !== @js($sortBy)) {
-                $wire.set('sortBy', stored);
-            }
-        },
         toggle() {
             this.open ? this.close() : this.openPanel();
         },
@@ -181,7 +177,7 @@ class extends Component
                     <flux:button
                         variant="ghost"
                         size="sm"
-                        x-on:click="$store.settings.dashboardSort = @js($nextSort); $wire.set('sortBy', @js($nextSort))"
+                        wire:click="$set('sortBy', @js($nextSort))"
                         class="text-gh-muted hover:text-gh-text font-mono text-xs shrink-0"
                         tooltip="Toggle sort"
                     >
