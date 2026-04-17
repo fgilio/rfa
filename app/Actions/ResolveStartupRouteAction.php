@@ -35,4 +35,16 @@ final readonly class ResolveStartupRouteAction
 
         return ['name' => 'no-projects', 'params' => []];
     }
+
+    /** Clears the last-opened slug if it matches. Returns true when cleared. */
+    public function forgetIfLastOpened(string $slug): bool
+    {
+        if (Cache::get(self::CACHE_KEY) !== $slug) {
+            return false;
+        }
+
+        Cache::forget(self::CACHE_KEY);
+
+        return true;
+    }
 }

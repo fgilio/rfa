@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Models\Project;
-use Illuminate\Support\Facades\Cache;
 
 final readonly class RemoveProjectAction
 {
@@ -25,14 +24,11 @@ final readonly class RemoveProjectAction
             return null;
         }
 
-        $slug = $project->slug;
-        $wasLastOpened = Cache::get(ResolveStartupRouteAction::CACHE_KEY) === $slug;
+        $wasLastOpened = $this->resolveStartupRoute->forgetIfLastOpened($project->slug);
 
         $project->delete();
 
         if ($wasLastOpened) {
-            Cache::forget(ResolveStartupRouteAction::CACHE_KEY);
-
             return $this->resolveStartupRoute->handle();
         }
 
