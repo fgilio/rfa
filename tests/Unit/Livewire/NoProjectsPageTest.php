@@ -27,6 +27,13 @@ test('root route redirects to most-recent review page when a project exists', fu
     $this->get('/')->assertRedirect(route('review-page', ['slug' => 'only-one']));
 });
 
+test('direct visit to no-projects redirects to review page when a project exists', function () {
+    Project::factory()->create(['slug' => 'already-there']);
+
+    $this->get(route('no-projects'))
+        ->assertRedirect(route('review-page', ['slug' => 'already-there']));
+});
+
 test('redirects to review page when a project is registered via projects-changed', function () {
     $component = Livewire::test('pages::no-projects-page')
         ->assertSee('No projects yet');

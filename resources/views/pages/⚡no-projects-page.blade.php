@@ -13,6 +13,8 @@ new #[Layout('layouts.app')] class extends Component
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title('rfa');
         }
+
+        $this->redirectIfProjectRegistered();
     }
 
     #[On('projects-changed')]

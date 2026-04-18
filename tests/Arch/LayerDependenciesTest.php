@@ -13,7 +13,7 @@
  * - Services must not depend on Actions or Livewire
  * - Actions must not depend on Livewire
  * - Models must not depend on any other app layer
- * - Only Actions, Observers, Factories, and console benchmark tooling should use Models
+ * - Only Actions, Observers, other Models, Factories, and console benchmark tooling should use Models
  */
 arch('dtos are standalone and do not depend on other app layers')
     ->expect('App\DTOs')
