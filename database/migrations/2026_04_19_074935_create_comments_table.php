@@ -28,6 +28,7 @@ return new class extends Migration
             $table->index(['repo_path', 'submitted_at']);
             $table->index(['project_id', 'file_path']);
             $table->index(['repo_path', 'file_path']);
+            $table->index('file_content_hash');
         });
     }
 

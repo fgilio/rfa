@@ -22,8 +22,8 @@ test('selection badge reads the short SHA in single-commit mode', function () {
 test('selection badge reads from..to when the URL carries a range', function () {
     $this->setUpCommitHistoryRepo();
 
-    $from = substr($this->commitHashes[0], 0, 40);
-    $to = substr($this->commitHashes[2], 0, 40);
+    $from = $this->commitHashes[0];
+    $to = $this->commitHashes[2];
     $page = $this->visit($this->projectUrl()."/r/{$from}..{$to}");
 
     $page->page()->getByLabel('Open selection drawer')->waitFor();

@@ -33,9 +33,8 @@ final readonly class ToggleReviewedAction
             return null;
         }
 
-        $ref = ($target?->to()) ?? GitFileContentService::WORKING_REF;
         $contentHash = $repoPath !== ''
-            ? ($this->gitFileContentService->hashAt($repoPath, $ref, $filePath) ?? '')
+            ? ($this->resolveContentHash($repoPath, $target, $filePath) ?? '')
             : '';
 
         if (array_key_exists($filePath, $reviewedFiles)) {
@@ -61,5 +60,25 @@ final readonly class ToggleReviewedAction
         $reviewedFiles[$filePath] = $contentHash;
 
         return $reviewedFiles;
+    }
+
+    /**
+     * Pin the reviewed anchor to a stable hash: right side first, falling back
+     * to the left side for files that only exist before the diff (deletions /
+     * left-only moves). Returns null when the file is absent on both sides.
+     */
+    private function resolveContentHash(string $repoPath, ?DiffTarget $target, string $filePath): ?string
+    {
+        $rightRef = $target?->to() ?? GitFileContentService::WORKING_REF;
+        $rightHash = $this->gitFileContentService->hashAt($repoPath, $rightRef, $filePath);
+        if ($rightHash !== null) {
+            return $rightHash;
+        }
+
+        $leftRef = $target?->from() ?? GitFileContentService::WORKING_REF;
+
+        return $leftRef === $rightRef
+            ? null
+            : $this->gitFileContentService->hashAt($repoPath, $leftRef, $filePath);
     }
 }

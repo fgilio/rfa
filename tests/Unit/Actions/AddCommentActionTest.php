@@ -47,7 +47,19 @@ test('returns comment array on valid input', function () {
 test('persists the comment row to the comments table', function () {
     $result = $this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'right', 1, 1, 'body');
 
-    expect(Comment::find($result['id']))->not->toBeNull();
+    $row = Comment::find($result['id']);
+
+    expect($row)->not->toBeNull();
+    expect($row->repo_path)->toBe($this->repoPath);
+    expect($row->project_id)->toBeNull();
+    expect($row->origin_ref)->toBe('working');
+    expect($row->file_path)->toBe('src/hello.php');
+    expect($row->side)->toBe('right');
+    expect($row->start_line)->toBe(1);
+    expect($row->end_line)->toBe(1);
+    expect($row->file_content_hash)->toBe('content-hash');
+    expect($row->is_draft)->toBeFalse();
+    expect($row->submitted_at)->toBeNull();
 });
 
 test('captures origin_ref from target head for immutable commits', function () {

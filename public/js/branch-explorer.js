@@ -30,6 +30,7 @@
                 this.open = true;
                 this.search = '';
                 this.selectedIndex = 0;
+                this.clearSelection();
                 await this.$wire.loadBranches();
                 this.allBranches = this.$wire.branches;
                 const currentIdx = this.allFiltered.findIndex(b => b.name === this.selectedBranch);
@@ -51,6 +52,7 @@
                 const id = ++this._loadId;
                 await this.$wire.loadCommits(branch.name);
                 if (this._loadId !== id) return;
+                this.clearSelection();
             },
 
             handleKeydown(e) {

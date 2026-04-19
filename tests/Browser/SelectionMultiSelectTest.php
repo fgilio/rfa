@@ -58,6 +58,8 @@ test('clicking Apply with a multi-commit selection navigates to a range URL', fu
 
     $page->page()->getByPlaceholder('Filter branches...')->waitFor(['state' => 'hidden']);
 
+    $url = $page->page()->url();
+    expect($url)->toMatch('#/p/[^/]+/[0-9a-f]{4,40}/[0-9a-f]{4,40}%5E\b#');
     expect($page->page()->getByLabel('Open selection drawer')->innerText())->toContain('..');
 });
 

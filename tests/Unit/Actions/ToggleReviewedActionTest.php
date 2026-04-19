@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\ToggleReviewedAction;
+use App\DTOs\DiffTarget;
 use App\Models\ReviewedFile;
 use App\Services\GitFileContentService;
 use Faker\Factory as Faker;
@@ -52,6 +53,41 @@ test('adds file with empty content hash when no repo path', function () {
     $result = $this->action->handle([], 'a.php', $this->knownFiles, '');
 
     expect($result)->toBe(['a.php' => '']);
+});
+
+test('toggle off does not touch rows belonging to a different repo', function () {
+    ReviewedFile::create(['repo_path' => '/tmp/repo', 'file_path' => 'a.php', 'content_hash' => 'h-own']);
+    ReviewedFile::create(['repo_path' => '/tmp/other', 'file_path' => 'a.php', 'content_hash' => 'h-foreign']);
+
+    $this->action->handle(['a.php' => 'h-own'], 'a.php', $this->knownFiles, '/tmp/repo');
+
+    expect(ReviewedFile::where('repo_path', '/tmp/repo')->where('file_path', 'a.php')->exists())->toBeFalse();
+    expect(ReviewedFile::where('repo_path', '/tmp/other')->where('file_path', 'a.php')->exists())->toBeTrue();
+});
+
+test('falls back to the left ref when the right side hash is unavailable', function () {
+    $target = DiffTarget::commit('abc123', 'parent123');
+
+    $this->gitFileContent = Mockery::mock(GitFileContentService::class);
+    $this->gitFileContent->shouldReceive('hashAt')
+        ->with('/tmp/repo', 'abc123', 'deleted.php')
+        ->andReturn(null);
+    $this->gitFileContent->shouldReceive('hashAt')
+        ->with('/tmp/repo', 'parent123', 'deleted.php')
+        ->andReturn('parent-hash');
+    app()->instance(GitFileContentService::class, $this->gitFileContent);
+
+    $action = app(ToggleReviewedAction::class);
+
+    $result = $action->handle(
+        [],
+        'deleted.php',
+        [['id' => 'id-d', 'path' => 'deleted.php', 'isUntracked' => false]],
+        '/tmp/repo',
+        $target,
+    );
+
+    expect($result)->toBe(['deleted.php' => 'parent-hash']);
 });
 
 test('preserves other entries on toggle off', function () {

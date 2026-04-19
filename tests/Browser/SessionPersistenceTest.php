@@ -38,8 +38,8 @@ test('reviewed files persist after page reload', function () {
 
     $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
     // Alpine updates the counter on the next microtask; poll until it renders.
-    $page->page()->waitForFunction("document.body.innerText.includes('1/3 reviewed')");
+    $page->page()->waitForFunction("document.querySelector('[data-testid=\"reviewed-counter\"]')?.textContent?.includes('1/3 reviewed')");
 
     $page->refresh();
-    $page->page()->waitForFunction("document.body.innerText.includes('1/3 reviewed')");
+    $page->page()->waitForFunction("document.querySelector('[data-testid=\"reviewed-counter\"]')?.textContent?.includes('1/3 reviewed')");
 });

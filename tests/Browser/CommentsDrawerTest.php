@@ -7,7 +7,7 @@ beforeEach(function () {
 test('the header shows a comments-drawer trigger button', function () {
     $page = $this->visit($this->projectUrl());
 
-    expect($page->page()->getByLabel('Open selection drawer')->count())->toBeGreaterThan(0);
+    expect($page->page()->getByLabel('All comments in this repo')->count())->toBeGreaterThan(0);
 });
 
 test('adding a comment pops the count on the drawer trigger badge', function () {

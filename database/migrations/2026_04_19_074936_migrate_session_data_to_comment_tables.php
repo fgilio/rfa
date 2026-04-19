@@ -145,10 +145,10 @@ return new class extends Migration
             ->get();
 
         foreach ($groups as $group) {
-            $query = DB::table('review_sessions');
+            $query = DB::table('review_sessions')->where('repo_path', $group->repo_path);
             $query = $group->project_id
                 ? $query->where('project_id', $group->project_id)
-                : $query->whereNull('project_id')->where('repo_path', $group->repo_path);
+                : $query->whereNull('project_id');
 
             $rows = $query->orderByDesc('id')->get();
             if ($rows->count() <= 1) {

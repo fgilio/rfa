@@ -758,7 +758,7 @@ new #[Layout('layouts.app')] class extends Component
                 <livewire:branch-explorer :repo-path="$repoPath" :current-branch="$projectBranch" :project-slug="$projectSlug" :active-commit-hash="$diffTo" />
             @endif
             @php
-                $shortFrom = $diffFrom !== 'HEAD' ? substr($diffFrom, 0, 7) : null;
+                $shortFrom = $diffFrom === 'HEAD' ? 'HEAD' : substr($diffFrom, 0, 7);
                 $shortTo = $diffTo ? substr($diffTo, 0, 7) : null;
                 if ($diffTo === null) {
                     $selectionLabel = 'working';
@@ -797,7 +797,7 @@ new #[Layout('layouts.app')] class extends Component
             <div x-show="reviewedCount > 0" x-cloak class="flex items-center gap-1.5">
                 <span class="w-px h-3.5 bg-gh-border"></span>
                 <div class="flex flex-col items-center min-w-[2.5rem]">
-                    <span class="font-mono text-gh-muted" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
+                    <span data-testid="reviewed-counter" class="font-mono text-gh-muted" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
                     <div class="w-full h-0.5 bg-gh-border/50 rounded-full overflow-hidden mt-0.5">
                         <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
                     </div>
