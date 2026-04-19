@@ -16,7 +16,7 @@ final readonly class ToggleReviewedAction
 
     /**
      * @param  array<string, string>  $reviewedFiles  Current view state: {path => content_hash}.
-     * @param  array<int, array<string, mixed>>  $knownFiles  Files in the current diff.
+     * @param  array<int, array{id?: string, path: string, isUntracked?: bool}>  $knownFiles  Files in the current diff.
      * @return array<string, string>|null Updated view state, or null when the file is unknown.
      */
     public function handle(

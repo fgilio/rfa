@@ -85,7 +85,7 @@ class extends Component
      shift; the real component hydrates and supplies the count + drawer body. --}}
 <div class="relative">
     <flux:tooltip content="All comments in this repo">
-        <flux:button variant="ghost" size="sm" icon="chat-bubble-left-right" icon:variant="outline" />
+        <flux:button variant="ghost" size="sm" icon="chat-bubble-left-right" icon:variant="outline" aria-label="All comments in this repo" />
     </flux:tooltip>
 </div>
 @endplaceholder
@@ -100,6 +100,7 @@ class extends Component
             size="sm"
             icon="chat-bubble-left-right"
             icon:variant="outline"
+            aria-label="All comments in this repo"
             x-on:click="open = !open"
         >
             @if($this->totalCount > 0)
@@ -130,6 +131,7 @@ class extends Component
                         size="xs"
                         :icon="$showSubmitted ? 'archive-box' : 'archive-box-arrow-down'"
                         icon:variant="outline"
+                        :aria-label="$showSubmitted ? 'Hide submitted comments' : 'Show submitted comments'"
                         wire:click="$toggle('showSubmitted')"
                     />
                 </flux:tooltip>
@@ -138,6 +140,7 @@ class extends Component
                     size="xs"
                     icon="x-mark"
                     icon:variant="outline"
+                    aria-label="Close comments drawer"
                     x-on:click="open = false"
                 />
             </div>
@@ -170,7 +173,7 @@ class extends Component
                                     <span>L{{ $c['start_line'] }}@if(! empty($c['end_line']) && $c['end_line'] !== $c['start_line'])-L{{ $c['end_line'] }}@endif</span>
                                 @endif
                                 @if(! empty($c['is_draft']))
-                                    <span class="ml-auto px-1.5 py-0.5 rounded bg-amber-400/10 text-amber-500 text-[9px]">draft</span>
+                                    <span class="ml-auto px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 dark:text-amber-400 text-[9px]">draft</span>
                                 @elseif(! empty($c['submitted_at']))
                                     <span class="ml-auto px-1.5 py-0.5 rounded bg-gh-border/40 text-gh-muted text-[9px]">submitted</span>
                                 @endif
