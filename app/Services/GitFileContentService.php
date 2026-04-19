@@ -10,6 +10,9 @@ class GitFileContentService
 {
     public const WORKING_REF = 'working';
 
+    /** @var array<string, ?string> */
+    private array $hashCache = [];
+
     public function __construct(
         private readonly GitProcessService $gitProcessService,
     ) {}
@@ -23,9 +26,14 @@ class GitFileContentService
      */
     public function hashAt(string $repoPath, string $ref, string $path): ?string
     {
-        $content = $this->contentAt($repoPath, $ref, $path);
+        $key = $repoPath."\0".$ref."\0".$path;
 
-        return $content === null ? null : hash('xxh128', $content);
+        if (! array_key_exists($key, $this->hashCache)) {
+            $content = $this->contentAt($repoPath, $ref, $path);
+            $this->hashCache[$key] = $content === null ? null : hash('xxh128', $content);
+        }
+
+        return $this->hashCache[$key];
     }
 
     public function contentAt(string $repoPath, string $ref, string $path): ?string

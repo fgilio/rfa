@@ -55,12 +55,13 @@ final readonly class RestoreSessionAction
     /** @return iterable<array<string, mixed>> */
     private function loadComments(string $repoPath, ?int $projectId): iterable
     {
-        $query = Comment::query()->whereNull('submitted_at');
-        $query = $projectId
-            ? $query->where('project_id', $projectId)
-            : $query->whereNull('project_id')->where('repo_path', $repoPath);
-
-        return $query->orderBy('created_at')->get()->map(fn (Comment $c) => $c->toArray())->all();
+        return Comment::query()
+            ->forProjectOrRepo($projectId, $repoPath)
+            ->whereNull('submitted_at')
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn (Comment $c) => $c->toArray())
+            ->all();
     }
 
     /**
@@ -86,13 +87,10 @@ final readonly class RestoreSessionAction
      */
     private function resolveReviewedFiles(string $repoPath, ?int $projectId, array $currentFiles, DiffTarget $target): array
     {
-        $query = ReviewedFile::query();
-        $query = $projectId
-            ? $query->where('project_id', $projectId)
-            : $query->whereNull('project_id')->where('repo_path', $repoPath);
-
         /** @var array<string, array<int, string>> $hashesByPath */
-        $hashesByPath = $query->get(['file_path', 'content_hash'])
+        $hashesByPath = ReviewedFile::query()
+            ->forProjectOrRepo($projectId, $repoPath)
+            ->get(['file_path', 'content_hash'])
             ->groupBy('file_path')
             ->map(fn ($rows) => $rows->pluck('content_hash')->all())
             ->all();

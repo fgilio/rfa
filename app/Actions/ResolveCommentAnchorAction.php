@@ -35,17 +35,7 @@ final readonly class ResolveCommentAnchorAction
         }
 
         $resolved = [];
-        $hashCache = [];
-
-        $hashFor = function (string $ref, string $path) use ($repoPath, &$hashCache): ?string {
-            $key = $ref.':'.$path;
-
-            if (! array_key_exists($key, $hashCache)) {
-                $hashCache[$key] = $this->gitFileContentService->hashAt($repoPath, $ref, $path);
-            }
-
-            return $hashCache[$key];
-        };
+        $rightRef = $target->to() ?? GitFileContentService::WORKING_REF;
 
         foreach ($rawComments as $row) {
             $filePath = (string) ($row['file_path'] ?? $row['file'] ?? '');
@@ -59,15 +49,13 @@ final readonly class ResolveCommentAnchorAction
             $anchorStatus = 'unplaced';
 
             if ($storedHash !== null && $storedHash !== '' && isset($fileIdByPath[$filePath])) {
-                $leftHash = $hashFor($target->from(), $filePath);
-                $rightRef = $target->to() ?? GitFileContentService::WORKING_REF;
-                $rightHash = $hashFor($rightRef, $filePath);
+                $leftHash = $this->gitFileContentService->hashAt($repoPath, $target->from(), $filePath);
+                $rightHash = $this->gitFileContentService->hashAt($repoPath, $rightRef, $filePath);
 
                 if ($storedHash === $leftHash || $storedHash === $rightHash) {
                     $anchorStatus = 'placed';
                 }
             } elseif (isset($fileIdByPath[$filePath])) {
-                // Legacy comments without stored hash: assume placed when the file is in the current diff.
                 $anchorStatus = 'placed';
             }
 
@@ -79,7 +67,7 @@ final readonly class ResolveCommentAnchorAction
                 'startLine' => $this->intOrNull($row['start_line'] ?? $row['startLine'] ?? null),
                 'endLine' => $this->intOrNull($row['end_line'] ?? $row['endLine'] ?? null),
                 'body' => (string) ($row['body'] ?? ''),
-                'originRef' => (string) ($row['origin_ref'] ?? $row['originRef'] ?? 'working'),
+                'originRef' => (string) ($row['origin_ref'] ?? $row['originRef'] ?? GitFileContentService::WORKING_REF),
                 'fileContentHash' => $storedHash,
                 'lineSnippet' => $row['line_snippet'] ?? $row['lineSnippet'] ?? null,
                 'isDraft' => (bool) ($row['is_draft'] ?? $row['isDraft'] ?? false),

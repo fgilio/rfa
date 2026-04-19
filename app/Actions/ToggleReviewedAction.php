@@ -38,13 +38,11 @@ final readonly class ToggleReviewedAction
             ? ($this->gitFileContentService->hashAt($repoPath, $ref, $filePath) ?? '')
             : '';
 
-        $query = ReviewedFile::query()->where('file_path', $filePath);
-        $query = $projectId
-            ? $query->where('project_id', $projectId)
-            : $query->whereNull('project_id')->where('repo_path', $repoPath);
-
         if (array_key_exists($filePath, $reviewedFiles)) {
-            (clone $query)->delete();
+            ReviewedFile::query()
+                ->forProjectOrRepo($projectId, $repoPath)
+                ->where('file_path', $filePath)
+                ->delete();
             unset($reviewedFiles[$filePath]);
 
             return $reviewedFiles;

@@ -23,18 +23,23 @@ new class extends Component
         $this->open = ! $this->open;
     }
 
-    /** @return array<string, array<int, array<string, mixed>>> */
-    #[Computed]
-    public function groupedComments(): array
+    /** @return \Illuminate\Database\Eloquent\Builder<\App\Models\Comment> */
+    private function baseQuery(): \Illuminate\Database\Eloquent\Builder
     {
-        $query = \App\Models\Comment::query()->orderByDesc('created_at');
-        $query = $this->projectId
-            ? $query->where('project_id', $this->projectId)
-            : $query->whereNull('project_id')->where('repo_path', $this->repoPath);
+        $query = \App\Models\Comment::query()->forProjectOrRepo($this->projectId, $this->repoPath);
 
         if (! $this->showSubmitted) {
             $query->whereNull('submitted_at');
         }
+
+        return $query;
+    }
+
+    /** @return array<string, array<int, array<string, mixed>>> */
+    #[Computed]
+    public function groupedComments(): array
+    {
+        $query = $this->baseQuery()->orderByDesc('created_at');
 
         $filter = trim($this->filter);
         if ($filter !== '') {
@@ -53,16 +58,7 @@ new class extends Component
     #[Computed]
     public function totalCount(): int
     {
-        $query = \App\Models\Comment::query();
-        $query = $this->projectId
-            ? $query->where('project_id', $this->projectId)
-            : $query->whereNull('project_id')->where('repo_path', $this->repoPath);
-
-        if (! $this->showSubmitted) {
-            $query->whereNull('submitted_at');
-        }
-
-        return $query->count();
+        return $this->baseQuery()->count();
     }
 }; ?>
 

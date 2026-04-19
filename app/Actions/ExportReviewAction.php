@@ -8,6 +8,7 @@ use App\DTOs\Comment;
 use App\DTOs\DiffTarget;
 use App\Models\Comment as CommentModel;
 use App\Services\CommentExporter;
+use App\Services\GitFileContentService;
 
 final readonly class ExportReviewAction
 {
@@ -52,11 +53,11 @@ final readonly class ExportReviewAction
             return $comments;
         }
 
-        $scopeRef = $target->to() ?? 'working';
+        $scopeRef = $target->to() ?? GitFileContentService::WORKING_REF;
 
         return array_values(array_filter(
             $comments,
-            fn (array $c) => ($c['originRef'] ?? 'working') === $scopeRef,
+            fn (array $c) => ($c['originRef'] ?? GitFileContentService::WORKING_REF) === $scopeRef,
         ));
     }
 }

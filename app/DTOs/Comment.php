@@ -8,6 +8,7 @@ use App\Enums\DiffSide;
 
 class Comment
 {
+    /** Mirrors GitFileContentService::WORKING_REF (kept here so the DTO stays standalone). */
     public const WORKING_REF = 'working';
 
     public function __construct(

@@ -231,30 +231,16 @@ new #[Layout('layouts.app')] class extends Component
     #[On('add-comment')]
     public function addComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, ?string $lineSnippet = null): void
     {
-        $comment = app(AddCommentAction::class)->handle(
-            $this->repoPath,
-            $this->projectId ?: null,
-            $this->buildDiffTarget(),
-            $this->files,
-            $fileId,
-            $side,
-            $startLine,
-            $endLine,
-            $body,
-            lineSnippet: $lineSnippet,
-        );
-
-        if (! $comment) {
-            return;
-        }
-
-        $this->comments[] = $comment;
-        $this->dispatchFileComments($fileId);
-        $this->skipRender();
+        $this->createComment($fileId, $side, $startLine, $endLine, $body, $lineSnippet, isDraft: false);
     }
 
     #[On('add-draft-comment')]
     public function addDraftComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, ?string $lineSnippet = null): void
+    {
+        $this->createComment($fileId, $side, $startLine, $endLine, $body, $lineSnippet, isDraft: true);
+    }
+
+    private function createComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, ?string $lineSnippet, bool $isDraft): void
     {
         $comment = app(AddCommentAction::class)->handle(
             $this->repoPath,
@@ -266,8 +252,8 @@ new #[Layout('layouts.app')] class extends Component
             $startLine,
             $endLine,
             $body,
-            isDraft: true,
-            lineSnippet: $lineSnippet,
+            $isDraft,
+            $lineSnippet,
         );
 
         if (! $comment) {
