@@ -201,15 +201,18 @@
                 const attr = side === 'left' ? 'data-line-old' : 'data-line-new';
                 const start = Math.min(startLine, endLine ?? startLine);
                 const end = Math.max(startLine, endLine ?? startLine);
+                // Alpine's $el points at the nearest scoped element, not the diff-file root;
+                // climb to the file wrapper (.group) so the query sees this file's rows.
+                const root = this.$el.closest('.group') ?? this.$el;
                 const lines = [];
                 for (let n = start; n <= end; n++) {
-                    const row = this.$el.querySelector(`tr[${attr}="${n}"]`);
+                    const row = root.querySelector(`tr[${attr}="${n}"]`);
                     if (!row) continue;
                     const cells = row.querySelectorAll('td');
                     const content = cells[cells.length - 1]?.textContent;
                     if (content !== undefined) lines.push(content);
                 }
-                return lines.length ? lines.join('\n') : null;
+                return lines.length ? lines.join('\n').trimEnd() : null;
             },
 
             _ensureScrollLoop() {

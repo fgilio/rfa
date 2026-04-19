@@ -181,42 +181,42 @@ test('escape in branch explorer filter clears input before closing panel', funct
     $page->assertNoJavaScriptErrors();
 });
 
-// -- Session Isolation --
+// -- Cross-selection pool --
+//
+// The comment pool is shared across selections: a comment anchored to content
+// that still exists elsewhere shows up in that selection too. These two tests
+// exercise both directions (commit -> WD and WD -> commit).
 
-test('comments in commit mode do not appear in working directory', function () {
+test('a comment authored in commit mode follows the file into the working directory', function () {
     $this->setUpCommitHistoryRepoWithWdChange();
 
     $page = $this->visit($this->projectUrl().'/c/'.$this->commitHashes[1]);
 
-    // Add inline comment in commit mode
     $page->page()->getByTestId('diff-line-number')->first()->click();
-    $page->page()->getByPlaceholder('Write a comment', false)->fill('Commit-only note');
+    $page->page()->getByPlaceholder('Write a comment', false)->fill('Commit-side note');
     $page->press('Save');
-    $page->assertSee('Commit-only note');
+    $page->assertSee('Commit-side note');
 
-    // Navigate to working directory
     $page->page()->getByLabel('Back to working directory')->click();
     $page->assertDontSee('Add type hints and utils');
 
-    $page->assertDontSee('Commit-only note');
+    $page->assertSee('Commit-side note');
 });
 
-test('comments in working directory do not appear in commit mode', function () {
+test('a comment authored in the working directory follows the file into commit mode', function () {
     $this->setUpCommitHistoryRepoWithWdChange();
 
     $page = $this->visit($this->projectUrl());
 
-    // Add inline comment in working directory mode
     $page->page()->getByTestId('diff-line-number')->first()->click();
-    $page->page()->getByPlaceholder('Write a comment', false)->fill('WD-only note');
+    $page->page()->getByPlaceholder('Write a comment', false)->fill('WD-side note');
     $page->press('Save');
-    $page->assertSee('WD-only note');
+    $page->assertSee('WD-side note');
 
-    // Navigate to commit view via fresh visit
     $page = $this->visit($this->projectUrl().'/c/'.$this->commitHashes[1]);
     $page->page()->getByTestId('commit-context-bar')->waitFor();
 
-    $page->assertDontSee('WD-only note');
+    $page->assertSee('WD-side note');
 });
 
 // -- Commit Mode UI State --

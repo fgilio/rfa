@@ -64,3 +64,24 @@ test('hashAt reads the working copy for the WORKING_REF sentinel', function () {
 test('hashAt returns null when working copy file is missing', function () {
     expect($this->service->hashAt($this->tmpDir, GitFileContentService::WORKING_REF, 'missing.php'))->toBeNull();
 });
+
+test('hashAt memoizes repeated lookups for the same (repo, ref, path)', function () {
+    $gitProcess = Mockery::mock(GitProcessService::class);
+    $gitProcess->shouldReceive('run')->once()->andReturn("stable content\n");
+
+    $service = new GitFileContentService($gitProcess);
+
+    $first = $service->hashAt($this->tmpDir, $this->firstCommit, 'hello.php');
+    $second = $service->hashAt($this->tmpDir, $this->firstCommit, 'hello.php');
+    $third = $service->hashAt($this->tmpDir, $this->firstCommit, 'hello.php');
+
+    expect($second)->toBe($first);
+    expect($third)->toBe($first);
+});
+
+test('GitFileContentService is a shared singleton in the container', function () {
+    $first = app(GitFileContentService::class);
+    $second = app(GitFileContentService::class);
+
+    expect($first)->toBe($second);
+});

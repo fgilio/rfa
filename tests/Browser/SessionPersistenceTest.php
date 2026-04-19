@@ -37,9 +37,9 @@ test('reviewed files persist after page reload', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
     $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
-    // Wait for Livewire round-trip to complete before refreshing
-    $page->assertSee('1/3 reviewed');
+    // Alpine updates the counter on the next microtask; poll until it renders.
+    $page->page()->waitForFunction("document.body.innerText.includes('1/3 reviewed')");
 
     $page->refresh();
-    $page->assertSee('1/3 reviewed');
+    $page->page()->waitForFunction("document.body.innerText.includes('1/3 reviewed')");
 });

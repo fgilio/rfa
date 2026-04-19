@@ -2,6 +2,7 @@
 
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 new class extends Component
@@ -21,6 +22,14 @@ new class extends Component
     public function toggle(): void
     {
         $this->open = ! $this->open;
+    }
+
+    #[On('comment-updated')]
+    #[On('reset-reviewed-files')]
+    public function refresh(): void
+    {
+        // Listening to the pool-wide write events re-renders the drawer so the
+        // count badge and list reflect the latest Comment table state.
     }
 
     /** @return \Illuminate\Database\Eloquent\Builder<\App\Models\Comment> */

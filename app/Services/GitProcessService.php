@@ -7,7 +7,7 @@ namespace App\Services;
 use App\Exceptions\GitCommandException;
 use Symfony\Component\Process\Process;
 
-final class GitProcessService
+class GitProcessService
 {
     /** @param array<int, string> $args */
     public function run(string $repoPath, array $args): string

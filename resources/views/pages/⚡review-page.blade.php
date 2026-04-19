@@ -759,12 +759,12 @@ new #[Layout('layouts.app')] class extends Component
                 if ($diffTo === null) {
                     $selectionLabel = 'working';
                     $selectionTitle = 'Working tree changes';
-                } elseif ($shortFrom && str_starts_with($diffFrom, $diffTo === null ? '' : substr($diffTo, 0, 0)) === false && $diffFrom !== $diffTo.'^') {
-                    $selectionLabel = $shortFrom.'..'.$shortTo;
-                    $selectionTitle = 'Range '.$diffFrom.'..'.$diffTo;
-                } else {
+                } elseif ($diffFrom === $diffTo.'^') {
                     $selectionLabel = $shortTo;
                     $selectionTitle = $commitInfo['message'] ?? $diffTo;
+                } else {
+                    $selectionLabel = $shortFrom.'..'.$shortTo;
+                    $selectionTitle = 'Range '.$diffFrom.'..'.$diffTo;
                 }
             @endphp
             <button
