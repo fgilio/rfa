@@ -52,9 +52,8 @@ final readonly class ToggleReviewedAction
                 'project_id' => $projectId,
                 'repo_path' => $repoPath,
                 'file_path' => $filePath,
-                'content_hash' => $contentHash,
             ],
-            [],
+            ['content_hash' => $contentHash],
         );
 
         $reviewedFiles[$filePath] = $contentHash;

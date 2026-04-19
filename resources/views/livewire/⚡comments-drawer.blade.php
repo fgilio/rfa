@@ -1,11 +1,14 @@
 <?php
 
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
-new class extends Component
+new
+#[Lazy]
+class extends Component
 {
     #[Locked]
     public string $repoPath = '';
@@ -76,6 +79,16 @@ new class extends Component
         return $this->baseQuery()->count();
     }
 }; ?>
+
+@placeholder
+{{-- Keep the trigger button visible at first paint so the header layout doesn't
+     shift; the real component hydrates and supplies the count + drawer body. --}}
+<div class="relative">
+    <flux:tooltip content="All comments in this repo">
+        <flux:button variant="ghost" size="sm" icon="chat-bubble-left-right" icon:variant="outline" />
+    </flux:tooltip>
+</div>
+@endplaceholder
 
 <div
     x-data="{ open: @entangle('open').live }"

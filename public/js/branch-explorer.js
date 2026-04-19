@@ -174,9 +174,11 @@
             applySelection() {
                 if (this.selectedHashes.length === 0) return;
 
-                const indices = this.selectedHashes
-                    .map(h => this.$wire.commits.findIndex(c => c.hash === h))
-                    .filter(i => i >= 0);
+                const indices = [...new Set(
+                    this.selectedHashes
+                        .map(h => this.$wire.commits.findIndex(c => c.hash === h))
+                        .filter(i => i >= 0)
+                )].sort((a, b) => a - b);
 
                 if (indices.length === 0) return;
 
@@ -186,9 +188,17 @@
                     return;
                 }
 
+                // A non-contiguous pick (e.g. A and C without B) would silently pull B
+                // into the diff if we just used min/max. Reject it so users have to
+                // explicitly include every commit in their range.
+                if (indices[indices.length - 1] - indices[0] + 1 !== indices.length) {
+                    window.alert('Selection is not contiguous — pick every commit between the oldest and newest you want to review.');
+                    return;
+                }
+
                 // Commits are listed newest-first; lowest index = tip, highest = oldest.
-                const newest = this.$wire.commits[Math.min(...indices)];
-                const oldest = this.$wire.commits[Math.max(...indices)];
+                const newest = this.$wire.commits[indices[0]];
+                const oldest = this.$wire.commits[indices[indices.length - 1]];
                 const baseRef = encodeURIComponent(oldest.hash + '^');
                 Livewire.navigate(`/p/${this.projectSlug}/${newest.hash}/${baseRef}`);
                 this.closePanel();

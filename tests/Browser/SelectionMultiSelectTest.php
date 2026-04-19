@@ -13,7 +13,7 @@ function commitRow(mixed $page, string $message): mixed
 }
 
 test('checkbox on a commit row toggles it into the selection', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
     $page->page()->getByLabel('Open selection drawer')->click();
     $page->page()->locator('text=Add greet function')->waitFor();
 
@@ -25,7 +25,7 @@ test('checkbox on a commit row toggles it into the selection', function () {
 });
 
 test('shift-clicking a second checkbox selects the commits between them', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
     $page->page()->getByLabel('Open selection drawer')->click();
     $page->page()->locator('text=Add greet function')->waitFor();
 
@@ -42,29 +42,31 @@ test('shift-clicking a second checkbox selects the commits between them', functi
 });
 
 test('clicking Apply with a multi-commit selection navigates to a range URL', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
     $page->page()->getByLabel('Open selection drawer')->click();
     $page->page()->locator('text=Add greet function')->waitFor();
 
+    // Pick the two adjacent newest commits (contiguous range).
     $newest = commitRow($page, 'Change date format to d/m/Y');
-    $oldest = commitRow($page, 'Add greet function');
+    $prev = commitRow($page, 'Add type hints and utils');
 
     $newest->hover();
     $newest->getByTestId('commit-select-toggle')->click();
-    $oldest->hover();
-    $oldest->getByTestId('commit-select-toggle')->click();
+    $prev->hover();
+    $prev->getByTestId('commit-select-toggle')->click();
 
     $page->page()->getByRole('button', ['name' => 'Apply'])->click();
 
     $page->page()->getByPlaceholder('Filter branches...')->waitFor(['state' => 'hidden']);
 
     $url = $page->page()->url();
-    expect($url)->toMatch('#/p/[^/]+/[0-9a-f]{4,40}/[0-9a-f]{4,40}%5E\b#');
+    expect($url)->toContain($this->commitHashes[2]);
+    expect($url)->toContain($this->commitHashes[1]);
     expect($page->page()->getByLabel('Open selection drawer')->innerText())->toContain('..');
 });
 
 test('clearing the selection removes the selected chip', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
     $page->page()->getByLabel('Open selection drawer')->click();
     $page->page()->locator('text=Add greet function')->waitFor();
 
