@@ -1,21 +1,35 @@
 <?php
 
 use App\Actions\AddCommentAction;
+use App\DTOs\DiffTarget;
+use App\Models\Comment;
+use App\Services\GitFileContentService;
 use Faker\Factory as Faker;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Tests\TestCase;
+
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 beforeEach(function () {
     $this->faker = Faker::create();
     $this->faker->seed(crc32(static::class.$this->name()));
-    $this->action = new AddCommentAction;
+
+    $this->gitFileContent = Mockery::mock(GitFileContentService::class);
+    $this->gitFileContent->shouldReceive('hashAt')->byDefault()->andReturn('content-hash');
+    app()->instance(GitFileContentService::class, $this->gitFileContent);
+
+    $this->action = app(AddCommentAction::class);
     $this->files = [
         ['id' => 'file-abc', 'path' => 'src/hello.php'],
     ];
+    $this->repoPath = '/tmp/'.$this->faker->word();
+    $this->target = DiffTarget::workingDirectory();
 });
 
 test('returns comment array on valid input', function () {
     $body = $this->faker->sentence();
 
-    $result = $this->action->handle($this->files, 'file-abc', 'right', 10, 10, $body);
+    $result = $this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'right', 10, 10, $body);
 
     expect($result)->not->toBeNull();
     expect($result['id'])->toStartWith('c-');
@@ -25,46 +39,61 @@ test('returns comment array on valid input', function () {
     expect($result['startLine'])->toBe(10);
     expect($result['endLine'])->toBe(10);
     expect($result['body'])->toBe($body);
+    expect($result['originRef'])->toBe('working');
+    expect($result['fileContentHash'])->toBe('content-hash');
+    expect($result['anchorStatus'])->toBe('placed');
+});
+
+test('persists the comment row to the comments table', function () {
+    $result = $this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'right', 1, 1, 'body');
+
+    expect(Comment::find($result['id']))->not->toBeNull();
+});
+
+test('captures origin_ref from target head for immutable commits', function () {
+    $target = DiffTarget::commit('abc123');
+
+    $result = $this->action->handle($this->repoPath, null, $target, $this->files, 'file-abc', 'right', 1, 1, 'body');
+
+    expect($result['originRef'])->toBe('abc123');
 });
 
 test('returns null for empty body', function () {
-    expect($this->action->handle($this->files, 'file-abc', 'right', 1, 1, ''))->toBeNull();
-    expect($this->action->handle($this->files, 'file-abc', 'right', 1, 1, '   '))->toBeNull();
+    expect($this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'right', 1, 1, ''))->toBeNull();
+    expect($this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'right', 1, 1, '   '))->toBeNull();
 });
 
 test('returns null for invalid file id', function () {
-    $result = $this->action->handle($this->files, 'file-nonexistent', 'right', 1, 1, 'body');
+    $result = $this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-nonexistent', 'right', 1, 1, 'body');
 
     expect($result)->toBeNull();
 });
 
 test('returns null for invalid side', function () {
-    $result = $this->action->handle($this->files, 'file-abc', 'invalid', 1, 1, 'body');
+    $result = $this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'invalid', 1, 1, 'body');
 
     expect($result)->toBeNull();
 });
 
 test('accepts file-level comments with null lines', function () {
-    $result = $this->action->handle($this->files, 'file-abc', 'file', null, null, 'general note');
+    $result = $this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'file', null, null, 'general note');
 
     expect($result)->not->toBeNull();
     expect($result['startLine'])->toBeNull();
     expect($result['endLine'])->toBeNull();
 });
 
-// -- impossible-state guards --
-
 test('returns null for file-level comment with line numbers', function () {
-    expect($this->action->handle($this->files, 'file-abc', 'file', 1, 5, 'body'))->toBeNull();
-    expect($this->action->handle($this->files, 'file-abc', 'file', 1, null, 'body'))->toBeNull();
-    expect($this->action->handle($this->files, 'file-abc', 'file', null, 5, 'body'))->toBeNull();
+    expect($this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'file', 1, 5, 'body'))->toBeNull();
+    expect($this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'file', 1, null, 'body'))->toBeNull();
+    expect($this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'file', null, 5, 'body'))->toBeNull();
 });
 
 test('returns null for line comment with null startLine', function () {
-    expect($this->action->handle($this->files, 'file-abc', 'right', null, 5, 'body'))->toBeNull();
-    expect($this->action->handle($this->files, 'file-abc', 'left', null, null, 'body'))->toBeNull();
+    expect($this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'right', null, 5, 'body'))->toBeNull();
+    expect($this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'left', null, null, 'body'))->toBeNull();
 });
 
 test('returns null when startLine exceeds endLine', function () {
-    expect($this->action->handle($this->files, 'file-abc', 'right', 10, 5, 'body'))->toBeNull();
+    expect($this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'right', 10, 5, 'body'))->toBeNull();
 });

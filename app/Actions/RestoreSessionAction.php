@@ -5,90 +5,114 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
-use App\DTOs\FileListEntry;
+use App\Models\Comment;
+use App\Models\ReviewedFile;
 use App\Models\ReviewSession;
-use App\Services\GitDiffService;
+use App\Services\GitFileContentService;
 
 final readonly class RestoreSessionAction
 {
     public function __construct(
-        private GitDiffService $gitDiffService,
+        private ResolveCommentAnchorAction $resolveCommentAnchor,
+        private GitFileContentService $gitFileContentService,
     ) {}
 
     /**
      * @param  array<int, array<string, mixed>>  $currentFiles
      * @return array{comments: array<int, array<string, mixed>>, reviewedFiles: array<string, string>, globalComment: string, orphanedPaths: array<int, string>}
      */
-    public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT, ?DiffTarget $target = null): array
+    public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, ?DiffTarget $target = null): array
     {
-        $session = ReviewSession::firstOrCreate(
-            ReviewSession::lookupKey($repoPath, $projectId, $contextFingerprint),
-            ['repo_path' => $repoPath],
-        );
+        $target ??= DiffTarget::workingDirectory();
 
-        $fileIdMap = [];
-        $currentPathSet = [];
-        foreach ($currentFiles as $f) {
-            $fileIdMap[$f['path']] = $f['id'];
-            $currentPathSet[$f['path']] = true;
-        }
+        $session = $this->resolveGlobalCommentRow($repoPath, $projectId);
 
-        /** @var array<int|string, string> $rawReviewed */
-        $rawReviewed = $session->reviewed_files ?? [];
-        $isImmutable = $target !== null && $target->isImmutable();
+        $rawComments = $this->loadComments($repoPath, $projectId);
+        $resolved = $this->resolveCommentAnchor->handle($repoPath, $rawComments, $currentFiles, $target);
 
-        // Legacy compat: convert indexed array to associative with fresh fingerprints
-        if ($rawReviewed !== [] && array_is_list($rawReviewed)) {
-            $reviewedFiles = [];
-            foreach ($rawReviewed as $path) {
-                if (isset($currentPathSet[$path])) {
-                    $reviewedFiles[$path] = $isImmutable ? '' : $this->gitDiffService->fileDiffFingerprint($repoPath, $path, $target);
-                }
-            }
-        } else {
-            /** @var array<string, string> $reviewedFiles */
-            $reviewedFiles = array_intersect_key($rawReviewed, $currentPathSet);
+        $orphanedPaths = $this->collectOrphanedPaths($resolved, $currentFiles);
 
-            // Fingerprint validation (skip for immutable targets)
-            if (! $isImmutable) {
-                foreach ($reviewedFiles as $path => $storedHash) {
-                    $currentHash = $this->gitDiffService->fileDiffFingerprint($repoPath, $path, $target);
-                    if ($storedHash !== '' && $currentHash !== '' && $storedHash !== $currentHash) {
-                        unset($reviewedFiles[$path]);
-                    }
-                }
-            }
-        }
-
-        // Restore comments - remap fileId, generate deterministic ID for orphaned files
-        /** @var array<int, array<string, mixed>> $savedComments */
-        $savedComments = $session->comments ?? [];
-        $orphanedPaths = [];
-        $comments = collect($savedComments)
-            ->map(function (array $c) use ($fileIdMap, &$orphanedPaths) {
-                $path = $c['file'] ?? '';
-                if (isset($fileIdMap[$path])) {
-                    return array_merge($c, ['fileId' => $fileIdMap[$path]]);
-                }
-                if ($path !== '') {
-                    $orphanedPaths[$path] = true;
-
-                    return array_merge($c, ['fileId' => FileListEntry::idForPath($path)]);
-                }
-
-                return null;
-            })
-            ->filter()
-            ->values()
-            ->all();
-
-        $orphanedPaths = array_keys($orphanedPaths);
+        $reviewedFiles = $this->resolveReviewedFiles($repoPath, $projectId, $currentFiles, $target);
 
         return [
-            'comments' => $comments,
+            'comments' => $resolved,
             'reviewedFiles' => $reviewedFiles,
-            'globalComment' => $session->global_comment ?? '',
+            'globalComment' => (string) ($session->global_comment ?? ''),
             'orphanedPaths' => $orphanedPaths,
         ];
+    }
+
+    private function resolveGlobalCommentRow(string $repoPath, ?int $projectId): ReviewSession
+    {
+        return ReviewSession::firstOrCreate(
+            $projectId
+                ? ['project_id' => $projectId]
+                : ['project_id' => null, 'repo_path' => $repoPath],
+            ['repo_path' => $repoPath],
+        );
+    }
+
+    /** @return iterable<array<string, mixed>> */
+    private function loadComments(string $repoPath, ?int $projectId): iterable
+    {
+        $query = Comment::query()->whereNull('submitted_at');
+        $query = $projectId
+            ? $query->where('project_id', $projectId)
+            : $query->whereNull('project_id')->where('repo_path', $repoPath);
+
+        return $query->orderBy('created_at')->get()->map(fn (Comment $c) => $c->toArray())->all();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $resolved
+     * @param  array<int, array<string, mixed>>  $currentFiles
+     * @return array<int, string>
+     */
+    private function collectOrphanedPaths(array $resolved, array $currentFiles): array
+    {
+        $presentPaths = collect($currentFiles)->pluck('path')->all();
+
+        return collect($resolved)
+            ->filter(fn (array $c) => ! in_array($c['file'], $presentPaths, true))
+            ->pluck('file')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $currentFiles
+     * @return array<string, string>
+     */
+    private function resolveReviewedFiles(string $repoPath, ?int $projectId, array $currentFiles, DiffTarget $target): array
+    {
+        $query = ReviewedFile::query();
+        $query = $projectId
+            ? $query->where('project_id', $projectId)
+            : $query->whereNull('project_id')->where('repo_path', $repoPath);
+
+        /** @var array<string, array<int, string>> $hashesByPath */
+        $hashesByPath = $query->get(['file_path', 'content_hash'])
+            ->groupBy('file_path')
+            ->map(fn ($rows) => $rows->pluck('content_hash')->all())
+            ->all();
+
+        $ref = $target->to() ?? GitFileContentService::WORKING_REF;
+        $reviewed = [];
+
+        foreach ($currentFiles as $file) {
+            $path = (string) ($file['path'] ?? '');
+            if ($path === '' || ! isset($hashesByPath[$path])) {
+                continue;
+            }
+
+            $currentHash = $this->gitFileContentService->hashAt($repoPath, $ref, $path) ?? '';
+
+            if ($currentHash !== '' && in_array($currentHash, $hashesByPath[$path], true)) {
+                $reviewed[$path] = $currentHash;
+            }
+        }
+
+        return $reviewed;
     }
 }

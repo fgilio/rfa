@@ -8,6 +8,8 @@ use App\Enums\DiffSide;
 
 class Comment
 {
+    public const WORKING_REF = 'working';
+
     public function __construct(
         public readonly string $id,
         public readonly string $fileId,
@@ -16,6 +18,12 @@ class Comment
         public readonly ?int $startLine,
         public readonly ?int $endLine,
         public readonly string $body,
+        public readonly string $originRef = self::WORKING_REF,
+        public readonly ?string $fileContentHash = null,
+        public readonly ?string $lineSnippet = null,
+        public readonly bool $isDraft = false,
+        public readonly ?string $submittedAt = null,
+        public readonly string $anchorStatus = 'placed',
     ) {}
 
     /** @return array<string, mixed> */
@@ -29,6 +37,12 @@ class Comment
             'startLine' => $this->startLine,
             'endLine' => $this->endLine,
             'body' => $this->body,
+            'originRef' => $this->originRef,
+            'fileContentHash' => $this->fileContentHash,
+            'lineSnippet' => $this->lineSnippet,
+            'isDraft' => $this->isDraft,
+            'submittedAt' => $this->submittedAt,
+            'anchorStatus' => $this->anchorStatus,
         ];
     }
 
@@ -42,6 +56,11 @@ class Comment
             'start_line' => $this->startLine,
             'end_line' => $this->endLine,
             'body' => $this->body,
+            'anchor' => [
+                'origin_ref' => $this->originRef,
+                'file_content_hash' => $this->fileContentHash,
+                'line_snippet' => $this->lineSnippet,
+            ],
         ];
     }
 
@@ -50,12 +69,18 @@ class Comment
     {
         return new self(
             id: $data['id'],
-            fileId: $data['fileId'],
+            fileId: $data['fileId'] ?? '',
             file: $data['file'],
             side: DiffSide::from($data['side']),
-            startLine: $data['startLine'],
-            endLine: $data['endLine'],
+            startLine: $data['startLine'] ?? null,
+            endLine: $data['endLine'] ?? null,
             body: $data['body'],
+            originRef: $data['originRef'] ?? self::WORKING_REF,
+            fileContentHash: $data['fileContentHash'] ?? null,
+            lineSnippet: $data['lineSnippet'] ?? null,
+            isDraft: (bool) ($data['isDraft'] ?? false),
+            submittedAt: $data['submittedAt'] ?? null,
+            anchorStatus: $data['anchorStatus'] ?? 'placed',
         );
     }
 }

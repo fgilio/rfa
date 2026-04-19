@@ -29,6 +29,12 @@ test('toArray returns camelCase keys for internal use', function () {
         'startLine' => $startLine,
         'endLine' => $endLine,
         'body' => $body,
+        'originRef' => 'working',
+        'fileContentHash' => null,
+        'lineSnippet' => null,
+        'isDraft' => false,
+        'submittedAt' => null,
+        'anchorStatus' => 'placed',
     ]);
 });
 
@@ -50,6 +56,11 @@ test('toExportArray returns snake_case keys without fileId', function () {
         'start_line' => $startLine,
         'end_line' => $endLine,
         'body' => $body,
+        'anchor' => [
+            'origin_ref' => 'working',
+            'file_content_hash' => null,
+            'line_snippet' => null,
+        ],
     ]);
     expect($array)->not->toHaveKey('fileId');
 });

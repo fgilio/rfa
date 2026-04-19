@@ -1,10 +1,11 @@
 <?php
 
 use App\Actions\ExportReviewAction;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
-uses(TestCase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_export_action_test_');
