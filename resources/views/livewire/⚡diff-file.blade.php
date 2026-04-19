@@ -218,6 +218,7 @@ new class extends Component {
         isReviewed: @js($isReviewed ?? false),
         singleFile: @js($singleFile ?? false),
     })"
+    :data-file-id="fileId"
     @mouseup.window="endDrag()"
     @comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"
     @collapse-all-files.window="autoExpandedForComment = false; collapsed = true"

@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Comment;
-use App\Models\Project;
 use Faker\Factory as Faker;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
@@ -14,10 +13,7 @@ beforeEach(function () {
 });
 
 test('forProjectOrRepo limits the result to a given project_id', function () {
-    $project = Project::create([
-        'slug' => 'p', 'name' => 'p', 'path' => '/tmp/p',
-        'git_common_dir' => '/tmp/p/.git', 'is_worktree' => false,
-    ]);
+    $project = $this->createTestProject(['slug' => 'p', 'path' => '/tmp/p']);
 
     Comment::create([
         'id' => 'c-in', 'project_id' => $project->id, 'repo_path' => $project->path,
@@ -49,10 +45,7 @@ test('forProjectOrRepo falls back to repo_path when no project_id is given', fun
 });
 
 test('forProjectOrRepo with null project_id excludes rows that have a project_id set', function () {
-    $project = Project::create([
-        'slug' => 'p', 'name' => 'p', 'path' => '/tmp/p',
-        'git_common_dir' => '/tmp/p/.git', 'is_worktree' => false,
-    ]);
+    $project = $this->createTestProject(['slug' => 'p', 'path' => '/tmp/p']);
 
     Comment::create([
         'id' => 'c-with-project', 'project_id' => $project->id, 'repo_path' => '/tmp/p',

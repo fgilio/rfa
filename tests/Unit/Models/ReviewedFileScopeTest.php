@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Project;
 use App\Models\ReviewedFile;
 use Faker\Factory as Faker;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -14,10 +13,7 @@ beforeEach(function () {
 });
 
 test('forProjectOrRepo limits the result to the given project', function () {
-    $project = Project::create([
-        'slug' => 'p', 'name' => 'p', 'path' => '/tmp/p',
-        'git_common_dir' => '/tmp/p/.git', 'is_worktree' => false,
-    ]);
+    $project = $this->createTestProject(['slug' => 'p', 'path' => '/tmp/p']);
 
     ReviewedFile::create(['project_id' => $project->id, 'repo_path' => '/tmp/p', 'file_path' => 'a.php', 'content_hash' => 'h1']);
     ReviewedFile::create(['project_id' => null, 'repo_path' => '/tmp/other', 'file_path' => 'a.php', 'content_hash' => 'h2']);

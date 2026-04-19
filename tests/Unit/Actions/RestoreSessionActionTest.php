@@ -3,7 +3,6 @@
 use App\Actions\RestoreSessionAction;
 use App\DTOs\DiffTarget;
 use App\Models\Comment;
-use App\Models\Project;
 use App\Models\ReviewedFile;
 use App\Models\ReviewSession;
 use App\Services\GitFileContentService;
@@ -95,12 +94,9 @@ test('remaps fileId to current file list', function () {
 });
 
 test('keys by project_id when provided', function () {
-    $project = Project::create([
+    $project = $this->createTestProject([
         'slug' => 'test-proj',
-        'name' => 'test-proj',
         'path' => '/tmp/test-proj',
-        'git_common_dir' => '/tmp/test-proj/.git',
-        'is_worktree' => false,
     ]);
 
     Comment::create([

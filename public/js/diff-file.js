@@ -201,9 +201,7 @@
                 const attr = side === 'left' ? 'data-line-old' : 'data-line-new';
                 const start = Math.min(startLine, endLine ?? startLine);
                 const end = Math.max(startLine, endLine ?? startLine);
-                // Alpine's $el points at the nearest scoped element, not the diff-file root;
-                // climb to the file wrapper (.group) so the query sees this file's rows.
-                const root = this.$el.closest('.group') ?? this.$el;
+                const root = this.$el.closest(`[data-file-id="${this.fileId}"]`) ?? this.$el;
                 const lines = [];
                 for (let n = start; n <= end; n++) {
                     const row = root.querySelector(`tr[${attr}="${n}"]`);

@@ -200,6 +200,8 @@ new class extends Component {
 
                         <template x-for="(commit, commitIdx) in $wire.commits" :key="commit.hash">
                             <div
+                                data-testid="commit-row"
+                                :data-commit-hash="commit.hash"
                                 class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
                                 @click="viewCommit(commit.hash)"
                                 :class="{
@@ -212,6 +214,7 @@ new class extends Component {
                                 <div class="flex items-start gap-2">
                                     <button
                                         type="button"
+                                        data-testid="commit-select-toggle"
                                         @click="toggleSelection(commit.hash, commitIdx, $event)"
                                         @mousedown.stop
                                         class="mt-0.5 size-4 shrink-0 grid place-items-center rounded border transition-colors cursor-pointer"
@@ -225,7 +228,7 @@ new class extends Component {
                                         </template>
                                     </button>
                                     <div class="min-w-0 flex-1">
-                                        <div class="text-xs text-gh-text truncate font-medium tracking-tight" x-text="commit.message"></div>
+                                        <div data-testid="commit-message" class="text-xs text-gh-text truncate font-medium tracking-tight" x-text="commit.message"></div>
                                         <div class="flex items-center gap-2 mt-0.5">
                                             <span class="text-[10px] font-mono text-gh-muted" x-text="commit.author"></span>
                                             <span class="text-[10px] text-gh-muted">&middot;</span>

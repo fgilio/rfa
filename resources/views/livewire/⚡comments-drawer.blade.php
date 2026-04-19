@@ -28,8 +28,10 @@ new class extends Component
     #[On('reset-reviewed-files')]
     public function refresh(): void
     {
-        // Listening to the pool-wide write events re-renders the drawer so the
-        // count badge and list reflect the latest Comment table state.
+        // A no-op body is enough: Livewire re-renders the component on #[On] hits,
+        // which invalidates the computed properties so the count badge picks up
+        // pool changes. The list itself is gated on $open, so closed drawers
+        // skip the expensive query.
     }
 
     /** @return \Illuminate\Database\Eloquent\Builder<\App\Models\Comment> */
@@ -48,6 +50,10 @@ new class extends Component
     #[Computed]
     public function groupedComments(): array
     {
+        if (! $this->open) {
+            return [];
+        }
+
         $query = $this->baseQuery()->orderByDesc('created_at');
 
         $filter = trim($this->filter);

@@ -19,11 +19,10 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 beforeEach(function () {
     $this->files = [];
 
-    $this->project = Project::create([
+    $this->project = $this->createTestProject([
         'slug' => 'test-project',
         'name' => 'Test Project',
         'path' => '/tmp/repo',
-        'git_common_dir' => '/tmp/repo/.git',
         'branch' => 'main',
         'global_gitignore_path' => null,
         'respect_global_gitignore' => false,

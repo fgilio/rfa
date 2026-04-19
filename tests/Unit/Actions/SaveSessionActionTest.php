@@ -1,7 +1,6 @@
 <?php
 
 use App\Actions\SaveSessionAction;
-use App\Models\Project;
 use App\Models\ReviewSession;
 use Faker\Factory as Faker;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -38,12 +37,9 @@ test('updates existing session row', function () {
 });
 
 test('keys by project_id when provided', function () {
-    $project = Project::create([
+    $project = $this->createTestProject([
         'slug' => 'test-proj',
-        'name' => 'test-proj',
         'path' => '/tmp/test-proj',
-        'git_common_dir' => '/tmp/test-proj/.git',
-        'is_worktree' => false,
     ]);
 
     app(SaveSessionAction::class)->handle('/tmp/test-proj', 'hello', $project->id);
