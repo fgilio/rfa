@@ -5,23 +5,27 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Models\Project;
-use Illuminate\Support\Facades\Cache;
 
 final readonly class RemoveProjectAction
 {
-    public function handle(int $projectId): void
+    public function __construct(private ResolveStartupRouteAction $resolveStartupRoute) {}
+
+    /**
+     * Remove a project. When the removed project was the last-opened one,
+     * returns a URL for the next route so the caller can redirect.
+     */
+    public function handle(int $projectId): ?string
     {
         $project = Project::find($projectId);
 
         if (! $project) {
-            return;
+            return null;
         }
 
-        $slug = $project->slug;
+        $wasLastOpened = $this->resolveStartupRoute->lastOpenedSlug() === $project->slug;
+
         $project->delete();
 
-        if (Cache::get(ResolveStartupRouteAction::CACHE_KEY) === $slug) {
-            Cache::forget(ResolveStartupRouteAction::CACHE_KEY);
-        }
+        return $wasLastOpened ? $this->resolveStartupRoute->handle() : null;
     }
 }

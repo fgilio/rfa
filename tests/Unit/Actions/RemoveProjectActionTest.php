@@ -5,45 +5,31 @@ use App\Actions\ResolveStartupRouteAction;
 use App\Models\Project;
 use App\Models\ReviewSession;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
-use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
 test('deletes project by ID', function () {
-    $project = Project::create([
-        'slug' => 'test-project',
-        'name' => 'Test Project',
-        'path' => '/tmp/test',
-        'git_common_dir' => '/tmp/test/.git',
-        'is_worktree' => false,
-        'branch' => 'main',
-    ]);
+    $project = Project::factory()->create(['slug' => 'test-project']);
 
-    app(RemoveProjectAction::class)->handle($project->id);
+    $result = app(RemoveProjectAction::class)->handle($project->id);
 
     expect(Project::find($project->id))->toBeNull();
+    expect($result)->toBeNull();
 });
 
 test('no-op when project does not exist', function () {
-    app(RemoveProjectAction::class)->handle(9999);
+    $result = app(RemoveProjectAction::class)->handle(9999);
 
-    expect(true)->toBeTrue();
+    expect($result)->toBeNull();
 });
 
 test('cascading delete removes associated review session', function () {
-    $project = Project::create([
-        'slug' => 'test-project',
-        'name' => 'Test Project',
-        'path' => '/tmp/test',
-        'git_common_dir' => '/tmp/test/.git',
-        'is_worktree' => false,
-        'branch' => 'main',
-    ]);
+    $project = Project::factory()->create(['slug' => 'test-project']);
 
     $session = ReviewSession::create([
         'project_id' => $project->id,
-        'repo_path' => '/tmp/test',
+        'repo_path' => $project->path,
     ]);
 
     app(RemoveProjectAction::class)->handle($project->id);
@@ -52,23 +38,34 @@ test('cascading delete removes associated review session', function () {
     expect(ReviewSession::find($session->id))->toBeNull();
 });
 
-test('clears last-opened cache when removing that project', function () {
-    $project = Project::factory()->create(['slug' => 'cached-project']);
+test('returns next route when removing the last-opened project leaves another behind', function () {
+    $current = Project::factory()->create(['slug' => 'current', 'updated_at' => now()->subHour()]);
+    Project::factory()->create(['slug' => 'surviving', 'updated_at' => now()]);
 
-    Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'cached-project');
+    app(ResolveStartupRouteAction::class)->rememberLastOpened('current');
 
-    app(RemoveProjectAction::class)->handle($project->id);
+    $result = app(RemoveProjectAction::class)->handle($current->id);
 
-    expect(Cache::get(ResolveStartupRouteAction::CACHE_KEY))->toBeNull();
+    expect($result)->toBe(route('review-page', ['slug' => 'surviving']));
 });
 
-test('preserves last-opened cache when removing a different project', function () {
-    $projectA = Project::factory()->create(['slug' => 'project-a']);
+test('returns no-projects route when removing the only project', function () {
+    $only = Project::factory()->create(['slug' => 'only']);
+
+    app(ResolveStartupRouteAction::class)->rememberLastOpened('only');
+
+    $result = app(RemoveProjectAction::class)->handle($only->id);
+
+    expect($result)->toBe(route('no-projects'));
+});
+
+test('returns null when removing a non-current project', function () {
+    Project::factory()->create(['slug' => 'project-a']);
     $projectB = Project::factory()->create(['slug' => 'project-b']);
 
-    Cache::forever(ResolveStartupRouteAction::CACHE_KEY, 'project-a');
+    app(ResolveStartupRouteAction::class)->rememberLastOpened('project-a');
 
-    app(RemoveProjectAction::class)->handle($projectB->id);
+    $result = app(RemoveProjectAction::class)->handle($projectB->id);
 
-    expect(Cache::get(ResolveStartupRouteAction::CACHE_KEY))->toBe('project-a');
+    expect($result)->toBeNull();
 });

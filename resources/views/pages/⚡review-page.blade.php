@@ -110,9 +110,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->projectBranch = $project['branch'] ?? '';
         $this->projectSlug = $project['slug'];
 
-        if (Cache::get(ResolveStartupRouteAction::CACHE_KEY) !== $slug) {
-            Cache::forever(ResolveStartupRouteAction::CACHE_KEY, $slug);
-        }
+        app(ResolveStartupRouteAction::class)->rememberLastOpened($slug);
 
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title("rfa - {$this->projectName}");
@@ -702,12 +700,14 @@ new #[Layout('layouts.app')] class extends Component
 
     {{-- Header --}}
     <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
-        <div class="flex items-center gap-2.5">
-            <a href="/" class="text-gh-muted hover:text-gh-text transition-colors" aria-label="Back to projects">
-                <flux:icon icon="chevron-left" variant="outline" class="!size-4" />
-            </a>
-            <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
+        <div class="flex items-center gap-2">
+            @native
+                <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" />
+            @else
+                <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
+            @endnative
             @if($projectBranch)
+                <x-header-separator />
                 <livewire:branch-explorer :repo-path="$repoPath" :current-branch="$projectBranch" :project-slug="$projectSlug" :active-commit-hash="$diffTo" />
             @endif
         </div>

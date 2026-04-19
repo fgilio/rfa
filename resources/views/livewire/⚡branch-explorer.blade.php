@@ -66,15 +66,17 @@ new class extends Component {
     })"
     @keydown.window="handleKeydown($event)"
 >
-    {{-- Trigger: branch badge button --}}
-    <button
-        @click="openPanel()"
-        class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded border border-gh-border hover:border-gh-text/30 bg-gh-surface text-gh-text transition-colors cursor-pointer"
+    {{-- Trigger: inline branch segment --}}
+    <x-header-picker-trigger
+        tooltip="Switch branch"
+        aria-label="Switch branch"
+        variant="mono"
+        x-on:click="openPanel()"
+        x-bind:aria-expanded="open"
     >
-        <flux:icon icon="share" variant="outline" class="!size-3.5 text-gh-muted" />
-        <span>{{ $currentBranch }}</span>
-        <flux:icon icon="chevron-down" variant="outline" class="!size-3.5 text-gh-muted" />
-    </button>
+        <flux:icon icon="share" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
+        <span class="tracking-tight">{{ $currentBranch }}</span>
+    </x-header-picker-trigger>
 
     {{-- Overlay panel --}}
     <template x-teleport="body">

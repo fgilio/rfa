@@ -9,21 +9,48 @@ use Illuminate\Support\Facades\Cache;
 
 final readonly class ResolveStartupRouteAction
 {
-    public const string CACHE_KEY = 'last-opened-project-slug';
+    private const string CACHE_KEY = 'last-opened-project-slug';
 
-    /** @return array{name: string, params: array<string, string>} */
-    public function handle(): array
+    public function handle(): string
     {
         $lastSlug = Cache::get(self::CACHE_KEY);
 
         if ($lastSlug && Project::where('slug', $lastSlug)->exists()) {
-            return ['name' => 'review-page', 'params' => ['slug' => $lastSlug]];
+            return route('review-page', ['slug' => $lastSlug]);
         }
 
         if ($lastSlug) {
             Cache::forget(self::CACHE_KEY);
         }
 
-        return ['name' => 'dashboard', 'params' => []];
+        $mostRecent = Project::query()
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($mostRecent) {
+            return route('review-page', ['slug' => $mostRecent->slug]);
+        }
+
+        return route('no-projects');
+    }
+
+    public function lastOpenedSlug(): ?string
+    {
+        return Cache::get(self::CACHE_KEY);
+    }
+
+    public function rememberLastOpened(string $slug): void
+    {
+        if (Cache::get(self::CACHE_KEY) === $slug) {
+            return;
+        }
+
+        Cache::forever(self::CACHE_KEY, $slug);
+    }
+
+    public function forgetLastOpened(): void
+    {
+        Cache::forget(self::CACHE_KEY);
     }
 }

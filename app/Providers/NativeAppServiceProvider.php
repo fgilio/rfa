@@ -126,8 +126,6 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
     private function createWindow(): void
     {
-        $route = app(ResolveStartupRouteAction::class)->handle();
-
         Window::open('main')
             ->title('rfa')
             ->width(1280)
@@ -135,7 +133,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->minWidth(800)
             ->minHeight(600)
             ->backgroundColor('#0d1117')
-            ->route($route['name'], $route['params'])
+            ->url(app(ResolveStartupRouteAction::class)->handle())
             ->rememberState();
     }
 
