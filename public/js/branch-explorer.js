@@ -48,11 +48,13 @@
                 const branch = this.allFiltered[this.selectedIndex];
                 if (!branch) return;
                 if (branch.name === this.selectedBranch && this.$wire.commits.length > 0) return;
+                // Selected branch is actually changing — stale hashes no longer apply.
+                const branchChanged = this.selectedBranch !== branch.name;
                 this.selectedBranch = branch.name;
                 const id = ++this._loadId;
                 await this.$wire.loadCommits(branch.name);
                 if (this._loadId !== id) return;
-                this.clearSelection();
+                if (branchChanged) this.clearSelection();
             },
 
             handleKeydown(e) {

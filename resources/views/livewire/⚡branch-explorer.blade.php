@@ -215,7 +215,7 @@ new class extends Component {
                                     <button
                                         type="button"
                                         data-testid="commit-select-toggle"
-                                        @click="toggleSelection(commit.hash, commitIdx, $event)"
+                                        @click.stop="toggleSelection(commit.hash, commitIdx, $event)"
                                         @mousedown.stop
                                         class="mt-0.5 size-4 shrink-0 grid place-items-center rounded border transition-colors cursor-pointer"
                                         :class="isSelected(commit.hash)
