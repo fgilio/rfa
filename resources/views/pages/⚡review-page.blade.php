@@ -512,12 +512,16 @@ new #[Layout('layouts.app')] class extends Component
         Flux::toast(variant: 'success', heading: 'Review submitted', text: $this->exportResult);
         $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
 
-        // Remove exported comments from the current view; drafts and out-of-scope comments persist.
-        $exportedIds = array_column($finalizedComments, 'id');
-        $affectedFileIds = collect($finalizedComments)->pluck('fileId')->unique();
+        // Only drop comments the export actually submitted; drafts and out-of-scope
+        // comments (e.g. hash-anchored from another selection) stay in the pool.
+        $submittedIds = $result['submittedIds'];
+        $affectedFileIds = collect($this->comments)
+            ->whereIn('id', $submittedIds)
+            ->pluck('fileId')
+            ->unique();
         $this->comments = array_values(array_filter(
             $this->comments,
-            fn ($c) => ! in_array($c['id'], $exportedIds, true),
+            fn ($c) => ! in_array($c['id'], $submittedIds, true),
         ));
         $this->globalComment = '';
         $this->saveSession();

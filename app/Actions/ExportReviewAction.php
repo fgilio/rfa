@@ -21,7 +21,7 @@ final readonly class ExportReviewAction
     /**
      * @param  array<int, array<string, mixed>>  $comments  Currently-loaded, view-ready comments.
      * @param  array<int, array<string, mixed>>  $files  Files in the current diff.
-     * @return array{json: string, md: string, clipboard: string}
+     * @return array{json: string, md: string, clipboard: string, submittedIds: array<int, string>}
      */
     public function handle(string $repoPath, array $comments, string $globalComment, array $files, ?DiffTarget $target = null): array
     {
@@ -40,7 +40,7 @@ final readonly class ExportReviewAction
 
         $this->ensureGitExclude->handle($repoPath);
 
-        return $result;
+        return [...$result, 'submittedIds' => $ids];
     }
 
     /**

@@ -104,9 +104,19 @@ final readonly class RestoreSessionAction
                 continue;
             }
 
+            $storedHashes = $hashesByPath[$path];
             $currentHash = $this->gitFileContentService->hashAt($repoPath, $ref, $path) ?? '';
 
-            if ($currentHash !== '' && in_array($currentHash, $hashesByPath[$path], true)) {
+            // Legacy rows (indexed `reviewed_files` arrays or immutable-context sessions)
+            // were migrated with an empty `content_hash`. Treat those as "reviewed
+            // regardless of content" so migrated users keep their state.
+            if (in_array('', $storedHashes, true)) {
+                $reviewed[$path] = $currentHash;
+
+                continue;
+            }
+
+            if ($currentHash !== '' && in_array($currentHash, $storedHashes, true)) {
                 $reviewed[$path] = $currentHash;
             }
         }

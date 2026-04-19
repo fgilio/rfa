@@ -212,6 +212,26 @@ test('marks comment as placed when content hash matches right side', function ()
     expect($result['comments'][0]['anchorStatus'])->toBe('placed');
 });
 
+test('rehydrates legacy reviewed_files rows that were migrated with an empty content_hash', function () {
+    $repoPath = '/tmp/'.$this->faker->word();
+
+    ReviewedFile::create([
+        'repo_path' => $repoPath,
+        'file_path' => 'legacy.php',
+        'content_hash' => '',
+    ]);
+
+    $files = [['id' => 'id-legacy', 'path' => 'legacy.php', 'isUntracked' => false]];
+
+    $this->gitFileContentMock->shouldReceive('hashAt')
+        ->with($repoPath, GitFileContentService::WORKING_REF, 'legacy.php')
+        ->andReturn('current-hash');
+
+    $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
+
+    expect($result['reviewedFiles'])->toHaveKey('legacy.php');
+});
+
 test('marks comment as unplaced when content hash does not match either side', function () {
     $repoPath = '/tmp/'.$this->faker->word();
 

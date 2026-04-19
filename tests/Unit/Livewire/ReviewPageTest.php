@@ -221,9 +221,14 @@ test('submitReview refreshes file list and populates reviewPairs', function () {
 
     app()->bind(ExportReviewAction::class, fn () => new class
     {
-        public function handle(string $repoPath, array $comments, string $globalComment, array $files): array
+        public function handle(string $repoPath, array $comments, string $globalComment, array $files, ?DiffTarget $target = null): array
         {
-            return ['json' => '/tmp/review.json', 'md' => '/tmp/review.md', 'clipboard' => 'review exported'];
+            return [
+                'json' => '/tmp/review.json',
+                'md' => '/tmp/review.md',
+                'clipboard' => 'review exported',
+                'submittedIds' => array_column($comments, 'id'),
+            ];
         }
     });
 

@@ -34,7 +34,7 @@ test('exports JSON, markdown, and clipboard text', function () {
     $action = app(ExportReviewAction::class);
     $result = $action->handle($this->tmpDir, $comments, 'overall feedback', $files);
 
-    expect($result)->toHaveKeys(['json', 'md', 'clipboard']);
+    expect($result)->toHaveKeys(['json', 'md', 'clipboard', 'submittedIds']);
     expect(File::exists($result['json']))->toBeTrue();
     expect(File::exists($result['md']))->toBeTrue();
     expect($result['clipboard'])->toContain('.rfa/');
@@ -49,6 +49,6 @@ test('handles empty comments', function () {
     $action = app(ExportReviewAction::class);
     $result = $action->handle($this->tmpDir, [], 'just a note', []);
 
-    expect($result)->toHaveKeys(['json', 'md', 'clipboard']);
+    expect($result)->toHaveKeys(['json', 'md', 'clipboard', 'submittedIds']);
     expect(File::exists($result['json']))->toBeTrue();
 });
