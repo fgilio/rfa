@@ -58,6 +58,27 @@ test('captures origin_ref from target head for immutable commits', function () {
     expect($result['originRef'])->toBe('abc123');
 });
 
+test('persists the line snippet when provided', function () {
+    $snippet = "echo 'hello';\necho 'world';";
+
+    $result = $this->action->handle(
+        $this->repoPath,
+        null,
+        $this->target,
+        $this->files,
+        'file-abc',
+        'right',
+        1,
+        2,
+        'body',
+        false,
+        $snippet,
+    );
+
+    expect($result['lineSnippet'])->toBe($snippet);
+    expect(Comment::find($result['id'])->line_snippet)->toBe($snippet);
+});
+
 test('returns null for empty body', function () {
     expect($this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'right', 1, 1, ''))->toBeNull();
     expect($this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'right', 1, 1, '   '))->toBeNull();

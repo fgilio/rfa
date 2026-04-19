@@ -11,6 +11,8 @@
             baseShortHash: null,
             activeCommitHash,
             projectSlug,
+            selectedHashes: [],
+            lastSelectionIndex: -1,
             _loadId: 0, // Stale-response guard: incremented before each async load, checked after
 
             _filterBranches(key) {
@@ -134,6 +136,60 @@
 
             viewWorkingTree() {
                 Livewire.navigate(`/p/${this.projectSlug}`);
+            },
+
+            isSelected(hash) {
+                return this.selectedHashes.includes(hash);
+            },
+
+            toggleSelection(hash, idx, event) {
+                event.stopPropagation();
+
+                if (event.shiftKey && this.lastSelectionIndex >= 0) {
+                    const start = Math.min(this.lastSelectionIndex, idx);
+                    const end = Math.max(this.lastSelectionIndex, idx);
+                    const rangeHashes = this.$wire.commits.slice(start, end + 1).map(c => c.hash);
+                    const merged = new Set(this.selectedHashes);
+                    rangeHashes.forEach(h => merged.add(h));
+                    this.selectedHashes = [...merged];
+                    return;
+                }
+
+                const i = this.selectedHashes.indexOf(hash);
+                if (i >= 0) {
+                    this.selectedHashes.splice(i, 1);
+                } else {
+                    this.selectedHashes.push(hash);
+                }
+                this.lastSelectionIndex = idx;
+            },
+
+            clearSelection() {
+                this.selectedHashes = [];
+                this.lastSelectionIndex = -1;
+            },
+
+            applySelection() {
+                if (this.selectedHashes.length === 0) return;
+
+                const indices = this.selectedHashes
+                    .map(h => this.$wire.commits.findIndex(c => c.hash === h))
+                    .filter(i => i >= 0);
+
+                if (indices.length === 0) return;
+
+                if (indices.length === 1) {
+                    Livewire.navigate(`/p/${this.projectSlug}/c/${this.$wire.commits[indices[0]].hash}`);
+                    this.closePanel();
+                    return;
+                }
+
+                // Commits are listed newest-first; lowest index = tip, highest = oldest.
+                const newest = this.$wire.commits[Math.min(...indices)];
+                const oldest = this.$wire.commits[Math.max(...indices)];
+                const baseRef = encodeURIComponent(oldest.hash + '^');
+                Livewire.navigate(`/p/${this.projectSlug}/${newest.hash}/${baseRef}`);
+                this.closePanel();
             },
         }));
     }

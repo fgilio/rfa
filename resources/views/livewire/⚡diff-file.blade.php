@@ -362,6 +362,17 @@ new class extends Component {
         @if($unplacedComments->isNotEmpty())
             @foreach($unplacedComments as $comment)
                 <div x-data x-show="editingCommentId !== '{{ $comment['id'] }}'">
+                    @if(! empty($comment['lineSnippet']))
+                        <div class="border-b border-gh-border bg-gh-surface/40 px-4 py-2">
+                            <div class="text-[10px] font-display uppercase tracking-brutal text-gh-muted mb-1">
+                                Original snippet
+                                @if(! empty($comment['startLine']))
+                                    &middot; L{{ $comment['startLine'] }}@if(! empty($comment['endLine']) && $comment['endLine'] !== $comment['startLine'])-L{{ $comment['endLine'] }}@endif
+                                @endif
+                            </div>
+                            <pre class="font-mono text-xs text-gh-muted whitespace-pre-wrap break-all">{{ $comment['lineSnippet'] }}</pre>
+                        </div>
+                    @endif
                     <x-comment-display :comment="$comment" border-class="border-b" />
                 </div>
             @endforeach

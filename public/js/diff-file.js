@@ -190,9 +190,26 @@
                     this.$wire.dispatch('update-comment', { commentId: this.editingCommentId, body: this.formBody, isDraft });
                 } else {
                     const event = isDraft ? 'add-draft-comment' : 'add-comment';
-                    this.$wire.dispatch(event, { fileId: this.fileId, side: this.formSide, startLine: this.formLine, endLine: this.formEndLine, body: this.formBody });
+                    const lineSnippet = this._extractLineSnippet(this.formSide, this.formLine, this.formEndLine);
+                    this.$wire.dispatch(event, { fileId: this.fileId, side: this.formSide, startLine: this.formLine, endLine: this.formEndLine, body: this.formBody, lineSnippet });
                 }
                 this.cancelForm();
+            },
+
+            _extractLineSnippet(side, startLine, endLine) {
+                if (startLine == null || side === 'file') return null;
+                const attr = side === 'left' ? 'data-line-old' : 'data-line-new';
+                const start = Math.min(startLine, endLine ?? startLine);
+                const end = Math.max(startLine, endLine ?? startLine);
+                const lines = [];
+                for (let n = start; n <= end; n++) {
+                    const row = this.$el.querySelector(`tr[${attr}="${n}"]`);
+                    if (!row) continue;
+                    const cells = row.querySelectorAll('td');
+                    const content = cells[cells.length - 1]?.textContent;
+                    if (content !== undefined) lines.push(content);
+                }
+                return lines.length ? lines.join('\n') : null;
             },
 
             _ensureScrollLoop() {

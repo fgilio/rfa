@@ -229,7 +229,7 @@ new #[Layout('layouts.app')] class extends Component
     // region: Comment Management
 
     #[On('add-comment')]
-    public function addComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body): void
+    public function addComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, ?string $lineSnippet = null): void
     {
         $comment = app(AddCommentAction::class)->handle(
             $this->repoPath,
@@ -241,6 +241,7 @@ new #[Layout('layouts.app')] class extends Component
             $startLine,
             $endLine,
             $body,
+            lineSnippet: $lineSnippet,
         );
 
         if (! $comment) {
@@ -253,7 +254,7 @@ new #[Layout('layouts.app')] class extends Component
     }
 
     #[On('add-draft-comment')]
-    public function addDraftComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body): void
+    public function addDraftComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, ?string $lineSnippet = null): void
     {
         $comment = app(AddCommentAction::class)->handle(
             $this->repoPath,
@@ -266,6 +267,7 @@ new #[Layout('layouts.app')] class extends Component
             $endLine,
             $body,
             isDraft: true,
+            lineSnippet: $lineSnippet,
         );
 
         if (! $comment) {
@@ -765,6 +767,30 @@ new #[Layout('layouts.app')] class extends Component
                 <x-header-separator />
                 <livewire:branch-explorer :repo-path="$repoPath" :current-branch="$projectBranch" :project-slug="$projectSlug" :active-commit-hash="$diffTo" />
             @endif
+            @php
+                $shortFrom = $diffFrom !== 'HEAD' ? substr($diffFrom, 0, 7) : null;
+                $shortTo = $diffTo ? substr($diffTo, 0, 7) : null;
+                if ($diffTo === null) {
+                    $selectionLabel = 'working';
+                    $selectionTitle = 'Working tree changes';
+                } elseif ($shortFrom && str_starts_with($diffFrom, $diffTo === null ? '' : substr($diffTo, 0, 0)) === false && $diffFrom !== $diffTo.'^') {
+                    $selectionLabel = $shortFrom.'..'.$shortTo;
+                    $selectionTitle = 'Range '.$diffFrom.'..'.$diffTo;
+                } else {
+                    $selectionLabel = $shortTo;
+                    $selectionTitle = $commitInfo['message'] ?? $diffTo;
+                }
+            @endphp
+            <button
+                type="button"
+                title="{{ $selectionTitle }}"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded border border-gh-border bg-gh-surface text-gh-text hover:border-gh-text/30 transition-colors cursor-pointer"
+                @click="$dispatch('open-selection-drawer')"
+                aria-label="Open selection drawer"
+            >
+                <flux:icon icon="square-3-stack-3d" variant="outline" class="!size-3.5 text-gh-muted" />
+                <span>{{ $selectionLabel }}</span>
+            </button>
             <livewire:comments-drawer :repo-path="$repoPath" :project-id="$projectId ?: null" />
         </div>
         <div class="flex items-center gap-2.5 text-xs">

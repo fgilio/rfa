@@ -65,6 +65,7 @@ new class extends Component {
         branches: @js($branches),
     })"
     @keydown.window="handleKeydown($event)"
+    @open-selection-drawer.window="openPanel()"
 >
     {{-- Trigger: inline branch segment --}}
     <x-header-picker-trigger
@@ -168,7 +169,16 @@ new class extends Component {
                         <span class="text-xs font-mono text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + ($wire.hasMore ? '+' : '') + ')'"></span>
 
                         <div class="ml-auto flex items-center gap-2">
-                            <template x-if="baseHash">
+                            <template x-if="selectedHashes.length > 0">
+                                <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gh-link/10 border border-gh-link/20">
+                                    <span class="text-[10px] text-gh-link font-mono" x-text="selectedHashes.length + ' selected'"></span>
+                                    <button @click="clearSelection()" class="text-gh-link hover:text-gh-link/80" title="Clear selection">
+                                        <flux:icon icon="x-mark" variant="outline" />
+                                    </button>
+                                    <button @click="applySelection()" class="text-[10px] text-gh-link hover:underline font-medium">Apply</button>
+                                </div>
+                            </template>
+                            <template x-if="baseHash && selectedHashes.length === 0">
                                 <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gh-link/10 border border-gh-link/20">
                                     <span class="text-[10px] text-gh-link font-mono" x-text="'Compare from ' + baseShortHash"></span>
                                     <button @click="clearBase()" class="text-gh-link hover:text-gh-link/80">
@@ -188,17 +198,32 @@ new class extends Component {
                             </div>
                         </template>
 
-                        <template x-for="commit in $wire.commits" :key="commit.hash">
+                        <template x-for="(commit, commitIdx) in $wire.commits" :key="commit.hash">
                             <div
                                 class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
                                 @click="viewCommit(commit.hash)"
                                 :class="{
                                     'bg-gh-text/5 border-l-2 border-l-gh-text': activeCommitHash === commit.hash,
                                     'bg-gh-text/3': baseHash === commit.hash && activeCommitHash !== commit.hash,
+                                    'bg-gh-link/5 border-l-2 border-l-gh-link': isSelected(commit.hash),
                                     'hover:bg-gh-text/5': baseHash && baseHash !== commit.hash && activeCommitHash !== commit.hash
                                 }"
                             >
                                 <div class="flex items-start gap-2">
+                                    <button
+                                        type="button"
+                                        @click="toggleSelection(commit.hash, commitIdx, $event)"
+                                        @mousedown.stop
+                                        class="mt-0.5 size-4 shrink-0 grid place-items-center rounded border transition-colors cursor-pointer"
+                                        :class="isSelected(commit.hash)
+                                            ? 'border-gh-link bg-gh-link/20 text-gh-link'
+                                            : 'border-gh-border opacity-0 group-hover:opacity-100 hover:border-gh-text/40'"
+                                        :title="isSelected(commit.hash) ? 'Remove from selection' : 'Add to selection (shift+click for range)'"
+                                    >
+                                        <template x-if="isSelected(commit.hash)">
+                                            <flux:icon icon="check" variant="outline" class="!size-3" />
+                                        </template>
+                                    </button>
                                     <div class="min-w-0 flex-1">
                                         <div class="text-xs text-gh-text truncate font-medium tracking-tight" x-text="commit.message"></div>
                                         <div class="flex items-center gap-2 mt-0.5">
