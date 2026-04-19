@@ -10,21 +10,27 @@ new #[Layout('layouts.app')] class extends Component
 {
     public function mount(): void
     {
+        if ($this->redirectIfProjectRegistered()) {
+            return;
+        }
+
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title('rfa');
         }
-
-        $this->redirectIfProjectRegistered();
     }
 
     #[On('projects-changed')]
-    public function redirectIfProjectRegistered(): void
+    public function redirectIfProjectRegistered(): bool
     {
         $url = app(ResolveStartupRouteAction::class)->handle();
 
-        if ($url !== route('no-projects')) {
-            $this->redirect($url);
+        if ($url === route('no-projects')) {
+            return false;
         }
+
+        $this->redirect($url);
+
+        return true;
     }
 
     private const ALLOWED_EXTERNAL_URLS = [

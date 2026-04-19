@@ -49,3 +49,10 @@ test('stays on page when projects-changed fires but no project exists', function
         ->dispatch('projects-changed')
         ->assertNoRedirect();
 });
+
+test('mount redirects to review page when projects already exist', function () {
+    Project::factory()->create(['slug' => 'already-here']);
+
+    Livewire::test('pages::no-projects-page')
+        ->assertRedirect(route('review-page', ['slug' => 'already-here']));
+});
