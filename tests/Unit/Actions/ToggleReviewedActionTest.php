@@ -90,6 +90,20 @@ test('falls back to the left ref when the right side hash is unavailable', funct
     expect($result)->toBe(['deleted.php' => 'parent-hash']);
 });
 
+test('updates content_hash in place instead of inserting a new row when the file changes', function () {
+    ReviewedFile::create(['repo_path' => '/tmp/repo', 'file_path' => 'a.php', 'content_hash' => 'old-hash']);
+
+    $mock = Mockery::mock(GitFileContentService::class);
+    $mock->shouldReceive('hashAt')->andReturn('new-hash');
+    app()->instance(GitFileContentService::class, $mock);
+
+    app(ToggleReviewedAction::class)->handle([], 'a.php', $this->knownFiles, '/tmp/repo');
+
+    $rows = ReviewedFile::where('repo_path', '/tmp/repo')->where('file_path', 'a.php')->get();
+    expect($rows)->toHaveCount(1);
+    expect($rows->first()->content_hash)->toBe('new-hash');
+});
+
 test('preserves other entries on toggle off', function () {
     ReviewedFile::create(['repo_path' => '/tmp/repo', 'file_path' => 'b.php', 'content_hash' => 'h2']);
 
