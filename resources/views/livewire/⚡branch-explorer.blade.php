@@ -197,14 +197,6 @@ new class extends Component {
                                     <button @click="applySelection()" class="text-[10px] text-gh-link hover:underline font-medium">Apply</button>
                                 </div>
                             </template>
-                            <template x-if="baseHash && selectedHashes.length === 0">
-                                <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gh-link/10 border border-gh-link/20">
-                                    <span class="text-[10px] text-gh-link font-mono" x-text="'Compare from ' + baseShortHash"></span>
-                                    <button @click="clearBase()" class="text-gh-link hover:text-gh-link/80">
-                                        <flux:icon icon="x-mark" variant="outline" />
-                                    </button>
-                                </div>
-                            </template>
                             <flux:button size="xs" variant="ghost" @click="viewWorkingTree()" class="!text-[10px]">Working Tree</flux:button>
                         </div>
                     </div>
@@ -225,9 +217,7 @@ new class extends Component {
                                 @click="viewCommit(commit.hash)"
                                 :class="{
                                     'bg-gh-text/5 border-l-2 border-l-gh-text': activeCommitHash === commit.hash,
-                                    'bg-gh-text/3': baseHash === commit.hash && activeCommitHash !== commit.hash,
                                     'bg-gh-link/5 border-l-2 border-l-gh-link': isSelected(commit.hash),
-                                    'hover:bg-gh-text/5': baseHash && baseHash !== commit.hash && activeCommitHash !== commit.hash
                                 }"
                             >
                                 <div class="flex items-start gap-2">
@@ -253,36 +243,9 @@ new class extends Component {
                                             <span class="text-[10px] text-gh-muted">&middot;</span>
                                             <span class="text-[10px] font-mono text-gh-muted" x-text="commit.relativeDate"></span>
                                         </div>
-                                        <template x-if="baseHash === commit.hash">
-                                            <span class="text-[10px] text-gh-link font-medium mt-0.5">Compare from</span>
-                                        </template>
-                                        <template x-if="baseHash && baseHash !== commit.hash">
-                                            <span class="text-[10px] text-gh-link font-medium mt-0.5">Compare to</span>
-                                        </template>
                                     </div>
 
-                                    <div class="flex items-center gap-1 transition-opacity" :class="baseHash === commit.hash ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'" @click.stop>
-                                        <template x-if="baseHash !== commit.hash">
-                                            <flux:tooltip content="Compare from">
-                                                <button
-                                                    @click="setBase(commit.hash, commit.shortHash)"
-                                                    class="p-1 rounded hover:bg-gh-border text-gh-muted hover:text-gh-text"
-                                                >
-                                                    <flux:icon icon="arrows-right-left" variant="outline" />
-                                                </button>
-                                            </flux:tooltip>
-                                        </template>
-                                        <template x-if="baseHash === commit.hash">
-                                            <flux:tooltip content="Clear base">
-                                                <button
-                                                    @click="clearBase()"
-                                                    class="p-1 rounded hover:bg-gh-border text-gh-link"
-                                                >
-                                                    <flux:icon icon="x-mark" variant="outline" />
-                                                </button>
-                                            </flux:tooltip>
-                                        </template>
-
+                                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" @click.stop>
                                         <button
                                             @click.stop="copyHash(commit.hash)"
                                             class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-gh-bg border border-gh-border text-gh-muted hover:text-gh-link hover:border-gh-link/50 transition-all cursor-pointer"

@@ -7,8 +7,6 @@
             selectedIndex: 0,
             selectedBranch: currentBranch,
             allBranches: branches,
-            baseHash: null,
-            baseShortHash: null,
             activeCommitHash,
             projectSlug,
             selectedHashes: [],
@@ -137,21 +135,7 @@
             },
 
             viewCommit(hash) {
-                if (this.baseHash) {
-                    Livewire.navigate(`/p/${this.projectSlug}/${hash}/${this.baseHash}`);
-                } else {
-                    Livewire.navigate(`/p/${this.projectSlug}/c/${hash}`);
-                }
-            },
-
-            setBase(hash, short) {
-                this.baseHash = hash;
-                this.baseShortHash = short;
-            },
-
-            clearBase() {
-                this.baseHash = null;
-                this.baseShortHash = null;
+                Livewire.navigate(`/p/${this.projectSlug}/c/${hash}`);
             },
 
             viewWorkingTree() {
