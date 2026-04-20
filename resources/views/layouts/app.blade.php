@@ -9,6 +9,7 @@
     <script src="/js/tailwind.js"></script>
     <script src="/js/settings-store.js"></script>
     <script src="/js/overlays-store.js"></script>
+    <script src="/js/keymap-store.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',

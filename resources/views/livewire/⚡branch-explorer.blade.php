@@ -70,6 +70,7 @@ new class extends Component {
         projectSlug: @js($projectSlug),
         branches: @js($branches),
     })"
+    x-init="$store.keymap.register('⌘B', () => open ? closePanel() : openPanel())"
     @keydown.window="handleKeydown($event)"
     @open-selection-drawer.window="openPanel()"
     x-effect="if (open && !$store.overlays.is('branch-explorer')) closePanel()"

@@ -124,15 +124,12 @@ class extends Component
             const slug = rows[index]?.dataset.slug;
             if (slug) this.selectSlug(slug);
         },
-        isHotkey(e) {
-            return (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k';
-        }
     }"
+    x-init="$store.keymap.register('⌘K', () => toggle(), { allowInEditable: true })"
     @project-picker:toggle.window="toggle()"
     @project-picker:close.window="close()"
     x-effect="if (open && !$store.overlays.is('project-picker')) close()"
     @keydown.window="
-        if (isHotkey($event)) { $event.preventDefault(); toggle(); return; }
         if (!open) return;
         const inSearch = $event.target === $refs.searchInput;
         if ($event.key === 'Escape') { $event.preventDefault(); close(); return; }

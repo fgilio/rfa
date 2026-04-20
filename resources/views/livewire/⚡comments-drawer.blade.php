@@ -93,7 +93,6 @@ class extends Component
 <div
     x-data="{
         open: @entangle('open').live,
-        isHotkey(e) { return (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j'; },
         openPanel() {
             this.open = true;
             Alpine.store('overlays').open('comments-drawer');
@@ -105,13 +104,8 @@ class extends Component
         },
         toggle() { this.open ? this.close() : this.openPanel(); },
     }"
-    @keydown.window="
-        if (isHotkey($event)) {
-            const inEditable = $event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT' || $event.target.isContentEditable;
-            if (!inEditable) { $event.preventDefault(); toggle(); return; }
-        }
-        if (open && $event.key === 'Escape') { $event.preventDefault(); close(); return; }
-    "
+    x-init="$store.keymap.register('⌘J', () => toggle())"
+    @keydown.window="if (open && $event.key === 'Escape') { $event.preventDefault(); close(); return; }"
     x-effect="if (open && !$store.overlays.is('comments-drawer')) close()"
     class="relative"
 >
