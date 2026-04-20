@@ -138,7 +138,9 @@ return new class extends Migration
 
     private function dedupeReviewSessions(): void
     {
-        // For each project_id/repo_path, keep the row with the longest global_comment (or first).
+        // For each project_id/repo_path, keep the most recently updated row.
+        // `updated_at DESC, id DESC` reflects user intent better than longest-wins
+        // (which could discard a freshly edited shorter note in favor of stale text).
         $groups = DB::table('review_sessions')
             ->selectRaw('COALESCE(project_id, 0) as group_key, project_id, repo_path')
             ->groupBy('group_key', 'project_id', 'repo_path')
@@ -150,19 +152,12 @@ return new class extends Migration
                 ? $query->where('project_id', $group->project_id)
                 : $query->whereNull('project_id');
 
-            $rows = $query->orderByDesc('id')->get();
+            $rows = $query->orderByDesc('updated_at')->orderByDesc('id')->get();
             if ($rows->count() <= 1) {
                 continue;
             }
 
-            /** @var object|null $keeper */
-            $keeper = null;
-            foreach ($rows as $row) {
-                if ($keeper === null || strlen((string) ($row->global_comment ?? '')) > strlen((string) ($keeper->global_comment ?? ''))) {
-                    $keeper = $row;
-                }
-            }
-
+            $keeper = $rows->first();
             $idsToDelete = $rows->pluck('id')->reject(fn ($id) => $id === $keeper->id)->all();
 
             if ($idsToDelete !== []) {

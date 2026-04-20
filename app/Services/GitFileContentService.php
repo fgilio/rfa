@@ -10,7 +10,15 @@ class GitFileContentService
 {
     public const WORKING_REF = 'working';
 
-    /** @var array<string, ?string> */
+    /**
+     * Request-scoped memoization. The singleton binding in AppServiceProvider
+     * is safe under shared-nothing PHP (built-in web server): each HTTP request
+     * rebuilds the container, so working-copy hashes cannot go stale mid-request.
+     * If this app ever adopts Octane/FrankenPHP/RoadRunner, add a `forget()` path
+     * or drop the singleton binding.
+     *
+     * @var array<string, ?string>
+     */
     private array $hashCache = [];
 
     public function __construct(

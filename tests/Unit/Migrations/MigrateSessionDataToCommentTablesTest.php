@@ -36,6 +36,10 @@ beforeEach(function () {
         // Already exists.
     }
 
+    // Drop later-migration partial uniques so dedup scenarios can be replayed.
+    DB::statement('DROP INDEX IF EXISTS review_sessions_project_id_unique');
+    DB::statement('DROP INDEX IF EXISTS review_sessions_bare_repo_unique');
+
     DB::table('comments')->delete();
     DB::table('reviewed_files')->delete();
     DB::table('review_sessions')->delete();
@@ -157,23 +161,23 @@ test('migrates legacy indexed-array reviewed_files with an empty content_hash', 
     expect($rows->get('b.php')->content_hash)->toBe('');
 });
 
-test('dedupes review_sessions rows keeping the longest global_comment', function () {
+test('dedupes review_sessions rows keeping the most recently updated', function () {
     DB::table('review_sessions')->insert([
         [
             'repo_path' => '/tmp/repo',
             'context_fingerprint' => 'working',
             'comments' => '[]',
             'reviewed_files' => '[]',
-            'global_comment' => 'short',
-            'created_at' => now(),
-            'updated_at' => now(),
+            'global_comment' => 'the longer, older feedback',
+            'created_at' => now()->subDays(2),
+            'updated_at' => now()->subDays(2),
         ],
         [
             'repo_path' => '/tmp/repo',
             'context_fingerprint' => 'abc..def',
             'comments' => '[]',
             'reviewed_files' => '[]',
-            'global_comment' => 'the longer feedback survives',
+            'global_comment' => 'fresh',
             'created_at' => now(),
             'updated_at' => now(),
         ],
@@ -183,7 +187,37 @@ test('dedupes review_sessions rows keeping the longest global_comment', function
 
     $remaining = DB::table('review_sessions')->where('repo_path', '/tmp/repo')->get();
     expect($remaining)->toHaveCount(1);
-    expect($remaining->first()->global_comment)->toBe('the longer feedback survives');
+    expect($remaining->first()->global_comment)->toBe('fresh');
+});
+
+test('dedupes review_sessions falls back to id DESC when updated_at matches', function () {
+    $stamp = now();
+    DB::table('review_sessions')->insert([
+        [
+            'repo_path' => '/tmp/repo',
+            'context_fingerprint' => 'working',
+            'comments' => '[]',
+            'reviewed_files' => '[]',
+            'global_comment' => 'earlier insert',
+            'created_at' => $stamp,
+            'updated_at' => $stamp,
+        ],
+        [
+            'repo_path' => '/tmp/repo',
+            'context_fingerprint' => 'abc..def',
+            'comments' => '[]',
+            'reviewed_files' => '[]',
+            'global_comment' => 'later insert',
+            'created_at' => $stamp,
+            'updated_at' => $stamp,
+        ],
+    ]);
+
+    $this->migration->up();
+
+    $remaining = DB::table('review_sessions')->where('repo_path', '/tmp/repo')->get();
+    expect($remaining)->toHaveCount(1);
+    expect($remaining->first()->global_comment)->toBe('later insert');
 });
 
 test('drops legacy columns from review_sessions', function () {
