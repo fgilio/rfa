@@ -96,10 +96,13 @@ class extends Component
         isHotkey(e) { return (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j'; },
         openPanel() {
             this.open = true;
-            window.dispatchEvent(new CustomEvent('overlay:open', { detail: { name: 'comments-drawer' } }));
+            Alpine.store('overlays').open('comments-drawer');
             this.$nextTick(() => this.$refs.searchInput?.focus());
         },
-        close() { this.open = false; },
+        close() {
+            this.open = false;
+            if (Alpine.store('overlays').is('comments-drawer')) Alpine.store('overlays').close();
+        },
         toggle() { this.open ? this.close() : this.openPanel(); },
     }"
     @keydown.window="
@@ -109,7 +112,7 @@ class extends Component
         }
         if (open && $event.key === 'Escape') { $event.preventDefault(); close(); return; }
     "
-    @overlay:open.window="if ($event.detail?.name !== 'comments-drawer') close()"
+    x-effect="if (open && !$store.overlays.is('comments-drawer')) close()"
     class="relative"
 >
     <flux:tooltip content="All comments · ⌘J">

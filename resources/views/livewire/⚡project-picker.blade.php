@@ -96,12 +96,13 @@ class extends Component
             this.open = true;
             this.selectedIndex = -1;
             if ($wire.search !== '') $wire.set('search', '');
-            window.dispatchEvent(new CustomEvent('overlay:open', { detail: { name: 'project-picker' } }));
+            Alpine.store('overlays').open('project-picker');
             this.$nextTick(() => this.$refs.searchInput?.focus());
         },
         close() {
             this.open = false;
             this.selectedIndex = -1;
+            if (Alpine.store('overlays').is('project-picker')) Alpine.store('overlays').close();
         },
         selectSlug(slug) {
             slug === this.currentSlug ? this.close() : $wire.selectProject(slug);
@@ -129,7 +130,7 @@ class extends Component
     }"
     @project-picker:toggle.window="toggle()"
     @project-picker:close.window="close()"
-    @overlay:open.window="if ($event.detail?.name !== 'project-picker') close()"
+    x-effect="if (open && !$store.overlays.is('project-picker')) close()"
     @keydown.window="
         if (isHotkey($event)) { $event.preventDefault(); toggle(); return; }
         if (!open) return;

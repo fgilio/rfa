@@ -72,7 +72,7 @@ new class extends Component {
     })"
     @keydown.window="handleKeydown($event)"
     @open-selection-drawer.window="openPanel()"
-    @overlay:open.window="if ($event.detail?.name !== 'branch-explorer') closePanel()"
+    x-effect="if (open && !$store.overlays.is('branch-explorer')) closePanel()"
 >
     <div class="inline-flex items-stretch rounded-md border border-gh-border/70 bg-gh-surface/30 hover:border-gh-text/30 transition-colors">
         <flux:tooltip content="Switch branch · ⌘B">

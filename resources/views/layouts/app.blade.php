@@ -8,6 +8,7 @@
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png">
     <script src="/js/tailwind.js"></script>
     <script src="/js/settings-store.js"></script>
+    <script src="/js/overlays-store.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',

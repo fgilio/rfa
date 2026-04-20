@@ -29,7 +29,7 @@
                 this.search = '';
                 this.selectedIndex = 0;
                 this.clearSelection();
-                window.dispatchEvent(new CustomEvent('overlay:open', { detail: { name: 'branch-explorer' } }));
+                Alpine.store('overlays').open('branch-explorer');
                 await this.$wire.loadBranches();
                 this.allBranches = this.$wire.branches;
                 const currentIdx = this.allFiltered.findIndex(b => b.name === this.selectedBranch);
@@ -41,6 +41,7 @@
 
             closePanel() {
                 this.open = false;
+                if (Alpine.store('overlays').is('branch-explorer')) Alpine.store('overlays').close();
             },
 
             async loadSelectedBranch() {
