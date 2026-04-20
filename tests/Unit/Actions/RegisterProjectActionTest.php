@@ -34,15 +34,21 @@ test('returns existing project on repeated registration (idempotent)', function 
     expect(Project::count())->toBe(1);
 });
 
-test('updates branch on repeated registration', function () {
+test('seeds branch on first registration', function () {
+    $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
+
+    expect($project->branch)->toBe('main');
+});
+
+test('does not overwrite branch on re-registration', function () {
     app(RegisterProjectAction::class)->handle($this->testRepoPath);
 
-    // Create and checkout a new branch
+    // Switch branches externally - the review page's divergence logic owns subsequent writes.
     $this->runTestRepoCommand($this->testRepoPath, 'git checkout -b feature-x');
 
     $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
 
-    expect($project->branch)->toBe('feature-x');
+    expect($project->branch)->toBe('main');
 });
 
 test('handles slug collisions with suffix', function () {

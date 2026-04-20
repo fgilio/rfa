@@ -28,8 +28,9 @@ final readonly class RegisterProjectAction
         $existing = Project::where('path', $path)->first();
 
         if ($existing) {
+            // Branch is owned by the review page's divergence logic once a project
+            // exists; only refresh gitignore on re-registration.
             $existing->update([
-                'branch' => $this->git->getCurrentBranch($directory),
                 'global_gitignore_path' => $this->git->resolveGlobalExcludesFile($path),
             ]);
 
