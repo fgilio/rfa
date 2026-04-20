@@ -18,6 +18,12 @@ new class extends Component {
     #[Locked]
     public ?string $activeCommitHash = null;
 
+    #[Locked]
+    public string $selectionLabel = 'working';
+
+    #[Locked]
+    public string $selectionTitle = 'Working tree changes';
+
     /** @var array{local: list<array<string, mixed>>, remote: list<array<string, mixed>>, current: string} */
     public array $branches = ['local' => [], 'remote' => [], 'current' => ''];
 
@@ -66,32 +72,45 @@ new class extends Component {
     })"
     @keydown.window="handleKeydown($event)"
     @open-selection-drawer.window="openPanel()"
+    @overlay:open.window="if ($event.detail?.name !== 'branch-explorer') closePanel()"
 >
-    {{-- Trigger: inline branch segment --}}
-    <x-header-picker-trigger
-        tooltip="Switch branch"
-        aria-label="Switch branch"
-        variant="mono"
-        x-on:click="openPanel()"
-        x-bind:aria-expanded="open"
-    >
-        <flux:icon icon="share" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
-        <span class="tracking-tight">{{ $currentBranch }}</span>
-    </x-header-picker-trigger>
-
-    {{-- Overlay panel --}}
-    <template x-teleport="body">
-        <div x-show="open" x-cloak class="fixed inset-0 z-[60]" @click.self="closePanel()">
-            {{-- Backdrop --}}
-            <div class="absolute inset-0 bg-black/30" @click="closePanel()"></div>
-
-            {{-- Panel --}}
-            <div
-                class="fixed top-[15vh] left-1/2 -translate-x-1/2 z-[61] w-[700px] max-w-[90vw] max-h-[60vh] bg-gh-bg border border-gh-border rounded-xl shadow-2xl flex overflow-hidden"
-                @click.stop
+    <div class="inline-flex items-stretch rounded-md border border-gh-border/70 bg-gh-surface/30 hover:border-gh-text/30 transition-colors">
+        <flux:tooltip content="Switch branch · ⌘B">
+            <button
+                type="button"
+                class="group inline-flex items-center gap-1.5 px-2 py-1 text-xs font-mono text-gh-muted hover:text-gh-text hover:bg-gh-border/25 rounded-l-md transition-colors cursor-pointer"
+                aria-label="Switch branch (⌘B)"
+                aria-haspopup="dialog"
+                x-on:click="openPanel()"
+                x-bind:aria-expanded="open"
             >
+                <flux:icon icon="share" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
+                <span class="tracking-tight">{{ $currentBranch }}</span>
+            </button>
+        </flux:tooltip>
+
+        <span class="w-px self-stretch bg-gh-border/70" aria-hidden="true"></span>
+
+        <flux:tooltip content="{{ $selectionTitle }} · ⌘B">
+            <button
+                type="button"
+                class="group inline-flex items-center gap-1.5 px-2 py-1 text-xs font-mono text-gh-text hover:bg-gh-border/25 rounded-r-md transition-colors cursor-pointer"
+                aria-label="Open selection drawer"
+                aria-haspopup="dialog"
+                x-on:click="openPanel()"
+                x-bind:aria-expanded="open"
+            >
+                <flux:icon icon="square-3-stack-3d" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
+                <span>{{ $selectionLabel }}</span>
+                <flux:icon icon="chevron-down" variant="outline" class="!size-3 text-gh-muted/60 group-hover:text-gh-text transition-colors" />
+            </button>
+        </flux:tooltip>
+    </div>
+
+    <x-overlay-panel name="branch-explorer" aria-label="Switch branch" size="lg" on-close="closePanel()">
+        <div class="flex flex-1 min-h-0">
                 {{-- Left pane: branches --}}
-                <div class="w-[240px] shrink-0 border-r border-gh-border flex flex-col max-h-[60vh]">
+                <div class="w-[180px] shrink-0 border-r border-gh-border flex flex-col min-h-0">
                     {{-- Search input --}}
                     <div class="p-3 border-b border-gh-border">
                         <flux:input
@@ -161,7 +180,7 @@ new class extends Component {
                 </div>
 
                 {{-- Right pane: commits --}}
-                <div class="flex-1 flex flex-col max-h-[60vh] min-w-0">
+                <div class="flex-1 flex flex-col min-h-0 min-w-0">
                     {{-- Commits header --}}
                     <div class="px-4 py-2.5 border-b border-gh-border flex items-center gap-2 shrink-0">
                         <flux:icon icon="clock" variant="outline" class="text-gh-muted" />
@@ -288,7 +307,12 @@ new class extends Component {
                         </template>
                     </div>
                 </div>
-            </div>
         </div>
-    </template>
+
+        <x-overlay-footer>
+            <x-slot:meta>
+                <span x-text="($wire.commits?.length || 0) + ($wire.hasMore ? '+' : '') + ' commits'"></span>
+            </x-slot:meta>
+        </x-overlay-footer>
+    </x-overlay-panel>
 </div>

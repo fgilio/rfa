@@ -31,6 +31,7 @@
                 this.search = '';
                 this.selectedIndex = 0;
                 this.clearSelection();
+                window.dispatchEvent(new CustomEvent('overlay:open', { detail: { name: 'branch-explorer' } }));
                 await this.$wire.loadBranches();
                 this.allBranches = this.$wire.branches;
                 const currentIdx = this.allFiltered.findIndex(b => b.name === this.selectedBranch);
@@ -57,7 +58,22 @@
                 if (branchChanged) this.clearSelection();
             },
 
+            isHotkey(e) {
+                return (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b';
+            },
+
             handleKeydown(e) {
+                // ⌘B / Ctrl+B toggles the picker from anywhere, except inside text inputs
+                // where it's the "bold" shortcut.
+                const inEditable = e.target.tagName === 'TEXTAREA'
+                    || e.target.tagName === 'INPUT'
+                    || e.target.isContentEditable;
+                if (this.isHotkey(e) && !inEditable) {
+                    e.preventDefault();
+                    this.open ? this.closePanel() : this.openPanel();
+                    return;
+                }
+
                 if (!this.open) return;
 
                 if (e.key === 'Escape') {

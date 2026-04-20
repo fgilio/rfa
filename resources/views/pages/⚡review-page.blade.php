@@ -753,10 +753,6 @@ new #[Layout('layouts.app')] class extends Component
             @else
                 <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
             @endnative
-            @if($projectBranch)
-                <x-header-separator />
-                <livewire:branch-explorer :repo-path="$repoPath" :current-branch="$projectBranch" :project-slug="$projectSlug" :active-commit-hash="$diffTo" />
-            @endif
             @php
                 $shortFrom = $diffFrom === 'HEAD' ? 'HEAD' : substr($diffFrom, 0, 7);
                 $shortTo = $diffTo ? substr($diffTo, 0, 7) : null;
@@ -771,16 +767,17 @@ new #[Layout('layouts.app')] class extends Component
                     $selectionTitle = 'Range '.$diffFrom.'..'.$diffTo;
                 }
             @endphp
-            <button
-                type="button"
-                title="{{ $selectionTitle }}"
-                class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded border border-gh-border bg-gh-surface text-gh-text hover:border-gh-text/30 transition-colors cursor-pointer"
-                @click="$dispatch('open-selection-drawer')"
-                aria-label="Open selection drawer"
-            >
-                <flux:icon icon="square-3-stack-3d" variant="outline" class="!size-3.5 text-gh-muted" />
-                <span>{{ $selectionLabel }}</span>
-            </button>
+            @if($projectBranch)
+                <x-header-separator />
+                <livewire:branch-explorer
+                    :repo-path="$repoPath"
+                    :current-branch="$projectBranch"
+                    :project-slug="$projectSlug"
+                    :active-commit-hash="$diffTo"
+                    :selection-label="$selectionLabel"
+                    :selection-title="$selectionTitle"
+                />
+            @endif
             <livewire:comments-drawer :repo-path="$repoPath" :project-id="$projectId ?: null" />
         </div>
         <div class="flex items-center gap-2.5 text-xs">

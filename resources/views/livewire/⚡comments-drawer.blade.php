@@ -84,24 +84,42 @@ class extends Component
 {{-- Keep the trigger button visible at first paint so the header layout doesn't
      shift; the real component hydrates and supplies the count + drawer body. --}}
 <div class="relative">
-    <flux:tooltip content="All comments in this repo">
+    <flux:tooltip content="All comments · ⌘J">
         <flux:button variant="ghost" size="sm" icon="chat-bubble-left-right" icon:variant="outline" aria-label="All comments in this repo" />
     </flux:tooltip>
 </div>
 @endplaceholder
 
 <div
-    x-data="{ open: @entangle('open').live }"
+    x-data="{
+        open: @entangle('open').live,
+        isHotkey(e) { return (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j'; },
+        openPanel() {
+            this.open = true;
+            window.dispatchEvent(new CustomEvent('overlay:open', { detail: { name: 'comments-drawer' } }));
+            this.$nextTick(() => this.$refs.searchInput?.focus());
+        },
+        close() { this.open = false; },
+        toggle() { this.open ? this.close() : this.openPanel(); },
+    }"
+    @keydown.window="
+        if (isHotkey($event)) {
+            const inEditable = $event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT' || $event.target.isContentEditable;
+            if (!inEditable) { $event.preventDefault(); toggle(); return; }
+        }
+        if (open && $event.key === 'Escape') { $event.preventDefault(); close(); return; }
+    "
+    @overlay:open.window="if ($event.detail?.name !== 'comments-drawer') close()"
     class="relative"
 >
-    <flux:tooltip content="All comments in this repo">
+    <flux:tooltip content="All comments · ⌘J">
         <flux:button
             variant="ghost"
             size="sm"
             icon="chat-bubble-left-right"
             icon:variant="outline"
             aria-label="All comments in this repo"
-            x-on:click="open = !open"
+            x-on:click="toggle()"
         >
             @if($this->totalCount > 0)
                 <span class="font-mono text-[10px] text-gh-muted">{{ $this->totalCount }}</span>
@@ -109,20 +127,8 @@ class extends Component
         </flux:button>
     </flux:tooltip>
 
-    <div
-        x-show="open"
-        x-cloak
-        x-transition:enter="transition ease-out duration-150"
-        x-transition:enter-start="opacity-0 translate-x-2"
-        x-transition:enter-end="opacity-100 translate-x-0"
-        x-transition:leave="transition ease-in duration-100"
-        x-transition:leave-start="opacity-100 translate-x-0"
-        x-transition:leave-end="opacity-0 translate-x-2"
-        @click.outside="open = false"
-        @keydown.escape.window="open = false"
-        class="fixed top-16 right-4 z-[55] w-[380px] max-h-[70vh] bg-gh-bg border border-gh-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
-    >
-        <div class="flex items-center justify-between px-4 py-2.5 border-b border-gh-border">
+    <x-overlay-panel name="comments-drawer" aria-label="All comments" size="md" on-close="close()">
+        <div class="flex items-center justify-between px-4 py-2.5 border-b border-gh-border shrink-0">
             <span class="section-label text-gh-muted">All comments</span>
             <div class="flex items-center gap-2">
                 <flux:tooltip :content="$showSubmitted ? 'Hide submitted' : 'Show submitted'">
@@ -141,13 +147,14 @@ class extends Component
                     icon="x-mark"
                     icon:variant="outline"
                     aria-label="Close comments drawer"
-                    x-on:click="open = false"
+                    x-on:click="close()"
                 />
             </div>
         </div>
 
-        <div class="px-3 py-2 border-b border-gh-border">
+        <div class="px-3 py-2 border-b border-gh-border shrink-0">
             <flux:input
+                x-ref="searchInput"
                 wire:model.live.debounce.200ms="filter"
                 placeholder="Filter comments..."
                 icon="magnifying-glass"
@@ -194,5 +201,11 @@ class extends Component
                 </div>
             @endforelse
         </div>
-    </div>
+
+        <x-overlay-footer>
+            <x-slot:meta>
+                {{ $this->totalCount }} {{ Str::plural('comment', $this->totalCount) }}
+            </x-slot:meta>
+        </x-overlay-footer>
+    </x-overlay-panel>
 </div>
