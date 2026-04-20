@@ -45,15 +45,27 @@ final readonly class ResolveCommentAnchorAction
 
             $storedHash = $row['file_content_hash'] ?? null;
             $fileId = $fileIdByPath[$filePath] ?? FileListEntry::idForPath($filePath);
+            $storedSide = (string) ($row['side'] ?? 'right');
 
             $anchorStatus = 'unplaced';
+            $resolvedSide = $storedSide;
 
             if ($storedHash !== null && $storedHash !== '' && isset($fileIdByPath[$filePath])) {
                 $leftHash = $this->gitFileContentService->hashAt($repoPath, $target->from(), $filePath);
                 $rightHash = $this->gitFileContentService->hashAt($repoPath, $rightRef, $filePath);
 
-                if ($storedHash === $leftHash || $storedHash === $rightHash) {
+                $matchesStoredSide = ($storedSide === 'left' && $storedHash === $leftHash)
+                    || ($storedSide === 'right' && $storedHash === $rightHash)
+                    || ($storedSide === 'file' && ($storedHash === $leftHash || $storedHash === $rightHash));
+
+                if ($matchesStoredSide) {
                     $anchorStatus = 'placed';
+                } elseif ($storedHash === $leftHash) {
+                    $anchorStatus = 'placed';
+                    $resolvedSide = 'left';
+                } elseif ($storedHash === $rightHash) {
+                    $anchorStatus = 'placed';
+                    $resolvedSide = 'right';
                 }
             } elseif (isset($fileIdByPath[$filePath])) {
                 $anchorStatus = 'placed';
@@ -63,7 +75,8 @@ final readonly class ResolveCommentAnchorAction
                 'id' => (string) $row['id'],
                 'fileId' => $fileId,
                 'file' => $filePath,
-                'side' => (string) ($row['side'] ?? 'right'),
+                'side' => $resolvedSide,
+                'originalSide' => $storedSide,
                 'startLine' => $this->intOrNull($row['start_line'] ?? $row['startLine'] ?? null),
                 'endLine' => $this->intOrNull($row['end_line'] ?? $row['endLine'] ?? null),
                 'body' => (string) ($row['body'] ?? ''),

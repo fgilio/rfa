@@ -120,6 +120,76 @@ test('marks comment as unplaced when the file is not in the current diff', funct
     expect($result[0]['anchorStatus'])->toBe('unplaced');
 });
 
+test('flips side to right when a left-side comment now matches the right-side hash', function () {
+    // Post-rebase: stored left hash no longer appears on left, but the right side of
+    // the current diff has identical content (e.g. the reviewed commit now sits on top).
+    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'from-sha', 'f.php')->andReturn('some-other-left');
+    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'to-sha', 'f.php')->andReturn('stored-hash');
+
+    $result = $this->action->handle(
+        '/tmp/repo',
+        [[
+            'id' => 'c-flip',
+            'file_path' => 'f.php',
+            'side' => 'left',
+            'start_line' => 20,
+            'end_line' => 20,
+            'file_content_hash' => 'stored-hash',
+            'body' => 'body',
+        ]],
+        [['id' => 'file-new', 'path' => 'f.php']],
+        DiffTarget::range('from-sha', 'to-sha'),
+    );
+
+    expect($result[0]['anchorStatus'])->toBe('placed');
+    expect($result[0]['side'])->toBe('right');
+    expect($result[0]['originalSide'])->toBe('left');
+});
+
+test('flips side to left when a right-side comment now matches the left-side hash', function () {
+    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'from-sha', 'f.php')->andReturn('stored-hash');
+    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'to-sha', 'f.php')->andReturn('some-other-right');
+
+    $result = $this->action->handle(
+        '/tmp/repo',
+        [[
+            'id' => 'c-flip',
+            'file_path' => 'f.php',
+            'side' => 'right',
+            'start_line' => 5,
+            'file_content_hash' => 'stored-hash',
+            'body' => 'body',
+        ]],
+        [['id' => 'file-new', 'path' => 'f.php']],
+        DiffTarget::range('from-sha', 'to-sha'),
+    );
+
+    expect($result[0]['anchorStatus'])->toBe('placed');
+    expect($result[0]['side'])->toBe('left');
+});
+
+test('keeps stored side when stored hash matches that same side', function () {
+    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'from-sha', 'f.php')->andReturn('unchanged');
+    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'to-sha', 'f.php')->andReturn('unchanged');
+
+    $result = $this->action->handle(
+        '/tmp/repo',
+        [[
+            'id' => 'c-same',
+            'file_path' => 'f.php',
+            'side' => 'left',
+            'start_line' => 1,
+            'file_content_hash' => 'unchanged',
+            'body' => 'body',
+        ]],
+        [['id' => 'file-new', 'path' => 'f.php']],
+        DiffTarget::range('from-sha', 'to-sha'),
+    );
+
+    expect($result[0]['side'])->toBe('left');
+    expect($result[0]['originalSide'])->toBe('left');
+});
+
 test('uses the working copy as the right side when the target has no `to`', function () {
     $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'HEAD', 'f.php')->andReturn('old');
     $this->gitFileContent->shouldReceive('hashAt')

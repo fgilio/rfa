@@ -8,7 +8,6 @@ use App\DTOs\Comment;
 use App\DTOs\DiffTarget;
 use App\Models\Comment as CommentModel;
 use App\Services\CommentExporter;
-use App\Services\GitFileContentService;
 
 final readonly class ExportReviewAction
 {
@@ -44,6 +43,13 @@ final readonly class ExportReviewAction
     }
 
     /**
+     * In scope means "the anchor resolver placed this comment against the active diff".
+     * Comments that aren't placed belong to another selection and survive this submit
+     * untouched (no submitted_at stamp, not included in the export payload).
+     *
+     * Comments without an explicit `anchorStatus` (e.g. fresh inputs in direct callers /
+     * tests) default to placed.
+     *
      * @param  array<int, array<string, mixed>>  $comments
      * @return array<int, array<string, mixed>>
      */
@@ -53,11 +59,9 @@ final readonly class ExportReviewAction
             return $comments;
         }
 
-        $scopeRef = $target->to() ?? GitFileContentService::WORKING_REF;
-
         return array_values(array_filter(
             $comments,
-            fn (array $c) => ($c['originRef'] ?? GitFileContentService::WORKING_REF) === $scopeRef,
+            fn (array $c) => ($c['anchorStatus'] ?? 'placed') === 'placed',
         ));
     }
 }

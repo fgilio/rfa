@@ -55,7 +55,8 @@ final readonly class AddCommentAction
         }
 
         $filePath = (string) $file['path'];
-        $contentHash = $this->resolveContentHash($repoPath, $target, $side, $filePath);
+        $oldPath = ! empty($file['oldPath']) ? (string) $file['oldPath'] : null;
+        $contentHash = $this->resolveContentHash($repoPath, $target, $side, $filePath, $oldPath);
         $originRef = $target->to() ?? GitFileContentService::WORKING_REF;
 
         $id = 'c-'.Str::ulid();
@@ -92,16 +93,13 @@ final readonly class AddCommentAction
         ];
     }
 
-    private function resolveContentHash(string $repoPath, DiffTarget $target, string $side, string $filePath): ?string
+    private function resolveContentHash(string $repoPath, DiffTarget $target, string $side, string $filePath, ?string $oldPath): ?string
     {
-        if ($side === 'file') {
-            $ref = $target->to() ?? GitFileContentService::WORKING_REF;
-
-            return $this->gitFileContentService->hashAt($repoPath, $ref, $filePath);
-        }
-
         if ($side === 'left') {
-            return $this->gitFileContentService->hashAt($repoPath, $target->from(), $filePath);
+            // For renames the file exists at `from` under its pre-rename path only.
+            $leftPath = $oldPath ?? $filePath;
+
+            return $this->gitFileContentService->hashAt($repoPath, $target->from(), $leftPath);
         }
 
         $ref = $target->to() ?? GitFileContentService::WORKING_REF;

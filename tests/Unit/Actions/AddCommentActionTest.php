@@ -130,3 +130,48 @@ test('returns null for line comment with null startLine', function () {
 test('returns null when startLine exceeds endLine', function () {
     expect($this->action->handle($this->repoPath, null, $this->target, $this->files, 'file-abc', 'right', 10, 5, 'body'))->toBeNull();
 });
+
+test('hashes left-side comments on renamed files using oldPath', function () {
+    $gitFileContent = Mockery::mock(GitFileContentService::class);
+    $gitFileContent->shouldReceive('hashAt')
+        ->with('/tmp/repo', 'parent-sha', 'src/old.php')
+        ->andReturn('left-hash');
+    app()->instance(GitFileContentService::class, $gitFileContent);
+
+    $action = app(AddCommentAction::class);
+    $files = [['id' => 'file-renamed', 'path' => 'src/new.php', 'oldPath' => 'src/old.php']];
+
+    $result = $action->handle('/tmp/repo', null, DiffTarget::range('parent-sha', 'abc123'), $files, 'file-renamed', 'left', 3, 3, 'body');
+
+    expect($result['fileContentHash'])->toBe('left-hash');
+});
+
+test('hashes right-side comments on renamed files using the post-rename path', function () {
+    $gitFileContent = Mockery::mock(GitFileContentService::class);
+    $gitFileContent->shouldReceive('hashAt')
+        ->with('/tmp/repo', 'abc123', 'src/new.php')
+        ->andReturn('right-hash');
+    app()->instance(GitFileContentService::class, $gitFileContent);
+
+    $action = app(AddCommentAction::class);
+    $files = [['id' => 'file-renamed', 'path' => 'src/new.php', 'oldPath' => 'src/old.php']];
+
+    $result = $action->handle('/tmp/repo', null, DiffTarget::range('parent-sha', 'abc123'), $files, 'file-renamed', 'right', 3, 3, 'body');
+
+    expect($result['fileContentHash'])->toBe('right-hash');
+});
+
+test('file-level comments on renamed files hash the post-rename path at `to`', function () {
+    $gitFileContent = Mockery::mock(GitFileContentService::class);
+    $gitFileContent->shouldReceive('hashAt')
+        ->with('/tmp/repo', 'abc123', 'src/new.php')
+        ->andReturn('file-hash');
+    app()->instance(GitFileContentService::class, $gitFileContent);
+
+    $action = app(AddCommentAction::class);
+    $files = [['id' => 'file-renamed', 'path' => 'src/new.php', 'oldPath' => 'src/old.php']];
+
+    $result = $action->handle('/tmp/repo', null, DiffTarget::range('parent-sha', 'abc123'), $files, 'file-renamed', 'file', null, null, 'body');
+
+    expect($result['fileContentHash'])->toBe('file-hash');
+});

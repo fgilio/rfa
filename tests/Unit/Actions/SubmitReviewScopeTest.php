@@ -21,20 +21,9 @@ beforeEach(function () {
     $this->commitTestRepo($this->tmpDir, 'init');
 });
 
-test('submit only exports comments whose origin matches the selection and marks them submitted', function () {
+test('submit only exports placed comments and marks them submitted', function () {
     $fileId = 'file-'.hash('xxh128', 'hello.php');
     $files = [['id' => $fileId, 'path' => 'hello.php', 'isUntracked' => false]];
-
-    $inScope = [[
-        'id' => 'c-in',
-        'fileId' => $fileId,
-        'file' => 'hello.php',
-        'side' => 'right',
-        'startLine' => 1,
-        'endLine' => 1,
-        'body' => 'in scope',
-        'originRef' => 'target-head',
-    ]];
 
     Comment::create([
         'id' => 'c-in',
@@ -54,18 +43,11 @@ test('submit only exports comments whose origin matches the selection and marks 
         'body' => 'out of scope',
     ]);
 
-    $outOfScope = [[
-        'id' => 'c-out',
-        'fileId' => $fileId,
-        'file' => 'hello.php',
-        'side' => 'right',
-        'startLine' => 1,
-        'endLine' => 1,
-        'body' => 'out of scope',
-        'originRef' => 'working',
-    ]];
+    $allComments = [
+        ['id' => 'c-in', 'fileId' => $fileId, 'file' => 'hello.php', 'side' => 'right', 'startLine' => 1, 'endLine' => 1, 'body' => 'in scope', 'anchorStatus' => 'placed'],
+        ['id' => 'c-out', 'fileId' => $fileId, 'file' => 'hello.php', 'side' => 'right', 'startLine' => 1, 'endLine' => 1, 'body' => 'out of scope', 'anchorStatus' => 'unplaced'],
+    ];
 
-    $allComments = array_merge($inScope, $outOfScope);
     $target = DiffTarget::range('base', 'target-head');
 
     $result = app(ExportReviewAction::class)->handle($this->tmpDir, $allComments, '', $files, $target);
@@ -85,11 +67,52 @@ test('submittedIds reports only the ids that were actually submitted', function 
     Comment::create(['id' => 'c-out', 'repo_path' => $this->tmpDir, 'origin_ref' => 'working', 'file_path' => 'hello.php', 'side' => 'right', 'body' => 'out']);
 
     $allComments = [
-        ['id' => 'c-in', 'fileId' => $fileId, 'file' => 'hello.php', 'side' => 'right', 'startLine' => 1, 'endLine' => 1, 'body' => 'in', 'originRef' => 'target-head'],
-        ['id' => 'c-out', 'fileId' => $fileId, 'file' => 'hello.php', 'side' => 'right', 'startLine' => 1, 'endLine' => 1, 'body' => 'out', 'originRef' => 'working'],
+        ['id' => 'c-in', 'fileId' => $fileId, 'file' => 'hello.php', 'side' => 'right', 'startLine' => 1, 'endLine' => 1, 'body' => 'in', 'anchorStatus' => 'placed'],
+        ['id' => 'c-out', 'fileId' => $fileId, 'file' => 'hello.php', 'side' => 'right', 'startLine' => 1, 'endLine' => 1, 'body' => 'out', 'anchorStatus' => 'unplaced'],
     ];
 
     $result = app(ExportReviewAction::class)->handle($this->tmpDir, $allComments, '', $files, DiffTarget::range('base', 'target-head'));
 
     expect($result['submittedIds'])->toBe(['c-in']);
+});
+
+test('comment with a different origin ref is still submitted when the resolver placed it', function () {
+    // Comment authored at commit B; today the user reviews A..D. If the anchor resolver
+    // matched the stored hash against D's content (rebase/amend reshuffled refs), the
+    // comment is "placed" in this selection and must get submitted_at stamped.
+    $fileId = 'file-'.hash('xxh128', 'hello.php');
+    $files = [['id' => $fileId, 'path' => 'hello.php', 'isUntracked' => false]];
+
+    Comment::create([
+        'id' => 'c-rebased',
+        'repo_path' => $this->tmpDir,
+        'origin_ref' => 'commit-B',
+        'file_path' => 'hello.php',
+        'side' => 'right',
+        'file_content_hash' => 'hash-that-matches-D',
+        'body' => 'rebased comment',
+    ]);
+
+    $resolved = [[
+        'id' => 'c-rebased',
+        'fileId' => $fileId,
+        'file' => 'hello.php',
+        'side' => 'right',
+        'startLine' => 1,
+        'endLine' => 1,
+        'body' => 'rebased comment',
+        'originRef' => 'commit-B',
+        'anchorStatus' => 'placed',
+    ]];
+
+    $result = app(ExportReviewAction::class)->handle(
+        $this->tmpDir,
+        $resolved,
+        '',
+        $files,
+        DiffTarget::range('commit-A', 'commit-D'),
+    );
+
+    expect($result['submittedIds'])->toBe(['c-rebased']);
+    expect(Comment::find('c-rebased')->submitted_at)->not->toBeNull();
 });
