@@ -1,6 +1,6 @@
 <?php
 
-use App\Actions\RestoreSessionAction;
+use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
 use App\Models\Comment;
 use App\Services\GitFileContentService;
@@ -39,7 +39,7 @@ test('a comment authored at commit B is visible when viewing range A..D if conte
         ->andReturn('stable-hash');
 
     $files = [['id' => 'file-shared', 'path' => 'shared.php', 'isUntracked' => false]];
-    $result = app(RestoreSessionAction::class)->handle($repoPath, $files, null, DiffTarget::range('A', 'D'));
+    $result = app(SessionStateAction::class)->handle($repoPath, $files, null, DiffTarget::range('A', 'D'));
 
     expect($result['comments'])->toHaveCount(1);
     expect($result['comments'][0]['anchorStatus'])->toBe('placed');
@@ -71,7 +71,7 @@ test('a submitted comment is hidden from the default view but persists in the po
     $this->gitFileContent->shouldReceive('hashAt')->andReturn(null);
 
     $files = [['id' => 'file-f', 'path' => 'f.php', 'isUntracked' => false]];
-    $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
+    $result = app(SessionStateAction::class)->handle($repoPath, $files);
 
     expect($result['comments'])->toHaveCount(1);
     expect($result['comments'][0]['id'])->toBe('c-open');

@@ -6,9 +6,8 @@ use App\Actions\DiscardFileChangesAction;
 use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
 use App\Actions\ResolveProjectAction;
-use App\Actions\RestoreSessionAction;
-use App\Actions\SaveSessionAction;
 use App\Actions\ScanReviewFilesAction;
+use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
 use App\Models\Project;
 use App\Models\TrashedFile;
@@ -62,17 +61,14 @@ beforeEach(function () {
         }
     });
 
-    app()->bind(RestoreSessionAction::class, fn () => new class
+    app()->bind(SessionStateAction::class, fn () => new class
     {
         public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, ?DiffTarget $target = null): array
         {
             return ['comments' => [], 'reviewedFiles' => [], 'globalComment' => '', 'orphanedPaths' => []];
         }
-    });
 
-    app()->bind(SaveSessionAction::class, fn () => new class
-    {
-        public function handle(string $repoPath, string $globalComment, ?int $projectId = null): void {}
+        public function saveGlobalNote(string $repoPath, string $globalComment, ?int $projectId = null): void {}
     });
 
     // Mock GitFileContentService to avoid real git calls

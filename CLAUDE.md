@@ -24,7 +24,7 @@ RFA runs as a local NativePHP desktop app. Server-side operations have negligibl
 4. Add unit test in `tests/Unit/Actions/`
 
 ### Key Patterns
-- Actions that need DB state (e.g. `RestoreSessionAction`, `SaveSessionAction`) read/write internally. Stateless actions receive data via parameters for reuse across interfaces.
+- Actions that need DB state (e.g. `SessionStateAction`) read/write internally. Stateless actions receive data via parameters for reuse across interfaces.
 - Actions use constructor injection for service dependencies
 - Actions may accept an optional `cacheKey` param for opt-in caching (e.g. `LoadFileDiffAction`). Use `DiffCacheKey::for()` for diff cache keys.
 

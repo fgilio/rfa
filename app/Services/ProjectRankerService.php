@@ -6,7 +6,7 @@ namespace App\Services;
 
 use Illuminate\Support\Str;
 
-final class ProjectSearchRanker
+final class ProjectRankerService
 {
     /**
      * Rank a project against a search query. Lower = better match. null = no match.

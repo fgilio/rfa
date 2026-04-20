@@ -1,6 +1,6 @@
 <?php
 
-use App\Actions\RestoreSessionAction;
+use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
 use App\Enums\GitRef;
 use App\Models\Comment;
@@ -26,7 +26,7 @@ test('creates session when none exists and returns defaults', function () {
     $repoPath = '/tmp/'.$this->faker->word();
     $files = [['id' => 'file-abc', 'path' => 'f.php', 'isUntracked' => false]];
 
-    $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
+    $result = app(SessionStateAction::class)->handle($repoPath, $files);
 
     expect($result['comments'])->toBeEmpty();
     expect($result['reviewedFiles'])->toBeEmpty();
@@ -63,7 +63,7 @@ test('restores comments and tracks orphaned paths', function () {
 
     $files = [['id' => 'file-new', 'path' => 'exists.php', 'isUntracked' => false]];
 
-    $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
+    $result = app(SessionStateAction::class)->handle($repoPath, $files);
 
     expect($result['comments'])->toHaveCount(2);
     $byFile = collect($result['comments'])->keyBy('file');
@@ -89,7 +89,7 @@ test('remaps fileId to current file list', function () {
     $currentId = 'file-'.hash('xxh128', 'f.php');
     $files = [['id' => $currentId, 'path' => 'f.php', 'isUntracked' => false]];
 
-    $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
+    $result = app(SessionStateAction::class)->handle($repoPath, $files);
 
     expect($result['comments'][0]['fileId'])->toBe($currentId);
 });
@@ -117,7 +117,7 @@ test('keys by project_id when provided', function () {
 
     $files = [['id' => 'file-new', 'path' => 'f.php', 'isUntracked' => false]];
 
-    $result = app(RestoreSessionAction::class)->handle('/tmp/test-proj', $files, $project->id);
+    $result = app(SessionStateAction::class)->handle('/tmp/test-proj', $files, $project->id);
 
     expect($result['globalComment'])->toBe('from project');
     expect($result['comments'])->toHaveCount(1);
@@ -150,7 +150,7 @@ test('restores reviewed files when current content hash matches stored record', 
         ->with($repoPath, GitRef::Working->value, 'b.php')
         ->andReturn('different-hash');
 
-    $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
+    $result = app(SessionStateAction::class)->handle($repoPath, $files);
 
     expect($result['reviewedFiles'])->toBe(['a.php' => 'hash-a']);
 });
@@ -179,7 +179,7 @@ test('excludes submitted comments from restored view', function () {
 
     $files = [['id' => 'file-new', 'path' => 'f.php', 'isUntracked' => false]];
 
-    $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
+    $result = app(SessionStateAction::class)->handle($repoPath, $files);
 
     expect($result['comments'])->toHaveCount(1);
     expect($result['comments'][0]['id'])->toBe('c-open');
@@ -208,7 +208,7 @@ test('marks comment as placed when content hash matches right side', function ()
         ->with($repoPath, 'abc123', 'f.php')
         ->andReturn('matching-hash');
 
-    $result = app(RestoreSessionAction::class)->handle($repoPath, $files, null, $target);
+    $result = app(SessionStateAction::class)->handle($repoPath, $files, null, $target);
 
     expect($result['comments'][0]['anchorStatus'])->toBe('placed');
 });
@@ -234,7 +234,7 @@ test('rehydrates reviewed files via left-side hash when the right ref has no con
         ->with($repoPath, 'parent123', 'deleted.php')
         ->andReturn('left-hash');
 
-    $result = app(RestoreSessionAction::class)->handle(
+    $result = app(SessionStateAction::class)->handle(
         $repoPath,
         $files,
         null,
@@ -259,7 +259,7 @@ test('rehydrates legacy reviewed_files rows that were migrated with an empty con
         ->with($repoPath, GitRef::Working->value, 'legacy.php')
         ->andReturn('current-hash');
 
-    $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
+    $result = app(SessionStateAction::class)->handle($repoPath, $files);
 
     expect($result['reviewedFiles'])->toHaveKey('legacy.php');
 });
@@ -282,7 +282,7 @@ test('marks comment as unplaced when content hash does not match either side', f
 
     $this->gitFileContentMock->shouldReceive('hashAt')->andReturn('different-hash');
 
-    $result = app(RestoreSessionAction::class)->handle($repoPath, $files, null, $target);
+    $result = app(SessionStateAction::class)->handle($repoPath, $files, null, $target);
 
     expect($result['comments'][0]['anchorStatus'])->toBe('unplaced');
 });

@@ -1,9 +1,9 @@
 <?php
 
-use App\Services\ProjectSearchRanker;
+use App\Services\ProjectRankerService;
 
 beforeEach(function () {
-    $this->ranker = new ProjectSearchRanker;
+    $this->ranker = new ProjectRankerService;
 });
 
 test('returns null when nothing matches', function () {

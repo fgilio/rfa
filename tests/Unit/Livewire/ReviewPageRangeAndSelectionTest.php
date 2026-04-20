@@ -5,8 +5,7 @@ use App\Actions\GetFileListAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
-use App\Actions\RestoreSessionAction;
-use App\Actions\SaveSessionAction;
+use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
 use App\Models\Project;
 use App\Services\GitFileContentService;
@@ -51,17 +50,14 @@ beforeEach(function () {
         }
     });
 
-    app()->bind(RestoreSessionAction::class, fn () => new class
+    app()->bind(SessionStateAction::class, fn () => new class
     {
         public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, ?DiffTarget $target = null): array
         {
             return ['comments' => [], 'reviewedFiles' => [], 'globalComment' => '', 'orphanedPaths' => []];
         }
-    });
 
-    app()->bind(SaveSessionAction::class, fn () => new class
-    {
-        public function handle(string $repoPath, string $globalComment, ?int $projectId = null): void {}
+        public function saveGlobalNote(string $repoPath, string $globalComment, ?int $projectId = null): void {}
     });
 
     app()->bind(BackfillGlobalGitignoreAction::class, fn () => new class

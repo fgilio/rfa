@@ -11,7 +11,18 @@ use App\Models\ReviewedFile;
 use App\Models\ReviewSession;
 use App\Services\GitFileContentService;
 
-final readonly class RestoreSessionAction
+/**
+ * Owns both halves of review-session persistence:
+ *
+ * - `handle()`         hydrates comments, reviewed files, orphaned paths, and
+ *                      the free-form repo-level note into the shape the
+ *                      review-page needs to render (the primary action entry
+ *                      point).
+ * - `saveGlobalNote()` writes the repo-scoped `global_comment` back. Per-
+ *                      comment and reviewed-file state live row-by-row in
+ *                      their own tables and are not touched here.
+ */
+final readonly class SessionStateAction
 {
     public function __construct(
         private ResolveCommentAnchorAction $resolveCommentAnchor,
@@ -19,6 +30,8 @@ final readonly class RestoreSessionAction
     ) {}
 
     /**
+     * Hydrate the review-page's in-memory session snapshot for a given diff target.
+     *
      * @param  array<int, array<string, mixed>>  $currentFiles
      * @return array{comments: array<int, array<string, mixed>>, reviewedFiles: array<string, string>, globalComment: string, orphanedPaths: array<int, string>}
      */
@@ -41,6 +54,19 @@ final readonly class RestoreSessionAction
             'globalComment' => (string) ($session->global_comment ?? ''),
             'orphanedPaths' => $orphanedPaths,
         ];
+    }
+
+    public function saveGlobalNote(string $repoPath, string $globalComment, ?int $projectId = null): void
+    {
+        ReviewSession::updateOrCreate(
+            $projectId
+                ? ['project_id' => $projectId]
+                : ['project_id' => null, 'repo_path' => $repoPath],
+            [
+                'repo_path' => $repoPath,
+                'global_comment' => $globalComment,
+            ]
+        );
     }
 
     private function resolveGlobalCommentRow(string $repoPath, ?int $projectId): ReviewSession

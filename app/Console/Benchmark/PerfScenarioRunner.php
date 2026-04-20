@@ -8,8 +8,7 @@ use App\Actions\BackfillGlobalGitignoreAction;
 use App\Actions\GetFileListAction;
 use App\Actions\LoadFileDiffAction;
 use App\Actions\ResolveProjectAction;
-use App\Actions\RestoreSessionAction;
-use App\Actions\SaveSessionAction;
+use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
 use App\Models\Project;
 use App\Models\ReviewSession;
@@ -187,7 +186,7 @@ final class PerfScenarioRunner
             }
         });
 
-        $this->app->bind(RestoreSessionAction::class, fn () => new class
+        $this->app->bind(SessionStateAction::class, fn () => new class
         {
             /**
              * @param  array<int, array<string, mixed>>  $currentFiles
@@ -201,11 +200,8 @@ final class PerfScenarioRunner
             ): array {
                 return ['comments' => [], 'reviewedFiles' => [], 'globalComment' => '', 'orphanedPaths' => []];
             }
-        });
 
-        $this->app->bind(SaveSessionAction::class, fn () => new class
-        {
-            public function handle(
+            public function saveGlobalNote(
                 string $repoPath,
                 string $globalComment,
                 ?int $projectId = null,

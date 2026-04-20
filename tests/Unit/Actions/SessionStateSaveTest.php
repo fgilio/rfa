@@ -1,6 +1,6 @@
 <?php
 
-use App\Actions\SaveSessionAction;
+use App\Actions\SessionStateAction;
 use App\Models\ReviewSession;
 use Faker\Factory as Faker;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -17,7 +17,7 @@ test('creates session row when none exists', function () {
     $repoPath = '/tmp/'.$this->faker->word();
     $globalComment = $this->faker->sentence();
 
-    app(SaveSessionAction::class)->handle($repoPath, $globalComment);
+    app(SessionStateAction::class)->saveGlobalNote($repoPath, $globalComment);
 
     $session = ReviewSession::where('repo_path', $repoPath)->first();
 
@@ -29,7 +29,7 @@ test('updates existing session row', function () {
     $repoPath = '/tmp/'.$this->faker->word();
     ReviewSession::create(['repo_path' => $repoPath, 'global_comment' => '']);
 
-    app(SaveSessionAction::class)->handle($repoPath, 'updated-global');
+    app(SessionStateAction::class)->saveGlobalNote($repoPath, 'updated-global');
 
     $session = ReviewSession::where('repo_path', $repoPath)->first();
     expect(ReviewSession::where('repo_path', $repoPath)->count())->toBe(1);
@@ -42,7 +42,7 @@ test('keys by project_id when provided', function () {
         'path' => '/tmp/test-proj',
     ]);
 
-    app(SaveSessionAction::class)->handle('/tmp/test-proj', 'hello', $project->id);
+    app(SessionStateAction::class)->saveGlobalNote('/tmp/test-proj', 'hello', $project->id);
 
     $session = ReviewSession::where('project_id', $project->id)->first();
 

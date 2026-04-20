@@ -8,14 +8,14 @@ use App\DTOs\ProjectListResult;
 use App\Models\Comment;
 use App\Models\Project;
 use App\Models\ReviewSession;
-use App\Services\ProjectSearchRanker;
+use App\Services\ProjectRankerService;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 
 final readonly class ListProjectsAction
 {
     public function __construct(
-        private ProjectSearchRanker $ranker,
+        private ProjectRankerService $ranker,
     ) {}
 
     public function handle(string $sortBy = 'recent', string $search = ''): ProjectListResult

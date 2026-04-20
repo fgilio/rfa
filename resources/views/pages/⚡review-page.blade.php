@@ -16,8 +16,7 @@ use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\RestoreDiscardedFileAction;
-use App\Actions\RestoreSessionAction;
-use App\Actions\SaveSessionAction;
+use App\Actions\SessionStateAction;
 use App\Actions\ToggleReviewedAction;
 use App\Actions\UpdateCommentAction;
 use App\Actions\UpdateProjectSettingAction;
@@ -152,7 +151,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->scanReviewFiles();
 
         $target = $this->buildDiffTarget();
-        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target);
+        $session = app(SessionStateAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target);
         $this->comments = $session['comments'];
         $this->reviewedFiles = $session['reviewedFiles'];
         $this->globalComment = $session['globalComment'];
@@ -215,7 +214,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->refreshFileList();
 
         $target = $this->buildDiffTarget();
-        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target);
+        $session = app(SessionStateAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target);
         $this->comments = $session['comments'];
         $this->reviewedFiles = $session['reviewedFiles'];
 
@@ -623,7 +622,7 @@ new #[Layout('layouts.app')] class extends Component
 
     private function saveSession(): void
     {
-        app(SaveSessionAction::class)->handle($this->repoPath, $this->globalComment, $this->projectId ?: null);
+        app(SessionStateAction::class)->saveGlobalNote($this->repoPath, $this->globalComment, $this->projectId ?: null);
     }
 
     private function loadTrashedFiles(): void
