@@ -86,3 +86,14 @@ test('GitFileContentService is a shared singleton in the container', function ()
 
     expect($first)->toBe($second);
 });
+
+test('flushCache forces a second git lookup for the same (repo, ref, path)', function () {
+    $gitProcess = Mockery::mock(GitProcessService::class);
+    $gitProcess->shouldReceive('run')->twice()->andReturn("stable content\n");
+
+    $service = new GitFileContentService($gitProcess);
+
+    $service->hashAt($this->tmpDir, $this->firstCommit, 'hello.php');
+    $service->flushCache();
+    $service->hashAt($this->tmpDir, $this->firstCommit, 'hello.php');
+});

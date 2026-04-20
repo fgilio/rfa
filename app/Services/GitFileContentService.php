@@ -13,8 +13,8 @@ class GitFileContentService
      * Request-scoped memoization. The singleton binding in AppServiceProvider
      * is safe under shared-nothing PHP (built-in web server): each HTTP request
      * rebuilds the container, so working-copy hashes cannot go stale mid-request.
-     * If this app ever adopts Octane/FrankenPHP/RoadRunner, add a `forget()` path
-     * or drop the singleton binding.
+     * Under a long-lived worker (Octane/FrankenPHP/RoadRunner) callers must
+     * invoke flushCache() between requests, or the singleton must be dropped.
      *
      * @var array<string, ?string>
      */
@@ -41,6 +41,12 @@ class GitFileContentService
         }
 
         return $this->hashCache[$key];
+    }
+
+    /** Drop every memoized hash. Call between requests under long-lived workers. */
+    public function flushCache(): void
+    {
+        $this->hashCache = [];
     }
 
     public function contentAt(string $repoPath, string $ref, string $path): ?string

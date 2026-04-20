@@ -15,6 +15,10 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(base_path('config/rfa.php'), 'rfa');
 
+        // Singleton so hashAt() memoization survives across every caller in a
+        // single request. RFA runs as NativePHP / built-in server (shared-nothing),
+        // so the cache can't go stale mid-request. Under Octane et al., callers
+        // must invoke GitFileContentService::flushCache() between requests.
         $this->app->singleton(GitFileContentService::class);
     }
 
