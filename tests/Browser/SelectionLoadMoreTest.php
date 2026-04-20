@@ -7,9 +7,11 @@ beforeEach(function () {
     // commits so the first page fills and "Load more" appears.
     // Zero-pad the counter so "Bulk commit 001" doesn't substring-match
     // "Bulk commit 010" / "011" / "012" when Playwright filters by text.
+    // `printf -v` is bash-only; CI uses /bin/sh (dash), so use POSIX
+    // command substitution instead.
     $this->runTestRepoCommand($this->testRepoPath, <<<'SH'
         for i in $(seq 1 55); do
-            printf -v n "%03d" $i
+            n=$(printf "%03d" $i)
             echo "line $n" >> bulk.txt
             git add -A
             git commit -m "Bulk commit $n" -q
