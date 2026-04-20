@@ -31,7 +31,7 @@
                     <span class="font-mono text-xs text-gh-muted" x-text="commentCount + ' ' + (commentCount === 1 ? 'comment' : 'comments')"></span>
                 </template>
                 <template x-if="draftCount > 0">
-                    <span class="font-mono text-xs text-amber-500 dark:text-amber-400" x-text="draftCount + ' ' + (draftCount === 1 ? 'draft' : 'drafts')"></span>
+                    <span class="font-mono text-xs text-gh-draft" x-text="draftCount + ' ' + (draftCount === 1 ? 'draft' : 'drafts')"></span>
                 </template>
                 <template x-if="commentCount + draftCount > 0">
                     <div class="flex items-center gap-3">

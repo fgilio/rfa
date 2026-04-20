@@ -180,7 +180,7 @@ class extends Component
                                     <span>L{{ $c['start_line'] }}@if(! empty($c['end_line']) && $c['end_line'] !== $c['start_line'])-L{{ $c['end_line'] }}@endif</span>
                                 @endif
                                 @if(! empty($c['is_draft']))
-                                    <span class="ml-auto px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 dark:text-amber-400 text-[9px]">draft</span>
+                                    <span class="ml-auto px-1.5 py-0.5 rounded bg-gh-draft/10 text-gh-draft text-[9px]">draft</span>
                                 @elseif(! empty($c['submitted_at']))
                                     <span class="ml-auto px-1.5 py-0.5 rounded bg-gh-border/40 text-gh-muted text-[9px]">submitted</span>
                                 @endif

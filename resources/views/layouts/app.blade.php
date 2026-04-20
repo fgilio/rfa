@@ -24,6 +24,7 @@
                             link: 'rgb(var(--gh-link) / <alpha-value>)',
                             green: 'rgb(var(--gh-green) / <alpha-value>)',
                             red: 'rgb(var(--gh-red) / <alpha-value>)',
+                            draft: 'rgb(var(--gh-draft) / <alpha-value>)',
                             'add-bg': 'var(--gh-add-bg)',
                             'add-line': 'var(--gh-add-line)',
                             'del-bg': 'var(--gh-del-bg)',

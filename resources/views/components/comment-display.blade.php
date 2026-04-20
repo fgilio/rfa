@@ -13,7 +13,7 @@
     <div class="flex items-start justify-between gap-2">
         <div class="flex items-center gap-2">
             @if($isDraft)
-                <span class="text-[10px] font-mono font-medium text-amber-500 dark:text-amber-400 uppercase tracking-wider">Draft</span>
+                <span class="text-[10px] font-mono font-medium text-gh-draft uppercase tracking-wider">Draft</span>
             @endif
             <flux:text size="sm" class="whitespace-pre-wrap">{{ $comment['body'] }}</flux:text>
         </div>
