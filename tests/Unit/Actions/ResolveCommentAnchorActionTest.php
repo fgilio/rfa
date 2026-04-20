@@ -18,6 +18,31 @@ beforeEach(function () {
     $this->action = app(ResolveCommentAnchorAction::class);
 });
 
+test('resolves left-side comments on renamed files using the pre-rename path', function () {
+    // Comment was created on `src/old.php` (left side) before a rename; the diff's
+    // current file list reports the new name. Without oldPath, the hash lookup
+    // against `src/new.php` at `from-sha` returns null and the comment would fall
+    // to unplaced even though the content is in the diff.
+    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'from-sha', 'src/old.php')->andReturn('pre-rename-hash');
+    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'to-sha', 'src/new.php')->andReturn('post-rename-hash');
+
+    $result = $this->action->handle(
+        '/tmp/repo',
+        [[
+            'id' => 'c-rename',
+            'file_path' => 'src/new.php',
+            'side' => 'left',
+            'start_line' => 3,
+            'file_content_hash' => 'pre-rename-hash',
+            'body' => 'left-side comment',
+        ]],
+        [['id' => 'file-renamed', 'path' => 'src/new.php', 'oldPath' => 'src/old.php']],
+        DiffTarget::range('from-sha', 'to-sha'),
+    );
+
+    expect($result[0]['anchorStatus'])->toBe('placed');
+});
+
 test('marks comment as placed when the stored hash matches the right side of the diff', function () {
     $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'from-sha', 'f.php')->andReturn('old');
     $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'to-sha', 'f.php')->andReturn('new-match');

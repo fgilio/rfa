@@ -212,6 +212,37 @@ test('marks comment as placed when content hash matches right side', function ()
     expect($result['comments'][0]['anchorStatus'])->toBe('placed');
 });
 
+test('rehydrates reviewed files via left-side hash when the right ref has no content', function () {
+    // ToggleReviewedAction explicitly stores the left-side hash for deleted /
+    // left-only files. Without matching against the left ref too, those reviewed
+    // markers would silently drop on restore.
+    $repoPath = '/tmp/'.$this->faker->word();
+
+    ReviewedFile::create([
+        'repo_path' => $repoPath,
+        'file_path' => 'deleted.php',
+        'content_hash' => 'left-hash',
+    ]);
+
+    $files = [['id' => 'id-d', 'path' => 'deleted.php', 'isUntracked' => false]];
+
+    $this->gitFileContentMock->shouldReceive('hashAt')
+        ->with($repoPath, 'abc123', 'deleted.php')
+        ->andReturn(null);
+    $this->gitFileContentMock->shouldReceive('hashAt')
+        ->with($repoPath, 'parent123', 'deleted.php')
+        ->andReturn('left-hash');
+
+    $result = app(RestoreSessionAction::class)->handle(
+        $repoPath,
+        $files,
+        null,
+        DiffTarget::range('parent123', 'abc123'),
+    );
+
+    expect($result['reviewedFiles'])->toBe(['deleted.php' => 'left-hash']);
+});
+
 test('rehydrates legacy reviewed_files rows that were migrated with an empty content_hash', function () {
     $repoPath = '/tmp/'.$this->faker->word();
 

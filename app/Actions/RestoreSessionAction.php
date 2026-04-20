@@ -95,7 +95,8 @@ final readonly class RestoreSessionAction
             ->map(fn ($rows) => $rows->pluck('content_hash')->all())
             ->all();
 
-        $ref = $target->to() ?? GitFileContentService::WORKING_REF;
+        $rightRef = $target->to() ?? GitFileContentService::WORKING_REF;
+        $leftRef = $target->from();
         $reviewed = [];
 
         foreach ($currentFiles as $file) {
@@ -105,19 +106,30 @@ final readonly class RestoreSessionAction
             }
 
             $storedHashes = $hashesByPath[$path];
-            $currentHash = $this->gitFileContentService->hashAt($repoPath, $ref, $path) ?? '';
 
             // Legacy rows (indexed `reviewed_files` arrays or immutable-context sessions)
             // were migrated with an empty `content_hash`. Treat those as "reviewed
             // regardless of content" so migrated users keep their state.
             if (in_array('', $storedHashes, true)) {
-                $reviewed[$path] = $currentHash;
+                $reviewed[$path] = $this->gitFileContentService->hashAt($repoPath, $rightRef, $path) ?? '';
 
                 continue;
             }
 
-            if ($currentHash !== '' && in_array($currentHash, $storedHashes, true)) {
-                $reviewed[$path] = $currentHash;
+            // `ToggleReviewedAction` falls back to the left ref when the right side is
+            // missing (deleted / left-only files). Check both sides on restore so the
+            // reviewed flag survives for those files too.
+            $rightHash = $this->gitFileContentService->hashAt($repoPath, $rightRef, $path);
+            if ($rightHash !== null && in_array($rightHash, $storedHashes, true)) {
+                $reviewed[$path] = $rightHash;
+
+                continue;
+            }
+
+            $leftPath = $file['oldPath'] ?? $path;
+            $leftHash = $this->gitFileContentService->hashAt($repoPath, $leftRef, $leftPath);
+            if ($leftHash !== null && in_array($leftHash, $storedHashes, true)) {
+                $reviewed[$path] = $leftHash;
             }
         }
 

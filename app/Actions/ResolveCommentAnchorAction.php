@@ -30,8 +30,10 @@ final readonly class ResolveCommentAnchorAction
     public function handle(string $repoPath, iterable $rawComments, array $currentFiles, DiffTarget $target): array
     {
         $fileIdByPath = [];
+        $oldPathByPath = [];
         foreach ($currentFiles as $file) {
             $fileIdByPath[$file['path']] = $file['id'];
+            $oldPathByPath[$file['path']] = $file['oldPath'] ?? null;
         }
 
         $resolved = [];
@@ -51,7 +53,11 @@ final readonly class ResolveCommentAnchorAction
             $resolvedSide = $storedSide;
 
             if ($storedHash !== null && $storedHash !== '' && isset($fileIdByPath[$filePath])) {
-                $leftHash = $this->gitFileContentService->hashAt($repoPath, $target->from(), $filePath);
+                // Renamed files: left-side content lives at `oldPath`; right-side stays
+                // at `path`. Without this, left comments on rename+edit diffs would be
+                // stamped unplaced and then silently dropped from submit.
+                $leftPath = $oldPathByPath[$filePath] ?? $filePath;
+                $leftHash = $this->gitFileContentService->hashAt($repoPath, $target->from(), $leftPath);
                 $rightHash = $this->gitFileContentService->hashAt($repoPath, $rightRef, $filePath);
 
                 $matchesStoredSide = ($storedSide === 'left' && $storedHash === $leftHash)

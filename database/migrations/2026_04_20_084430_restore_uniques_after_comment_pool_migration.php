@@ -17,9 +17,16 @@ return new class extends Migration
      * bare-repo and project-scoped rows never share a unique key.
      *
      * SQLite partial indexes (WHERE clause) have been supported since 3.8.
+     * RFA ships SQLite via NativePHP; this migration is a no-op on other
+     * drivers so environments that use MySQL/Postgres for testing don't fail
+     * on the partial-index syntax.
      */
     public function up(): void
     {
+        if (! $this->isSqlite()) {
+            return;
+        }
+
         if ($this->hasIndex('review_sessions', 'review_sessions_project_id_unique')) {
             Schema::table('review_sessions', function (Blueprint $table) {
                 $table->dropUnique('review_sessions_project_id_unique');
@@ -53,6 +60,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! $this->isSqlite()) {
+            return;
+        }
+
         DB::statement('DROP INDEX IF EXISTS review_sessions_project_id_unique');
         DB::statement('DROP INDEX IF EXISTS review_sessions_bare_repo_unique');
         DB::statement('DROP INDEX IF EXISTS reviewed_files_bare_repo_unique');
@@ -63,6 +74,11 @@ return new class extends Migration
                 $table->unique(['repo_path', 'file_path', 'content_hash'], 'reviewed_files_repo_unique');
             });
         }
+    }
+
+    private function isSqlite(): bool
+    {
+        return DB::connection()->getDriverName() === 'sqlite';
     }
 
     private function hasIndex(string $table, string $name): bool

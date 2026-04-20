@@ -26,7 +26,7 @@
             x-transition:leave="transition ease-in duration-100"
             x-transition:leave-start="opacity-100"
             x-transition:leave-end="opacity-0"
-            class="absolute inset-0 bg-black/30"
+            class="absolute inset-0 bg-gh-muted/50"
             @click="{{ $onClose }}"
         ></div>
 
@@ -40,6 +40,7 @@
             x-transition:leave-end="opacity-0 -translate-y-1"
             @click.stop
             role="dialog"
+            aria-modal="true"
             aria-label="{{ $ariaLabel }}"
             data-overlay-panel="{{ $name }}"
             data-testid="overlay-panel-{{ $name }}"

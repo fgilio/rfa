@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -138,31 +139,54 @@ return new class extends Migration
 
     private function dedupeReviewSessions(): void
     {
-        // For each project_id/repo_path, keep the most recently updated row.
-        // `updated_at DESC, id DESC` reflects user intent better than longest-wins
-        // (which could discard a freshly edited shorter note in favor of stale text).
-        $groups = DB::table('review_sessions')
-            ->selectRaw('COALESCE(project_id, 0) as group_key, project_id, repo_path')
-            ->groupBy('group_key', 'project_id', 'repo_path')
+        // Dedup to match the partial uniques in the next migration:
+        //   - project_id IS NOT NULL  → unique on project_id alone
+        //   - project_id IS NULL      → unique on repo_path alone
+        // Grouping by (project_id, repo_path) would leave two rows for a project
+        // that ever had multiple paths, and the unique index would then fail.
+        //
+        // `updated_at DESC, id DESC` keeps the most recently touched row; this is
+        // closer to user intent than longest-comment-wins, which can otherwise
+        // discard a freshly edited short note in favor of stale text.
+        $projectGroups = DB::table('review_sessions')
+            ->whereNotNull('project_id')
+            ->select('project_id')
+            ->groupBy('project_id')
             ->get();
 
-        foreach ($groups as $group) {
-            $query = DB::table('review_sessions')->where('repo_path', $group->repo_path);
-            $query = $group->project_id
-                ? $query->where('project_id', $group->project_id)
-                : $query->whereNull('project_id');
+        foreach ($projectGroups as $group) {
+            $this->dedupeGroup(
+                DB::table('review_sessions')->where('project_id', $group->project_id),
+            );
+        }
 
-            $rows = $query->orderByDesc('updated_at')->orderByDesc('id')->get();
-            if ($rows->count() <= 1) {
-                continue;
-            }
+        $bareGroups = DB::table('review_sessions')
+            ->whereNull('project_id')
+            ->select('repo_path')
+            ->groupBy('repo_path')
+            ->get();
 
-            $keeper = $rows->first();
-            $idsToDelete = $rows->pluck('id')->reject(fn ($id) => $id === $keeper->id)->all();
+        foreach ($bareGroups as $group) {
+            $this->dedupeGroup(
+                DB::table('review_sessions')
+                    ->whereNull('project_id')
+                    ->where('repo_path', $group->repo_path),
+            );
+        }
+    }
 
-            if ($idsToDelete !== []) {
-                DB::table('review_sessions')->whereIn('id', $idsToDelete)->delete();
-            }
+    private function dedupeGroup(Builder $query): void
+    {
+        $rows = $query->orderByDesc('updated_at')->orderByDesc('id')->get();
+        if ($rows->count() <= 1) {
+            return;
+        }
+
+        $keeper = $rows->first();
+        $idsToDelete = $rows->pluck('id')->reject(fn ($id) => $id === $keeper->id)->all();
+
+        if ($idsToDelete !== []) {
+            DB::table('review_sessions')->whereIn('id', $idsToDelete)->delete();
         }
     }
 };
