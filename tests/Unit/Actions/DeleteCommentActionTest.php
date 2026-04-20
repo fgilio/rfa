@@ -1,7 +1,12 @@
 <?php
 
 use App\Actions\DeleteCommentAction;
+use App\Models\Comment;
 use Faker\Factory as Faker;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Tests\TestCase;
+
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 beforeEach(function () {
     $this->faker = Faker::create();
@@ -19,6 +24,21 @@ test('removes comment by id', function () {
 
     expect($result)->toHaveCount(1);
     expect($result[0]['id'])->toBe('c-bbb');
+});
+
+test('deletes the comment row from the comments table', function () {
+    Comment::create([
+        'id' => 'c-aaa',
+        'repo_path' => '/tmp/repo',
+        'origin_ref' => 'working',
+        'file_path' => 'f.php',
+        'side' => 'right',
+        'body' => 'first',
+    ]);
+
+    $this->action->handle([['id' => 'c-aaa']], 'c-aaa');
+
+    expect(Comment::find('c-aaa'))->toBeNull();
 });
 
 test('returns null for invalid prefix', function () {

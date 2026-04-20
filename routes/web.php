@@ -12,6 +12,10 @@ Route::get('/', fn (): RedirectResponse => redirect(app(ResolveStartupRouteActio
 
 Route::livewire('/no-projects', 'pages::no-projects-page')->name('no-projects');
 Route::livewire('/p/{slug}/c/{hash}', 'pages::review-page')->where('hash', '[0-9a-fA-F]{4,40}')->name('review-page.commit');
+Route::livewire('/p/{slug}/r/{from}..{to}', 'pages::review-page')
+    ->where('from', '[0-9a-fA-F]{4,40}')
+    ->where('to', '[0-9a-fA-F]{4,40}')
+    ->name('review-page.range');
 Route::livewire('/p/{slug}/{ref?}/{baseRef?}', 'pages::review-page')->name('review-page');
 
 Route::get('/api/status/{project}', function (Project $project) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Services\GitFileContentService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
@@ -13,6 +14,8 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(base_path('config/rfa.php'), 'rfa');
+
+        $this->app->singleton(GitFileContentService::class);
     }
 
     public function boot(): void

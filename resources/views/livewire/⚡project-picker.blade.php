@@ -96,6 +96,7 @@ class extends Component
             this.open = true;
             this.selectedIndex = -1;
             if ($wire.search !== '') $wire.set('search', '');
+            window.dispatchEvent(new CustomEvent('overlay:open', { detail: { name: 'project-picker' } }));
             this.$nextTick(() => this.$refs.searchInput?.focus());
         },
         close() {
@@ -128,6 +129,7 @@ class extends Component
     }"
     @project-picker:toggle.window="toggle()"
     @project-picker:close.window="close()"
+    @overlay:open.window="if ($event.detail?.name !== 'project-picker') close()"
     @keydown.window="
         if (isHotkey($event)) { $event.preventDefault(); toggle(); return; }
         if (!open) return;
@@ -148,16 +150,7 @@ class extends Component
         <span>{{ $projectName }}</span>
     </x-header-picker-trigger>
 
-    <template x-teleport="body">
-        <div x-show="open" x-cloak class="fixed inset-0 z-[60]" @click.self="close()">
-            <div class="absolute inset-0 bg-black/30" @click="close()"></div>
-
-            <div
-                class="fixed top-[calc(var(--header-h,56px)+6px)] left-4 z-[61] w-[460px] max-w-[calc(100vw-32px)] max-h-[70vh] bg-gh-bg border border-gh-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
-                @click.stop
-                role="dialog"
-                aria-label="Switch project"
-            >
+    <x-overlay-panel name="project-picker" aria-label="Switch project" size="md">
                 <div class="p-3 border-b border-gh-border flex items-center gap-2 shrink-0">
                     <div class="flex-1">
                         <flux:input
@@ -281,21 +274,14 @@ class extends Component
                 @endforeach
                 </div>
 
-                <div class="px-3 py-2 border-t border-gh-border flex items-center justify-between shrink-0 bg-gh-surface/50">
-                    <span class="font-mono text-[11px] text-gh-muted">
+                <x-overlay-footer>
+                    <x-slot:meta>
                         @if($search !== '')
                             {{ $matchCount }}/{{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}
                         @else
                             {{ $totalProjects }} {{ Str::plural('project', $totalProjects) }}
                         @endif
-                    </span>
-                    <span class="font-mono text-[11px] text-gh-muted/60 flex items-center gap-2">
-                        <span><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">↑</kbd><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">↓</kbd> nav</span>
-                        <span><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">↵</kbd> open</span>
-                        <span><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">esc</kbd> close</span>
-                    </span>
-                </div>
-            </div>
-        </div>
-    </template>
+                    </x-slot:meta>
+                </x-overlay-footer>
+    </x-overlay-panel>
 </div>

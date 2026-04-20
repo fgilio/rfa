@@ -2,10 +2,28 @@
 
 namespace Tests\Helpers;
 
+use App\Models\Project;
 use Illuminate\Support\Facades\File;
 
 trait InteractsWithTestRepositories
 {
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    protected function createTestProject(array $overrides = []): Project
+    {
+        $slug = $overrides['slug'] ?? 'test-proj-'.uniqid();
+        $path = $overrides['path'] ?? '/tmp/'.$slug;
+
+        return Project::create(array_merge([
+            'slug' => $slug,
+            'name' => $slug,
+            'path' => $path,
+            'git_common_dir' => $path.'/.git',
+            'is_worktree' => false,
+        ], $overrides));
+    }
+
     /** @var list<string> */
     protected array $trackedTempDirectories = [];
 

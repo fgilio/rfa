@@ -14,27 +14,19 @@ class ReviewSession extends Model
     /** @use HasFactory<ReviewSessionFactory> */
     use HasFactory;
 
-    protected $fillable = ['repo_path', 'project_id', 'context_fingerprint', 'reviewed_files', 'comments', 'global_comment'];
+    protected $fillable = ['repo_path', 'project_id', 'global_comment'];
 
-    /** @return array<string, int|string> */
-    public static function lookupKey(string $repoPath, ?int $projectId, string $contextFingerprint): array
+    /** @return array<string, int|string|null> */
+    public static function lookupKey(string $repoPath, ?int $projectId): array
     {
         return $projectId
-            ? ['project_id' => $projectId, 'context_fingerprint' => $contextFingerprint]
-            : ['repo_path' => $repoPath, 'context_fingerprint' => $contextFingerprint];
+            ? ['project_id' => $projectId]
+            : ['project_id' => null, 'repo_path' => $repoPath];
     }
 
     /** @return BelongsTo<Project, $this> */
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
-    }
-
-    protected function casts(): array
-    {
-        return [
-            'reviewed_files' => 'array',
-            'comments' => 'array',
-        ];
     }
 }

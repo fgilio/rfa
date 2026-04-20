@@ -2,9 +2,10 @@
 
 use App\Actions\RestoreSessionAction;
 use App\DTOs\DiffTarget;
-use App\Models\Project;
+use App\Models\Comment;
+use App\Models\ReviewedFile;
 use App\Models\ReviewSession;
-use App\Services\GitDiffService;
+use App\Services\GitFileContentService;
 use Faker\Factory as Faker;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
@@ -14,6 +15,10 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 beforeEach(function () {
     $this->faker = Faker::create();
     $this->faker->seed(crc32(static::class.$this->name()));
+
+    $this->gitFileContentMock = Mockery::mock(GitFileContentService::class);
+    $this->gitFileContentMock->shouldReceive('hashAt')->byDefault()->andReturn(null);
+    app()->instance(GitFileContentService::class, $this->gitFileContentMock);
 });
 
 test('creates session when none exists and returns defaults', function () {
@@ -31,44 +36,53 @@ test('creates session when none exists and returns defaults', function () {
 
 test('restores comments and tracks orphaned paths', function () {
     $repoPath = '/tmp/'.$this->faker->word();
-    ReviewSession::create([
+
+    Comment::create([
+        'id' => 'c-1',
         'repo_path' => $repoPath,
-        'comments' => [
-            ['id' => 'c-1', 'file' => 'exists.php', 'fileId' => 'old-id'],
-            ['id' => 'c-2', 'file' => 'gone.php', 'fileId' => 'old-id-2'],
-        ],
-        'reviewed_files' => ['exists.php' => 'somehash'],
-        'global_comment' => 'hello',
+        'origin_ref' => 'working',
+        'file_path' => 'exists.php',
+        'side' => 'right',
+        'body' => 'comment on existing',
     ]);
 
-    $files = [['id' => 'file-new', 'path' => 'exists.php', 'isUntracked' => false]];
+    Comment::create([
+        'id' => 'c-2',
+        'repo_path' => $repoPath,
+        'origin_ref' => 'working',
+        'file_path' => 'gone.php',
+        'side' => 'right',
+        'body' => 'comment on missing file',
+    ]);
 
-    // Mock GitDiffService to return matching fingerprint
-    $mock = Mockery::mock(GitDiffService::class);
-    $mock->shouldReceive('fileDiffFingerprint')->andReturn('somehash');
-    app()->instance(GitDiffService::class, $mock);
+    ReviewSession::updateOrCreate(
+        ['project_id' => null, 'repo_path' => $repoPath],
+        ['repo_path' => $repoPath, 'global_comment' => 'hello'],
+    );
+
+    $files = [['id' => 'file-new', 'path' => 'exists.php', 'isUntracked' => false]];
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
 
     expect($result['comments'])->toHaveCount(2);
-    expect($result['comments'][0]['file'])->toBe('exists.php');
-    expect($result['comments'][0]['fileId'])->toBe('file-new');
-    expect($result['comments'][1]['file'])->toBe('gone.php');
-    expect($result['comments'][1]['fileId'])->toBe('file-'.hash('xxh128', 'gone.php'));
+    $byFile = collect($result['comments'])->keyBy('file');
+    expect($byFile['exists.php']['fileId'])->toBe('file-new');
+    expect($byFile['exists.php']['anchorStatus'])->toBe('placed');
+    expect($byFile['gone.php']['anchorStatus'])->toBe('unplaced');
     expect($result['orphanedPaths'])->toBe(['gone.php']);
-    expect($result['reviewedFiles'])->toBe(['exists.php' => 'somehash']);
     expect($result['globalComment'])->toBe('hello');
 });
 
 test('remaps fileId to current file list', function () {
     $repoPath = '/tmp/'.$this->faker->word();
-    ReviewSession::create([
+
+    Comment::create([
+        'id' => 'c-1',
         'repo_path' => $repoPath,
-        'comments' => [
-            ['id' => 'c-1', 'file' => 'f.php', 'fileId' => 'stale-id'],
-        ],
-        'reviewed_files' => [],
-        'global_comment' => '',
+        'origin_ref' => 'working',
+        'file_path' => 'f.php',
+        'side' => 'right',
+        'body' => 'comment',
     ]);
 
     $currentId = 'file-'.hash('xxh128', 'f.php');
@@ -80,21 +94,25 @@ test('remaps fileId to current file list', function () {
 });
 
 test('keys by project_id when provided', function () {
-    $project = Project::create([
+    $project = $this->createTestProject([
         'slug' => 'test-proj',
-        'name' => 'test-proj',
         'path' => '/tmp/test-proj',
-        'git_common_dir' => '/tmp/test-proj/.git',
-        'is_worktree' => false,
     ]);
 
-    ReviewSession::create([
-        'repo_path' => '/tmp/test-proj',
+    Comment::create([
+        'id' => 'c-1',
         'project_id' => $project->id,
-        'comments' => [['id' => 'c-1', 'file' => 'f.php', 'fileId' => 'x']],
-        'reviewed_files' => [],
-        'global_comment' => 'from project',
+        'repo_path' => '/tmp/test-proj',
+        'origin_ref' => 'working',
+        'file_path' => 'f.php',
+        'side' => 'right',
+        'body' => 'x',
     ]);
+
+    ReviewSession::updateOrCreate(
+        ['project_id' => $project->id],
+        ['repo_path' => '/tmp/test-proj', 'global_comment' => 'from project'],
+    );
 
     $files = [['id' => 'file-new', 'path' => 'f.php', 'isUntracked' => false]];
 
@@ -104,15 +122,19 @@ test('keys by project_id when provided', function () {
     expect($result['comments'])->toHaveCount(1);
 });
 
-// -- Legacy migration --
-
-test('migrates legacy indexed array to associative with fresh fingerprints', function () {
+test('restores reviewed files when current content hash matches stored record', function () {
     $repoPath = '/tmp/'.$this->faker->word();
-    ReviewSession::create([
+
+    ReviewedFile::create([
         'repo_path' => $repoPath,
-        'comments' => [],
-        'reviewed_files' => ['a.php', 'b.php', 'gone.php'],
-        'global_comment' => '',
+        'file_path' => 'a.php',
+        'content_hash' => 'hash-a',
+    ]);
+
+    ReviewedFile::create([
+        'repo_path' => $repoPath,
+        'file_path' => 'b.php',
+        'content_hash' => 'hash-b',
     ]);
 
     $files = [
@@ -120,72 +142,146 @@ test('migrates legacy indexed array to associative with fresh fingerprints', fun
         ['id' => 'id-b', 'path' => 'b.php', 'isUntracked' => false],
     ];
 
-    $mock = Mockery::mock(GitDiffService::class);
-    $mock->shouldReceive('fileDiffFingerprint')
-        ->with($repoPath, 'a.php', null)
+    $this->gitFileContentMock->shouldReceive('hashAt')
+        ->with($repoPath, GitFileContentService::WORKING_REF, 'a.php')
         ->andReturn('hash-a');
-    $mock->shouldReceive('fileDiffFingerprint')
-        ->with($repoPath, 'b.php', null)
-        ->andReturn('hash-b');
-    app()->instance(GitDiffService::class, $mock);
+    $this->gitFileContentMock->shouldReceive('hashAt')
+        ->with($repoPath, GitFileContentService::WORKING_REF, 'b.php')
+        ->andReturn('different-hash');
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
 
-    expect($result['reviewedFiles'])->toBe(['a.php' => 'hash-a', 'b.php' => 'hash-b']);
+    expect($result['reviewedFiles'])->toBe(['a.php' => 'hash-a']);
 });
 
-// -- Fingerprint validation --
-
-test('unmarks reviewed file when fingerprint mismatches', function () {
+test('excludes submitted comments from restored view', function () {
     $repoPath = '/tmp/'.$this->faker->word();
-    ReviewSession::create([
+
+    Comment::create([
+        'id' => 'c-open',
         'repo_path' => $repoPath,
-        'comments' => [],
-        'reviewed_files' => ['a.php' => 'old-hash', 'b.php' => 'still-good'],
-        'global_comment' => '',
+        'origin_ref' => 'working',
+        'file_path' => 'f.php',
+        'side' => 'right',
+        'body' => 'open',
     ]);
 
-    $files = [
-        ['id' => 'id-a', 'path' => 'a.php', 'isUntracked' => false],
-        ['id' => 'id-b', 'path' => 'b.php', 'isUntracked' => false],
-    ];
+    Comment::create([
+        'id' => 'c-submitted',
+        'repo_path' => $repoPath,
+        'origin_ref' => 'working',
+        'file_path' => 'f.php',
+        'side' => 'right',
+        'body' => 'already submitted',
+        'submitted_at' => now(),
+    ]);
 
-    $mock = Mockery::mock(GitDiffService::class);
-    $mock->shouldReceive('fileDiffFingerprint')
-        ->with($repoPath, 'a.php', null)
-        ->andReturn('new-hash');
-    $mock->shouldReceive('fileDiffFingerprint')
-        ->with($repoPath, 'b.php', null)
-        ->andReturn('still-good');
-    app()->instance(GitDiffService::class, $mock);
+    $files = [['id' => 'file-new', 'path' => 'f.php', 'isUntracked' => false]];
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
 
-    expect($result['reviewedFiles'])->toBe(['b.php' => 'still-good']);
+    expect($result['comments'])->toHaveCount(1);
+    expect($result['comments'][0]['id'])->toBe('c-open');
 });
 
-test('skips fingerprint validation for immutable targets', function () {
+test('marks comment as placed when content hash matches right side', function () {
     $repoPath = '/tmp/'.$this->faker->word();
+
+    Comment::create([
+        'id' => 'c-1',
+        'repo_path' => $repoPath,
+        'origin_ref' => DiffTarget::commit('abc123')->to(),
+        'file_path' => 'f.php',
+        'side' => 'right',
+        'file_content_hash' => 'matching-hash',
+        'body' => 'body',
+    ]);
+
     $target = DiffTarget::commit('abc123');
+    $files = [['id' => 'file-new', 'path' => 'f.php', 'isUntracked' => false]];
 
-    ReviewSession::create([
+    $this->gitFileContentMock->shouldReceive('hashAt')
+        ->with($repoPath, $target->from(), 'f.php')
+        ->andReturn('different-hash');
+    $this->gitFileContentMock->shouldReceive('hashAt')
+        ->with($repoPath, 'abc123', 'f.php')
+        ->andReturn('matching-hash');
+
+    $result = app(RestoreSessionAction::class)->handle($repoPath, $files, null, $target);
+
+    expect($result['comments'][0]['anchorStatus'])->toBe('placed');
+});
+
+test('rehydrates reviewed files via left-side hash when the right ref has no content', function () {
+    // ToggleReviewedAction explicitly stores the left-side hash for deleted /
+    // left-only files. Without matching against the left ref too, those reviewed
+    // markers would silently drop on restore.
+    $repoPath = '/tmp/'.$this->faker->word();
+
+    ReviewedFile::create([
         'repo_path' => $repoPath,
-        'context_fingerprint' => $target->contextKey(),
-        'comments' => [],
-        'reviewed_files' => ['a.php' => ''],
-        'global_comment' => '',
+        'file_path' => 'deleted.php',
+        'content_hash' => 'left-hash',
     ]);
 
-    $files = [['id' => 'id-a', 'path' => 'a.php', 'isUntracked' => false]];
+    $files = [['id' => 'id-d', 'path' => 'deleted.php', 'isUntracked' => false]];
 
-    // Mock returns empty string for immutable (no validation needed)
-    $mock = Mockery::mock(GitDiffService::class);
-    $mock->shouldReceive('fileDiffFingerprint')
-        ->with($repoPath, 'a.php', $target)
-        ->andReturn('');
-    app()->instance(GitDiffService::class, $mock);
+    $this->gitFileContentMock->shouldReceive('hashAt')
+        ->with($repoPath, 'abc123', 'deleted.php')
+        ->andReturn(null);
+    $this->gitFileContentMock->shouldReceive('hashAt')
+        ->with($repoPath, 'parent123', 'deleted.php')
+        ->andReturn('left-hash');
 
-    $result = app(RestoreSessionAction::class)->handle($repoPath, $files, null, $target->contextKey(), $target);
+    $result = app(RestoreSessionAction::class)->handle(
+        $repoPath,
+        $files,
+        null,
+        DiffTarget::range('parent123', 'abc123'),
+    );
 
-    expect($result['reviewedFiles'])->toBe(['a.php' => '']);
+    expect($result['reviewedFiles'])->toBe(['deleted.php' => 'left-hash']);
+});
+
+test('rehydrates legacy reviewed_files rows that were migrated with an empty content_hash', function () {
+    $repoPath = '/tmp/'.$this->faker->word();
+
+    ReviewedFile::create([
+        'repo_path' => $repoPath,
+        'file_path' => 'legacy.php',
+        'content_hash' => '',
+    ]);
+
+    $files = [['id' => 'id-legacy', 'path' => 'legacy.php', 'isUntracked' => false]];
+
+    $this->gitFileContentMock->shouldReceive('hashAt')
+        ->with($repoPath, GitFileContentService::WORKING_REF, 'legacy.php')
+        ->andReturn('current-hash');
+
+    $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
+
+    expect($result['reviewedFiles'])->toHaveKey('legacy.php');
+});
+
+test('marks comment as unplaced when content hash does not match either side', function () {
+    $repoPath = '/tmp/'.$this->faker->word();
+
+    Comment::create([
+        'id' => 'c-1',
+        'repo_path' => $repoPath,
+        'origin_ref' => 'deadbeef',
+        'file_path' => 'f.php',
+        'side' => 'right',
+        'file_content_hash' => 'orphan-hash',
+        'body' => 'body',
+    ]);
+
+    $target = DiffTarget::commit('abc123');
+    $files = [['id' => 'file-new', 'path' => 'f.php', 'isUntracked' => false]];
+
+    $this->gitFileContentMock->shouldReceive('hashAt')->andReturn('different-hash');
+
+    $result = app(RestoreSessionAction::class)->handle($repoPath, $files, null, $target);
+
+    expect($result['comments'][0]['anchorStatus'])->toBe('unplaced');
 });

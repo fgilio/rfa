@@ -218,6 +218,7 @@ new class extends Component {
         isReviewed: @js($isReviewed ?? false),
         singleFile: @js($singleFile ?? false),
     })"
+    :data-file-id="fileId"
     @mouseup.window="endDrag()"
     @comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"
     @collapse-all-files.window="autoExpandedForComment = false; collapsed = true"
@@ -351,10 +352,14 @@ new class extends Component {
                 @endif
             @endforeach
         </div>
-        {{-- Unplaced inline comments (line no longer exists in diff) --}}
+        {{-- Unplaced inline comments: either the anchor-resolver marked them unplaced
+             (content hash mismatch) or the stored line no longer exists in the diff. --}}
         @php
             $visibleLines = $this->getVisibleLineKeys();
             $unplacedComments = collect($fileComments)->where('side', '!=', 'file')->filter(function ($c) use ($visibleLines) {
+                if (($c['anchorStatus'] ?? null) === 'unplaced') {
+                    return true;
+                }
                 $key = $c['side'] . ':' . ($c['endLine'] ?? $c['startLine'] ?? 0);
                 return !isset($visibleLines[$key]);
             });
@@ -362,6 +367,17 @@ new class extends Component {
         @if($unplacedComments->isNotEmpty())
             @foreach($unplacedComments as $comment)
                 <div x-data x-show="editingCommentId !== '{{ $comment['id'] }}'">
+                    @if(! empty($comment['lineSnippet']))
+                        <div class="border-b border-gh-border bg-gh-surface/40 px-4 py-2">
+                            <div class="text-[10px] font-display uppercase tracking-brutal text-gh-muted mb-1">
+                                Original snippet
+                                @if(! empty($comment['startLine']))
+                                    &middot; L{{ $comment['startLine'] }}@if(! empty($comment['endLine']) && $comment['endLine'] !== $comment['startLine'])-L{{ $comment['endLine'] }}@endif
+                                @endif
+                            </div>
+                            <pre class="font-mono text-xs text-gh-muted whitespace-pre-wrap break-all">{{ $comment['lineSnippet'] }}</pre>
+                        </div>
+                    @endif
                     <x-comment-display :comment="$comment" border-class="border-b" />
                 </div>
             @endforeach
@@ -454,7 +470,10 @@ new class extends Component {
             </div>
         @else
             @php
-                $commentsByLine = collect($fileComments)->where('side', '!=', 'file')->groupBy(fn($c) => $c['side'] . ':' . $c['endLine']);
+                $commentsByLine = collect($fileComments)
+                    ->where('side', '!=', 'file')
+                    ->where(fn ($c) => ($c['anchorStatus'] ?? 'placed') !== 'unplaced')
+                    ->groupBy(fn($c) => $c['side'] . ':' . $c['endLine']);
                 $hunks = $diffData['hunks'];
                 $lastHunk = end($hunks);
                 $lastHunkEnd = $lastHunk ? $lastHunk['newStart'] + $lastHunk['newCount'] - 1 : 0;

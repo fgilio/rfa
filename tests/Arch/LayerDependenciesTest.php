@@ -57,11 +57,12 @@ arch('models are only used in actions, observers, other models, factories, and c
         'App\Console\Benchmark',
     ]);
 
-arch('services are only used in actions and services')
+arch('services are only used in actions, services, and providers (for container binding)')
     ->expect('App\Services')
     ->toOnlyBeUsedIn([
         'App\Actions',
         'App\Services',
+        'App\Providers',
     ]);
 
 arch('dtos are only used in services, actions, livewire, and console benchmark tooling')

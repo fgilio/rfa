@@ -34,6 +34,18 @@ class Project extends Model
         return $this->hasMany(ReviewSession::class);
     }
 
+    /** @return HasMany<Comment, $this> */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(Comment::class);
+    }
+
+    /** @return HasMany<ReviewedFile, $this> */
+    public function reviewedFiles(): HasMany
+    {
+        return $this->hasMany(ReviewedFile::class);
+    }
+
     /** @return HasMany<TrashedFile, $this> */
     public function trashedFiles(): HasMany
     {

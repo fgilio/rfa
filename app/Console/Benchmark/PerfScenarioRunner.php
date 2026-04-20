@@ -197,7 +197,7 @@ final class PerfScenarioRunner
                 string $repoPath,
                 array $currentFiles,
                 ?int $projectId = null,
-                string $contextFingerprint = DiffTarget::WORKING_CONTEXT,
+                ?DiffTarget $target = null,
             ): array {
                 return ['comments' => [], 'reviewedFiles' => [], 'globalComment' => '', 'orphanedPaths' => []];
             }
@@ -205,17 +205,10 @@ final class PerfScenarioRunner
 
         $this->app->bind(SaveSessionAction::class, fn () => new class
         {
-            /**
-             * @param  array<int, array<string, mixed>>  $comments
-             * @param  array<string, string>  $reviewedFiles
-             */
             public function handle(
                 string $repoPath,
-                array $comments,
-                array $reviewedFiles,
                 string $globalComment,
                 ?int $projectId = null,
-                string $contextFingerprint = DiffTarget::WORKING_CONTEXT,
             ): void {}
         });
 

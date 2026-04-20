@@ -18,6 +18,12 @@ new class extends Component {
     #[Locked]
     public ?string $activeCommitHash = null;
 
+    #[Locked]
+    public string $selectionLabel = 'working';
+
+    #[Locked]
+    public string $selectionTitle = 'Working tree changes';
+
     /** @var array{local: list<array<string, mixed>>, remote: list<array<string, mixed>>, current: string} */
     public array $branches = ['local' => [], 'remote' => [], 'current' => ''];
 
@@ -65,32 +71,46 @@ new class extends Component {
         branches: @js($branches),
     })"
     @keydown.window="handleKeydown($event)"
+    @open-selection-drawer.window="openPanel()"
+    @overlay:open.window="if ($event.detail?.name !== 'branch-explorer') closePanel()"
 >
-    {{-- Trigger: inline branch segment --}}
-    <x-header-picker-trigger
-        tooltip="Switch branch"
-        aria-label="Switch branch"
-        variant="mono"
-        x-on:click="openPanel()"
-        x-bind:aria-expanded="open"
-    >
-        <flux:icon icon="share" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
-        <span class="tracking-tight">{{ $currentBranch }}</span>
-    </x-header-picker-trigger>
-
-    {{-- Overlay panel --}}
-    <template x-teleport="body">
-        <div x-show="open" x-cloak class="fixed inset-0 z-[60]" @click.self="closePanel()">
-            {{-- Backdrop --}}
-            <div class="absolute inset-0 bg-black/30" @click="closePanel()"></div>
-
-            {{-- Panel --}}
-            <div
-                class="fixed top-[15vh] left-1/2 -translate-x-1/2 z-[61] w-[700px] max-w-[90vw] max-h-[60vh] bg-gh-bg border border-gh-border rounded-xl shadow-2xl flex overflow-hidden"
-                @click.stop
+    <div class="inline-flex items-stretch rounded-md border border-gh-border/70 bg-gh-surface/30 hover:border-gh-text/30 transition-colors">
+        <flux:tooltip content="Switch branch · ⌘B">
+            <button
+                type="button"
+                class="group inline-flex items-center gap-1.5 px-2 py-1 text-xs font-mono text-gh-muted hover:text-gh-text hover:bg-gh-border/25 rounded-l-md transition-colors cursor-pointer"
+                aria-label="Switch branch (⌘B)"
+                aria-haspopup="dialog"
+                x-on:click="openPanel()"
+                x-bind:aria-expanded="open"
             >
+                <flux:icon icon="share" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
+                <span class="tracking-tight">{{ $currentBranch }}</span>
+            </button>
+        </flux:tooltip>
+
+        <span class="w-px self-stretch bg-gh-border/70" aria-hidden="true"></span>
+
+        <flux:tooltip content="{{ $selectionTitle }} · ⌘B">
+            <button
+                type="button"
+                class="group inline-flex items-center gap-1.5 px-2 py-1 text-xs font-mono text-gh-text hover:bg-gh-border/25 rounded-r-md transition-colors cursor-pointer"
+                aria-label="Open selection drawer"
+                aria-haspopup="dialog"
+                x-on:click="openPanel()"
+                x-bind:aria-expanded="open"
+            >
+                <flux:icon icon="square-3-stack-3d" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
+                <span>{{ $selectionLabel }}</span>
+                <flux:icon icon="chevron-down" variant="outline" class="!size-3 text-gh-muted/60 group-hover:text-gh-text transition-colors" />
+            </button>
+        </flux:tooltip>
+    </div>
+
+    <x-overlay-panel name="branch-explorer" aria-label="Switch branch" size="lg" on-close="closePanel()">
+        <div class="flex flex-1 min-h-0">
                 {{-- Left pane: branches --}}
-                <div class="w-[240px] shrink-0 border-r border-gh-border flex flex-col max-h-[60vh]">
+                <div class="w-[180px] shrink-0 border-r border-gh-border flex flex-col min-h-0">
                     {{-- Search input --}}
                     <div class="p-3 border-b border-gh-border">
                         <flux:input
@@ -160,7 +180,7 @@ new class extends Component {
                 </div>
 
                 {{-- Right pane: commits --}}
-                <div class="flex-1 flex flex-col max-h-[60vh] min-w-0">
+                <div class="flex-1 flex flex-col min-h-0 min-w-0">
                     {{-- Commits header --}}
                     <div class="px-4 py-2.5 border-b border-gh-border flex items-center gap-2 shrink-0">
                         <flux:icon icon="clock" variant="outline" class="text-gh-muted" />
@@ -168,7 +188,16 @@ new class extends Component {
                         <span class="text-xs font-mono text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + ($wire.hasMore ? '+' : '') + ')'"></span>
 
                         <div class="ml-auto flex items-center gap-2">
-                            <template x-if="baseHash">
+                            <template x-if="selectedHashes.length > 0">
+                                <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gh-link/10 border border-gh-link/20">
+                                    <span class="text-[10px] text-gh-link font-mono" x-text="selectedHashes.length + ' selected'"></span>
+                                    <button @click="clearSelection()" class="text-gh-link hover:text-gh-link/80" title="Clear selection">
+                                        <flux:icon icon="x-mark" variant="outline" />
+                                    </button>
+                                    <button @click="applySelection()" class="text-[10px] text-gh-link hover:underline font-medium">Apply</button>
+                                </div>
+                            </template>
+                            <template x-if="baseHash && selectedHashes.length === 0">
                                 <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gh-link/10 border border-gh-link/20">
                                     <span class="text-[10px] text-gh-link font-mono" x-text="'Compare from ' + baseShortHash"></span>
                                     <button @click="clearBase()" class="text-gh-link hover:text-gh-link/80">
@@ -188,19 +217,37 @@ new class extends Component {
                             </div>
                         </template>
 
-                        <template x-for="commit in $wire.commits" :key="commit.hash">
+                        <template x-for="(commit, commitIdx) in $wire.commits" :key="commit.hash">
                             <div
+                                data-testid="commit-row"
+                                :data-commit-hash="commit.hash"
                                 class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
                                 @click="viewCommit(commit.hash)"
                                 :class="{
                                     'bg-gh-text/5 border-l-2 border-l-gh-text': activeCommitHash === commit.hash,
                                     'bg-gh-text/3': baseHash === commit.hash && activeCommitHash !== commit.hash,
+                                    'bg-gh-link/5 border-l-2 border-l-gh-link': isSelected(commit.hash),
                                     'hover:bg-gh-text/5': baseHash && baseHash !== commit.hash && activeCommitHash !== commit.hash
                                 }"
                             >
                                 <div class="flex items-start gap-2">
+                                    <button
+                                        type="button"
+                                        data-testid="commit-select-toggle"
+                                        @click.stop="toggleSelection(commit.hash, commitIdx, $event)"
+                                        @mousedown.stop
+                                        class="mt-0.5 size-4 shrink-0 grid place-items-center rounded border transition-colors cursor-pointer"
+                                        :class="isSelected(commit.hash)
+                                            ? 'border-gh-link bg-gh-link/20 text-gh-link'
+                                            : 'border-gh-border opacity-0 group-hover:opacity-100 hover:border-gh-text/40'"
+                                        :title="isSelected(commit.hash) ? 'Remove from selection' : 'Add to selection (shift+click for range)'"
+                                    >
+                                        <template x-if="isSelected(commit.hash)">
+                                            <flux:icon icon="check" variant="outline" class="!size-3" />
+                                        </template>
+                                    </button>
                                     <div class="min-w-0 flex-1">
-                                        <div class="text-xs text-gh-text truncate font-medium tracking-tight" x-text="commit.message"></div>
+                                        <div data-testid="commit-message" class="text-xs text-gh-text truncate font-medium tracking-tight" x-text="commit.message"></div>
                                         <div class="flex items-center gap-2 mt-0.5">
                                             <span class="text-[10px] font-mono text-gh-muted" x-text="commit.author"></span>
                                             <span class="text-[10px] text-gh-muted">&middot;</span>
@@ -260,7 +307,12 @@ new class extends Component {
                         </template>
                     </div>
                 </div>
-            </div>
         </div>
-    </template>
+
+        <x-overlay-footer>
+            <x-slot:meta>
+                <span x-text="($wire.commits?.length || 0) + ($wire.hasMore ? '+' : '') + ' commits'"></span>
+            </x-slot:meta>
+        </x-overlay-footer>
+    </x-overlay-panel>
 </div>

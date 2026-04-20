@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\Comment;
+use App\DTOs\DiffTarget;
+use App\Models\Comment as CommentModel;
 use App\Services\CommentExporter;
 
 final readonly class ExportReviewAction
@@ -16,20 +18,50 @@ final readonly class ExportReviewAction
     ) {}
 
     /**
-     * @param  array<int, array<string, mixed>>  $comments
-     * @param  array<int, array<string, mixed>>  $files
-     * @return array{json: string, md: string, clipboard: string}
+     * @param  array<int, array<string, mixed>>  $comments  Currently-loaded, view-ready comments.
+     * @param  array<int, array<string, mixed>>  $files  Files in the current diff.
+     * @return array{json: string, md: string, clipboard: string, submittedIds: array<int, string>}
      */
-    public function handle(string $repoPath, array $comments, string $globalComment, array $files): array
+    public function handle(string $repoPath, array $comments, string $globalComment, array $files, ?DiffTarget $target = null): array
     {
-        $commentDTOs = array_map(fn ($c) => Comment::fromArray($c), $comments);
+        $inScope = $this->filterInScope($comments, $target);
 
-        $diffContext = $this->buildDiffContextAction->handle($repoPath, $comments, $files);
+        $commentDTOs = array_map(fn ($c) => Comment::fromArray($c), $inScope);
+
+        $diffContext = $this->buildDiffContextAction->handle($repoPath, $inScope, $files);
 
         $result = $this->commentExporter->export($repoPath, $commentDTOs, $globalComment, $diffContext);
 
+        $ids = array_column($inScope, 'id');
+        if ($ids !== []) {
+            CommentModel::whereIn('id', $ids)->update(['submitted_at' => now()]);
+        }
+
         $this->ensureGitExclude->handle($repoPath);
 
-        return $result;
+        return [...$result, 'submittedIds' => $ids];
+    }
+
+    /**
+     * In scope means "the anchor resolver placed this comment against the active diff".
+     * Comments that aren't placed belong to another selection and survive this submit
+     * untouched (no submitted_at stamp, not included in the export payload).
+     *
+     * Comments without an explicit `anchorStatus` (e.g. fresh inputs in direct callers /
+     * tests) default to placed.
+     *
+     * @param  array<int, array<string, mixed>>  $comments
+     * @return array<int, array<string, mixed>>
+     */
+    private function filterInScope(array $comments, ?DiffTarget $target): array
+    {
+        if ($target === null) {
+            return $comments;
+        }
+
+        return array_values(array_filter(
+            $comments,
+            fn (array $c) => ($c['anchorStatus'] ?? 'placed') === 'placed',
+        ));
     }
 }

@@ -12,7 +12,7 @@ use App\Actions\ScanReviewFilesAction;
 use App\DTOs\DiffTarget;
 use App\Models\Project;
 use App\Models\TrashedFile;
-use App\Services\GitDiffService;
+use App\Services\GitFileContentService;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -64,7 +64,7 @@ beforeEach(function () {
 
     app()->bind(RestoreSessionAction::class, fn () => new class
     {
-        public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, ?DiffTarget $target = null): array
         {
             return ['comments' => [], 'reviewedFiles' => [], 'globalComment' => '', 'orphanedPaths' => []];
         }
@@ -72,13 +72,13 @@ beforeEach(function () {
 
     app()->bind(SaveSessionAction::class, fn () => new class
     {
-        public function handle(string $repoPath, array $comments, array $reviewedFiles, string $globalComment, ?int $projectId = null, string $contextFingerprint = DiffTarget::WORKING_CONTEXT): void {}
+        public function handle(string $repoPath, string $globalComment, ?int $projectId = null): void {}
     });
 
-    // Mock GitDiffService to avoid real git calls
-    $gitDiffMock = Mockery::mock(GitDiffService::class);
-    $gitDiffMock->shouldReceive('fileDiffFingerprint')->andReturn('mock-hash');
-    app()->instance(GitDiffService::class, $gitDiffMock);
+    // Mock GitFileContentService to avoid real git calls
+    $gitFileContentMock = Mockery::mock(GitFileContentService::class);
+    $gitFileContentMock->shouldReceive('hashAt')->andReturn('mock-hash');
+    app()->instance(GitFileContentService::class, $gitFileContentMock);
 
     // Prevent backfill from calling real git
     app()->bind(BackfillGlobalGitignoreAction::class, fn () => new class
@@ -221,9 +221,14 @@ test('submitReview refreshes file list and populates reviewPairs', function () {
 
     app()->bind(ExportReviewAction::class, fn () => new class
     {
-        public function handle(string $repoPath, array $comments, string $globalComment, array $files): array
+        public function handle(string $repoPath, array $comments, string $globalComment, array $files, ?DiffTarget $target = null): array
         {
-            return ['json' => '/tmp/review.json', 'md' => '/tmp/review.md', 'clipboard' => 'review exported'];
+            return [
+                'json' => '/tmp/review.json',
+                'md' => '/tmp/review.md',
+                'clipboard' => 'review exported',
+                'submittedIds' => array_column($comments, 'id'),
+            ];
         }
     });
 

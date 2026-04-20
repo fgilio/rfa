@@ -19,6 +19,7 @@ use App\Actions\RestoreDiscardedFileAction;
 use App\Actions\RestoreSessionAction;
 use App\Actions\SaveSessionAction;
 use App\Actions\ToggleReviewedAction;
+use App\Actions\UpdateCommentAction;
 use App\Actions\UpdateProjectSettingAction;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
@@ -101,7 +102,7 @@ new #[Layout('layouts.app')] class extends Component
 
     // region: Initialization & Diff Context
 
-    public function mount(string $slug, ?string $hash = null, ?string $ref = null, ?string $baseRef = null): void
+    public function mount(string $slug, ?string $hash = null, ?string $ref = null, ?string $baseRef = null, ?string $from = null, ?string $to = null): void
     {
         $project = app(ResolveProjectAction::class)->handle($slug, touch: true) ?? abort(404);
         $this->repoPath = $project['path'];
@@ -130,6 +131,11 @@ new #[Layout('layouts.app')] class extends Component
             $this->diffFrom = $target->from();
             $this->diffTo = $target->to();
             $this->loadCommitInfo();
+        } elseif ($from !== null && $to !== null) {
+            // Explicit range mode: /p/{slug}/r/{from}..{to}
+            $this->diffFrom = $from;
+            $this->diffTo = $to;
+            $this->loadCommitInfo();
         } elseif ($ref !== null) {
             // Range mode from URL params
             $this->diffTo = $ref;
@@ -146,7 +152,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->scanReviewFiles();
 
         $target = $this->buildDiffTarget();
-        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target->contextKey(), $target);
+        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target);
         $this->comments = $session['comments'];
         $this->reviewedFiles = $session['reviewedFiles'];
         $this->globalComment = $session['globalComment'];
@@ -209,7 +215,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->refreshFileList();
 
         $target = $this->buildDiffTarget();
-        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target->contextKey(), $target);
+        $session = app(RestoreSessionAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target);
         $this->comments = $session['comments'];
         $this->reviewedFiles = $session['reviewedFiles'];
 
@@ -223,31 +229,38 @@ new #[Layout('layouts.app')] class extends Component
     // region: Comment Management
 
     #[On('add-comment')]
-    public function addComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body): void
+    public function addComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, ?string $lineSnippet = null): void
     {
-        $comment = app(AddCommentAction::class)->handle($this->files, $fileId, $side, $startLine, $endLine, $body);
-
-        if (! $comment) {
-            return;
-        }
-
-        $this->comments[] = $comment;
-        $this->saveSession();
-        $this->dispatchFileComments($fileId);
-        $this->skipRender();
+        $this->createComment($fileId, $side, $startLine, $endLine, $body, $lineSnippet, isDraft: false);
     }
 
     #[On('add-draft-comment')]
-    public function addDraftComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body): void
+    public function addDraftComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, ?string $lineSnippet = null): void
     {
-        $comment = app(AddCommentAction::class)->handle($this->files, $fileId, $side, $startLine, $endLine, $body, isDraft: true);
+        $this->createComment($fileId, $side, $startLine, $endLine, $body, $lineSnippet, isDraft: true);
+    }
+
+    private function createComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, ?string $lineSnippet, bool $isDraft): void
+    {
+        $comment = app(AddCommentAction::class)->handle(
+            $this->repoPath,
+            $this->projectId ?: null,
+            $this->buildDiffTarget(),
+            $this->files,
+            $fileId,
+            $side,
+            $startLine,
+            $endLine,
+            $body,
+            $isDraft,
+            $lineSnippet,
+        );
 
         if (! $comment) {
             return;
         }
 
         $this->comments[] = $comment;
-        $this->saveSession();
         $this->dispatchFileComments($fileId);
         $this->skipRender();
     }
@@ -261,11 +274,14 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
+        if (! app(UpdateCommentAction::class)->handle($commentId, $body, $isDraft)) {
+            return;
+        }
+
         $this->comments[$index]['body'] = $body;
         $this->comments[$index]['isDraft'] = $isDraft;
         $fileId = $this->comments[$index]['fileId'];
 
-        $this->saveSession();
         $this->dispatchFileComments($fileId);
         $this->skipRender();
     }
@@ -283,7 +299,6 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $this->comments = $result;
-        $this->saveSession();
 
         if ($fileId) {
             $this->dispatchFileComments($fileId);
@@ -304,8 +319,9 @@ new #[Layout('layouts.app')] class extends Component
 
         $deletedComments = $this->comments;
 
+        \App\Models\Comment::whereIn('id', array_column($deletedComments, 'id'))->delete();
+
         $this->comments = [];
-        $this->saveSession();
 
         collect($deletedComments)
             ->pluck('fileId')
@@ -327,7 +343,25 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
-        $this->saveSession();
+        foreach ($merged as $c) {
+            \App\Models\Comment::updateOrCreate(
+                ['id' => $c['id']],
+                [
+                    'project_id' => $this->projectId ?: null,
+                    'repo_path' => $this->repoPath,
+                    'origin_ref' => $c['originRef'] ?? 'working',
+                    'file_path' => $c['file'] ?? '',
+                    'side' => $c['side'] ?? 'right',
+                    'start_line' => $c['startLine'] ?? null,
+                    'end_line' => $c['endLine'] ?? null,
+                    'file_content_hash' => $c['fileContentHash'] ?? null,
+                    'line_snippet' => $c['lineSnippet'] ?? null,
+                    'body' => $c['body'] ?? '',
+                    'is_draft' => (bool) ($c['isDraft'] ?? false),
+                    'submitted_at' => null,
+                ],
+            );
+        }
 
         collect($merged)
             ->pluck('fileId')
@@ -438,14 +472,20 @@ new #[Layout('layouts.app')] class extends Component
     #[On('toggle-reviewed')]
     public function toggleReviewed(string $filePath): void
     {
-        $result = app(ToggleReviewedAction::class)->handle($this->reviewedFiles, $filePath, $this->files, $this->repoPath, $this->buildDiffTarget());
+        $result = app(ToggleReviewedAction::class)->handle(
+            $this->reviewedFiles,
+            $filePath,
+            $this->files,
+            $this->repoPath,
+            $this->buildDiffTarget(),
+            $this->projectId ?: null,
+        );
 
         if ($result === null) {
             return;
         }
 
         $this->reviewedFiles = $result;
-        $this->saveSession();
         $this->skipRender();
     }
 
@@ -459,9 +499,10 @@ new #[Layout('layouts.app')] class extends Component
     {
         $this->saveSession();
 
+        $target = $this->buildDiffTarget();
         $finalizedComments = array_values(array_filter($this->comments, fn ($c) => ! ($c['isDraft'] ?? false)));
 
-        $result = app(ExportReviewAction::class)->handle($this->repoPath, $finalizedComments, $this->globalComment, $this->files);
+        $result = app(ExportReviewAction::class)->handle($this->repoPath, $finalizedComments, $this->globalComment, $this->files, $target);
 
         $this->exportResult = $result['clipboard'];
         $this->submitted = true;
@@ -471,15 +512,21 @@ new #[Layout('layouts.app')] class extends Component
         Flux::toast(variant: 'success', heading: 'Review submitted', text: $this->exportResult);
         $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
 
-        // Clear finalized comments, keep drafts
-        $affectedFileIds = collect($this->comments)->pluck('fileId')->unique();
-        $this->comments = array_values(array_filter($this->comments, fn ($c) => $c['isDraft'] ?? false));
+        // Only drop comments the export actually submitted; drafts and out-of-scope
+        // comments (e.g. hash-anchored from another selection) stay in the pool.
+        $submittedIds = $result['submittedIds'];
+        $affectedFileIds = collect($this->comments)
+            ->whereIn('id', $submittedIds)
+            ->pluck('fileId')
+            ->unique();
+        $this->comments = array_values(array_filter(
+            $this->comments,
+            fn ($c) => ! in_array($c['id'], $submittedIds, true),
+        ));
         $this->globalComment = '';
-        $this->reviewedFiles = [];
         $this->saveSession();
 
         $affectedFileIds->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
-        $this->dispatch('reset-reviewed-files');
     }
 
     // endregion: Review State & Export
@@ -576,7 +623,7 @@ new #[Layout('layouts.app')] class extends Component
 
     private function saveSession(): void
     {
-        app(SaveSessionAction::class)->handle($this->repoPath, $this->comments, $this->reviewedFiles, $this->globalComment, $this->projectId, $this->buildDiffTarget()->contextKey());
+        app(SaveSessionAction::class)->handle($this->repoPath, $this->globalComment, $this->projectId ?: null);
     }
 
     private function loadTrashedFiles(): void
@@ -706,10 +753,32 @@ new #[Layout('layouts.app')] class extends Component
             @else
                 <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
             @endnative
+            @php
+                $shortFrom = $diffFrom === 'HEAD' ? 'HEAD' : substr($diffFrom, 0, 7);
+                $shortTo = $diffTo ? substr($diffTo, 0, 7) : null;
+                if ($diffTo === null) {
+                    $selectionLabel = 'working';
+                    $selectionTitle = 'Working tree changes';
+                } elseif ($diffFrom === $diffTo.'^') {
+                    $selectionLabel = $shortTo;
+                    $selectionTitle = $commitInfo['message'] ?? $diffTo;
+                } else {
+                    $selectionLabel = $shortFrom.'..'.$shortTo;
+                    $selectionTitle = 'Range '.$diffFrom.'..'.$diffTo;
+                }
+            @endphp
             @if($projectBranch)
                 <x-header-separator />
-                <livewire:branch-explorer :repo-path="$repoPath" :current-branch="$projectBranch" :project-slug="$projectSlug" :active-commit-hash="$diffTo" />
+                <livewire:branch-explorer
+                    :repo-path="$repoPath"
+                    :current-branch="$projectBranch"
+                    :project-slug="$projectSlug"
+                    :active-commit-hash="$diffTo"
+                    :selection-label="$selectionLabel"
+                    :selection-title="$selectionTitle"
+                />
             @endif
+            <livewire:comments-drawer :repo-path="$repoPath" :project-id="$projectId ?: null" />
         </div>
         <div class="flex items-center gap-2.5 text-xs">
             {{-- Stats --}}
@@ -725,7 +794,7 @@ new #[Layout('layouts.app')] class extends Component
             <div x-show="reviewedCount > 0" x-cloak class="flex items-center gap-1.5">
                 <span class="w-px h-3.5 bg-gh-border"></span>
                 <div class="flex flex-col items-center min-w-[2.5rem]">
-                    <span class="font-mono text-gh-muted" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
+                    <span data-testid="reviewed-counter" class="font-mono text-gh-muted" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
                     <div class="w-full h-0.5 bg-gh-border/50 rounded-full overflow-hidden mt-0.5">
                         <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
                     </div>
