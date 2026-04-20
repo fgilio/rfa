@@ -21,7 +21,5 @@ test('switching branches clears an in-flight commit selection', function () {
     $page->page()->locator('[x-ref="branchList"]')->getByText('feature-x')->click();
 
     $page->page()->getByText('selected')->waitFor(['state' => 'hidden']);
-
-    $selectedCount = $page->script('document.querySelector("[x-data*=branchExplorer]")._x_dataStack[0].selectedHashes.length');
-    expect($selectedCount)->toBe(0);
+    $page->assertDontSee('selected');
 });
