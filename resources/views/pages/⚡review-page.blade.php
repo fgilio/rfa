@@ -8,6 +8,7 @@ use App\Actions\DeleteReviewFilesAction;
 use App\Actions\DeleteTrashedFileAction;
 use App\Actions\DiscardFileChangesAction;
 use App\Actions\ExportReviewAction;
+use App\Actions\GetCurrentHeadAction;
 use App\Actions\GetFileListAction;
 use App\Actions\GroupReviewFilesAction;
 use App\Actions\ScanReviewFilesAction;
@@ -20,8 +21,10 @@ use App\Actions\SessionStateAction;
 use App\Actions\ToggleReviewedAction;
 use App\Actions\UpdateCommentAction;
 use App\Actions\UpdateProjectSettingAction;
+use App\DTOs\CurrentHeadResult;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\Enums\DivergenceState;
 use App\Exceptions\GitCommandException;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
@@ -85,6 +88,18 @@ new #[Layout('layouts.app')] class extends Component
     #[Locked]
     public ?array $commitInfo = null;
 
+    public DivergenceState $divergenceState = DivergenceState::Aligned;
+
+    /** @var array<string, mixed> */
+    public array $divergenceContext = [];
+
+    /** HEAD sha at which the user last dismissed a divergence banner. */
+    public ?string $dismissedAtHead = null;
+
+    /** Guards `skipRender()` on poll ticks so the initial mount still renders. */
+    #[Locked]
+    public bool $divergenceChecked = false;
+
     /*
     |----------------------------------------------------------------------
     | Responsibility clusters (5):
@@ -147,6 +162,12 @@ new #[Layout('layouts.app')] class extends Component
                 ->handle($this->projectId, $this->repoPath);
         }
 
+        $this->rehydrateForTarget();
+        $this->checkHeadDivergence();
+    }
+
+    private function rehydrateForTarget(): void
+    {
         $this->refreshFileList();
         $this->scanReviewFiles();
 
@@ -224,6 +245,161 @@ new #[Layout('layouts.app')] class extends Component
     }
 
     // endregion: Initialization & Diff Context
+
+    // region: Branch Divergence
+
+    public function checkHeadDivergence(): void
+    {
+        if ($this->isCommitMode()) {
+            if ($this->divergenceChecked) {
+                $this->skipRender();
+            }
+            $this->divergenceChecked = true;
+
+            return;
+        }
+
+        $before = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->projectBranch];
+
+        $head = app(GetCurrentHeadAction::class)->handle($this->repoPath, $this->projectBranch ?: null);
+        $this->resolveDivergenceState($head);
+
+        $after = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->projectBranch];
+
+        if ($this->divergenceChecked && $before === $after) {
+            $this->skipRender();
+        }
+
+        $this->divergenceChecked = true;
+    }
+
+    private function resolveDivergenceState(CurrentHeadResult $head): void
+    {
+        // Sentinel: GetCurrentHeadAction returns sha='' when git fails transiently
+        // (e.g. mid-rebase). Leave state untouched and retry next tick.
+        if ($head->sha === '') {
+            return;
+        }
+
+        if (! $head->detached && $head->branch === $this->projectBranch) {
+            $this->markAligned();
+
+            return;
+        }
+
+        $target = $this->projectBranch;
+
+        if ($head->detached) {
+            if ($this->dismissedAtHead === $head->sha) {
+                $this->markAligned();
+
+                return;
+            }
+
+            $this->divergenceState = DivergenceState::Detached;
+            $this->divergenceContext = [
+                'target' => $target,
+                'currentBranch' => null,
+                'currentSha' => $head->sha,
+                'shortSha' => substr($head->sha, 0, 7),
+            ];
+
+            return;
+        }
+
+        if ($target !== '' && $head->targetExists === false) {
+            $this->divergenceState = DivergenceState::MissingTarget;
+            $this->divergenceContext = [
+                'target' => $target,
+                'currentBranch' => $head->branch,
+                'currentSha' => $head->sha,
+                'shortSha' => substr($head->sha, 0, 7),
+            ];
+
+            return;
+        }
+
+        if (! $this->hasPersistedComments()) {
+            $this->autoFollowToHead((string) $head->branch);
+
+            return;
+        }
+
+        if ($this->dismissedAtHead === $head->sha) {
+            $this->markAligned();
+
+            return;
+        }
+
+        $this->divergenceState = DivergenceState::Diverged;
+        $this->divergenceContext = [
+            'target' => $target,
+            'currentBranch' => $head->branch,
+            'currentSha' => $head->sha,
+            'shortSha' => substr($head->sha, 0, 7),
+        ];
+    }
+
+    public function switchReviewToHead(): void
+    {
+        $head = app(GetCurrentHeadAction::class)->handle($this->repoPath, $this->projectBranch ?: null);
+
+        if ($head->detached || $head->branch === null || $head->branch === '') {
+            return;
+        }
+
+        $this->autoFollowToHead($head->branch);
+    }
+
+    public function keepReviewing(): void
+    {
+        $currentSha = $this->divergenceContext['currentSha'] ?? null;
+
+        if (is_string($currentSha) && $currentSha !== '') {
+            $this->dismissedAtHead = $currentSha;
+        }
+
+        $this->markAligned();
+    }
+
+    public function dismissDetachedBanner(): void
+    {
+        $this->keepReviewing();
+    }
+
+    private function autoFollowToHead(string $newBranch): void
+    {
+        // Race guard: overlapping polls during a slow rehydrate can re-enter here.
+        if ($this->projectBranch === $newBranch) {
+            $this->markAligned();
+
+            return;
+        }
+
+        app(UpdateProjectSettingAction::class)->handle($this->projectId, ['branch' => $newBranch]);
+
+        $this->projectBranch = $newBranch;
+        $this->cachedTarget = null;
+        $this->dismissedAtHead = null;
+        $this->markAligned();
+
+        $this->rehydrateForTarget();
+    }
+
+    private function markAligned(): void
+    {
+        $this->divergenceState = DivergenceState::Aligned;
+        $this->divergenceContext = [];
+    }
+
+    private function hasPersistedComments(): bool
+    {
+        $projectId = $this->projectId === 0 ? null : $this->projectId;
+
+        return \App\Models\Comment::forProjectOrRepo($projectId, $this->repoPath)->exists();
+    }
+
+    // endregion: Branch Divergence
 
     // region: Comment Management
 
@@ -888,6 +1064,56 @@ new #[Layout('layouts.app')] class extends Component
             <livewire:theme-switcher />
         </div>
     </header>
+
+    {{-- Branch divergence banner + polling island (working-tree mode only) --}}
+    @if(! $this->isCommitMode())
+        <div wire:key="head-divergence-polling" data-testid="head-divergence-polling" x-data="{
+            interval: null,
+            start() {
+                this.interval = setInterval(() => {
+                    if (!document.hidden) $wire.checkHeadDivergence();
+                }, 2000);
+            }
+        }" x-init="start()" x-destroy="clearInterval(interval)" class="hidden"></div>
+
+        @if($divergenceState === DivergenceState::Diverged)
+            <div class="px-5 py-3 border-b border-gh-border" data-testid="divergence-banner-diverged">
+                <flux:callout icon="arrow-path" variant="warning" inline>
+                    <flux:callout.heading>Repo switched to <span class="font-mono">{{ $divergenceContext['currentBranch'] }}</span></flux:callout.heading>
+                    <flux:callout.text>Still reviewing <span class="font-mono">{{ $divergenceContext['target'] }}</span>.</flux:callout.text>
+                    <x-slot name="actions">
+                        <flux:button size="sm" variant="primary" wire:click="switchReviewToHead">
+                            Switch review to <span class="font-mono ml-1">{{ $divergenceContext['currentBranch'] }}</span>
+                        </flux:button>
+                        <flux:button size="sm" variant="ghost" wire:click="keepReviewing">
+                            Keep reviewing <span class="font-mono ml-1">{{ $divergenceContext['target'] }}</span>
+                        </flux:button>
+                    </x-slot>
+                </flux:callout>
+            </div>
+        @elseif($divergenceState === DivergenceState::Detached)
+            <div class="px-5 py-3 border-b border-gh-border" data-testid="divergence-banner-detached">
+                <flux:callout icon="information-circle" variant="secondary" inline>
+                    <flux:callout.heading>Repo detached at <span class="font-mono">{{ $divergenceContext['shortSha'] }}</span></flux:callout.heading>
+                    <flux:callout.text>Still reviewing <span class="font-mono">{{ $divergenceContext['target'] }}</span>.</flux:callout.text>
+                    <x-slot name="actions">
+                        <flux:button size="sm" variant="ghost" wire:click="dismissDetachedBanner">Dismiss</flux:button>
+                    </x-slot>
+                </flux:callout>
+            </div>
+        @elseif($divergenceState === DivergenceState::MissingTarget)
+            <div class="px-5 py-3 border-b border-gh-border" data-testid="divergence-banner-missing">
+                <flux:callout icon="exclamation-triangle" variant="danger" inline>
+                    <flux:callout.heading>Review target <span class="font-mono">{{ $divergenceContext['target'] }}</span> no longer exists</flux:callout.heading>
+                    <x-slot name="actions">
+                        <flux:button size="sm" variant="primary" wire:click="switchReviewToHead">
+                            Switch to <span class="font-mono ml-1">{{ $divergenceContext['currentBranch'] }}</span>
+                        </flux:button>
+                    </x-slot>
+                </flux:callout>
+            </div>
+        @endif
+    @endif
 
     {{-- Commit context bar --}}
     @if($commitInfo)
