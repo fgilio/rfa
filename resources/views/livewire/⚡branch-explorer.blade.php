@@ -103,7 +103,7 @@ new class extends Component {
             >
                 <flux:icon icon="square-3-stack-3d" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
                 <span>{{ $selectionLabel }}</span>
-                <flux:icon icon="chevron-down" variant="outline" class="!size-3 text-gh-muted/60 group-hover:text-gh-text transition-colors" />
+                <x-chevron-icon variant="mono" />
             </button>
         </flux:tooltip>
     </div>

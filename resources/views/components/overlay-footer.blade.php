@@ -5,8 +5,12 @@
         {{ $meta }}
     </span>
     <span class="font-mono text-[11px] text-gh-muted/60 flex items-center gap-2">
-        <span><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">↑</kbd><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">↓</kbd> nav</span>
-        <span><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">↵</kbd> open</span>
-        <span><kbd class="px-1 py-0.5 rounded border border-gh-border text-[10px]">esc</kbd> close</span>
+        @isset($hints)
+            {{ $hints }}
+        @else
+            <x-kbd-hint :keys="['↑', '↓']"> nav</x-kbd-hint>
+            <x-kbd-hint keys="↵"> open</x-kbd-hint>
+            <x-kbd-hint keys="esc"> close</x-kbd-hint>
+        @endisset
     </span>
 </div>

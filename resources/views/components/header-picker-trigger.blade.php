@@ -8,10 +8,6 @@
     $textClasses = $variant === 'mono'
         ? 'text-xs font-mono text-gh-muted hover:text-gh-text'
         : 'font-display font-bold tracking-brutal-tight text-base hover:text-gh-link';
-
-    $chevronClasses = $variant === 'mono'
-        ? 'text-gh-muted/60 group-hover:text-gh-text'
-        : 'text-gh-muted group-hover:text-gh-link';
 @endphp
 
 <flux:tooltip content="{{ $tooltip }}">
@@ -22,6 +18,6 @@
         aria-haspopup="dialog"
     >
         {{ $slot }}
-        <flux:icon icon="chevron-down" variant="outline" class="!size-3 transition-colors {{ $chevronClasses }}" />
+        <x-chevron-icon :variant="$variant" />
     </button>
 </flux:tooltip>
