@@ -8,7 +8,7 @@
 - **Display font** (`font-display` / Space Grotesk): headings, labels, navigation text, buttons
 - **Mono font** (`font-mono` / JetBrains Mono): code, diffs, file paths, hashes, badges, technical data
 - Use `rfa-logo` class for the "rfa" wordmark (bold, tight tracking)
-- Use `section-label` class for uppercase section headers (e.g. "Files", "Reviews", "Local", "Remote")
+- Use `section-label` class for uppercase section headers (e.g. "Files", "Reviews", "Local", "Remote"). Defaults to display font; add `font-mono` when the label content is technical data like a path or hash (see the picker's group header over `$commonDir`)
 - Use `tracking-brutal` (-0.04em) on headings and `tracking-brutal-tight` (-0.06em) for display sizes
 - Diff code areas stay dense: `font-mono text-xs leading-5`
 
