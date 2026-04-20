@@ -1,16 +1,6 @@
 #!/bin/bash
 set -e
 
-# -- Deprecated subcommands --
-case "${1:-}" in
-    stop|status|dump|flush)
-        echo "The '${1}' subcommand is not available in desktop mode." >&2
-        echo "Use the rfa app directly." >&2
-        exit 1
-        ;;
-esac
-
-# -- Default: open repo via deep link --
 RFA_REPO_PATH="$(pwd)"
 
 # Validate git repo

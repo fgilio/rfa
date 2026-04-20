@@ -46,9 +46,14 @@ composer test        # Pest
 
 - `LoadFileDiffAction` uses self-healing cache: validates cached entries have expected keys (e.g. `syntaxStyles`) before returning. Stale entries are re-computed and overwritten automatically. Prefer adding key checks over bumping `DiffCacheKey` version for format changes.
 
-## Running locally
+## Running locally (development)
 
-./rfa
+Two equivalent invocations:
+
+- `composer native:dev` — preferred. Runs `php artisan native:run --no-interaction` under `Composer\Config::disableProcessTimeout` so Composer's default 300s timeout doesn't kill the long-running dev process.
+- `php artisan native:run --no-interaction` — direct Artisan call. Same end result; use if you're already in an Artisan-only flow.
+
+Note: `./rfa` deep-links into the installed packaged app (see README "Terminal Helper"), not the dev build, so it won't reflect local code changes.
 
 ## Releasing
 
