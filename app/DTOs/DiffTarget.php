@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use App\Enums\GitRef;
+
 final readonly class DiffTarget
 {
     public const EMPTY_TREE_HASH = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-
-    public const WORKING_CONTEXT = 'working';
 
     private function __construct(
         private string $from,
@@ -60,7 +60,7 @@ final readonly class DiffTarget
 
     public function contextKey(): string
     {
-        return $this->to === null ? self::WORKING_CONTEXT : $this->from.'..'.$this->to;
+        return $this->to === null ? GitRef::Working->value : $this->from.'..'.$this->to;
     }
 
     /** @return list<string> Git diff command prefix args */

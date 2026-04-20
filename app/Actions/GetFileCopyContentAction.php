@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
+use App\Enums\GitRef;
 use App\Services\GitDiffService;
 use App\Services\GitMetadataService;
 
@@ -20,7 +21,7 @@ final readonly class GetFileCopyContentAction
         return match ($kind) {
             'diff' => $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, target: $target),
             'original' => $this->gitMetadataService->getFileContent($repoPath, $oldPath ?? $path, $target->from()),
-            'new' => $this->gitMetadataService->getFileContent($repoPath, $path, $target->to() ?? DiffTarget::WORKING_CONTEXT),
+            'new' => $this->gitMetadataService->getFileContent($repoPath, $path, $target->to() ?? GitRef::Working->value),
             default => null,
         };
     }

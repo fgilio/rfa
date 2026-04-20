@@ -2,6 +2,7 @@
 
 use App\Actions\ResolveCommentAnchorAction;
 use App\DTOs\DiffTarget;
+use App\Enums\GitRef;
 use App\Services\GitFileContentService;
 use Faker\Factory as Faker;
 use Tests\TestCase;
@@ -218,7 +219,7 @@ test('keeps stored side when stored hash matches that same side', function () {
 test('uses the working copy as the right side when the target has no `to`', function () {
     $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'HEAD', 'f.php')->andReturn('old');
     $this->gitFileContent->shouldReceive('hashAt')
-        ->with('/tmp/repo', GitFileContentService::WORKING_REF, 'f.php')
+        ->with('/tmp/repo', GitRef::Working->value, 'f.php')
         ->andReturn('working-match');
 
     $result = $this->action->handle(

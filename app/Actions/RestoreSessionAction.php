@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
+use App\Enums\GitRef;
 use App\Models\Comment;
 use App\Models\ReviewedFile;
 use App\Models\ReviewSession;
@@ -95,7 +96,7 @@ final readonly class RestoreSessionAction
             ->map(fn ($rows) => $rows->pluck('content_hash')->all())
             ->all();
 
-        $rightRef = $target->to() ?? GitFileContentService::WORKING_REF;
+        $rightRef = $target->to() ?? GitRef::Working->value;
         $leftRef = $target->from();
         $reviewed = [];
 

@@ -6,7 +6,7 @@ namespace App\Services;
 
 use App\DTOs\BranchEntry;
 use App\DTOs\CommitEntry;
-use App\DTOs\DiffTarget;
+use App\Enums\GitRef;
 use App\Exceptions\GitCommandException;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -86,13 +86,13 @@ class GitMetadataService
         return trim($this->git->run($directory, ['rev-parse', '--abbrev-ref', 'HEAD']));
     }
 
-    public function getFileContent(string $repoPath, string $path, string $ref = DiffTarget::WORKING_CONTEXT): ?string
+    public function getFileContent(string $repoPath, string $path, string $ref = GitRef::Working->value): ?string
     {
         if ($this->looksLikeFlag($ref)) {
             return null;
         }
 
-        if ($ref === DiffTarget::WORKING_CONTEXT) {
+        if ($ref === GitRef::Working->value) {
             $fullPath = $repoPath.'/'.$path;
 
             if (! File::isFile($fullPath)) {

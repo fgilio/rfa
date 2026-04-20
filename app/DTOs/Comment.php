@@ -5,12 +5,10 @@ declare(strict_types=1);
 namespace App\DTOs;
 
 use App\Enums\DiffSide;
+use App\Enums\GitRef;
 
 class Comment
 {
-    /** Mirrors GitFileContentService::WORKING_REF (kept here so the DTO stays standalone). */
-    public const WORKING_REF = 'working';
-
     public function __construct(
         public readonly string $id,
         public readonly string $fileId,
@@ -19,7 +17,7 @@ class Comment
         public readonly ?int $startLine,
         public readonly ?int $endLine,
         public readonly string $body,
-        public readonly string $originRef = self::WORKING_REF,
+        public readonly string $originRef = GitRef::Working->value,
         public readonly ?string $fileContentHash = null,
         public readonly ?string $lineSnippet = null,
         public readonly bool $isDraft = false,
@@ -76,7 +74,7 @@ class Comment
             startLine: $data['startLine'] ?? null,
             endLine: $data['endLine'] ?? null,
             body: $data['body'],
-            originRef: $data['originRef'] ?? self::WORKING_REF,
+            originRef: $data['originRef'] ?? GitRef::Working->value,
             fileContentHash: $data['fileContentHash'] ?? null,
             lineSnippet: $data['lineSnippet'] ?? null,
             isDraft: (bool) ($data['isDraft'] ?? false),

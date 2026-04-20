@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\Enums\GitRef;
 use App\Services\GitFileContentService;
 
 final readonly class ResolveCommentAnchorAction
@@ -37,7 +38,7 @@ final readonly class ResolveCommentAnchorAction
         }
 
         $resolved = [];
-        $rightRef = $target->to() ?? GitFileContentService::WORKING_REF;
+        $rightRef = $target->to() ?? GitRef::Working->value;
 
         foreach ($rawComments as $row) {
             $filePath = (string) ($row['file_path'] ?? $row['file'] ?? '');
@@ -86,7 +87,7 @@ final readonly class ResolveCommentAnchorAction
                 'startLine' => $this->intOrNull($row['start_line'] ?? $row['startLine'] ?? null),
                 'endLine' => $this->intOrNull($row['end_line'] ?? $row['endLine'] ?? null),
                 'body' => (string) ($row['body'] ?? ''),
-                'originRef' => (string) ($row['origin_ref'] ?? $row['originRef'] ?? GitFileContentService::WORKING_REF),
+                'originRef' => (string) ($row['origin_ref'] ?? $row['originRef'] ?? GitRef::Working->value),
                 'fileContentHash' => $storedHash,
                 'lineSnippet' => $row['line_snippet'] ?? $row['lineSnippet'] ?? null,
                 'isDraft' => (bool) ($row['is_draft'] ?? $row['isDraft'] ?? false),

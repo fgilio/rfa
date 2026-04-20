@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\GitRef;
 use App\Exceptions\GitCommandException;
 
 class GitFileContentService
 {
-    public const WORKING_REF = 'working';
-
     /**
      * Request-scoped memoization. The singleton binding in AppServiceProvider
      * is safe under shared-nothing PHP (built-in web server): each HTTP request
@@ -28,7 +27,7 @@ class GitFileContentService
     /**
      * Hash the contents of a file at a given ref.
      *
-     * `$ref` accepts a commit SHA, branch name, or the special value `self::WORKING_REF`,
+     * `$ref` accepts a commit SHA, branch name, or `GitRef::Working->value`,
      * which reads the current working copy from disk. Returns null when the file does
      * not exist at that ref (e.g. added-only or deleted-only changes).
      */
@@ -46,7 +45,7 @@ class GitFileContentService
 
     public function contentAt(string $repoPath, string $ref, string $path): ?string
     {
-        if ($ref === self::WORKING_REF) {
+        if ($ref === GitRef::Working->value) {
             $absolute = rtrim($repoPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.$path;
 
             if (! is_file($absolute)) {

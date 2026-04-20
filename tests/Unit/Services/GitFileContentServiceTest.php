@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\GitRef;
 use App\Services\GitFileContentService;
 use App\Services\GitProcessService;
 use Illuminate\Support\Facades\File;
@@ -51,10 +52,10 @@ test('hashAt returns null for a file that does not exist at the given ref', func
     expect($result)->toBeNull();
 });
 
-test('hashAt reads the working copy for the WORKING_REF sentinel', function () {
+test('hashAt reads the working copy for the GitRef::Working sentinel', function () {
     File::put($this->tmpDir.'/hello.php', "<?php\necho 'uncommitted';\n");
 
-    $workingHash = $this->service->hashAt($this->tmpDir, GitFileContentService::WORKING_REF, 'hello.php');
+    $workingHash = $this->service->hashAt($this->tmpDir, GitRef::Working->value, 'hello.php');
     $headHash = $this->service->hashAt($this->tmpDir, $this->secondCommit, 'hello.php');
 
     expect($workingHash)->not->toBeNull();
@@ -62,7 +63,7 @@ test('hashAt reads the working copy for the WORKING_REF sentinel', function () {
 });
 
 test('hashAt returns null when working copy file is missing', function () {
-    expect($this->service->hashAt($this->tmpDir, GitFileContentService::WORKING_REF, 'missing.php'))->toBeNull();
+    expect($this->service->hashAt($this->tmpDir, GitRef::Working->value, 'missing.php'))->toBeNull();
 });
 
 test('hashAt memoizes repeated lookups for the same (repo, ref, path)', function () {

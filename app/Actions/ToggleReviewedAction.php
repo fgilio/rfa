@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
+use App\Enums\GitRef;
 use App\Models\ReviewedFile;
 use App\Services\GitFileContentService;
 
@@ -68,13 +69,13 @@ final readonly class ToggleReviewedAction
      */
     private function resolveContentHash(string $repoPath, ?DiffTarget $target, string $filePath): ?string
     {
-        $rightRef = $target?->to() ?? GitFileContentService::WORKING_REF;
+        $rightRef = $target?->to() ?? GitRef::Working->value;
         $rightHash = $this->gitFileContentService->hashAt($repoPath, $rightRef, $filePath);
         if ($rightHash !== null) {
             return $rightHash;
         }
 
-        $leftRef = $target?->from() ?? GitFileContentService::WORKING_REF;
+        $leftRef = $target?->from() ?? GitRef::Working->value;
 
         return $leftRef === $rightRef
             ? null

@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\DTOs\DiffTarget;
 use App\Enums\DiffSide;
+use App\Enums\GitRef;
 use App\Models\Comment;
 use App\Services\GitFileContentService;
 use Illuminate\Support\Str;
@@ -57,7 +58,7 @@ final readonly class AddCommentAction
         $filePath = (string) $file['path'];
         $oldPath = ! empty($file['oldPath']) ? (string) $file['oldPath'] : null;
         $contentHash = $this->resolveContentHash($repoPath, $target, $side, $filePath, $oldPath);
-        $originRef = $target->to() ?? GitFileContentService::WORKING_REF;
+        $originRef = $target->to() ?? GitRef::Working->value;
 
         $id = 'c-'.Str::ulid();
 
@@ -102,7 +103,7 @@ final readonly class AddCommentAction
             return $this->gitFileContentService->hashAt($repoPath, $target->from(), $leftPath);
         }
 
-        $ref = $target->to() ?? GitFileContentService::WORKING_REF;
+        $ref = $target->to() ?? GitRef::Working->value;
 
         return $this->gitFileContentService->hashAt($repoPath, $ref, $filePath);
     }

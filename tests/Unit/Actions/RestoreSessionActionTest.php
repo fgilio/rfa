@@ -2,6 +2,7 @@
 
 use App\Actions\RestoreSessionAction;
 use App\DTOs\DiffTarget;
+use App\Enums\GitRef;
 use App\Models\Comment;
 use App\Models\ReviewedFile;
 use App\Models\ReviewSession;
@@ -143,10 +144,10 @@ test('restores reviewed files when current content hash matches stored record', 
     ];
 
     $this->gitFileContentMock->shouldReceive('hashAt')
-        ->with($repoPath, GitFileContentService::WORKING_REF, 'a.php')
+        ->with($repoPath, GitRef::Working->value, 'a.php')
         ->andReturn('hash-a');
     $this->gitFileContentMock->shouldReceive('hashAt')
-        ->with($repoPath, GitFileContentService::WORKING_REF, 'b.php')
+        ->with($repoPath, GitRef::Working->value, 'b.php')
         ->andReturn('different-hash');
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
@@ -255,7 +256,7 @@ test('rehydrates legacy reviewed_files rows that were migrated with an empty con
     $files = [['id' => 'id-legacy', 'path' => 'legacy.php', 'isUntracked' => false]];
 
     $this->gitFileContentMock->shouldReceive('hashAt')
-        ->with($repoPath, GitFileContentService::WORKING_REF, 'legacy.php')
+        ->with($repoPath, GitRef::Working->value, 'legacy.php')
         ->andReturn('current-hash');
 
     $result = app(RestoreSessionAction::class)->handle($repoPath, $files);
