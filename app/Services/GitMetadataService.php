@@ -86,6 +86,26 @@ class GitMetadataService
         return trim($this->git->run($directory, ['rev-parse', '--abbrev-ref', 'HEAD']));
     }
 
+    public function getHeadSha(string $directory): string
+    {
+        return trim($this->git->run($directory, ['rev-parse', 'HEAD']));
+    }
+
+    public function branchExists(string $directory, string $branch): bool
+    {
+        if ($branch === '' || str_starts_with($branch, '-')) {
+            return false;
+        }
+
+        try {
+            $this->git->run($directory, ['rev-parse', '--verify', '--quiet', 'refs/heads/'.$branch]);
+
+            return true;
+        } catch (GitCommandException) {
+            return false;
+        }
+    }
+
     public function getFileContent(string $repoPath, string $path, string $ref = GitRef::Working->value): ?string
     {
         if ($this->looksLikeFlag($ref)) {
