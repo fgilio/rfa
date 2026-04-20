@@ -95,3 +95,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `undo-available` | ReviewPage PHP dispatch | undo-toast Alpine `@window` | `{type: 'delete'\|'clear-all'\|'discard', payload: comment[]\|int, message: string}` |
 | `discard-file` | DiffFile Alpine `$dispatch` | ReviewPage `#[On]` | `{fileId}` |
 | `fingerprint-reset` | ReviewPage PHP dispatch | change-polling Alpine `@window` | none |
+
+### Known Debt
+
+- **diff-file's Alpine `reviewed` state isn't reset by `reset-reviewed-files`.** The DiffFile's local `reviewed` mirror (initialized from the `isReviewed` Livewire prop, driving the checkbox and auto-collapse) has no `@reset-reviewed-files.window` listener. If any flow fires `reset-reviewed-files`, the review-page sidebar clears its `reviewedFiles` map and the comments-drawer refreshes, but individual diff-file checkboxes can visually remain checked until the component re-hydrates. Today this is masked because reset paths are paired with full reloads / navigation. Fix is a one-line handler: `@reset-reviewed-files.window="reviewed = false; collapsed = false"` on the diff-file root. Deferred to keep the mirror decision reversible; migrating the whole file to `@entangle('isReviewed').live` would be the alternative but requires moving `toggleReviewed` from review-page into diff-file.

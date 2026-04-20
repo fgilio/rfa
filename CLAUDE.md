@@ -28,6 +28,9 @@ RFA runs as a local NativePHP desktop app. Server-side operations have negligibl
 - Actions use constructor injection for service dependencies
 - Actions may accept an optional `cacheKey` param for opt-in caching (e.g. `LoadFileDiffAction`). Use `DiffCacheKey::for()` for diff cache keys.
 
+### Known Debt
+- **review-page comment writes.** The page (`resources/views/pages/⚡review-page.blade.php`) owns five responsibility clusters: initialization, comment writes (`addComment` / `addDraftComment` / `updateComment` / `deleteComment`), trash/restore/clear-all, reviewed-file state, and session persistence. Second-opinion review landed on extracting a `ReviewCommentWorkflow` service at the app layer that the four comment methods delegate to (inputs: `repoPath`, `projectId`, `DiffTarget`, current `$files` and `$comments`; output: a result DTO with new comments, affected file ids, undo payload, undo message). **Do not** move writes into `comments-drawer`: the drawer is intentionally a lazy read-model and the writes couple to diff/session state it doesn't own. Trash/restore/clear-all stay in the page (session-state concerns, not comment concerns).
+
 ## Tests
 
 composer test:lint   # Pint
