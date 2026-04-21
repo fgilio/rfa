@@ -5,7 +5,7 @@ beforeEach(function () {
 });
 
 test('Cmd+F opens the search bar, Escape closes it and clears marks', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     expect($page->page()->getByPlaceholder('Find in page...')->isVisible())->toBeFalse();
 
@@ -20,12 +20,12 @@ test('Cmd+F opens the search bar, Escape closes it and clears marks', function (
 
     $input->press('Escape');
 
+    $page->page()->getByPlaceholder('Find in page...')->waitFor(['state' => 'hidden']);
     expect($page->page()->locator('.rfa-search-match')->count())->toBe(0);
-    expect($page->page()->getByPlaceholder('Find in page...')->isVisible())->toBeFalse();
 });
 
 test('typing highlights every match, marks the first as current, and shows the counter', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     $page->page()->locator('body')->press('Meta+f');
     $input = $page->page()->getByPlaceholder('Find in page...');
@@ -45,7 +45,7 @@ test('typing highlights every match, marks the first as current, and shows the c
 });
 
 test('Enter advances and Shift+Enter goes back, wrapping at the ends', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     $page->page()->locator('body')->press('Meta+f');
     $input = $page->page()->getByPlaceholder('Find in page...');
@@ -71,7 +71,7 @@ test('Enter advances and Shift+Enter goes back, wrapping at the ends', function 
 });
 
 test('non-matching query shows No results and wraps no nodes', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     $page->page()->locator('body')->press('Meta+f');
     $input = $page->page()->getByPlaceholder('Find in page...');
@@ -83,7 +83,7 @@ test('non-matching query shows No results and wraps no nodes', function () {
 });
 
 test('the search bar itself is skipped so the counter text is never wrapped', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     $page->page()->locator('body')->press('Meta+f');
     $input = $page->page()->getByPlaceholder('Find in page...');
