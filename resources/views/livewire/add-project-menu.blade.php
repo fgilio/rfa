@@ -12,9 +12,15 @@ new class extends Component {
     {
         $project = app(OpenRepositoryDialogAction::class)->handle();
 
-        if ($project) {
-            $this->redirect(route('review-page', ['slug' => $project->slug]));
+        if (! $project) {
+            return;
         }
+
+        // A synchronous location write from this nested child is clobbered by
+        // Livewire's own post-response DOM processing; deferring past it with
+        // setTimeout lets the navigation survive.
+        $url = json_encode(route('review-page', ['slug' => $project->slug]));
+        $this->js("setTimeout(() => window.location.href = {$url}, 100)");
     }
 
     public function scanDirectory(): void
