@@ -11,6 +11,9 @@ test('branch-explorer panel shows a Working tree row at the top of the commit li
     $row = $page->page()->getByTestId('working-tree-row');
     $row->waitFor();
     expect($row->innerText())->toContain('Working tree');
+
+    $firstRow = $page->page()->locator('[data-testid="working-tree-row"], [data-testid="commit-row"]')->first();
+    expect($firstRow->getAttribute('data-testid'))->toBe('working-tree-row');
 });
 
 test('Working tree row shows active state when viewing the working tree', function () {
