@@ -14,6 +14,8 @@ return [
             'green' => '22 163 74',
             'red' => '220 38 38',
             'draft' => '245 158 11',
+            'search-match' => '253 224 71',
+            'search-match-current' => '251 146 60',
         ],
         'dark' => [
             'bg' => '9 9 11',
@@ -26,6 +28,8 @@ return [
             'green' => '74 222 128',
             'red' => '248 113 113',
             'draft' => '251 191 36',
+            'search-match' => '161 98 7',
+            'search-match-current' => '234 88 12',
         ],
     ],
 

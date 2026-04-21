@@ -15,6 +15,7 @@ use App\Actions\ScanReviewFilesAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
+use App\Actions\ResolveRangeAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\RestoreDiscardedFileAction;
 use App\Actions\SessionStateAction;
@@ -147,13 +148,15 @@ new #[Layout('layouts.app')] class extends Component
             $this->loadCommitInfo();
         } elseif ($from !== null && $to !== null) {
             // Explicit range mode: /p/{slug}/r/{from}..{to}
-            $this->diffFrom = $from;
-            $this->diffTo = $to;
+            $target = app(ResolveRangeAction::class)->handle($this->repoPath, $from, $to);
+            $this->diffFrom = $target->from();
+            $this->diffTo = $target->to();
             $this->loadCommitInfo();
         } elseif ($ref !== null) {
             // Range mode from URL params
-            $this->diffTo = $ref;
-            $this->diffFrom = $baseRef ?? $ref.'^';
+            $target = app(ResolveRangeAction::class)->handle($this->repoPath, $baseRef, $ref);
+            $this->diffFrom = $target->from();
+            $this->diffTo = $target->to();
         }
 
         // Backfill path for projects registered before the migration
