@@ -189,7 +189,7 @@ new class extends Component {
 
                         <template x-if="selectedHashes.length > 0">
                             <div class="ml-auto flex items-center gap-1">
-                                {{-- Segmented apply button: count + label act as one unit --}}
+                                {{-- Segmented apply button: count + label + apply act as one unit --}}
                                 <button
                                     type="button"
                                     @click="applySelection()"
@@ -200,6 +200,9 @@ new class extends Component {
                                         class="grid place-items-center min-w-[18px] h-full px-1 bg-gh-link text-[10px] font-mono font-bold text-gh-bg tabular-nums leading-none"
                                         x-text="selectedHashes.length"
                                     ></span>
+                                    <span class="flex items-center px-2 text-[9px] font-display font-semibold uppercase tracking-brutal text-gh-link/80 border-r border-gh-link/25">
+                                        selected
+                                    </span>
                                     <span class="flex items-center gap-1 px-2 text-gh-link font-display text-[10px] font-bold uppercase tracking-brutal">
                                         <span>Apply</span>
                                         <flux:icon icon="arrow-right" variant="outline" class="!size-3 transition-transform group-hover:translate-x-0.5" />
@@ -207,16 +210,15 @@ new class extends Component {
                                 </button>
 
                                 {{-- Clear --}}
-                                <flux:tooltip content="Clear selection">
-                                    <button
-                                        type="button"
-                                        @click="clearSelection()"
-                                        class="flex items-center justify-center size-6 rounded-md text-gh-muted hover:text-gh-text hover:bg-gh-border/40 transition-colors cursor-pointer"
-                                        aria-label="Clear selection"
-                                    >
-                                        <flux:icon icon="x-mark" variant="outline" class="!size-3.5" />
-                                    </button>
-                                </flux:tooltip>
+                                <button
+                                    type="button"
+                                    @click="clearSelection()"
+                                    class="flex items-center justify-center size-6 rounded-md text-gh-muted hover:text-gh-text hover:bg-gh-border/40 transition-colors cursor-pointer"
+                                    title="Clear selection"
+                                    aria-label="Clear selection"
+                                >
+                                    <flux:icon icon="x-mark" variant="outline" class="!size-3.5" />
+                                </button>
                             </div>
                         </template>
                     </div>
