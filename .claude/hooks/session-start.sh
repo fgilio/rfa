@@ -36,7 +36,12 @@ if [ -f composer.json ]; then
   fi
 fi
 
-if [ -f package.json ] && [ ! -d node_modules ]; then
+if [ -f package.json ]; then
+  # Run unconditionally: npm install is idempotent and a fast no-op when
+  # node_modules already matches the lockfile. Skipping the install when
+  # node_modules merely exists risks using a stale cache (e.g. from a
+  # different commit) that's missing the playwright binary the next step
+  # depends on.
   echo "Installing npm dependencies..."
   npm install
 fi
