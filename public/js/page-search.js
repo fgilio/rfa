@@ -111,11 +111,13 @@
                                 return NodeFilter.FILTER_REJECT;
                             }
                             // Skip collapsed/hidden sections (x-show, [hidden],
-                            // display:none ancestors) so the counter and
-                            // next/prev navigation only target visible matches.
-                            if (typeof parent.checkVisibility === 'function'
-                                ? !parent.checkVisibility()
-                                : parent.offsetParent === null) {
+                            // display:none, visibility:hidden, opacity:0) so
+                            // the counter and next/prev navigation only target
+                            // visible matches.
+                            if (!parent.checkVisibility({
+                                checkOpacity: true,
+                                checkVisibilityCSS: true,
+                            })) {
                                 return NodeFilter.FILTER_REJECT;
                             }
                             // Substring check (not pattern.test) avoids
