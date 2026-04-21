@@ -5,6 +5,8 @@ use App\DTOs\CurrentHeadResult;
 use App\Services\GitMetadataService;
 use App\Services\GitProcessService;
 use Illuminate\Support\Facades\File;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -54,6 +56,28 @@ test('returns sentinel result on git failure', function () {
     $result = $this->action->handle($nonGit);
 
     expect($result->branch)->toBeNull()
+        ->and($result->sha)->toBe('')
+        ->and($result->detached)->toBeFalse();
+});
+
+test('returns sentinel result when git process times out', function () {
+    $timingOutService = new class(new GitProcessService) extends GitMetadataService
+    {
+        public function getCurrentBranch(string $directory): string
+        {
+            $process = new Process(['git', 'rev-parse', 'HEAD']);
+            $process->setTimeout(30);
+
+            throw new ProcessTimedOutException($process, ProcessTimedOutException::TYPE_GENERAL);
+        }
+    };
+
+    $action = new GetCurrentHeadAction($timingOutService);
+
+    $result = $action->handle($this->tmpDir);
+
+    expect($result)->toBeInstanceOf(CurrentHeadResult::class)
+        ->and($result->branch)->toBeNull()
         ->and($result->sha)->toBe('')
         ->and($result->detached)->toBeFalse();
 });
