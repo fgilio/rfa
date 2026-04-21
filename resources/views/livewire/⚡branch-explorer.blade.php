@@ -188,12 +188,35 @@ new class extends Component {
                         <span class="text-xs font-mono text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + ($wire.hasMore ? '+' : '') + ')'"></span>
 
                         <template x-if="selectedHashes.length > 0">
-                            <div class="ml-auto flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gh-link/10 border border-gh-link/20">
-                                <span class="text-[10px] text-gh-link font-mono" x-text="selectedHashes.length + ' selected'"></span>
-                                <button @click="clearSelection()" class="text-gh-link hover:text-gh-link/80" title="Clear selection">
-                                    <flux:icon icon="x-mark" variant="outline" />
+                            <div class="ml-auto flex items-center gap-1">
+                                {{-- Segmented apply button: count + label act as one unit --}}
+                                <button
+                                    type="button"
+                                    @click="applySelection()"
+                                    class="group flex items-stretch h-6 rounded-md overflow-hidden ring-1 ring-inset ring-gh-link/30 bg-gh-link/10 hover:bg-gh-link/20 hover:ring-gh-link/50 transition-colors cursor-pointer"
+                                    :aria-label="'Apply ' + selectedHashes.length + ' selected commits'"
+                                >
+                                    <span
+                                        class="grid place-items-center min-w-[18px] h-full px-1 bg-gh-link text-[10px] font-mono font-bold text-gh-bg tabular-nums leading-none"
+                                        x-text="selectedHashes.length"
+                                    ></span>
+                                    <span class="flex items-center gap-1 px-2 text-gh-link font-display text-[10px] font-bold uppercase tracking-brutal">
+                                        <span>Apply</span>
+                                        <flux:icon icon="arrow-right" variant="outline" class="!size-3 transition-transform group-hover:translate-x-0.5" />
+                                    </span>
                                 </button>
-                                <button @click="applySelection()" class="text-[10px] text-gh-link hover:underline font-medium">Apply</button>
+
+                                {{-- Clear --}}
+                                <flux:tooltip content="Clear selection">
+                                    <button
+                                        type="button"
+                                        @click="clearSelection()"
+                                        class="flex items-center justify-center size-6 rounded-md text-gh-muted hover:text-gh-text hover:bg-gh-border/40 transition-colors cursor-pointer"
+                                        aria-label="Clear selection"
+                                    >
+                                        <flux:icon icon="x-mark" variant="outline" class="!size-3.5" />
+                                    </button>
+                                </flux:tooltip>
                             </div>
                         </template>
                     </div>
