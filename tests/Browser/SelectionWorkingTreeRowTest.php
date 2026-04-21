@@ -1,0 +1,53 @@
+<?php
+
+test('branch-explorer panel shows a Working tree row at the top of the commit list', function () {
+    $this->setUpCommitHistoryRepo();
+
+    $page = $this->visit($this->projectUrl());
+
+    $page->page()->getByLabel('Open selection drawer')->click();
+    $page->page()->getByPlaceholder('Filter branches...')->waitFor();
+
+    $row = $page->page()->getByTestId('working-tree-row');
+    $row->waitFor();
+    expect($row->innerText())->toContain('Working tree');
+});
+
+test('Working tree row shows active state when viewing the working tree', function () {
+    $this->setUpCommitHistoryRepo();
+
+    $page = $this->visit($this->projectUrl());
+
+    $page->page()->getByLabel('Open selection drawer')->click();
+    $page->page()->getByTestId('working-tree-row')->waitFor();
+
+    $classes = $page->page()->getByTestId('working-tree-row')->getAttribute('class');
+    expect($classes)->toContain('border-l-gh-text');
+});
+
+test('Working tree row has no active state when viewing a commit', function () {
+    $this->setUpCommitHistoryRepo();
+
+    $page = $this->visit($this->projectUrl().'/c/'.$this->commitHashes[1]);
+    $page->page()->getByTestId('commit-context-bar')->waitFor();
+
+    $page->page()->getByLabel('Open selection drawer')->click();
+    $page->page()->getByTestId('working-tree-row')->waitFor();
+
+    $classes = $page->page()->getByTestId('working-tree-row')->getAttribute('class');
+    expect($classes)->not->toContain('border-l-gh-text');
+});
+
+test('clicking the Working tree row navigates back to the working tree', function () {
+    $this->setUpCommitHistoryRepo();
+
+    $page = $this->visit($this->projectUrl().'/c/'.$this->commitHashes[1]);
+    $page->page()->getByTestId('commit-context-bar')->waitFor();
+
+    $page->page()->getByLabel('Open selection drawer')->click();
+    $page->page()->getByTestId('working-tree-row')->waitFor();
+    $page->page()->getByTestId('working-tree-row')->click();
+
+    $page->assertDontSee('Add type hints and utils');
+    expect($page->page()->getByTestId('commit-context-bar')->count())->toBe(0);
+});
