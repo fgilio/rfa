@@ -16,11 +16,7 @@ new class extends Component {
             return;
         }
 
-        // A synchronous location write from this nested child is clobbered by
-        // Livewire's own post-response DOM processing; deferring past it with
-        // setTimeout lets the navigation survive.
-        $url = json_encode(route('review-page', ['slug' => $project->slug]));
-        $this->js("setTimeout(() => window.location.href = {$url}, 100)");
+        $this->redirect(route('review-page', ['slug' => $project->slug]), navigate: true);
     }
 
     public function scanDirectory(): void
