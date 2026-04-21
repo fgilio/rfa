@@ -199,10 +199,10 @@
                placeholder="Find in page..."
                class="bg-transparent text-gh-text text-sm font-mono outline-none w-56 placeholder:text-gh-muted"
                @input="onQueryInput()"
-               @keydown.enter.prevent="find(false)"
-               @keydown.shift.enter.prevent="find(true)"
+               @keydown.enter.prevent="find($event.shiftKey)"
                @keydown.escape.prevent="close()">
-        <span x-show="query" class="text-gh-muted text-xs font-mono tabular-nums shrink-0 min-w-[3rem] text-right"
+        <span x-show="query" role="status" aria-live="polite" aria-atomic="true"
+              class="text-gh-muted text-xs font-mono tabular-nums shrink-0 min-w-[3rem] text-right"
               x-text="matchElements.length === 0 ? 'No results' : currentMatch + ' of ' + matchElements.length"></span>
         <button @click="find(true)" class="text-gh-muted hover:text-gh-text p-0.5" title="Previous (Shift+Enter)">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

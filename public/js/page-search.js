@@ -34,7 +34,9 @@
 
             refresh() {
                 this.clearMarks();
-                if (!this.query) {
+                // Treat whitespace-only queries as empty so pressing space
+                // doesn't wrap every whitespace run on the page.
+                if (!/\S/.test(this.query)) {
                     this.currentMatch = 0;
                     return;
                 }
