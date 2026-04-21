@@ -201,13 +201,13 @@ new class extends Component {
 
                     {{-- Commits list --}}
                     <div class="overflow-y-auto flex-1">
-                        {{-- Row 0: Working tree. A peer to commits, not a property of a branch. --}}
                         <button
                             type="button"
                             data-testid="working-tree-row"
                             class="w-full text-left px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors cursor-pointer"
                             @click="viewWorkingTree()"
                             :class="{ 'bg-gh-text/5 border-l-2 border-l-gh-text': activeCommitHash === null }"
+                            :aria-current="activeCommitHash === null ? 'true' : null"
                         >
                             <div class="flex items-start gap-2">
                                 <div class="mt-0.5 size-4 shrink-0 grid place-items-center">
@@ -215,9 +215,7 @@ new class extends Component {
                                 </div>
                                 <div class="min-w-0 flex-1">
                                     <div class="text-xs text-gh-text truncate font-medium tracking-tight">Working tree</div>
-                                    <div class="flex items-center gap-2 mt-0.5">
-                                        <span class="text-[10px] font-mono text-gh-muted">uncommitted changes</span>
-                                    </div>
+                                    <span class="block mt-0.5 text-[10px] font-mono text-gh-muted">uncommitted changes</span>
                                 </div>
                             </div>
                         </button>

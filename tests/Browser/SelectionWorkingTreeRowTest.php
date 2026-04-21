@@ -21,8 +21,7 @@ test('Working tree row shows active state when viewing the working tree', functi
     $page->page()->getByLabel('Open selection drawer')->click();
     $page->page()->getByTestId('working-tree-row')->waitFor();
 
-    $classes = $page->page()->getByTestId('working-tree-row')->getAttribute('class');
-    expect($classes)->toContain('border-l-gh-text');
+    expect($page->page()->getByTestId('working-tree-row')->getAttribute('aria-current'))->toBe('true');
 });
 
 test('Working tree row has no active state when viewing a commit', function () {
@@ -34,8 +33,7 @@ test('Working tree row has no active state when viewing a commit', function () {
     $page->page()->getByLabel('Open selection drawer')->click();
     $page->page()->getByTestId('working-tree-row')->waitFor();
 
-    $classes = $page->page()->getByTestId('working-tree-row')->getAttribute('class');
-    expect($classes)->not->toContain('border-l-gh-text');
+    expect($page->page()->getByTestId('working-tree-row')->getAttribute('aria-current'))->toBeNull();
 });
 
 test('clicking the Working tree row navigates back to the working tree', function () {
