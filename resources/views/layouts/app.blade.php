@@ -151,12 +151,47 @@
             font-family: 'Space Grotesk', system-ui, sans-serif !important;
             letter-spacing: -0.04em;
         }
+
+        /* Find-in-page: highlight every match, give the current one a distinct
+           treatment plus a floating badge with the match number. Backgrounds
+           use theme tokens so colors work in both light and dark mode; text
+           color stays inherited so syntax highlighting still shows through. */
+        .rfa-search-match {
+            background: rgb(var(--gh-search-match) / 0.55);
+            border-radius: 2px;
+            box-shadow: 0 0 0 1px rgb(var(--gh-search-match) / 0.7);
+        }
+        .rfa-search-match--current {
+            background: rgb(var(--gh-search-match-current) / 0.85);
+            box-shadow: 0 0 0 2px rgb(var(--gh-search-match-current));
+            position: relative;
+            z-index: 1;
+        }
+        .rfa-search-match--current::after {
+            content: attr(data-match-number);
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translate(-50%, 6px);
+            background: rgb(var(--gh-accent));
+            color: rgb(var(--gh-bg));
+            font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+            font-size: 10px;
+            font-weight: 500;
+            line-height: 1;
+            padding: 3px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+            pointer-events: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+            z-index: 2;
+        }
     </style>
     @fluxAppearance
 </head>
 <body class="bg-gh-bg text-gh-text min-h-screen font-display text-sm antialiased">
     {{-- Find-in-page search bar (Cmd/Ctrl+F) --}}
-    <div x-data="pageSearch" x-show="open" x-cloak
+    <div x-data="pageSearch" x-show="open" x-cloak data-search-ignore
          @keydown.window="handleKeydown($event)"
          class="fixed top-2 right-4 z-[9999] flex items-center gap-1.5 bg-gh-surface border border-gh-border rounded-lg shadow-lg px-3 py-1.5">
         <svg class="w-4 h-4 text-gh-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -165,9 +200,12 @@
         <input x-ref="input" type="text" x-model="query"
                placeholder="Find in page..."
                class="bg-transparent text-gh-text text-sm font-mono outline-none w-56 placeholder:text-gh-muted"
+               @input="onQueryInput()"
                @keydown.enter.prevent="find(false)"
                @keydown.shift.enter.prevent="find(true)"
                @keydown.escape.prevent="close()">
+        <span x-show="query" class="text-gh-muted text-xs font-mono tabular-nums shrink-0 min-w-[3rem] text-right"
+              x-text="totalMatches === 0 ? 'No results' : currentMatch + ' of ' + totalMatches"></span>
         <button @click="find(true)" class="text-gh-muted hover:text-gh-text p-0.5" title="Previous (Shift+Enter)">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
