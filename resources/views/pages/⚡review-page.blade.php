@@ -1211,17 +1211,22 @@ new #[Layout('layouts.app')] class extends Component
                             @endif
                             <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['isSymlink'] ?? false) ? ' -> ' . $file['symlinkTarget'] : '' }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
                         </button>
-                        <flux:icon icon="check" variant="outline" x-show="reviewedFiles['{{ $file['id'] }}']"
-                            class="text-gh-green shrink-0" x-cloak />
-                        @if(! $this->isCommitMode() && $file['status'] !== 'commented')
-                            <button
-                                class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text shrink-0 data-loading:pointer-events-none data-loading:opacity-50"
-                                title="Discard changes"
-                                wire:click.stop="discardFileChanges('{{ $file['id'] }}')"
-                            >
-                                <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
-                            </button>
-                        @endif
+                        <span class="shrink-0 size-3.5 flex items-center justify-center">
+                            <flux:icon icon="check" variant="outline"
+                                class="!size-3.5 text-gh-green {{ array_key_exists($file['path'], $reviewedFiles) ? '' : 'invisible' }}"
+                                :class="{ 'invisible': !reviewedFiles['{{ $file['id'] }}'] }" />
+                        </span>
+                        <span class="shrink-0 size-3.5 flex items-center justify-center">
+                            @if(! $this->isCommitMode() && $file['status'] !== 'commented')
+                                <button
+                                    class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text data-loading:pointer-events-none data-loading:opacity-50"
+                                    title="Discard changes"
+                                    wire:click.stop="discardFileChanges('{{ $file['id'] }}')"
+                                >
+                                    <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
+                                </button>
+                            @endif
+                        </span>
                         <span class="ml-auto flex gap-1.5 shrink-0 font-mono">
                             @if($file['additions'] > 0)
                                 <span class="text-gh-green">+{{ $file['additions'] }}</span>
