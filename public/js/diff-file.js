@@ -57,6 +57,18 @@
                     this.focusCommentInput();
                     return;
                 }
+                // Toggle: re-clicking the same line with an empty form closes it.
+                if (
+                    this.showForm
+                    && !this.editingCommentId
+                    && this.formSide === side
+                    && this.formLine === lineNum
+                    && this.formEndLine === lineNum
+                    && this.formBody.trim() === ''
+                ) {
+                    this.cancelForm();
+                    return;
+                }
                 // Check for existing draft comment on this line
                 const comments = this.$wire.fileComments || [];
                 const existingDraft = comments.find(c => c.isDraft && c.side === side && c.startLine !== null && lineNum >= c.startLine && lineNum <= (c.endLine ?? c.startLine));
