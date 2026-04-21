@@ -1,9 +1,4 @@
 // Alpine component for global find-in-page search (Cmd/Ctrl+F)
-//
-// Wraps every match in the document with <span class="rfa-search-match"> so
-// all matches are highlighted at once. The active match additionally gets the
-// `rfa-search-match--current` modifier (stronger background + badge showing
-// "N of total" rendered via CSS ::after).
 (function () {
     const MATCH_CLASS = 'rfa-search-match';
     const CURRENT_CLASS = 'rfa-search-match--current';
@@ -17,7 +12,6 @@
         Alpine.data('pageSearch', () => ({
             open: false,
             query: '',
-            totalMatches: 0,
             currentMatch: 0,
             matchElements: [],
 
@@ -41,33 +35,32 @@
             refresh() {
                 this.clearMarks();
                 if (!this.query) {
-                    this.totalMatches = 0;
                     this.currentMatch = 0;
                     return;
                 }
                 this.matchElements = this.markMatches(this.query);
-                this.totalMatches = this.matchElements.length;
-                this.currentMatch = this.totalMatches > 0 ? 1 : 0;
+                this.currentMatch = this.matchElements.length > 0 ? 1 : 0;
                 this.updateCurrent(true);
             },
 
             find(backwards) {
-                if (this.totalMatches === 0) {
+                const total = this.matchElements.length;
+                if (total === 0) {
                     if (this.query) {
                         this.refresh();
                     }
                     return;
                 }
                 if (backwards) {
-                    this.currentMatch = this.currentMatch <= 1 ? this.totalMatches : this.currentMatch - 1;
+                    this.currentMatch = this.currentMatch <= 1 ? total : this.currentMatch - 1;
                 } else {
-                    this.currentMatch = this.currentMatch >= this.totalMatches ? 1 : this.currentMatch + 1;
+                    this.currentMatch = this.currentMatch >= total ? 1 : this.currentMatch + 1;
                 }
                 this.updateCurrent(true);
             },
 
             updateCurrent(scroll) {
-                const badge = `${this.currentMatch} of ${this.totalMatches}`;
+                const badge = `${this.currentMatch} of ${this.matchElements.length}`;
                 this.matchElements.forEach((el, i) => {
                     const isCurrent = (i + 1) === this.currentMatch;
                     el.classList.toggle(CURRENT_CLASS, isCurrent);
@@ -86,18 +79,19 @@
                 this.clearMarks();
                 this.open = false;
                 this.query = '';
-                this.totalMatches = 0;
                 this.currentMatch = 0;
             },
 
             clearMarks() {
                 const existing = document.querySelectorAll('.' + MATCH_CLASS);
+                const parents = new Set();
                 existing.forEach(el => {
                     const parent = el.parentNode;
                     if (!parent) return;
                     parent.replaceChild(document.createTextNode(el.textContent), el);
-                    parent.normalize();
+                    parents.add(parent);
                 });
+                parents.forEach(parent => parent.normalize());
                 this.matchElements = [];
             },
 
@@ -116,8 +110,8 @@
                             if (!parent || parent.closest(SKIP_SELECTOR)) {
                                 return NodeFilter.FILTER_REJECT;
                             }
-                            // Use a lowercase substring check for filtering to
-                            // avoid mutating the shared regex's lastIndex.
+                            // Substring check (not pattern.test) avoids
+                            // mutating the shared regex's lastIndex.
                             return node.nodeValue.toLowerCase().includes(needle)
                                 ? NodeFilter.FILTER_ACCEPT
                                 : NodeFilter.FILTER_REJECT;

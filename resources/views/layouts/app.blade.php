@@ -152,10 +152,7 @@
             letter-spacing: -0.04em;
         }
 
-        /* Find-in-page: highlight every match, give the current one a distinct
-           treatment plus a floating badge with the match number. Backgrounds
-           use theme tokens so colors work in both light and dark mode; text
-           color stays inherited so syntax highlighting still shows through. */
+        /* Text color stays inherited so syntax highlighting still shows through. */
         .rfa-search-match {
             background: rgb(var(--gh-search-match) / 0.55);
             border-radius: 2px;
@@ -205,7 +202,7 @@
                @keydown.shift.enter.prevent="find(true)"
                @keydown.escape.prevent="close()">
         <span x-show="query" class="text-gh-muted text-xs font-mono tabular-nums shrink-0 min-w-[3rem] text-right"
-              x-text="totalMatches === 0 ? 'No results' : currentMatch + ' of ' + totalMatches"></span>
+              x-text="matchElements.length === 0 ? 'No results' : currentMatch + ' of ' + matchElements.length"></span>
         <button @click="find(true)" class="text-gh-muted hover:text-gh-text p-0.5" title="Previous (Shift+Enter)">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />

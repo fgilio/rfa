@@ -4,8 +4,6 @@ beforeEach(function () {
     $this->setUpTestRepo();
 });
 
-// ----- UI-level behavior -----
-
 test('Cmd+F opens the search bar, Escape closes it and clears marks', function () {
     $page = $this->visit($this->projectUrl());
 
@@ -65,11 +63,9 @@ test('Enter advances and Shift+Enter goes back, wrapping at the ends', function 
     $input->press('Shift+Enter');
     $page->assertSee('1 of '.$total);
 
-    // Wraps to last when going back from 1.
     $input->press('Shift+Enter');
     $page->assertSee($total.' of '.$total);
 
-    // Wraps back to 1 when advancing from last.
     $input->press('Enter');
     $page->assertSee('1 of '.$total);
 });
@@ -96,20 +92,14 @@ test('the search bar itself is skipped so the counter text is never wrapped', fu
 
     $page->page()->locator('.rfa-search-match')->first()->waitFor();
 
-    // Now type a query that would otherwise match the counter text ("N of M").
     $input->fill('of');
-    // Even though "of" may appear elsewhere, none of the wrapped matches should
-    // live inside the bar (which is marked data-search-ignore).
     $insideBar = $page->page()->locator('[data-search-ignore] .rfa-search-match')->count();
     expect($insideBar)->toBe(0);
 });
 
-// ----- Direct Alpine-component-level checks -----
-
 test('escapeRegex via markMatches handles regex metacharacters without throwing', function () {
     $page = $this->visit($this->projectUrl());
 
-    // Inject a sandbox element with known content including regex-ish chars.
     $result = $page->script(<<<'JS'
         (() => {
             const host = document.createElement('div');
