@@ -113,18 +113,17 @@ new class extends Component {
                 {{-- Left pane: branches --}}
                 <div class="w-[180px] shrink-0 border-r border-gh-border flex flex-col min-h-0">
                     {{-- Search input --}}
-                    <div class="p-3 border-b border-gh-border">
+                    <div class="px-2 py-3 border-b border-gh-border">
                         <flux:input
                             x-ref="searchInput"
                             x-model.debounce.100ms="search"
                             @input="onSearchChange()"
                             @keydown.escape.stop="handleSearchEscape($event)"
-                            placeholder="Filter branches..."
+                            placeholder="Filter branch"
                             icon="magnifying-glass"
                             icon:variant="outline"
                             size="sm"
                             variant="filled"
-                            clearable
                         />
                     </div>
 
