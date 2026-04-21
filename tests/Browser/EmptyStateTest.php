@@ -4,10 +4,10 @@ beforeEach(function () {
     $this->setUpEmptyTestRepo();
 });
 
-test('no changes shows no changes detected message', function () {
+test('no changes shows clean working tree message', function () {
     $this->visit($this->projectUrl())
-        ->assertSee('No changes detected')
-        ->assertSee('Make some changes and run rfa again');
+        ->assertSee('Working tree is clean')
+        ->assertSee('Edit files to see them here');
 });
 
 test('empty state has no file list', function () {

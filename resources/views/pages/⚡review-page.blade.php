@@ -1300,8 +1300,8 @@ new #[Layout('layouts.app')] class extends Component
                             <h2 class="font-semibold tracking-brutal text-lg mb-2">No file changes in this commit</h2>
                             <p class="text-sm text-gh-muted">This commit has no diff (empty or merge commit)</p>
                         @else
-                            <h2 class="font-semibold tracking-brutal text-lg mb-2">No changes detected</h2>
-                            <p class="text-sm text-gh-muted">Make some changes and run rfa again</p>
+                            <h2 class="font-semibold tracking-brutal text-lg mb-2">Working tree is clean</h2>
+                            <p class="text-sm text-gh-muted">Edit files to see them here</p>
                         @endif
                     </div>
                 </div>
