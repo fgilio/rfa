@@ -4,8 +4,21 @@ beforeEach(function () {
     $this->setUpTestRepo();
 });
 
+/**
+ * Wait for at least one diff line to render. `visitAndLoad()` only waits for
+ * networkidle, which can fire before the lazy-loaded diff has filled the DOM.
+ * The page-search tests fill the input and expect matches immediately, so
+ * they need a deterministic signal that the content they're about to search
+ * is actually present before pressing Cmd+F.
+ */
+function waitForDiffsLoaded($page): void
+{
+    $page->page()->getByTestId('diff-line-number')->first()->waitFor();
+}
+
 test('Cmd+F opens the search bar, Escape closes it and clears marks', function () {
     $page = $this->visitAndLoad($this->projectUrl());
+    waitForDiffsLoaded($page);
 
     expect($page->page()->getByPlaceholder('Find in page...')->isVisible())->toBeFalse();
 
@@ -26,6 +39,7 @@ test('Cmd+F opens the search bar, Escape closes it and clears marks', function (
 
 test('typing highlights every match, marks the first as current, and shows the counter', function () {
     $page = $this->visitAndLoad($this->projectUrl());
+    waitForDiffsLoaded($page);
 
     $page->page()->locator('body')->press('Meta+f');
     $input = $page->page()->getByPlaceholder('Find in page...');
@@ -46,6 +60,7 @@ test('typing highlights every match, marks the first as current, and shows the c
 
 test('Enter advances and Shift+Enter goes back, wrapping at the ends', function () {
     $page = $this->visitAndLoad($this->projectUrl());
+    waitForDiffsLoaded($page);
 
     $page->page()->locator('body')->press('Meta+f');
     $input = $page->page()->getByPlaceholder('Find in page...');
@@ -72,6 +87,7 @@ test('Enter advances and Shift+Enter goes back, wrapping at the ends', function 
 
 test('non-matching query shows No results and wraps no nodes', function () {
     $page = $this->visitAndLoad($this->projectUrl());
+    waitForDiffsLoaded($page);
 
     $page->page()->locator('body')->press('Meta+f');
     $input = $page->page()->getByPlaceholder('Find in page...');
@@ -84,6 +100,7 @@ test('non-matching query shows No results and wraps no nodes', function () {
 
 test('the search bar itself is skipped so the counter text is never wrapped', function () {
     $page = $this->visitAndLoad($this->projectUrl());
+    waitForDiffsLoaded($page);
 
     $page->page()->locator('body')->press('Meta+f');
     $input = $page->page()->getByPlaceholder('Find in page...');
