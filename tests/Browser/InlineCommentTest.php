@@ -58,7 +58,7 @@ test('escape on empty comment form closes it', function () {
 });
 
 test('clicking the same line number again with an empty input closes the form', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->assertSee('Cancel');
@@ -69,7 +69,7 @@ test('clicking the same line number again with an empty input closes the form', 
 });
 
 test('clicking the same line number again with a non-empty input keeps the form open', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('In progress draft');
