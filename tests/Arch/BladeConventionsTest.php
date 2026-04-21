@@ -3,7 +3,7 @@
 /**
  * Blade template conventions:
  * - flux:icon must use variant="outline" (outline stroke icons, not solid)
- * - flux:button/input with icon= must use icon:variant="outline"
+ * - flux:button/input/menu.item with icon= must use icon:variant="outline"
  * - No hardcoded class="dark" on <html> (use Flux's @fluxAppearance)
  */
 function bladeFiles(): array
@@ -36,11 +36,11 @@ test('flux:icon uses outline variant', function () {
     expect($violations)->toBeEmpty();
 });
 
-test('flux:button and flux:input with icon prop use outline variant', function () {
+test('flux:button, flux:input and flux:menu.item with icon prop use outline variant', function () {
     $violations = [];
     foreach (bladeFiles() as $file) {
         $content = file_get_contents($file);
-        preg_match_all('/(<flux:(?:button|input)\b[^>]*?>)/s', $content, $matches);
+        preg_match_all('/(<flux:(?:button|input|menu\.item)\b[^>]*?>)/s', $content, $matches);
         foreach ($matches[1] as $tag) {
             if (preg_match('/\bicon="/', $tag) && ! str_contains($tag, 'icon:variant="outline"')) {
                 $violations[] = basename($file).": {$tag}";
