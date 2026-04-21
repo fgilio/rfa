@@ -5,6 +5,7 @@ use App\Actions\GetFileListAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
+use App\Actions\ResolveRangeAction;
 use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
 use App\Models\Project;
@@ -88,6 +89,14 @@ beforeEach(function () {
         public function handle(string $repoPath, string $hash): ?DiffTarget
         {
             return DiffTarget::commit($hash, $hash.'^');
+        }
+    });
+
+    app()->bind(ResolveRangeAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, ?string $from, string $to): DiffTarget
+        {
+            return DiffTarget::fromRefs($from ?? $to.'^', $to);
         }
     });
 

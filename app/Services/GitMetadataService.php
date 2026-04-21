@@ -167,6 +167,29 @@ class GitMetadataService
         }
     }
 
+    /**
+     * True when $ref resolves to a commit with no parents (the repo's root).
+     * Uses a single `rev-list --parents -n 1` call instead of separate resolve + parent lookups.
+     */
+    public function isRootCommit(string $repoPath, string $ref): bool
+    {
+        if ($this->looksLikeFlag($ref)) {
+            return false;
+        }
+
+        try {
+            $line = trim($this->git->run($repoPath, ['rev-list', '--parents', '-n', '1', $ref]));
+        } catch (GitCommandException $e) {
+            Log::warning('Failed to check root commit', ['repo' => $repoPath, 'ref' => $ref, 'error' => $e->getMessage()]);
+
+            return false;
+        }
+
+        // `rev-list --parents -n 1` prints: "<hash> <parent1> <parent2> ..."
+        // A root commit emits exactly one token (its own hash, no parents).
+        return $line !== '' && ! str_contains($line, ' ');
+    }
+
     public function getChildCommit(string $repoPath, string $hash): ?string
     {
         try {
