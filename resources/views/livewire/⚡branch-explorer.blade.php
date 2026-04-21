@@ -19,7 +19,7 @@ new class extends Component {
     public ?string $activeCommitHash = null;
 
     #[Locked]
-    public string $selectionLabel = 'working';
+    public string $selectionLabel = 'Working tree';
 
     #[Locked]
     public string $selectionTitle = 'Working tree changes';
@@ -113,18 +113,17 @@ new class extends Component {
                 {{-- Left pane: branches --}}
                 <div class="w-[180px] shrink-0 border-r border-gh-border flex flex-col min-h-0">
                     {{-- Search input --}}
-                    <div class="p-3 border-b border-gh-border">
+                    <div class="px-2 py-3 border-b border-gh-border">
                         <flux:input
                             x-ref="searchInput"
                             x-model.debounce.100ms="search"
                             @input="onSearchChange()"
                             @keydown.escape.stop="handleSearchEscape($event)"
-                            placeholder="Filter branches..."
+                            placeholder="Filter branch"
                             icon="magnifying-glass"
                             icon:variant="outline"
                             size="sm"
                             variant="filled"
-                            clearable
                         />
                     </div>
 
@@ -188,22 +187,38 @@ new class extends Component {
                         <span class="text-xs font-semibold tracking-brutal text-gh-text truncate" x-text="selectedBranch || 'Select a branch'"></span>
                         <span class="text-xs font-mono text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + ($wire.hasMore ? '+' : '') + ')'"></span>
 
-                        <div class="ml-auto flex items-center gap-2">
-                            <template x-if="selectedHashes.length > 0">
-                                <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gh-link/10 border border-gh-link/20">
-                                    <span class="text-[10px] text-gh-link font-mono" x-text="selectedHashes.length + ' selected'"></span>
-                                    <button @click="clearSelection()" class="text-gh-link hover:text-gh-link/80" title="Clear selection">
-                                        <flux:icon icon="x-mark" variant="outline" />
-                                    </button>
-                                    <button @click="applySelection()" class="text-[10px] text-gh-link hover:underline font-medium">Apply</button>
-                                </div>
-                            </template>
-                            <flux:button size="xs" variant="ghost" @click="viewWorkingTree()" class="!text-[10px]">Working Tree</flux:button>
-                        </div>
+                        <template x-if="selectedHashes.length > 0">
+                            <div class="ml-auto flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gh-link/10 border border-gh-link/20">
+                                <span class="text-[10px] text-gh-link font-mono" x-text="selectedHashes.length + ' selected'"></span>
+                                <button @click="clearSelection()" class="text-gh-link hover:text-gh-link/80" title="Clear selection">
+                                    <flux:icon icon="x-mark" variant="outline" />
+                                </button>
+                                <button @click="applySelection()" class="text-[10px] text-gh-link hover:underline font-medium">Apply</button>
+                            </div>
+                        </template>
                     </div>
 
                     {{-- Commits list --}}
                     <div class="overflow-y-auto flex-1">
+                        <button
+                            type="button"
+                            data-testid="working-tree-row"
+                            class="w-full text-left px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors cursor-pointer"
+                            @click="viewWorkingTree()"
+                            :class="{ 'bg-gh-text/5 border-l-2 border-l-gh-text': activeCommitHash === null }"
+                            :aria-current="activeCommitHash === null ? 'true' : null"
+                        >
+                            <div class="flex items-start gap-2">
+                                <div class="mt-0.5 size-4 shrink-0 grid place-items-center">
+                                    <flux:icon icon="pencil-square" variant="outline" class="!size-3.5 text-gh-muted" />
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-xs text-gh-text truncate font-medium tracking-tight">Working tree</div>
+                                    <span class="block mt-0.5 text-[10px] font-mono text-gh-muted">uncommitted changes</span>
+                                </div>
+                            </div>
+                        </button>
+
                         <template x-if="$wire.commits.length === 0">
                             <div class="flex items-center justify-center h-32">
                                 <span class="text-xs text-gh-muted">No commits</span>

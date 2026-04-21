@@ -1,12 +1,12 @@
 <?php
 
-test('selection badge reads "working" when viewing the working tree', function () {
+test('selection badge reads "Working tree" when viewing the working tree', function () {
     $this->setUpTestRepo();
 
     $page = $this->visit($this->projectUrl());
 
     $page->page()->getByLabel('Open selection drawer')->waitFor();
-    expect($page->page()->getByLabel('Open selection drawer')->innerText())->toContain('working');
+    expect($page->page()->getByLabel('Open selection drawer')->innerText())->toContain('Working tree');
 });
 
 test('selection badge reads the short SHA in single-commit mode', function () {
@@ -38,6 +38,6 @@ test('clicking the selection badge opens the branch-explorer panel', function ()
     $page = $this->visit($this->projectUrl());
     $page->page()->getByLabel('Open selection drawer')->click();
 
-    $page->page()->getByPlaceholder('Filter branches...')->waitFor();
+    $page->page()->getByPlaceholder('Filter branch')->waitFor();
     $page->assertSee('Add greet function');
 });

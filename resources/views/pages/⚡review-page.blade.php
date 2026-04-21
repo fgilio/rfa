@@ -935,7 +935,7 @@ new #[Layout('layouts.app')] class extends Component
                 $shortFrom = $diffFrom === 'HEAD' ? 'HEAD' : substr($diffFrom, 0, 7);
                 $shortTo = $diffTo ? substr($diffTo, 0, 7) : null;
                 if ($diffTo === null) {
-                    $selectionLabel = 'working';
+                    $selectionLabel = 'Working tree';
                     $selectionTitle = 'Working tree changes';
                 } elseif ($diffFrom === $diffTo.'^') {
                     $selectionLabel = $shortTo;
