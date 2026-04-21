@@ -280,13 +280,13 @@ test('current match badge text tracks navigation', function () {
         (() => {
             const host = document.createElement('div');
             host.id = '__search_sandbox_badge';
-            host.textContent = 'x x x';
+            host.textContent = 'xxbadgexx xxbadgexx xxbadgexx';
             document.body.appendChild(host);
 
             const root = document.querySelector('[x-data="pageSearch"]');
             const data = Alpine.$data(root);
 
-            data.query = 'x';
+            data.query = 'xxbadgexx';
             data.refresh();
 
             const badgeAt = () => {
