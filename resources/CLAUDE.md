@@ -47,6 +47,14 @@ To emit dynamic CSS, build the tag via Blade output instead:
 
 This avoids the SFC regex while producing identical HTML at runtime.
 
+### Redirecting from component actions
+
+Use `$this->redirect($url, navigate: true)` — not raw `$this->redirect($url)`, `$this->js('window.location...')`, or `Window::url(...)` — from Livewire component actions.
+
+- `navigate: true` routes through Livewire's own SPA pipeline, sequenced after the post-response DOM swap. Matches how the app navigates elsewhere (`Livewire.navigate` in `public/js/branch-explorer.js` and `⚡review-page.blade.php`).
+- Raw `$this->redirect()` or synchronous `window.location` writes from a **nested child** get clobbered by the parent's post-response DOM processing — the server action completes but the browser never navigates. Hit on `add-project-menu` (child of `project-picker`).
+- `Window::get('main')->url(...)` is for main-process listeners (`HandleDeepLink`, `HandleMenuItemClicked`), not in-renderer Livewire actions.
+
 ### Parent-Child: Avoid 1+N Re-renders
 
 ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile children (`resources/views/livewire/⚡diff-file.blade.php`) - one per changed file. Livewire re-hydrates ALL children when a parent re-renders. With `#[Reactive]` props, Livewire's JS interceptor bundles every reactive child into every parent request - even if the prop didn't change. This hits `TooManyComponentsException` (default limit ~20) on repos with many files.
