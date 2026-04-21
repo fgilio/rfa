@@ -227,6 +227,52 @@ test('close() restores original text so no trace is left in the DOM', function (
     expect($result['singleTextNode'])->toBeTrue();
 });
 
+test('markMatches skips text inside display:none and [hidden] sections', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $result = $page->script(<<<'JS'
+        (() => {
+            const host = document.createElement('div');
+            host.id = '__search_sandbox_hidden';
+
+            const visible = document.createElement('div');
+            visible.textContent = 'hiddentoken';
+            host.appendChild(visible);
+
+            const displayNone = document.createElement('div');
+            displayNone.style.display = 'none';
+            displayNone.textContent = 'hiddentoken';
+            host.appendChild(displayNone);
+
+            const hiddenAttr = document.createElement('div');
+            hiddenAttr.hidden = true;
+            hiddenAttr.textContent = 'hiddentoken';
+            host.appendChild(hiddenAttr);
+
+            document.body.appendChild(host);
+
+            const root = document.querySelector('[x-data="pageSearch"]');
+            const data = Alpine.$data(root);
+
+            data.query = 'hiddentoken';
+            data.refresh();
+
+            const total = document.querySelectorAll('#__search_sandbox_hidden .rfa-search-match').length;
+            const inDisplayNone = displayNone.querySelectorAll('.rfa-search-match').length;
+            const inHiddenAttr = hiddenAttr.querySelectorAll('.rfa-search-match').length;
+
+            data.close();
+            host.remove();
+
+            return { total, inDisplayNone, inHiddenAttr };
+        })()
+    JS);
+
+    expect($result['total'])->toBe(1);
+    expect($result['inDisplayNone'])->toBe(0);
+    expect($result['inHiddenAttr'])->toBe(0);
+});
+
 test('current match badge text tracks navigation', function () {
     $page = $this->visit($this->projectUrl());
 

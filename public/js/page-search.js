@@ -110,6 +110,14 @@
                             if (!parent || parent.closest(SKIP_SELECTOR)) {
                                 return NodeFilter.FILTER_REJECT;
                             }
+                            // Skip collapsed/hidden sections (x-show, [hidden],
+                            // display:none ancestors) so the counter and
+                            // next/prev navigation only target visible matches.
+                            if (typeof parent.checkVisibility === 'function'
+                                ? !parent.checkVisibility()
+                                : parent.offsetParent === null) {
+                                return NodeFilter.FILTER_REJECT;
+                            }
                             // Substring check (not pattern.test) avoids
                             // mutating the shared regex's lastIndex.
                             return node.nodeValue.toLowerCase().includes(needle)
