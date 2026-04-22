@@ -1,8 +1,12 @@
 # RFA Project Conventions
 
-## Local Desktop App
+## What RFA is
 
-RFA runs as a local NativePHP desktop app. Server-side operations have negligible latency, so prefer Livewire server-side logic over complex client-side (Alpine/JS) alternatives for filtering, sorting, and state management.
+Local NativePHP desktop app (Laravel 12 + Livewire 4 + Flux UI), packaged as a macOS Electron `.app` with Chromium renderer. Single window, single local user, direct access to real filesystem paths (reads git repos on disk). SQLite lives inside the install. `APP_URL` and localhost are internal plumbing, not user-facing.
+
+**Skip these assumptions:** auth, multi-tenancy, CSRF-across-origins, rate limiting, responsive/mobile breakpoints, legacy-browser fallbacks, public URLs, SEO, `Storage::disk('public')` semantics for user content, network-DB failure modes.
+
+**Process split.** Livewire component actions run in the renderer's PHP process; `Window::get('main')->url(...)` is for main-process listeners only (`HandleDeepLink`, `HandleMenuItemClicked`). Round-trips have negligible latency; prefer server-side logic (filtering, sorting, state) over Alpine/JS.
 
 ## PHP / Laravel
 
