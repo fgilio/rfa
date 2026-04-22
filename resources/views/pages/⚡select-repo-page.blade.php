@@ -36,6 +36,11 @@ new #[Layout('layouts.app')] class extends Component
         $this->refreshProjects();
     }
 
+    public function updatedSortBy(): void
+    {
+        $this->refreshProjects();
+    }
+
     #[On('projects-changed')]
     public function refreshProjects(): void
     {
@@ -124,17 +129,7 @@ new #[Layout('layouts.app')] class extends Component
                             variant="filled"
                         />
                     </div>
-                    @php $nextSort = $sortBy === 'recent' ? 'alpha' : 'recent'; @endphp
-                    <flux:button
-                        variant="ghost"
-                        size="sm"
-                        wire:click="$set('sortBy', @js($nextSort))"
-                        class="text-gh-muted hover:text-gh-text font-mono text-xs shrink-0"
-                        tooltip="Toggle sort"
-                    >
-                        <flux:icon icon="arrows-up-down" variant="outline" class="!size-3.5" />
-                        <span>{{ $sortBy === 'recent' ? 'Recent' : 'A–Z' }}</span>
-                    </flux:button>
+                    <x-sort-toggle :sort-by="$sortBy" />
                 </div>
 
                 <div class="border border-gh-border rounded overflow-hidden bg-gh-surface">

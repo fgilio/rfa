@@ -1,3 +1,13 @@
+{{--
+    Mode contract (hidden coupling; document before changing):
+    - 'picker': rows render inside the picker's Alpine scope. Requires the
+      parent x-data to define `selectSlug(slug)` and a `selectedIndex`
+      int, and to treat `[data-project-picker-row]` as the keyboard-nav
+      target list.
+    - 'page': rows dispatch to the parent Livewire component. Requires the
+      parent to expose `selectProject(string $slug)` and
+      `removeProject(int $id)` methods.
+--}}
 @props([
     'mode' => 'page',
     'groups' => [],

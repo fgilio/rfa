@@ -162,17 +162,7 @@ class extends Component
                             variant="filled"
                         />
                     </div>
-                    @php $nextSort = $sortBy === 'recent' ? 'alpha' : 'recent'; @endphp
-                    <flux:button
-                        variant="ghost"
-                        size="sm"
-                        wire:click="$set('sortBy', @js($nextSort))"
-                        class="text-gh-muted hover:text-gh-text font-mono text-xs shrink-0"
-                        tooltip="Toggle sort"
-                    >
-                        <flux:icon icon="arrows-up-down" variant="outline" class="!size-3.5" />
-                        <span>{{ $sortBy === 'recent' ? 'Recent' : 'A–Z' }}</span>
-                    </flux:button>
+                    <x-sort-toggle :sort-by="$sortBy" />
                     @native
                         <livewire:add-project-menu />
                     @endnative
