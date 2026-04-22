@@ -15,10 +15,14 @@ runs:
         php-version: ${{ inputs.php-version }}
         coverage: none
         tools: composer:v2
+    - name: Resolve Composer cache directory
+      id: composer-cache-dir
+      shell: bash
+      run: echo "dir=$(composer config --global cache-files-dir)" >> "$GITHUB_OUTPUT"
     - name: Cache Composer packages
       uses: actions/cache@v5
       with:
-        path: ~/.cache/composer/files
+        path: ${{ steps.composer-cache-dir.outputs.dir }}
         key: composer-${{ runner.os }}-php${{ inputs.php-version }}-${{ hashFiles('composer.lock') }}
         restore-keys: composer-${{ runner.os }}-php${{ inputs.php-version }}-
     - name: Install Composer dependencies
