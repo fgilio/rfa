@@ -292,6 +292,11 @@ trait CreatesTestRepo
         return '/p/'.$this->testProjectSlug;
     }
 
+    protected function projectName(int $index): string
+    {
+        return basename($this->testRepoPaths[$index]);
+    }
+
     /** Visit the project page and wait for lazy-loaded diffs to finish loading. */
     protected function visitAndLoad(string $url): PendingAwaitablePage
     {

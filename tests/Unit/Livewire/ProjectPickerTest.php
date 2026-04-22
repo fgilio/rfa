@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\ResolveStartupRouteAction;
+use App\Models\Comment;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Livewire\Livewire;
@@ -40,7 +41,7 @@ test('selectProject redirects to review-page for a different project', function 
         ->assertRedirect(route('review-page', ['slug' => 'other']));
 });
 
-test('removeProject redirects to next target when removing the current project', function () {
+test('removeProject redirects to select-repo when removing the current project', function () {
     $current = Project::factory()->create(['slug' => 'current', 'updated_at' => now()->subHour()]);
     Project::factory()->create(['slug' => 'surviving', 'updated_at' => now()]);
 
@@ -48,19 +49,19 @@ test('removeProject redirects to next target when removing the current project',
 
     Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current'])
         ->call('removeProject', $current->id)
-        ->assertRedirect(route('review-page', ['slug' => 'surviving']));
+        ->assertRedirect(route('select-repo'));
 
     expect(Project::find($current->id))->toBeNull();
 });
 
-test('removeProject redirects to no-projects when removing the last project', function () {
+test('removeProject redirects to select-repo when removing the last project', function () {
     $only = Project::factory()->create(['slug' => 'only']);
 
     app(ResolveStartupRouteAction::class)->rememberLastOpened('only');
 
     Livewire::test('project-picker', ['currentSlug' => 'only', 'projectName' => 'Only'])
         ->call('removeProject', $only->id)
-        ->assertRedirect(route('no-projects'));
+        ->assertRedirect(route('select-repo'));
 
     expect(Project::find($only->id))->toBeNull();
 });
@@ -88,4 +89,63 @@ test('projects-changed refreshes the list', function () {
 
     $component->dispatch('projects-changed')
         ->assertSet('totalProjects', 2);
+});
+
+test('trigger renders Switch repo tooltip and aria-label', function () {
+    Project::factory()->create(['slug' => 'only']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'only', 'projectName' => 'Only'])
+        ->assertSee('Switch repo')
+        ->assertSee('Switch to repo...');
+});
+
+test('trash button announces repo name via aria-label', function () {
+    Project::factory()->create(['slug' => 'anchor', 'name' => 'anchor']);
+    Project::factory()->create(['slug' => 'removable-repo', 'name' => 'removable-repo']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'anchor'])
+        ->assertSee('Remove removable-repo')
+        ->assertSee('Remove repo');
+});
+
+test('confirm copy warns about data loss when removing the current repo', function () {
+    Project::factory()->create(['slug' => 'current-repo', 'name' => 'current-repo']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'current-repo', 'projectName' => 'current-repo'])
+        ->assertSee('and all its review data')
+        ->assertSee('return to the repo picker');
+});
+
+test('confirm copy is minimal when removing a non-current repo', function () {
+    Project::factory()->create(['slug' => 'sibling-repo', 'name' => 'sibling-repo']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'anchor'])
+        ->assertSee('from the list?')
+        ->assertDontSee('review data');
+});
+
+test('confirm copy mentions comment count when repo has unsubmitted comments', function () {
+    $repo = Project::factory()->create(['slug' => 'with-comments', 'name' => 'with-comments']);
+
+    Comment::factory()->count(3)->for($repo, 'project')->create(['repo_path' => $repo->path]);
+
+    Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'Anchor'])
+        ->assertSee('3 comments will be deleted');
+});
+
+test('confirm copy uses singular comment form for a single comment', function () {
+    $repo = Project::factory()->create(['slug' => 'one-comment', 'name' => 'one-comment']);
+
+    Comment::factory()->for($repo, 'project')->create(['repo_path' => $repo->path]);
+
+    Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'Anchor'])
+        ->assertSee('1 comment will be deleted')
+        ->assertDontSee('1 comments will be deleted');
+});
+
+test('confirm copy omits comment clause when there are no unsubmitted comments', function () {
+    Project::factory()->create(['slug' => 'clean-repo', 'name' => 'clean-repo']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'Anchor'])
+        ->assertDontSee('will be deleted');
 });
