@@ -19,6 +19,7 @@
 
 @php
     $rowIndex = 0;
+    $isPicker = $mode === 'picker';
 @endphp
 
 @if($matchCount === 0)
@@ -58,7 +59,7 @@
             @endphp
             <div
                 wire:key="{{ $keyPrefix }}-project-{{ $project['id'] }}"
-                @if($mode === 'picker')
+                @if($isPicker)
                     data-project-picker-row
                     data-slug="{{ $project['slug'] }}"
                 @endif
@@ -72,9 +73,9 @@
                 @class([
                     'group px-3 py-2.5 border-b border-gh-border/50 last:border-b-0 cursor-pointer transition-colors',
                     'bg-gh-link/5 border-l-2 border-l-gh-link' => $isCurrent,
-                    'hover:bg-gh-border/30' => $mode !== 'picker',
+                    'hover:bg-gh-border/30' => ! $isPicker,
                 ])
-                @if($mode === 'picker')
+                @if($isPicker)
                     :class="selectedIndex === {{ $rowIndex }} ? 'bg-gh-text/10' : 'hover:bg-gh-border/30'"
                     @click="selectSlug('{{ $project['slug'] }}')"
                     @mouseenter="selectedIndex = {{ $rowIndex }}"
@@ -123,8 +124,8 @@
                             wire:confirm="{{ $confirmMessage }}"
                             @class([
                                 'text-gh-muted hover:text-red-500 transition-opacity',
-                                'opacity-0 group-hover:opacity-100 focus-visible:opacity-100' => $mode === 'picker',
-                                'opacity-60 hover:opacity-100' => $mode !== 'picker',
+                                'opacity-0 group-hover:opacity-100 focus-visible:opacity-100' => $isPicker,
+                                'opacity-60 hover:opacity-100' => ! $isPicker,
                             ])
                             tooltip="Remove repo"
                             aria-label="Remove {{ $project['name'] }}"

@@ -140,17 +140,7 @@ test('page confirm copy is minimal for repos that are not the cached current', f
 test('page confirm copy pluralizes the comment clause correctly', function () {
     $repo = Project::factory()->create(['slug' => 'two-comments', 'name' => 'two-comments']);
 
-    foreach (['one', 'two'] as $i => $body) {
-        Comment::create([
-            'id' => "c-{$i}",
-            'project_id' => $repo->id,
-            'repo_path' => $repo->path,
-            'origin_ref' => 'working',
-            'file_path' => 'a.php',
-            'side' => 'right',
-            'body' => $body,
-        ]);
-    }
+    Comment::factory()->count(2)->for($repo, 'project')->create(['repo_path' => $repo->path]);
 
     Livewire::test('pages::select-repo-page')
         ->assertSee('2 comments will be deleted');

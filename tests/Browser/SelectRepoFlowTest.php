@@ -5,21 +5,17 @@ beforeEach(function () {
 });
 
 test('select-repo page lists all registered repos with the pick heading', function () {
-    $alphaName = basename($this->testRepoPaths[0]);
-    $betaName = basename($this->testRepoPaths[1]);
-    $gammaName = basename($this->testRepoPaths[2]);
-
     $this->visit(route('select-repo'))
         ->assertSee('Pick a repo')
-        ->assertSee($alphaName)
-        ->assertSee($betaName)
-        ->assertSee($gammaName);
+        ->assertSee($this->projectName(0))
+        ->assertSee($this->projectName(1))
+        ->assertSee($this->projectName(2));
 });
 
 test('deleting a repo from the select-repo list updates the list in place', function () {
     $alphaSlug = $this->testProjectSlugs[0];
-    $alphaName = basename($this->testRepoPaths[0]);
-    $betaName = basename($this->testRepoPaths[1]);
+    $alphaName = $this->projectName(0);
+    $betaName = $this->projectName(1);
 
     $page = $this->visit(route('select-repo'));
 
@@ -39,9 +35,8 @@ test('deleting the final repo reveals the empty state', function () {
     $page->script('window.confirm = function() { return true; }');
 
     foreach ($this->testProjectSlugs as $i => $slug) {
-        $name = basename($this->testRepoPaths[$i]);
         $page->page()->getByTestId("remove-repo-{$slug}")->click();
-        $page->page()->getByText($name)->first()->waitFor(['state' => 'hidden']);
+        $page->page()->getByText($this->projectName($i))->first()->waitFor(['state' => 'hidden']);
     }
 
     $page->assertSee('No repos yet');

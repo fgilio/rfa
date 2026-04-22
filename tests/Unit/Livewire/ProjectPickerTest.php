@@ -127,17 +127,7 @@ test('confirm copy is minimal when removing a non-current repo', function () {
 test('confirm copy mentions comment count when repo has unsubmitted comments', function () {
     $repo = Project::factory()->create(['slug' => 'with-comments', 'name' => 'with-comments']);
 
-    foreach (['one', 'two', 'three'] as $i => $body) {
-        Comment::create([
-            'id' => "c-{$i}",
-            'project_id' => $repo->id,
-            'repo_path' => $repo->path,
-            'origin_ref' => 'working',
-            'file_path' => 'a.php',
-            'side' => 'right',
-            'body' => $body,
-        ]);
-    }
+    Comment::factory()->count(3)->for($repo, 'project')->create(['repo_path' => $repo->path]);
 
     Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'Anchor'])
         ->assertSee('3 comments will be deleted');
@@ -146,15 +136,7 @@ test('confirm copy mentions comment count when repo has unsubmitted comments', f
 test('confirm copy uses singular comment form for a single comment', function () {
     $repo = Project::factory()->create(['slug' => 'one-comment', 'name' => 'one-comment']);
 
-    Comment::create([
-        'id' => 'c-solo',
-        'project_id' => $repo->id,
-        'repo_path' => $repo->path,
-        'origin_ref' => 'working',
-        'file_path' => 'a.php',
-        'side' => 'right',
-        'body' => 'only one',
-    ]);
+    Comment::factory()->for($repo, 'project')->create(['repo_path' => $repo->path]);
 
     Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'Anchor'])
         ->assertSee('1 comment will be deleted')
