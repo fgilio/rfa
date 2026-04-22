@@ -64,7 +64,7 @@
                 @endif
                 x-data="{ status: null, loaded: false }"
                 x-intersect.once="setTimeout(() => {
-                    fetch('/api/status/{{ $project['id'] }}')
+                    fetch('{{ route('api.status', $project['id']) }}')
                         .then(r => r.json())
                         .then(d => { status = d; loaded = true; })
                         .catch(() => { loaded = true; });
@@ -121,7 +121,11 @@
                             icon:variant="outline"
                             wire:click.stop="removeProject({{ $project['id'] }})"
                             wire:confirm="{{ $confirmMessage }}"
-                            class="text-gh-muted hover:text-red-500 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                            @class([
+                                'text-gh-muted hover:text-red-500 transition-opacity',
+                                'opacity-0 group-hover:opacity-100 focus-visible:opacity-100' => $mode === 'picker',
+                                'opacity-60 hover:opacity-100' => $mode !== 'picker',
+                            ])
                             tooltip="Remove repo"
                             aria-label="Remove {{ $project['name'] }}"
                         />
