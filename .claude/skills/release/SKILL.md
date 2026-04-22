@@ -96,6 +96,8 @@ git log <prev-tag>..vX.Y.Z --oneline --no-merges
 Write concise, user-facing notes following this format:
 
 ```markdown
+**vX.Y.Z is a {small | focused | feature | bugfix | polish} release focused on {1-3 user-visible themes}.** {Optional second sentence naming the standout change in plain user-facing terms.}
+
 ## What's new
 - **Feature name** — One-line description
 
@@ -106,12 +108,35 @@ Write concise, user-facing notes following this format:
 - Description of fix
 ```
 
-Rules:
+Opener rules:
+- Open with one bold sentence framing the release: `**vX.Y.Z is a {kind} release focused on {themes}.**` Optionally add 1 follow-up sentence for the standout item. Hard cap: 60 words total.
+- Themes are user outcomes, not subsystems. Good: "comment editing", "session recovery", "diff readability". Avoid: "refactor of LoadFileDiffAction", "Livewire SPA navigation". Internal terms belong in the bullets, not the opener.
+- Pick a "kind" that matches scope: `small`, `focused`, `feature`, `bugfix`, `polish`, `maintenance`. Skip "big" / "high-impact" hype.
+- No em dash in the opener. Use parentheses, semicolons, or split into two sentences.
+- Skip the opener entirely for trivial single-fix patch releases (the bullet list is enough).
+
+Body rules:
 - Group into **What's new**, **Improvements**, **Fixes** (omit empty sections)
 - Bold the feature/fix name, then a brief description
 - Skip internal commits (CI, refactoring, tests, deps) unless user-visible
 - One line per item, no fluff
 - For patch releases with 1-2 changes, keep it very short
+
+Example:
+
+```markdown
+**v0.4.0 is a focused release on session recovery and review-page polish.** Reopening rfa now restores your in-progress comments even after an unexpected quit.
+
+## What's new
+- **Session recovery** — In-progress comments and reviewed-file state survive crashes and force-quits.
+
+## Improvements
+- **Empty-state copy** — Clearer message when a repo has no diffs to review.
+- **Single-repo picker** — Newly-added repos open automatically after picking.
+
+## Fixes
+- **Git timeouts** — `GetCurrentHeadAction` no longer hangs on slow repos.
+```
 
 Update the draft release with the notes:
 
