@@ -1214,7 +1214,7 @@ new #[Layout('layouts.app')] class extends Component
                         <span class="shrink-0 size-3.5 flex items-center justify-center">
                             <flux:icon icon="check" variant="outline"
                                 class="!size-3.5 text-gh-green {{ array_key_exists($file['path'], $reviewedFiles) ? '' : 'invisible' }}"
-                                :class="{ 'invisible': !reviewedFiles['{{ $file['id'] }}'] }" />
+                                ::class="{ 'invisible': !reviewedFiles['{{ $file['id'] }}'] }" />
                         </span>
                         <span class="shrink-0 size-3.5 flex items-center justify-center">
                             @if(! $this->isCommitMode() && $file['status'] !== 'commented')
