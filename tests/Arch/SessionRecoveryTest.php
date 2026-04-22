@@ -32,7 +32,15 @@ test('session-recovery.js intercepts 419 responses and reloads', function () {
     expect($script)
         ->toContain('livewire:init')
         ->toContain('Livewire.interceptRequest')
-        ->toContain('status === 419')
+        ->toContain('status !== 419')
         ->toContain('preventDefault')
         ->toContain('window.location.reload');
+});
+
+test('session-recovery.js guards against a post-reload 419 loop', function () {
+    $script = file_get_contents(dirname(__DIR__, 2).'/public/js/session-recovery.js');
+
+    expect($script)
+        ->toContain('sessionStorage')
+        ->toContain('__rfa419RecoveryAt');
 });
