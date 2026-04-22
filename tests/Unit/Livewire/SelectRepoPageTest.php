@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\ResolveStartupRouteAction;
+use App\Models\Comment;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Livewire\Livewire;
@@ -87,4 +88,93 @@ test('search filters the repo list', function () {
         ->set('search', 'alpha')
         ->assertSee('alpha-match')
         ->assertDontSee('beta-skip');
+});
+
+test('changing sortBy re-queries and refreshes the list', function () {
+    Project::factory()->create(['slug' => 'a']);
+
+    $component = Livewire::test('pages::select-repo-page')
+        ->assertSet('totalProjects', 1);
+
+    Project::factory()->create(['slug' => 'b']);
+
+    $component->set('sortBy', 'alpha')
+        ->assertSet('totalProjects', 2);
+});
+
+test('direct visit to /select-repo renders list even when last-opened cache is valid', function () {
+    Project::factory()->create(['slug' => 'cached', 'name' => 'cached']);
+    app(ResolveStartupRouteAction::class)->rememberLastOpened('cached');
+
+    $this->get(route('select-repo'))
+        ->assertOk()
+        ->assertSee('Pick a repo')
+        ->assertSee('cached');
+});
+
+test('trash button announces repo name via aria-label on the page', function () {
+    Project::factory()->create(['slug' => 'another-repo', 'name' => 'another-repo']);
+
+    Livewire::test('pages::select-repo-page')
+        ->assertSee('Remove another-repo')
+        ->assertSee('Remove repo');
+});
+
+test('page confirm copy warns about data loss on the cached current repo', function () {
+    Project::factory()->create(['slug' => 'last-opened-repo', 'name' => 'last-opened-repo']);
+    app(ResolveStartupRouteAction::class)->rememberLastOpened('last-opened-repo');
+
+    Livewire::test('pages::select-repo-page')
+        ->assertSee('and all its review data')
+        ->assertSee('return to the repo picker');
+});
+
+test('page confirm copy is minimal for repos that are not the cached current', function () {
+    Project::factory()->create(['slug' => 'sibling', 'name' => 'sibling']);
+
+    Livewire::test('pages::select-repo-page')
+        ->assertSee('from the list?')
+        ->assertDontSee('review data');
+});
+
+test('page confirm copy pluralizes the comment clause correctly', function () {
+    $repo = Project::factory()->create(['slug' => 'two-comments', 'name' => 'two-comments']);
+
+    foreach (['one', 'two'] as $i => $body) {
+        Comment::create([
+            'id' => "c-{$i}",
+            'project_id' => $repo->id,
+            'repo_path' => $repo->path,
+            'origin_ref' => 'working',
+            'file_path' => 'a.php',
+            'side' => 'right',
+            'body' => $body,
+        ]);
+    }
+
+    Livewire::test('pages::select-repo-page')
+        ->assertSee('2 comments will be deleted');
+});
+
+test('removing the cached current repo from the page redirects to select-repo', function () {
+    $current = Project::factory()->create(['slug' => 'current-on-page', 'name' => 'current-on-page']);
+    Project::factory()->create(['slug' => 'other-on-page']);
+
+    app(ResolveStartupRouteAction::class)->rememberLastOpened('current-on-page');
+
+    Livewire::test('pages::select-repo-page')
+        ->call('removeProject', $current->id)
+        ->assertRedirect(route('select-repo'));
+
+    expect(Project::find($current->id))->toBeNull();
+});
+
+test('footer reflects total and filtered counts', function () {
+    Project::factory()->create(['slug' => 'match-me', 'name' => 'match-me']);
+    Project::factory()->create(['slug' => 'skip-me', 'name' => 'skip-me']);
+
+    Livewire::test('pages::select-repo-page')
+        ->assertSee('2 repos')
+        ->set('search', 'match')
+        ->assertSee('1/2 repos');
 });

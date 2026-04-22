@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\ResolveStartupRouteAction;
+use App\Models\Comment;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Livewire\Livewire;
@@ -88,4 +89,81 @@ test('projects-changed refreshes the list', function () {
 
     $component->dispatch('projects-changed')
         ->assertSet('totalProjects', 2);
+});
+
+test('trigger renders Switch repo tooltip and aria-label', function () {
+    Project::factory()->create(['slug' => 'only']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'only', 'projectName' => 'Only'])
+        ->assertSee('Switch repo')
+        ->assertSee('Switch to repo...');
+});
+
+test('trash button announces repo name via aria-label', function () {
+    Project::factory()->create(['slug' => 'anchor', 'name' => 'anchor']);
+    Project::factory()->create(['slug' => 'removable-repo', 'name' => 'removable-repo']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'anchor'])
+        ->assertSee('Remove removable-repo')
+        ->assertSee('Remove repo');
+});
+
+test('confirm copy warns about data loss when removing the current repo', function () {
+    Project::factory()->create(['slug' => 'current-repo', 'name' => 'current-repo']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'current-repo', 'projectName' => 'current-repo'])
+        ->assertSee('and all its review data')
+        ->assertSee('return to the repo picker');
+});
+
+test('confirm copy is minimal when removing a non-current repo', function () {
+    Project::factory()->create(['slug' => 'sibling-repo', 'name' => 'sibling-repo']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'anchor'])
+        ->assertSee('from the list?')
+        ->assertDontSee('review data');
+});
+
+test('confirm copy mentions comment count when repo has unsubmitted comments', function () {
+    $repo = Project::factory()->create(['slug' => 'with-comments', 'name' => 'with-comments']);
+
+    foreach (['one', 'two', 'three'] as $i => $body) {
+        Comment::create([
+            'id' => "c-{$i}",
+            'project_id' => $repo->id,
+            'repo_path' => $repo->path,
+            'origin_ref' => 'working',
+            'file_path' => 'a.php',
+            'side' => 'right',
+            'body' => $body,
+        ]);
+    }
+
+    Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'Anchor'])
+        ->assertSee('3 comments will be deleted');
+});
+
+test('confirm copy uses singular comment form for a single comment', function () {
+    $repo = Project::factory()->create(['slug' => 'one-comment', 'name' => 'one-comment']);
+
+    Comment::create([
+        'id' => 'c-solo',
+        'project_id' => $repo->id,
+        'repo_path' => $repo->path,
+        'origin_ref' => 'working',
+        'file_path' => 'a.php',
+        'side' => 'right',
+        'body' => 'only one',
+    ]);
+
+    Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'Anchor'])
+        ->assertSee('1 comment will be deleted')
+        ->assertDontSee('1 comments will be deleted');
+});
+
+test('confirm copy omits comment clause when there are no unsubmitted comments', function () {
+    Project::factory()->create(['slug' => 'clean-repo', 'name' => 'clean-repo']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'anchor', 'projectName' => 'Anchor'])
+        ->assertDontSee('will be deleted');
 });

@@ -2,6 +2,7 @@
 
 use App\Actions\ListProjectsAction;
 use App\Actions\RemoveProjectAction;
+use App\Actions\ResolveStartupRouteAction;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Session;
@@ -22,8 +23,11 @@ new #[Layout('layouts.app')] class extends Component
 
     public int $matchCount = 0;
 
+    public string $currentSlug = '';
+
     public function mount(): void
     {
+        $this->currentSlug = app(ResolveStartupRouteAction::class)->lastOpenedSlug() ?? '';
         $this->refreshProjects();
 
         if (config('nativephp-internal.running')) {
@@ -137,6 +141,7 @@ new #[Layout('layouts.app')] class extends Component
                         mode="page"
                         key-prefix="select"
                         :groups="$projectGroups"
+                        :current-slug="$currentSlug"
                         :search="$search"
                         :match-count="$matchCount"
                     />

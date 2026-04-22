@@ -123,6 +123,7 @@
                             wire:confirm="{{ $confirmMessage }}"
                             class="text-gh-muted hover:text-red-500 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                             tooltip="Remove repo"
+                            aria-label="Remove {{ $project['name'] }}"
                         />
                     </div>
                 </div>
