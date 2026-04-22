@@ -23,16 +23,7 @@ final readonly class ResolveStartupRouteAction
             Cache::forget(self::CACHE_KEY);
         }
 
-        $mostRecent = Project::query()
-            ->orderByDesc('updated_at')
-            ->orderByDesc('id')
-            ->first();
-
-        if ($mostRecent) {
-            return route('review-page', ['slug' => $mostRecent->slug]);
-        }
-
-        return route('no-projects');
+        return route('select-repo');
     }
 
     public function lastOpenedSlug(): ?string

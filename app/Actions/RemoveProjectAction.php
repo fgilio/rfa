@@ -12,7 +12,8 @@ final readonly class RemoveProjectAction
 
     /**
      * Remove a project. When the removed project was the last-opened one,
-     * returns a URL for the next route so the caller can redirect.
+     * returns the select-repo URL so the caller can redirect the user to
+     * explicitly pick a new repo. Returns null otherwise.
      */
     public function handle(int $projectId): ?string
     {

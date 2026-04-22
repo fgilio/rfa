@@ -38,7 +38,7 @@ test('cascading delete removes associated review session', function () {
     expect(ReviewSession::find($session->id))->toBeNull();
 });
 
-test('returns next route when removing the last-opened project leaves another behind', function () {
+test('returns select-repo route when removing the last-opened project leaves others behind', function () {
     $current = Project::factory()->create(['slug' => 'current', 'updated_at' => now()->subHour()]);
     Project::factory()->create(['slug' => 'surviving', 'updated_at' => now()]);
 
@@ -46,17 +46,17 @@ test('returns next route when removing the last-opened project leaves another be
 
     $result = app(RemoveProjectAction::class)->handle($current->id);
 
-    expect($result)->toBe(route('review-page', ['slug' => 'surviving']));
+    expect($result)->toBe(route('select-repo'));
 });
 
-test('returns no-projects route when removing the only project', function () {
+test('returns select-repo route when removing the only project', function () {
     $only = Project::factory()->create(['slug' => 'only']);
 
     app(ResolveStartupRouteAction::class)->rememberLastOpened('only');
 
     $result = app(RemoveProjectAction::class)->handle($only->id);
 
-    expect($result)->toBe(route('no-projects'));
+    expect($result)->toBe(route('select-repo'));
 });
 
 test('returns null when removing a non-current project', function () {

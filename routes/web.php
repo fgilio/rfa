@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn (): RedirectResponse => redirect(app(ResolveStartupRouteAction::class)->handle()))->name('home');
 
-Route::livewire('/no-projects', 'pages::no-projects-page')->name('no-projects');
+Route::livewire('/select-repo', 'pages::select-repo-page')->name('select-repo');
 Route::livewire('/p/{slug}/c/{hash}', 'pages::review-page')->where('hash', '[0-9a-fA-F]{4,40}')->name('review-page.commit');
 Route::livewire('/p/{slug}/r/{from}..{to}', 'pages::review-page')
     ->where('from', '[0-9a-fA-F]{4,40}')

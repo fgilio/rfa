@@ -40,7 +40,7 @@ test('selectProject redirects to review-page for a different project', function 
         ->assertRedirect(route('review-page', ['slug' => 'other']));
 });
 
-test('removeProject redirects to next target when removing the current project', function () {
+test('removeProject redirects to select-repo when removing the current project', function () {
     $current = Project::factory()->create(['slug' => 'current', 'updated_at' => now()->subHour()]);
     Project::factory()->create(['slug' => 'surviving', 'updated_at' => now()]);
 
@@ -48,19 +48,19 @@ test('removeProject redirects to next target when removing the current project',
 
     Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current'])
         ->call('removeProject', $current->id)
-        ->assertRedirect(route('review-page', ['slug' => 'surviving']));
+        ->assertRedirect(route('select-repo'));
 
     expect(Project::find($current->id))->toBeNull();
 });
 
-test('removeProject redirects to no-projects when removing the last project', function () {
+test('removeProject redirects to select-repo when removing the last project', function () {
     $only = Project::factory()->create(['slug' => 'only']);
 
     app(ResolveStartupRouteAction::class)->rememberLastOpened('only');
 
     Livewire::test('project-picker', ['currentSlug' => 'only', 'projectName' => 'Only'])
         ->call('removeProject', $only->id)
-        ->assertRedirect(route('no-projects'));
+        ->assertRedirect(route('select-repo'));
 
     expect(Project::find($only->id))->toBeNull();
 });

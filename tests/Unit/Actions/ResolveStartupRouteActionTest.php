@@ -7,9 +7,9 @@ use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
-test('returns no-projects when no cache and no projects exist', function () {
+test('returns select-repo when no cache and no projects exist', function () {
     expect(app(ResolveStartupRouteAction::class)->handle())
-        ->toBe(route('no-projects'));
+        ->toBe(route('select-repo'));
 });
 
 test('returns review-page when cached slug exists in DB', function () {
@@ -22,32 +22,30 @@ test('returns review-page when cached slug exists in DB', function () {
         ->toBe(route('review-page', ['slug' => 'my-project']));
 });
 
-test('returns most-recent project and forgets stale slug when cached project was deleted', function () {
+test('returns select-repo and forgets stale slug when cached project was deleted', function () {
     Project::factory()->create(['slug' => 'surviving-project']);
 
     $action = app(ResolveStartupRouteAction::class);
     $action->rememberLastOpened('deleted-project');
 
-    expect($action->handle())
-        ->toBe(route('review-page', ['slug' => 'surviving-project']));
+    expect($action->handle())->toBe(route('select-repo'));
     expect($action->lastOpenedSlug())->toBeNull();
 });
 
-test('returns no-projects and forgets stale slug when cache stale and no projects exist', function () {
+test('returns select-repo and forgets stale slug when cache stale and no projects exist', function () {
     $action = app(ResolveStartupRouteAction::class);
     $action->rememberLastOpened('deleted-project');
 
-    expect($action->handle())
-        ->toBe(route('no-projects'));
+    expect($action->handle())->toBe(route('select-repo'));
     expect($action->lastOpenedSlug())->toBeNull();
 });
 
-test('returns most-recent project when no cache and projects exist', function () {
+test('returns select-repo when no cache and projects exist', function () {
     Project::factory()->create(['slug' => 'older', 'updated_at' => now()->subHour()]);
     Project::factory()->create(['slug' => 'newer', 'updated_at' => now()]);
 
     expect(app(ResolveStartupRouteAction::class)->handle())
-        ->toBe(route('review-page', ['slug' => 'newer']));
+        ->toBe(route('select-repo'));
 });
 
 test('rememberLastOpened is a no-op when slug already cached', function () {
