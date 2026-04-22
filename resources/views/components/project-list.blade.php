@@ -72,13 +72,13 @@
                 @class([
                     'group px-3 py-2.5 border-b border-gh-border/50 last:border-b-0 cursor-pointer transition-colors',
                     'bg-gh-link/5 border-l-2 border-l-gh-link' => $isCurrent,
+                    'hover:bg-gh-border/30' => $mode !== 'picker',
                 ])
                 @if($mode === 'picker')
                     :class="selectedIndex === {{ $rowIndex }} ? 'bg-gh-text/10' : 'hover:bg-gh-border/30'"
                     @click="selectSlug('{{ $project['slug'] }}')"
                     @mouseenter="selectedIndex = {{ $rowIndex }}"
                 @else
-                    class="hover:bg-gh-border/30"
                     wire:click="selectProject('{{ $project['slug'] }}')"
                 @endif
             >
@@ -128,6 +128,7 @@
                             ])
                             tooltip="Remove repo"
                             aria-label="Remove {{ $project['name'] }}"
+                            data-testid="remove-repo-{{ $project['slug'] }}"
                         />
                     </div>
                 </div>

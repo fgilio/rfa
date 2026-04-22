@@ -17,6 +17,7 @@ test('select-repo page lists all registered repos with the pick heading', functi
 });
 
 test('deleting a repo from the select-repo list updates the list in place', function () {
+    $alphaSlug = $this->testProjectSlugs[0];
     $alphaName = basename($this->testRepoPaths[0]);
     $betaName = basename($this->testRepoPaths[1]);
 
@@ -25,8 +26,7 @@ test('deleting a repo from the select-repo list updates the list in place', func
     // wire:confirm invokes the browser's native confirm dialog; force-accept.
     $page->script('window.confirm = function() { return true; }');
 
-    $page->page()->getByLabel("Remove {$alphaName}")->waitFor();
-    $page->page()->getByLabel("Remove {$alphaName}")->click();
+    $page->page()->getByTestId("remove-repo-{$alphaSlug}")->click();
 
     $page->page()->getByText($alphaName)->first()->waitFor(['state' => 'hidden']);
 
@@ -35,14 +35,12 @@ test('deleting a repo from the select-repo list updates the list in place', func
 });
 
 test('deleting the final repo reveals the empty state', function () {
-    $names = array_map(fn (string $p) => basename($p), $this->testRepoPaths);
-
     $page = $this->visit(route('select-repo'));
     $page->script('window.confirm = function() { return true; }');
 
-    foreach ($names as $name) {
-        $page->page()->getByLabel("Remove {$name}")->waitFor();
-        $page->page()->getByLabel("Remove {$name}")->click();
+    foreach ($this->testProjectSlugs as $i => $slug) {
+        $name = basename($this->testRepoPaths[$i]);
+        $page->page()->getByTestId("remove-repo-{$slug}")->click();
         $page->page()->getByText($name)->first()->waitFor(['state' => 'hidden']);
     }
 
