@@ -56,7 +56,7 @@ class extends Component
 
     public function selectProject(string $slug): void
     {
-        $this->redirect(route('review-page', ['slug' => $slug]));
+        $this->redirect(route('review-page', ['slug' => $slug]), navigate: true);
     }
 
     public function removeProject(int $projectId): void
@@ -64,7 +64,7 @@ class extends Component
         $nextUrl = app(RemoveProjectAction::class)->handle($projectId);
 
         if ($nextUrl !== null) {
-            $this->redirect($nextUrl);
+            $this->redirect($nextUrl, navigate: true);
 
             return;
         }
