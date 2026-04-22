@@ -65,11 +65,11 @@ new class extends Component {
         @if($variant === 'expanded')
             <div class="flex items-center justify-center gap-3">
                 <flux:button wire:click="openRepository" wire:loading.attr="disabled" variant="primary" size="sm" icon="folder-open" icon:variant="outline">
-                    <span wire:loading.remove wire:target="openRepository">Open Repository</span>
+                    <span wire:loading.remove wire:target="openRepository">Add a repo</span>
                     <span wire:loading wire:target="openRepository">Opening...</span>
                 </flux:button>
                 <flux:button wire:click="scanDirectory" wire:loading.attr="disabled" variant="ghost" size="sm" icon="rectangle-stack" icon:variant="outline">
-                    <span wire:loading.remove wire:target="scanDirectory">Scan Folder</span>
+                    <span wire:loading.remove wire:target="scanDirectory">Scan folder for repos</span>
                     <span wire:loading wire:target="scanDirectory">Scanning...</span>
                 </flux:button>
             </div>
@@ -85,10 +85,10 @@ new class extends Component {
 
                 <flux:menu>
                     <flux:menu.item wire:click="openRepository" icon="folder-open" icon:variant="outline">
-                        Add Single Repository
+                        Add a repo
                     </flux:menu.item>
                     <flux:menu.item wire:click="scanDirectory" icon="rectangle-stack" icon:variant="outline">
-                        Scan Folder for Repos
+                        Scan folder for repos
                     </flux:menu.item>
                 </flux:menu>
             </flux:dropdown>
