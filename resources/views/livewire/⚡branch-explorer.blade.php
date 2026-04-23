@@ -108,7 +108,7 @@ new class extends Component {
                 <button
                     type="button"
                     class="group inline-flex items-center gap-1.5 px-2 py-1 text-xs font-mono text-gh-text hover:bg-gh-border/25 rounded-r-md transition-colors cursor-pointer"
-                    aria-label="Open selection drawer"
+                    aria-label="{{ $selectionTitle }} (⌘B)"
                     aria-haspopup="dialog"
                     x-on:click="openPanel()"
                     x-bind:aria-expanded="open"
