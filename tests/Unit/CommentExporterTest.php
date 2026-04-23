@@ -79,7 +79,7 @@ test('exports Markdown with file grouping', function () {
 test('returns clipboard text', function () {
     $result = $this->exporter->export($this->tmpDir, [], 'test');
 
-    expect($result['clipboard'])->toMatch('/^review my comments on these changes in @\.rfa\/\d{8}_\d{6}_comments_.*\.md$/');
+    expect($result['clipboard'])->toMatch('/^address my comments on these changes in @\.rfa\/\d{8}_\d{6}_comments_.*\.md$/');
 });
 
 test('creates .rfa directory if missing', function () {
