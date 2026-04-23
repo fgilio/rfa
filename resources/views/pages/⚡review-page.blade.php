@@ -16,6 +16,7 @@ use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\ResolveRangeAction;
+use App\Actions\ResolveRangeToWorkingAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\RestoreDiscardedFileAction;
 use App\Actions\SessionStateAction;
@@ -117,7 +118,7 @@ new #[Layout('layouts.app')] class extends Component
 
     // region: Initialization & Diff Context
 
-    public function mount(string $slug, ?string $hash = null, ?string $ref = null, ?string $baseRef = null, ?string $from = null, ?string $to = null): void
+    public function mount(string $slug, ?string $hash = null, ?string $ref = null, ?string $baseRef = null, ?string $from = null, ?string $to = null, ?string $rangeFromWorking = null): void
     {
         $project = app(ResolveProjectAction::class)->handle($slug, touch: true) ?? abort(404);
         $this->repoPath = $project['path'];
@@ -152,6 +153,11 @@ new #[Layout('layouts.app')] class extends Component
             $this->diffFrom = $target->from();
             $this->diffTo = $target->to();
             $this->loadCommitInfo();
+        } elseif ($rangeFromWorking !== null) {
+            // Range-to-working mode: /p/{slug}/rw/{from} — commits from $from through the working tree.
+            $target = app(ResolveRangeToWorkingAction::class)->handle($this->repoPath, $rangeFromWorking);
+            $this->diffFrom = $target->from();
+            $this->diffTo = $target->to();
         } elseif ($ref !== null) {
             // Range mode from URL params
             $target = app(ResolveRangeAction::class)->handle($this->repoPath, $baseRef, $ref);
@@ -934,9 +940,12 @@ new #[Layout('layouts.app')] class extends Component
             @php
                 $shortFrom = $diffFrom === 'HEAD' ? 'HEAD' : substr($diffFrom, 0, 7);
                 $shortTo = $diffTo ? substr($diffTo, 0, 7) : null;
-                if ($diffTo === null) {
+                if ($diffTo === null && $diffFrom === 'HEAD') {
                     $selectionLabel = 'Working tree';
                     $selectionTitle = 'Working tree changes';
+                } elseif ($diffTo === null) {
+                    $selectionLabel = 'WT · '.$shortFrom;
+                    $selectionTitle = 'Working tree + commits through '.$diffFrom;
                 } elseif ($diffFrom === $diffTo.'^') {
                     $selectionLabel = $shortTo;
                     $selectionTitle = $commitInfo['message'] ?? $diffTo;
@@ -952,6 +961,7 @@ new #[Layout('layouts.app')] class extends Component
                     :current-branch="$projectBranch"
                     :project-slug="$projectSlug"
                     :active-commit-hash="$diffTo"
+                    :active-diff-from="$diffFrom"
                     :selection-label="$selectionLabel"
                     :selection-title="$selectionTitle"
                 />

@@ -8,8 +8,11 @@ use App\Enums\GitRef;
 
 final class DiffCacheKey
 {
-    public static function for(int|string $projectIdOrRepoPath, string $fileId, string $contextKey = GitRef::Working->value): string
+    /** Default for the implicit working-tree context ("HEAD..working"). Matches DiffTarget::workingDirectory()->contextKey(). */
+    private const WORKING_TREE_CONTEXT = 'HEAD..'.GitRef::Working->value;
+
+    public static function for(int|string $projectIdOrRepoPath, string $fileId, string $contextKey = self::WORKING_TREE_CONTEXT): string
     {
-        return 'rfa_diff_v6_'.hash('xxh128', $projectIdOrRepoPath.':'.$contextKey.':'.$fileId);
+        return 'rfa_diff_v7_'.hash('xxh128', $projectIdOrRepoPath.':'.$contextKey.':'.$fileId);
     }
 }

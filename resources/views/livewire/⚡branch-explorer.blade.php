@@ -18,6 +18,10 @@ new class extends Component {
     #[Locked]
     public ?string $activeCommitHash = null;
 
+    /** Left-endpoint of the active diff. 'HEAD' for plain working-tree view; a commit sha for range views. */
+    #[Locked]
+    public string $activeDiffFrom = 'HEAD';
+
     #[Locked]
     public string $selectionLabel = 'Working tree';
 
@@ -67,6 +71,7 @@ new class extends Component {
     x-data="branchExplorer({
         currentBranch: @js($currentBranch),
         activeCommitHash: @js($activeCommitHash),
+        activeDiffFrom: @js($activeDiffFrom),
         projectSlug: @js($projectSlug),
         branches: @js($branches),
     })"
@@ -187,18 +192,18 @@ new class extends Component {
                         <span class="text-xs font-semibold tracking-brutal text-gh-text truncate" x-text="selectedBranch || 'Select a branch'"></span>
                         <span class="text-xs font-mono text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + ($wire.hasMore ? '+' : '') + ')'"></span>
 
-                        <template x-if="selectedHashes.length > 0">
+                        <template x-if="hasAnySelection">
                             <div class="ml-auto flex items-center gap-1">
                                 {{-- Segmented apply button: count + label + apply act as one unit --}}
                                 <button
                                     type="button"
                                     @click="applySelection()"
                                     class="group flex items-stretch h-6 rounded-md overflow-hidden ring-1 ring-inset ring-gh-link/30 bg-gh-link/10 hover:bg-gh-link/20 hover:ring-gh-link/50 transition-colors cursor-pointer"
-                                    :aria-label="'Apply ' + selectedHashes.length + ' selected commits'"
+                                    :aria-label="'Apply ' + selectionDescription"
                                 >
                                     <span
                                         class="grid place-items-center min-w-[18px] h-full px-1 bg-gh-link text-[10px] font-mono font-bold text-gh-bg tabular-nums leading-none"
-                                        x-text="selectedHashes.length"
+                                        x-text="selectionBadge"
                                     ></span>
                                     <span class="flex items-center px-2 text-[9px] font-display font-semibold uppercase tracking-brutal text-gh-link/80 border-r border-gh-link/25">
                                         selected
@@ -225,24 +230,38 @@ new class extends Component {
 
                     {{-- Commits list --}}
                     <div class="overflow-y-auto flex-1">
-                        <button
-                            type="button"
+                        <div
                             data-testid="working-tree-row"
-                            class="w-full text-left px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors cursor-pointer"
+                            class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
                             @click="viewWorkingTree()"
-                            :class="{ 'bg-gh-text/5 border-l-2 border-l-gh-text': activeCommitHash === null }"
-                            :aria-current="activeCommitHash === null ? 'true' : null"
+                            :class="{
+                                'bg-gh-text/5 border-l-2 border-l-gh-text': isWorkingTreeActive,
+                                'bg-gh-link/5 border-l-2 border-l-gh-link': workingTreeSelected,
+                            }"
+                            :aria-current="isWorkingTreeActive ? 'true' : null"
                         >
                             <div class="flex items-start gap-2">
-                                <div class="mt-0.5 size-4 shrink-0 grid place-items-center">
-                                    <flux:icon icon="pencil-square" variant="outline" class="!size-3.5 text-gh-muted" />
-                                </div>
+                                <button
+                                    type="button"
+                                    data-testid="working-tree-select-toggle"
+                                    @click.stop="toggleWorkingTreeSelection($event)"
+                                    @mousedown.stop
+                                    class="mt-0.5 size-4 shrink-0 grid place-items-center rounded border transition-colors cursor-pointer"
+                                    :class="workingTreeSelected
+                                        ? 'border-gh-link bg-gh-link/20 text-gh-link'
+                                        : 'border-gh-border opacity-0 group-hover:opacity-100 hover:border-gh-text/40'"
+                                    :title="workingTreeSelected ? 'Remove working tree from selection' : 'Add working tree to selection (shift+click for range)'"
+                                >
+                                    <template x-if="workingTreeSelected">
+                                        <flux:icon icon="check" variant="outline" class="!size-3" />
+                                    </template>
+                                </button>
                                 <div class="min-w-0 flex-1">
                                     <div class="text-xs text-gh-text truncate font-medium tracking-tight">Working tree</div>
                                     <span class="block mt-0.5 text-[10px] font-mono text-gh-muted">uncommitted changes</span>
                                 </div>
                             </div>
-                        </button>
+                        </div>
 
                         <template x-if="$wire.commits.length === 0">
                             <div class="flex items-center justify-center h-32">
