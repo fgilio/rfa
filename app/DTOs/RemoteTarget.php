@@ -7,10 +7,8 @@ namespace App\DTOs;
 use InvalidArgumentException;
 
 /**
- * Describes what part of a repo a "open on remote" / "copy link" action targets.
- *
- * Constructed only via the static factories. The `$params` shape is validated on
- * construction so the builder can rely on the keys it reads.
+ * Construct only via the static factories — the builder relies on the shape
+ * of `$params` they produce.
  */
 final readonly class RemoteTarget
 {
@@ -71,11 +69,10 @@ final readonly class RemoteTarget
             throw new InvalidArgumentException('Line start must be >= 1');
         }
 
-        // Normalise: end >= start, drop `end` when equal to start.
         if ($end !== null && $end < $start) {
             [$start, $end] = [$end, $start];
         }
-        if ($end !== null && $end === $start) {
+        if ($end === $start) {
             $end = null;
         }
 
@@ -93,11 +90,7 @@ final readonly class RemoteTarget
         return ['type' => $this->type, 'params' => $this->params];
     }
 
-    /**
-     * Reconstruct from a primitive payload sent by the frontend.
-     *
-     * @param  array<string, mixed>  $params
-     */
+    /** @param array<string, mixed> $params */
     public static function fromWire(string $type, array $params): self
     {
         return match ($type) {

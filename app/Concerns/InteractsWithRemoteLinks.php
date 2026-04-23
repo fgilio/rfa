@@ -8,10 +8,8 @@ use App\Actions\BuildRemoteUrlAction;
 use Native\Desktop\Facades\Shell;
 
 /**
- * Shared Livewire methods for "Open on remote" and "Copy remote link" context
- * menu actions. Consumers call `openRemote($slug, $type, $params)` or
- * `copyRemoteLink(...)` from Blade; the URL is always rebuilt server-side from
- * the project's stored `remote_url`, so we never trust a URL from the DOM.
+ * The URL is always rebuilt server-side from the project's stored `remote_url`
+ * so the trait never trusts a URL passed from the DOM.
  */
 trait InteractsWithRemoteLinks
 {

@@ -7,9 +7,9 @@ namespace App\Services;
 use App\DTOs\RemoteTarget;
 
 /**
- * Builds an https URL for a parsed remote + RemoteTarget, honouring each
- * provider's URL conventions (GitLab prefixes with `/-/`, GitHub does not;
- * both use the same `#L10` / `#L10-L20` line-anchor format).
+ * Composes web URLs from a parsed remote + RemoteTarget. GitLab prefixes
+ * tree/commit/blob with `/-/`; line-range anchors are `#L10-L20` on GitHub
+ * and `#L10-20` on GitLab.
  */
 final class RemoteUrlBuilderService
 {
@@ -36,19 +36,18 @@ final class RemoteUrlBuilderService
         };
     }
 
-    /** Preserve `/` in nested paths; encode every other segment component. */
+    /**
+     * GitLab supports `/` inside branch names (e.g. `release/1.0`); both providers
+     * resolve those as path segments, so we encode each segment and re-join with `/`.
+     */
     private function encodePath(string $path): string
     {
         return implode('/', array_map('rawurlencode', explode('/', $path)));
     }
 
-    /**
-     * Encode branch / tag / sha refs. GitLab allows `/` in branch names
-     * (e.g. `release/1.0`); both providers resolve these as path segments.
-     */
     private function encodeRef(string $ref): string
     {
-        return implode('/', array_map('rawurlencode', explode('/', $ref)));
+        return $this->encodePath($ref);
     }
 
     private function lineAnchor(string $provider, int $start, ?int $end): string
@@ -57,7 +56,6 @@ final class RemoteUrlBuilderService
             return '#L'.$start;
         }
 
-        // GitHub: #L10-L20. GitLab: #L10-20.
         return $provider === 'gitlab'
             ? '#L'.$start.'-'.$end
             : '#L'.$start.'-L'.$end;

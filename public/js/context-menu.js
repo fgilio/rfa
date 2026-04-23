@@ -1,10 +1,7 @@
-// Right-click context menu state for Alpine.
-//
-// Two usage modes:
-//   1. Standalone:   <div x-data="contextMenu()" @contextmenu.prevent="openAt($event)">
-//   2. Composed:     <div x-data="{ ...contextMenuState(), foo: 1 }" @contextmenu.prevent="openAt($event)">
-//
-// Paired with <x-remote-link-menu> which reads `open`, `x`, `y`, `close()`.
+// Alpine state factory for right-click context menus. Exposed both as an
+// Alpine.data('contextMenu') component and as a window-level factory so the
+// fields (`open`, `x`, `y`, `openAt`, `close`) can be spread into another
+// component's x-data, e.g. `{ ...contextMenuState(), status: null }`.
 (function () {
     window.contextMenuState = function () {
         return {

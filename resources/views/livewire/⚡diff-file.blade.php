@@ -236,26 +236,26 @@ new class extends Component {
     class="group"
 >
     @php
-        $remoteRef = $diffTo ?: ($projectBranch !== '' ? $projectBranch : 'HEAD');
+        $remoteRef = $diffTo ?: ($projectBranch ?: 'HEAD');
         $remoteFilePath = $file['path'];
     @endphp
 
     {{-- Shared line-level context menu (teleported, one per file) --}}
     <template x-teleport="body">
         <div
-            x-show="lineMenuOpen"
+            x-show="lineMenu.open"
             x-cloak
             x-transition.opacity.duration.75ms
             @click.outside="closeLineMenu()"
             @keydown.escape.window="closeLineMenu()"
             @click="closeLineMenu()"
             class="fixed z-[100] min-w-[200px] py-1 rounded-md border border-gh-border bg-gh-surface shadow-lg"
-            :style="`left:${lineMenuX}px; top:${lineMenuY}px`"
+            :style="`left:${lineMenu.x}px; top:${lineMenu.y}px`"
         >
             @native
                 <button
                     type="button"
-                    @click.stop="$wire.openRemote(@js($projectSlug), 'line', { ref: @js($remoteRef), path: @js($remoteFilePath), start: lineMenuStart, end: lineMenuEnd }); closeLineMenu()"
+                    @click.stop="$wire.openRemote(@js($projectSlug), 'line', { ref: @js($remoteRef), path: @js($remoteFilePath), start: lineMenu.start, end: lineMenu.end }); closeLineMenu()"
                     class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer"
                 >
                     <flux:icon icon="arrow-top-right-on-square" variant="outline" class="!size-3.5 text-gh-muted" />
@@ -264,7 +264,7 @@ new class extends Component {
             @endnative
             <button
                 type="button"
-                @click.stop="$wire.copyRemoteLink(@js($projectSlug), 'line', { ref: @js($remoteRef), path: @js($remoteFilePath), start: lineMenuStart, end: lineMenuEnd }); closeLineMenu()"
+                @click.stop="$wire.copyRemoteLink(@js($projectSlug), 'line', { ref: @js($remoteRef), path: @js($remoteFilePath), start: lineMenu.start, end: lineMenu.end }); closeLineMenu()"
                 class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer"
             >
                 <flux:icon icon="link" variant="outline" class="!size-3.5 text-gh-muted" />

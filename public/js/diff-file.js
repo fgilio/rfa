@@ -25,40 +25,34 @@
             dragSide: null,
 
             // Shared line context-menu state (one instance per file, not per line).
-            lineMenuOpen: false,
-            lineMenuX: 0,
-            lineMenuY: 0,
-            lineMenuStart: null,
-            lineMenuEnd: null,
+            lineMenu: { open: false, x: 0, y: 0, start: null, end: null },
 
             openLineMenu(event, lineNum) {
                 event.preventDefault();
-                // If the right-clicked line falls inside an active selection, link the range;
-                // otherwise just link this single line.
                 const inSelection = this.formLine !== null
                     && lineNum >= this.formLine
                     && lineNum <= (this.formEndLine ?? this.formLine);
-                this.lineMenuStart = inSelection ? this.formLine : lineNum;
-                this.lineMenuEnd = inSelection ? (this.formEndLine ?? this.formLine) : null;
-
                 const margin = 8;
                 const menuW = 220;
                 const menuH = 80;
-                this.lineMenuX = Math.min(event.clientX, window.innerWidth - menuW - margin);
-                this.lineMenuY = Math.min(event.clientY, window.innerHeight - menuH - margin);
-                this.lineMenuOpen = true;
+                this.lineMenu = {
+                    open: true,
+                    x: Math.min(event.clientX, window.innerWidth - menuW - margin),
+                    y: Math.min(event.clientY, window.innerHeight - menuH - margin),
+                    start: inSelection ? this.formLine : lineNum,
+                    end: inSelection ? (this.formEndLine ?? this.formLine) : null,
+                };
             },
 
             closeLineMenu() {
-                this.lineMenuOpen = false;
+                this.lineMenu.open = false;
             },
 
             get lineMenuLabel() {
-                if (this.lineMenuStart === null) return 'line';
-                if (this.lineMenuEnd === null || this.lineMenuEnd === this.lineMenuStart) {
-                    return 'line ' + this.lineMenuStart;
-                }
-                return 'lines ' + this.lineMenuStart + '-' + this.lineMenuEnd;
+                const { start, end } = this.lineMenu;
+                if (start === null) return 'line';
+                if (end === null || end === start) return 'line ' + start;
+                return 'lines ' + start + '-' + end;
             },
             _dragMouseX: 0,
             _dragMouseY: 0,

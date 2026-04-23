@@ -88,7 +88,6 @@ test('builds a line url with a range anchor', function () {
 });
 
 test('self-heals a missing remote_url by reading git config and persisting it', function () {
-    // Add a real origin to the test repo so GitMetadataService can find it.
     $this->runTestRepoCommand($this->testRepoPath, 'git remote add origin git@github.com:fgilio/rfa.git');
 
     $project = Project::create([
