@@ -164,7 +164,18 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                     ->icon(resource_path('icons/scan-folderTemplate.png')),
             )->label('File'),
             Menu::edit(),
-            Menu::view(),
+            // Custom View submenu that intentionally omits `reload`. The
+            // viewMenu role would otherwise bind ⌘R to Electron's built-in
+            // reload accelerator — NativePHP's menu helper strips custom
+            // accelerators from role items, so the binding can't be retargeted
+            // and the keydown never reaches the renderer. Keeping the View
+            // menu lean here lets the ⌘R registration in the review page's
+            // keymap store fire as intended.
+            Menu::make(
+                Menu::devTools(),
+                Menu::separator(),
+                Menu::fullscreen(),
+            )->label('View'),
             Menu::window(),
         );
     }
