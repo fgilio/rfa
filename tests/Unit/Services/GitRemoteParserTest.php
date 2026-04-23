@@ -102,3 +102,27 @@ test('lowercases the host for stable comparisons', function () {
     expect($result['host'])->toBe('github.com');
     expect($result['provider'])->toBe('github');
 });
+
+test('preserves http scheme for explicitly-insecure self-hosted remotes', function () {
+    $result = $this->parser->parse('http://gitlab.internal.corp/team/project.git');
+
+    expect($result['scheme'])->toBe('http');
+    expect($result['webBaseUrl'])->toBe('http://gitlab.internal.corp/team/project');
+});
+
+test('upgrades ssh:// and git:// remotes to https for the web url', function () {
+    $ssh = $this->parser->parse('ssh://git@github.com/fgilio/rfa.git');
+    $git = $this->parser->parse('git://github.com/fgilio/rfa.git');
+
+    expect($ssh['scheme'])->toBe('https');
+    expect($ssh['webBaseUrl'])->toBe('https://github.com/fgilio/rfa');
+    expect($git['scheme'])->toBe('https');
+    expect($git['webBaseUrl'])->toBe('https://github.com/fgilio/rfa');
+});
+
+test('defaults scp-style remotes to https', function () {
+    $result = $this->parser->parse('git@github.com:fgilio/rfa.git');
+
+    expect($result['scheme'])->toBe('https');
+    expect($result['webBaseUrl'])->toBe('https://github.com/fgilio/rfa');
+});

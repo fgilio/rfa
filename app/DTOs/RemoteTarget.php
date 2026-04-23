@@ -65,15 +65,16 @@ final readonly class RemoteTarget
         if ($ref === '' || $path === '') {
             throw new InvalidArgumentException('Line target requires a non-empty ref and path');
         }
-        if ($start < 1) {
-            throw new InvalidArgumentException('Line start must be >= 1');
-        }
 
         if ($end !== null && $end < $start) {
             [$start, $end] = [$end, $start];
         }
         if ($end === $start) {
             $end = null;
+        }
+
+        if ($start < 1 || ($end !== null && $end < 1)) {
+            throw new InvalidArgumentException('Line numbers must be >= 1');
         }
 
         return new self(self::TYPE_LINE, [

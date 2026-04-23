@@ -25,9 +25,9 @@
             dragSide: null,
 
             // Shared line context-menu state (one instance per file, not per line).
-            lineMenu: { open: false, x: 0, y: 0, start: null, end: null },
+            lineMenu: { open: false, x: 0, y: 0, start: null, end: null, side: 'new' },
 
-            openLineMenu(event, lineNum) {
+            openLineMenu(event, lineNum, side = 'new') {
                 event.preventDefault();
                 const inSelection = this.formLine !== null
                     && lineNum >= this.formLine
@@ -41,6 +41,7 @@
                     y: Math.min(event.clientY, window.innerHeight - menuH - margin),
                     start: inSelection ? this.formLine : lineNum,
                     end: inSelection ? (this.formEndLine ?? this.formLine) : null,
+                    side,
                 };
             },
 

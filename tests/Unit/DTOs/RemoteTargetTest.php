@@ -27,6 +27,8 @@ test('file factory rejects empty ref or path', function () {
 test('line factory rejects invalid line numbers', function () {
     expect(fn () => RemoteTarget::line('main', 'foo.php', 0))->toThrow(InvalidArgumentException::class);
     expect(fn () => RemoteTarget::line('main', 'foo.php', -1))->toThrow(InvalidArgumentException::class);
+    expect(fn () => RemoteTarget::line('main', 'foo.php', 1, -5))->toThrow(InvalidArgumentException::class);
+    expect(fn () => RemoteTarget::line('main', 'foo.php', 5, 0))->toThrow(InvalidArgumentException::class);
 });
 
 test('line factory collapses end-equals-start to single-line', function () {

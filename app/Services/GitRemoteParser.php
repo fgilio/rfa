@@ -12,7 +12,7 @@ namespace App\Services;
 final class GitRemoteParser
 {
     /**
-     * @return array{provider: string, host: string, owner: string, repo: string, webBaseUrl: string}|null
+     * @return array{provider: string, scheme: string, host: string, owner: string, repo: string, webBaseUrl: string}|null
      */
     public function parse(string $remoteUrl): ?array
     {
@@ -21,8 +21,8 @@ final class GitRemoteParser
             return null;
         }
 
-        [$host, $ownerRepo] = $this->extractHostAndPath($remoteUrl) ?? [null, null];
-        if ($host === null || $ownerRepo === null || $ownerRepo === '') {
+        [$host, $ownerRepo, $scheme] = $this->extractHostAndPath($remoteUrl) ?? [null, null, null];
+        if ($host === null || $ownerRepo === null || $ownerRepo === '' || $scheme === null) {
             return null;
         }
 
@@ -48,15 +48,16 @@ final class GitRemoteParser
 
         return [
             'provider' => $provider,
+            'scheme' => $scheme,
             'host' => $host,
             'owner' => $owner,
             'repo' => $repo,
-            'webBaseUrl' => "https://{$host}/{$owner}/{$repo}",
+            'webBaseUrl' => "{$scheme}://{$host}/{$owner}/{$repo}",
         ];
     }
 
     /**
-     * @return array{0: string, 1: string}|null [host, ownerAndRepoPath]
+     * @return array{0: string, 1: string, 2: string}|null [host, ownerAndRepoPath, webScheme]
      */
     private function extractHostAndPath(string $remoteUrl): ?array
     {
@@ -66,7 +67,7 @@ final class GitRemoteParser
             && ! str_contains($m[1], '/')
             && ! str_starts_with($m[2], '/')
         ) {
-            return [strtolower($m[1]), ltrim($m[2], '/')];
+            return [strtolower($m[1]), ltrim($m[2], '/'), 'https'];
         }
 
         $parts = parse_url($remoteUrl);
@@ -74,7 +75,13 @@ final class GitRemoteParser
             return null;
         }
 
-        return [strtolower((string) $parts['host']), ltrim((string) $parts['path'], '/')];
+        // Preserve http:// for explicitly-insecure remotes (e.g. self-hosted on an
+        // internal network); every other scheme — ssh://, git://, or missing — maps
+        // to https for the web URL since those don't have a browser-facing variant.
+        $rawScheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $webScheme = $rawScheme === 'http' ? 'http' : 'https';
+
+        return [strtolower((string) $parts['host']), ltrim((string) $parts['path'], '/'), $webScheme];
     }
 
     private function detectProvider(string $host): ?string
