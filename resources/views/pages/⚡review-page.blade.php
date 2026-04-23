@@ -64,6 +64,8 @@ new #[Layout('layouts.app')] class extends Component
 
     public string $projectSlug = '';
 
+    public bool $hasRemote = false;
+
     public ?string $exportResult = null;
 
     public bool $submitted = false;
@@ -128,6 +130,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->projectName = $project['name'];
         $this->projectBranch = $project['branch'] ?? '';
         $this->projectSlug = $project['slug'];
+        $this->hasRemote = ! empty($project['remote_url']);
 
         app(ResolveStartupRouteAction::class)->rememberLastOpened($slug);
 
@@ -929,17 +932,19 @@ new #[Layout('layouts.app')] class extends Component
     {{-- Header --}}
     <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
         <div class="flex items-center gap-2">
-            <div x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" class="inline-flex">
+            <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif class="inline-flex">
                 @native
                     <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" />
                 @else
                     <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
                 @endnative
-                <x-remote-link-menu
-                    :project-slug="$projectSlug"
-                    type="repo"
-                    label="repository"
-                />
+                @if($hasRemote)
+                    <x-remote-link-menu
+                        :project-slug="$projectSlug"
+                        type="repo"
+                        label="repository"
+                    />
+                @endif
             </div>
             @php
                 $shortFrom = $diffFrom === 'HEAD' ? 'HEAD' : substr($diffFrom, 0, 7);
@@ -962,6 +967,7 @@ new #[Layout('layouts.app')] class extends Component
                     :current-branch="$projectBranch"
                     :project-slug="$projectSlug"
                     :active-commit-hash="$diffTo"
+                    :has-remote="$hasRemote"
                     :selection-label="$selectionLabel"
                     :selection-title="$selectionTitle"
                 />
@@ -1350,6 +1356,7 @@ new #[Layout('layouts.app')] class extends Component
                                         :project-id="$projectId"
                                         :project-slug="$projectSlug"
                                         :project-branch="$projectBranch"
+                                        :has-remote="$hasRemote"
                                         :diff-from="$diffFrom"
                                         :diff-to="$diffTo"
                                     />
@@ -1365,6 +1372,7 @@ new #[Layout('layouts.app')] class extends Component
                                         :project-id="$projectId"
                                         :project-slug="$projectSlug"
                                         :project-branch="$projectBranch"
+                                        :has-remote="$hasRemote"
                                         :diff-from="$diffFrom"
                                         :diff-to="$diffTo"
                                     />
@@ -1389,6 +1397,7 @@ new #[Layout('layouts.app')] class extends Component
                             :project-id="$projectId"
                             :project-slug="$projectSlug"
                             :project-branch="$projectBranch"
+                            :has-remote="$hasRemote"
                             :diff-from="$diffFrom"
                             :diff-to="$diffTo"
                         />

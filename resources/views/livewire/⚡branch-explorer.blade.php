@@ -22,6 +22,9 @@ new class extends Component {
     public ?string $activeCommitHash = null;
 
     #[Locked]
+    public bool $hasRemote = false;
+
+    #[Locked]
     public string $selectionLabel = 'Working tree';
 
     #[Locked]
@@ -79,7 +82,7 @@ new class extends Component {
     x-effect="if (open && !$store.overlays.is('branch-explorer')) closePanel()"
 >
     <div class="inline-flex items-stretch rounded-md border border-gh-border/70 bg-gh-surface/30 hover:border-gh-text/30 transition-colors">
-        <div x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" class="inline-flex">
+        <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif class="inline-flex">
             <flux:tooltip content="Switch branch · ⌘B">
                 <button
                     type="button"
@@ -93,17 +96,19 @@ new class extends Component {
                     <span class="tracking-tight">{{ $currentBranch }}</span>
                 </button>
             </flux:tooltip>
-            <x-remote-link-menu
-                :project-slug="$projectSlug"
-                type="branch"
-                :params="['name' => $currentBranch]"
-                label="branch"
-            />
+            @if($hasRemote)
+                <x-remote-link-menu
+                    :project-slug="$projectSlug"
+                    type="branch"
+                    :params="['name' => $currentBranch]"
+                    label="branch"
+                />
+            @endif
         </div>
 
         <span class="w-px self-stretch bg-gh-border/70" aria-hidden="true"></span>
 
-        <div x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" class="inline-flex">
+        <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif class="inline-flex">
             <flux:tooltip content="{{ $selectionTitle }} · ⌘B">
                 <button
                     type="button"
@@ -118,20 +123,22 @@ new class extends Component {
                     <x-chevron-icon variant="mono" />
                 </button>
             </flux:tooltip>
-            @if($activeCommitHash !== null)
-                <x-remote-link-menu
-                    :project-slug="$projectSlug"
-                    type="commit"
-                    :params="['sha' => $activeCommitHash]"
-                    label="commit"
-                />
-            @else
-                <x-remote-link-menu
-                    :project-slug="$projectSlug"
-                    type="branch"
-                    :params="['name' => $currentBranch]"
-                    label="branch"
-                />
+            @if($hasRemote)
+                @if($activeCommitHash !== null)
+                    <x-remote-link-menu
+                        :project-slug="$projectSlug"
+                        type="commit"
+                        :params="['sha' => $activeCommitHash]"
+                        label="commit"
+                    />
+                @else
+                    <x-remote-link-menu
+                        :project-slug="$projectSlug"
+                        type="branch"
+                        :params="['name' => $currentBranch]"
+                        label="branch"
+                    />
+                @endif
             @endif
         </div>
     </div>
@@ -164,7 +171,7 @@ new class extends Component {
                                     <span class="section-label text-gh-muted">Local</span>
                                 </div>
                                 <template x-for="(branch, i) in filteredLocal" :key="branch.name">
-                                    <div x-data="contextMenu()" @contextmenu.prevent="openCtx($event)">
+                                    <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif>
                                         <button
                                             @click="selectBranchAt(i)"
                                             class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors cursor-pointer"
@@ -175,12 +182,14 @@ new class extends Component {
                                             <span class="shrink-0 w-3" x-show="!branch.isCurrent"></span>
                                             <span class="truncate" x-text="branch.name"></span>
                                         </button>
-                                        <x-remote-link-menu
-                                            :project-slug="$projectSlug"
-                                            type-js="'branch'"
-                                            params-js="{ name: branch.name }"
-                                            label-js="'branch ' + branch.name"
-                                        />
+                                        @if($hasRemote)
+                                            <x-remote-link-menu
+                                                :project-slug="$projectSlug"
+                                                type-js="'branch'"
+                                                params-js="{ name: branch.name }"
+                                                label-js="'branch ' + branch.name"
+                                            />
+                                        @endif
                                     </div>
                                 </template>
                             </div>
@@ -193,7 +202,7 @@ new class extends Component {
                                     <span class="section-label text-gh-muted">Remote</span>
                                 </div>
                                 <template x-for="(branch, j) in filteredRemote" :key="branch.name">
-                                    <div x-data="contextMenu()" @contextmenu.prevent="openCtx($event)">
+                                    <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif>
                                         <button
                                             @click="selectBranchAt(filteredLocal.length + j)"
                                             class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors cursor-pointer"
@@ -203,12 +212,14 @@ new class extends Component {
                                             <span class="shrink-0 w-3"></span>
                                             <span class="truncate" x-text="branch.name"></span>
                                         </button>
-                                        <x-remote-link-menu
-                                            :project-slug="$projectSlug"
-                                            type-js="'branch'"
-                                            params-js="{ name: branch.remote && branch.name.startsWith(branch.remote + '/') ? branch.name.slice(branch.remote.length + 1) : branch.name }"
-                                            label-js="'branch ' + branch.name"
-                                        />
+                                        @if($hasRemote)
+                                            <x-remote-link-menu
+                                                :project-slug="$projectSlug"
+                                                type-js="'branch'"
+                                                params-js="{ name: branch.remote && branch.name.startsWith(branch.remote + '/') ? branch.name.slice(branch.remote.length + 1) : branch.name }"
+                                                label-js="'branch ' + branch.name"
+                                            />
+                                        @endif
                                     </div>
                                 </template>
                             </div>
@@ -298,8 +309,7 @@ new class extends Component {
                             <div
                                 data-testid="commit-row"
                                 :data-commit-hash="commit.hash"
-                                x-data="contextMenu()"
-                                @contextmenu.prevent="openCtx($event)"
+                                @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif
                                 class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
                                 @click="viewCommit(commit.hash)"
                                 :class="{
@@ -341,12 +351,14 @@ new class extends Component {
                                         ></button>
                                     </div>
                                 </div>
-                                <x-remote-link-menu
-                                    :project-slug="$projectSlug"
-                                    type-js="'commit'"
-                                    params-js="{ sha: commit.hash }"
-                                    label-js="'commit ' + commit.shortHash"
-                                />
+                                @if($hasRemote)
+                                    <x-remote-link-menu
+                                        :project-slug="$projectSlug"
+                                        type-js="'commit'"
+                                        params-js="{ sha: commit.hash }"
+                                        label-js="'commit ' + commit.shortHash"
+                                    />
+                                @endif
                             </div>
                         </template>
 

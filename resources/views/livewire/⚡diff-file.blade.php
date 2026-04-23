@@ -3,7 +3,6 @@
 use App\Actions\ExpandDiffGapAction;
 use App\Actions\GetFileCopyContentAction;
 use App\Actions\LoadFileDiffAction;
-use App\Concerns\InteractsWithRemoteLinks;
 use App\DTOs\DiffTarget;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
@@ -11,7 +10,6 @@ use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 new class extends Component {
-    use InteractsWithRemoteLinks;
 
     /** @var array<string, mixed> */
     #[Locked]
@@ -28,6 +26,9 @@ new class extends Component {
 
     #[Locked]
     public string $projectBranch = '';
+
+    #[Locked]
+    public bool $hasRemote = false;
 
     #[Locked]
     public int $loadDelay = 0;
@@ -235,65 +236,65 @@ new class extends Component {
     @expand-file.window="if ($event.detail.id === fileId) { autoExpandedForComment = false; collapsed = false }"
     class="group"
 >
-    @php
-        // File-level / new-side links target the current ref and new path. Old-side
-        // links (removed lines, old path on renames) target the parent ref so the
-        // line exists at that revision. In working-tree mode both sides resolve to
-        // the current branch since there's no pushed commit to anchor to.
-        $remoteRefNew = $diffTo ?: ($projectBranch ?: 'HEAD');
-        $remoteRefOld = $diffTo !== null ? $diffFrom : ($projectBranch ?: 'HEAD');
-        $remoteFilePathNew = $file['path'];
-        $remoteFilePathOld = $file['oldPath'] ?? $file['path'];
-        // Back-compat alias for the file-header menu (always uses new side).
-        $remoteRef = $remoteRefNew;
-        $remoteFilePath = $remoteFilePathNew;
-    @endphp
+    @if($hasRemote)
+        @php
+            // File-level / new-side links target the current ref and new path. Old-side
+            // links (removed lines, old path on renames) target the parent ref so the
+            // line exists at that revision. In working-tree mode both sides resolve to
+            // the current branch since there's no pushed commit to anchor to.
+            $remoteRefNew = $diffTo ?: ($projectBranch ?: 'HEAD');
+            $remoteRefOld = $diffTo !== null ? $diffFrom : ($projectBranch ?: 'HEAD');
+            $remoteFilePathNew = $file['path'];
+            $remoteFilePathOld = $file['oldPath'] ?? $file['path'];
+        @endphp
 
-    {{-- Shared line-level context menu (teleported, one per file) --}}
-    <template x-teleport="body">
-        <div
-            x-show="lineMenu.open"
-            x-cloak
-            x-transition.opacity.duration.75ms
-            @click.outside="closeLineMenu()"
-            @keydown.escape.window="closeLineMenu()"
-            @click="closeLineMenu()"
-            class="fixed z-[100] min-w-[200px] py-1 rounded-md border border-gh-border bg-gh-surface shadow-lg"
-            :style="`left:${lineMenu.x}px; top:${lineMenu.y}px`"
-        >
-            @native
+        {{-- Shared line-level context menu (teleported, one per file) --}}
+        <template x-teleport="body">
+            <div
+                x-show="lineMenu.open"
+                x-cloak
+                x-transition.opacity.duration.75ms
+                @click.outside="closeLineMenu()"
+                @keydown.escape.window="closeLineMenu()"
+                @click="closeLineMenu()"
+                class="fixed z-[100] min-w-[200px] py-1 rounded-md border border-gh-border bg-gh-surface shadow-lg"
+                :style="`left:${lineMenu.x}px; top:${lineMenu.y}px`"
+            >
+                @native
+                    <button
+                        type="button"
+                        @click.stop="$wire.openRemote(@js($projectSlug), 'line', { ref: lineMenu.side === 'old' ? @js($remoteRefOld) : @js($remoteRefNew), path: lineMenu.side === 'old' ? @js($remoteFilePathOld) : @js($remoteFilePathNew), start: lineMenu.start, end: lineMenu.end }); closeLineMenu()"
+                        class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer"
+                    >
+                        <flux:icon icon="arrow-top-right-on-square" variant="outline" class="!size-3.5 text-gh-muted" />
+                        <span>Open </span><span x-text="lineMenuLabel"></span>
+                    </button>
+                @endnative
                 <button
                     type="button"
-                    @click.stop="$wire.openRemote(@js($projectSlug), 'line', { ref: lineMenu.side === 'old' ? @js($remoteRefOld) : @js($remoteRefNew), path: lineMenu.side === 'old' ? @js($remoteFilePathOld) : @js($remoteFilePathNew), start: lineMenu.start, end: lineMenu.end }); closeLineMenu()"
+                    @click.stop="$wire.copyRemoteLink(@js($projectSlug), 'line', { ref: lineMenu.side === 'old' ? @js($remoteRefOld) : @js($remoteRefNew), path: lineMenu.side === 'old' ? @js($remoteFilePathOld) : @js($remoteFilePathNew), start: lineMenu.start, end: lineMenu.end }); closeLineMenu()"
                     class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer"
                 >
-                    <flux:icon icon="arrow-top-right-on-square" variant="outline" class="!size-3.5 text-gh-muted" />
-                    <span>Open </span><span x-text="lineMenuLabel"></span>
+                    <flux:icon icon="link" variant="outline" class="!size-3.5 text-gh-muted" />
+                    <span>Copy </span><span x-text="lineMenuLabel"></span><span> link</span>
                 </button>
-            @endnative
-            <button
-                type="button"
-                @click.stop="$wire.copyRemoteLink(@js($projectSlug), 'line', { ref: lineMenu.side === 'old' ? @js($remoteRefOld) : @js($remoteRefNew), path: lineMenu.side === 'old' ? @js($remoteFilePathOld) : @js($remoteFilePathNew), start: lineMenu.start, end: lineMenu.end }); closeLineMenu()"
-                class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer"
-            >
-                <flux:icon icon="link" variant="outline" class="!size-3.5 text-gh-muted" />
-                <span>Copy </span><span x-text="lineMenuLabel"></span><span> link</span>
-            </button>
-        </div>
-    </template>
+            </div>
+        </template>
+    @endif
 
     {{-- File header --}}
     <div data-testid="file-header"
-         x-data="contextMenu()"
-         @contextmenu.prevent="openCtx($event)"
+         @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif
          class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
 
-        <x-remote-link-menu
-            :project-slug="$projectSlug"
-            type="file"
-            :params="['ref' => $remoteRef, 'path' => $remoteFilePath]"
-            label="file"
-        />
+        @if($hasRemote)
+            <x-remote-link-menu
+                :project-slug="$projectSlug"
+                type="file"
+                :params="['ref' => $remoteRefNew, 'path' => $remoteFilePathNew]"
+                label="file"
+            />
+        @endif
 
         {{-- Toggle zone: click anywhere here to expand/collapse --}}
         <div data-testid="toggle-zone"
@@ -614,7 +615,7 @@ new class extends Component {
                                 class="diff-line {{ $bgClass }}"
                                 :class="isLineInSelection({{ $lineNum ?? 'null' }}) ? 'line-selected' : ''"
                                 @mouseenter="onDragOver({{ $line['newLineNum'] ?? 'null' }}, {{ $line['oldLineNum'] ?? 'null' }})"
-                                @if($lineNum !== null) @contextmenu.prevent="openLineMenu($event, {{ $lineNum }}, '{{ $lineSide === 'left' ? 'old' : 'new' }}')" @endif
+                                @if($hasRemote && $lineNum !== null) @contextmenu.prevent="openLineMenu($event, {{ $lineNum }}, '{{ $lineSide === 'left' ? 'old' : 'new' }}')" @endif
                                 @if($line['newLineNum']) data-line-new="{{ $line['newLineNum'] }}" @endif
                                 @if($line['oldLineNum']) data-line-old="{{ $line['oldLineNum'] }}" @endif
                             >
