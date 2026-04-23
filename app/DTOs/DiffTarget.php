@@ -30,7 +30,6 @@ final readonly class DiffTarget
         return new self(from: $from, to: $to);
     }
 
-    /** Range from a commit through the working tree (committed + uncommitted + untracked). */
     public static function rangeToWorking(string $from): self
     {
         return new self(from: $from, to: null);

@@ -13,11 +13,6 @@ final readonly class ResolveRangeToWorkingAction
         private GitMetadataService $gitMetadataService,
     ) {}
 
-    /**
-     * Resolve a "from-commit through the working tree" target. Typically the
-     * caller passes `<oldest-selected>^` so the diff spans every committed
-     * change plus uncommitted/untracked edits.
-     */
     public function handle(string $repoPath, string $from): DiffTarget
     {
         $effectiveFrom = $from;
