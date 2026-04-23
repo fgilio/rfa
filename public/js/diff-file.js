@@ -1,9 +1,10 @@
 // Alpine component for livewire/⚡diff-file.blade.php
 (function () {
     function init() {
-        Alpine.data('diffFile', ({ fileId, filePath, isReviewed, singleFile = false }) => ({
+        Alpine.data('diffFile', ({ fileId, filePath, oldPath = null, isReviewed, singleFile = false }) => ({
             fileId,
             filePath,
+            oldPath,
             collapsed: singleFile ? false : (Alpine.store('settings')?.collapseAll || isReviewed),
             reviewed: isReviewed,
 
@@ -24,36 +25,21 @@
             dragStartLine: null,
             dragSide: null,
 
-            // Shared line context-menu state (one instance per file, not per line).
-            lineMenu: { open: false, x: 0, y: 0, start: null, end: null, side: 'new' },
-
-            openLineMenu(event, lineNum, side = 'new') {
-                event.preventDefault();
+            onLineContextmenu(event, lineNum, side) {
                 const inSelection = this.formLine !== null
                     && lineNum >= this.formLine
                     && lineNum <= (this.formEndLine ?? this.formLine);
-                const margin = 8;
-                const menuW = 220;
-                const menuH = 80;
-                this.lineMenu = {
-                    open: true,
-                    x: Math.min(event.clientX, window.innerWidth - menuW - margin),
-                    y: Math.min(event.clientY, window.innerHeight - menuH - margin),
+                this.$dispatch('show-remote-menu', {
+                    target: 'line',
+                    fileId: this.fileId,
+                    filePath: this.filePath,
+                    oldPath: this.oldPath,
+                    side,
                     start: inSelection ? this.formLine : lineNum,
                     end: inSelection ? (this.formEndLine ?? this.formLine) : null,
-                    side,
-                };
-            },
-
-            closeLineMenu() {
-                this.lineMenu.open = false;
-            },
-
-            get lineMenuLabel() {
-                const { start, end } = this.lineMenu;
-                if (start === null) return 'line';
-                if (end === null || end === start) return 'line ' + start;
-                return 'lines ' + start + '-' + end;
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                });
             },
             _dragMouseX: 0,
             _dragMouseY: 0,
