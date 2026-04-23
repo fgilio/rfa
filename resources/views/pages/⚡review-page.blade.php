@@ -946,7 +946,9 @@ new #[Layout('layouts.app')] class extends Component
     @reset-reviewed-files.window="reviewedFiles = {}"
     @show-remote-menu.window="showRemoteMenu($event)"
     @copy-to-clipboard.window="
-        navigator.clipboard.writeText($event.detail.text).catch(() => {});
+        navigator.clipboard.writeText($event.detail.text).then(() => {
+            if ($event.detail.toast) Flux.toast({ text: $event.detail.toast, variant: 'success' });
+        }).catch(() => {});
     "
     @keydown.window="
         if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {

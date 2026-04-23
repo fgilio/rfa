@@ -29,7 +29,7 @@ trait InteractsWithTestRepositories
 
     protected function createTempDirectory(string $prefix = 'rfa_test_'): string
     {
-        $path = sys_get_temp_dir().'/'.$prefix.uniqid();
+        $path = sys_get_temp_dir().'/'.$prefix.getmypid().'_'.uniqid('', true);
 
         File::makeDirectory($path, 0755, true);
 

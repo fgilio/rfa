@@ -84,7 +84,7 @@ test('draft comment shows Draft badge', function () {
     $page->assertSee('Badge test');
 });
 
-test('draft comment has click-to-edit cursor', function () {
+test('draft comment exposes an edit button', function () {
     $page = $this->visit($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
@@ -94,15 +94,15 @@ test('draft comment has click-to-edit cursor', function () {
 
     $page->assertSee('Click me');
 
-    // Click the draft to re-open form
-    $page->page()->getByTestId('draft-comment')->first()->click();
+    // Edit button is the explicit affordance (same as finalized comments)
+    $page->page()->getByRole('button', ['name' => 'Edit comment'])->first()->click();
 
     $page->assertSee('Cancel');
 });
 
 // -- Click-to-edit drafts --
 
-test('clicking draft re-opens edit form with pre-filled text', function () {
+test('clicking edit on a draft re-opens form with pre-filled text', function () {
     $page = $this->visit($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
@@ -112,7 +112,7 @@ test('clicking draft re-opens edit form with pre-filled text', function () {
 
     $page->assertSee('Original draft');
 
-    $page->page()->getByTestId('draft-comment')->first()->click();
+    $page->page()->getByRole('button', ['name' => 'Edit comment'])->first()->click();
 
     $page->assertSee('Cancel');
     expect($page->page()->getByPlaceholder('Write a comment', false)->inputValue())->toBe('Original draft');
@@ -126,7 +126,7 @@ test('saving edited draft promotes to finalized comment', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
 
-    $page->page()->getByTestId('draft-comment')->first()->click();
+    $page->page()->getByRole('button', ['name' => 'Edit comment'])->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Final comment');
     $page->page()->getByPlaceholder('Write a comment', false)->press('Meta+Enter');
 
@@ -145,7 +145,7 @@ test('clearing draft text and pressing esc deletes the draft', function () {
 
     $page->assertSee('Delete me');
 
-    $page->page()->getByTestId('draft-comment')->first()->click();
+    $page->page()->getByRole('button', ['name' => 'Edit comment'])->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('');
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
 
@@ -163,7 +163,7 @@ test('double esc on edited draft updates the draft', function () {
 
     $page->assertSee('v1');
 
-    $page->page()->getByTestId('draft-comment')->first()->click();
+    $page->page()->getByRole('button', ['name' => 'Edit comment'])->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('v2');
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
