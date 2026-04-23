@@ -4,6 +4,20 @@ beforeEach(function () {
     $this->setUpTestRepo();
 });
 
+/**
+ * Replace the Alpine refresh() with a counter so Meta+R doesn't actually
+ * reload the document mid-test. window.location.reload itself is read-only
+ * and can't be stubbed, so we swap the caller instead.
+ */
+function stubRefreshCounter($page): void
+{
+    $page->page()->evaluate(<<<'JS'
+        window.__refreshCalls = 0;
+        const el = document.querySelector('[data-testid="change-polling"]');
+        Alpine.$data(el).refresh = () => { window.__refreshCalls += 1; };
+    JS);
+}
+
 test('the header shows a refresh button labelled with the ⌘R shortcut', function () {
     $page = $this->visit($this->projectUrl());
 
@@ -14,17 +28,10 @@ test('the header shows a refresh button labelled with the ⌘R shortcut', functi
 test('pressing ⌘R triggers the refresh handler', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
-    // Wait for the refresh control (and therefore its x-init keymap registration) to mount.
+    // Waiting for the button confirms the x-init keymap registration ran.
     $page->page()->getByLabel('Refresh page · ⌘R')->first()->waitFor();
 
-    // Swap the Alpine component's refresh() for a counter so we don't actually
-    // reload the document mid-test (window.location.reload is read-only and
-    // can't be stubbed).
-    $page->page()->evaluate(<<<'JS'
-        window.__refreshCalls = 0;
-        const el = document.querySelector('[data-testid="change-polling"]');
-        Alpine.$data(el).refresh = () => { window.__refreshCalls += 1; };
-    JS);
+    stubRefreshCounter($page);
 
     $page->page()->locator('body')->press('Meta+r');
 
@@ -37,17 +44,12 @@ test('⌘R fires even while a comment input is focused', function () {
 
     $page->page()->getByLabel('Refresh page · ⌘R')->first()->waitFor();
 
-    // Open a comment form so an input is focused.
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $input = $page->page()->getByPlaceholder('Write a comment', false);
     $input->waitFor();
     $input->focus();
 
-    $page->page()->evaluate(<<<'JS'
-        window.__refreshCalls = 0;
-        const el = document.querySelector('[data-testid="change-polling"]');
-        Alpine.$data(el).refresh = () => { window.__refreshCalls += 1; };
-    JS);
+    stubRefreshCounter($page);
 
     $input->press('Meta+r');
 
