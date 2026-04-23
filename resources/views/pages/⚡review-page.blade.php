@@ -903,7 +903,9 @@ new #[Layout('layouts.app')] class extends Component
     @file-reviewed-changed.window="reviewedFiles[$event.detail.id] = $event.detail.reviewed"
     @reset-reviewed-files.window="reviewedFiles = {}"
     @copy-to-clipboard.window="
-        navigator.clipboard.writeText($event.detail.text).catch(() => {});
+        navigator.clipboard.writeText($event.detail.text).then(() => {
+            if ($event.detail.toast) Flux.toast({ text: $event.detail.toast, variant: 'success' });
+        }).catch(() => {});
     "
     @keydown.window="
         if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {

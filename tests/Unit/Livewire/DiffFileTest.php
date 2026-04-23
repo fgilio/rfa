@@ -135,7 +135,6 @@ test('draft comment renders copy, edit, and delete buttons', function () {
     $draftPos = strpos($html, 'data-testid="draft-comment"');
     expect($draftPos)->not->toBeFalse();
 
-    // All three buttons must render inside the draft bubble (before the closing wrapper).
     $slice = substr($html, $draftPos);
     expect($slice)->toContain('data-testid="copy-comment"')
         ->and($slice)->toContain('data-testid="edit-comment"')

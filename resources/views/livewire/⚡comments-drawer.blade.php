@@ -167,7 +167,7 @@ class extends Component
                 <div class="border-b border-gh-border/50">
                     <div class="px-4 py-2 bg-gh-surface/40 font-mono text-xs text-gh-text truncate">{{ $filePath }}</div>
                     @foreach($comments as $c)
-                        <div x-data class="group px-4 py-2.5 border-t border-gh-border/30 text-xs">
+                        <div class="group px-4 py-2.5 border-t border-gh-border/30 text-xs">
                             <div class="flex items-center gap-2 text-[10px] font-mono text-gh-muted mb-1">
                                 @if(! empty($c['origin_ref']))
                                     <span>{{ $c['origin_ref'] === 'working' ? 'WD' : Str::limit($c['origin_ref'], 7, '') }}</span>
@@ -189,11 +189,7 @@ class extends Component
                                             variant="ghost"
                                             size="xs"
                                             aria-label="Copy comment"
-                                            x-on:click="
-                                                navigator.clipboard.writeText(@js($c['body'])).then(() => {
-                                                    window.Flux && Flux.toast({ text: 'Copied', variant: 'success' });
-                                                }).catch(() => {});
-                                            "
+                                            x-on:click="$dispatch('copy-to-clipboard', { text: @js($c['body']), toast: 'Copied' })"
                                             class="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity hover:!text-gh-accent"
                                         />
                                     </flux:tooltip>

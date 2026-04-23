@@ -26,11 +26,7 @@
                     variant="ghost"
                     size="xs"
                     aria-label="Copy comment"
-                    x-on:click.stop="
-                        navigator.clipboard.writeText(@js($comment['body'])).then(() => {
-                            window.Flux && Flux.toast({ text: 'Copied', variant: 'success' });
-                        }).catch(() => {});
-                    "
+                    x-on:click.stop="$dispatch('copy-to-clipboard', { text: @js($comment['body']), toast: 'Copied' })"
                     class="hover:!text-gh-accent"
                     data-testid="copy-comment"
                 />
