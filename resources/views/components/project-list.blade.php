@@ -63,13 +63,14 @@
                     data-project-picker-row
                     data-slug="{{ $project['slug'] }}"
                 @endif
-                x-data="{ status: null, loaded: false }"
+                x-data="{ ...contextMenuState(), status: null, loaded: false }"
                 x-intersect.once="setTimeout(() => {
                     fetch('{{ route('api.status', $project['id']) }}')
                         .then(r => r.json())
                         .then(d => { status = d; loaded = true; })
                         .catch(() => { loaded = true; });
                 }, {{ $rowIndex * 40 }})"
+                @contextmenu.prevent="openAt($event)"
                 @class([
                     'group px-3 py-2.5 border-b border-gh-border/50 last:border-b-0 cursor-pointer transition-colors',
                     'bg-gh-link/5 border-l-2 border-l-gh-link' => $isCurrent,
@@ -134,6 +135,11 @@
                     </div>
                 </div>
                 <p class="mt-1 font-mono text-[11px] text-gh-muted/70 truncate pl-6">{{ $project['path'] }}</p>
+                <x-remote-link-menu
+                    :project-slug="$project['slug']"
+                    type="repo"
+                    label="repository"
+                />
             </div>
             @php $rowIndex++; @endphp
         @endforeach

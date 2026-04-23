@@ -56,6 +56,7 @@ final readonly class RegisterProjectAction
             'git_common_dir' => $gitCommonDir,
             'is_worktree' => $isWorktree,
             'branch' => $branch,
+            'remote_url' => $this->git->getRemoteUrl($path),
             'global_gitignore_path' => $this->git->resolveGlobalExcludesFile($path),
         ]);
     }

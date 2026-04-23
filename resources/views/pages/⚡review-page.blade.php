@@ -2,6 +2,7 @@
 
 use App\Actions\AddCommentAction;
 use App\Actions\BackfillGlobalGitignoreAction;
+use App\Concerns\InteractsWithRemoteLinks;
 use App\Actions\CleanExpiredTrashAction;
 use App\Actions\DeleteCommentAction;
 use App\Actions\DeleteReviewFilesAction;
@@ -37,6 +38,8 @@ use Livewire\Component;
 
 new #[Layout('layouts.app')] class extends Component
 {
+    use InteractsWithRemoteLinks;
+
     /** @var array<int, array<string, mixed>> */
     public array $files = [];
 
@@ -926,11 +929,18 @@ new #[Layout('layouts.app')] class extends Component
     {{-- Header --}}
     <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
         <div class="flex items-center gap-2">
-            @native
-                <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" />
-            @else
-                <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
-            @endnative
+            <div x-data="contextMenu()" @contextmenu.prevent="openAt($event)" class="inline-flex">
+                @native
+                    <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" />
+                @else
+                    <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
+                @endnative
+                <x-remote-link-menu
+                    :project-slug="$projectSlug"
+                    type="repo"
+                    label="repository"
+                />
+            </div>
             @php
                 $shortFrom = $diffFrom === 'HEAD' ? 'HEAD' : substr($diffFrom, 0, 7);
                 $shortTo = $diffTo ? substr($diffTo, 0, 7) : null;
@@ -1338,6 +1348,8 @@ new #[Layout('layouts.app')] class extends Component
                                         :is-reviewed="array_key_exists($pair['jsonFile']['path'], $reviewedFiles)"
                                         :repo-path="$repoPath"
                                         :project-id="$projectId"
+                                        :project-slug="$projectSlug"
+                                        :project-branch="$projectBranch"
                                         :diff-from="$diffFrom"
                                         :diff-to="$diffTo"
                                     />
@@ -1351,6 +1363,8 @@ new #[Layout('layouts.app')] class extends Component
                                         :is-reviewed="array_key_exists($pair['mdFile']['path'], $reviewedFiles)"
                                         :repo-path="$repoPath"
                                         :project-id="$projectId"
+                                        :project-slug="$projectSlug"
+                                        :project-branch="$projectBranch"
                                         :diff-from="$diffFrom"
                                         :diff-to="$diffTo"
                                     />
@@ -1373,6 +1387,8 @@ new #[Layout('layouts.app')] class extends Component
                             :single-file="$singleFile"
                             :repo-path="$repoPath"
                             :project-id="$projectId"
+                            :project-slug="$projectSlug"
+                            :project-branch="$projectBranch"
                             :diff-from="$diffFrom"
                             :diff-to="$diffTo"
                         />

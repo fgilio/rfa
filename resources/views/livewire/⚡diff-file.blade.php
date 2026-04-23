@@ -3,6 +3,7 @@
 use App\Actions\ExpandDiffGapAction;
 use App\Actions\GetFileCopyContentAction;
 use App\Actions\LoadFileDiffAction;
+use App\Concerns\InteractsWithRemoteLinks;
 use App\DTOs\DiffTarget;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
@@ -10,6 +11,8 @@ use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 new class extends Component {
+    use InteractsWithRemoteLinks;
+
     /** @var array<string, mixed> */
     #[Locked]
     public array $file = [];
@@ -19,6 +22,12 @@ new class extends Component {
 
     #[Locked]
     public int $projectId = 0;
+
+    #[Locked]
+    public string $projectSlug = '';
+
+    #[Locked]
+    public string $projectBranch = '';
 
     #[Locked]
     public int $loadDelay = 0;
@@ -226,8 +235,56 @@ new class extends Component {
     @expand-file.window="if ($event.detail.id === fileId) { autoExpandedForComment = false; collapsed = false }"
     class="group"
 >
+    @php
+        $remoteRef = $diffTo ?: ($projectBranch !== '' ? $projectBranch : 'HEAD');
+        $remoteFilePath = $file['path'];
+    @endphp
+
+    {{-- Shared line-level context menu (teleported, one per file) --}}
+    <template x-teleport="body">
+        <div
+            x-show="lineMenuOpen"
+            x-cloak
+            x-transition.opacity.duration.75ms
+            @click.outside="closeLineMenu()"
+            @keydown.escape.window="closeLineMenu()"
+            @click="closeLineMenu()"
+            class="fixed z-[100] min-w-[200px] py-1 rounded-md border border-gh-border bg-gh-surface shadow-lg"
+            :style="`left:${lineMenuX}px; top:${lineMenuY}px`"
+        >
+            @native
+                <button
+                    type="button"
+                    @click.stop="$wire.openRemote(@js($projectSlug), 'line', { ref: @js($remoteRef), path: @js($remoteFilePath), start: lineMenuStart, end: lineMenuEnd }); closeLineMenu()"
+                    class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer"
+                >
+                    <flux:icon icon="arrow-top-right-on-square" variant="outline" class="!size-3.5 text-gh-muted" />
+                    <span>Open </span><span x-text="lineMenuLabel"></span>
+                </button>
+            @endnative
+            <button
+                type="button"
+                @click.stop="$wire.copyRemoteLink(@js($projectSlug), 'line', { ref: @js($remoteRef), path: @js($remoteFilePath), start: lineMenuStart, end: lineMenuEnd }); closeLineMenu()"
+                class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer"
+            >
+                <flux:icon icon="link" variant="outline" class="!size-3.5 text-gh-muted" />
+                <span>Copy </span><span x-text="lineMenuLabel"></span><span> link</span>
+            </button>
+        </div>
+    </template>
+
     {{-- File header --}}
-    <div data-testid="file-header" class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
+    <div data-testid="file-header"
+         x-data="contextMenu()"
+         @contextmenu.prevent="openAt($event)"
+         class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
+
+        <x-remote-link-menu
+            :project-slug="$projectSlug"
+            type="file"
+            :params="['ref' => $remoteRef, 'path' => $remoteFilePath]"
+            label="file"
+        />
 
         {{-- Toggle zone: click anywhere here to expand/collapse --}}
         <div data-testid="toggle-zone"
@@ -548,6 +605,7 @@ new class extends Component {
                                 class="diff-line {{ $bgClass }}"
                                 :class="isLineInSelection({{ $lineNum ?? 'null' }}) ? 'line-selected' : ''"
                                 @mouseenter="onDragOver({{ $line['newLineNum'] ?? 'null' }}, {{ $line['oldLineNum'] ?? 'null' }})"
+                                @if($lineNum !== null) @contextmenu.prevent="openLineMenu($event, {{ $lineNum }})" @endif
                                 @if($line['newLineNum']) data-line-new="{{ $line['newLineNum'] }}" @endif
                                 @if($line['oldLineNum']) data-line-old="{{ $line['oldLineNum'] }}" @endif
                             >
