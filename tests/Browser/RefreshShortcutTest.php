@@ -1,5 +1,7 @@
 <?php
 
+use Pest\Browser\Api\PendingAwaitablePage;
+
 beforeEach(function () {
     $this->setUpTestRepo();
 });
@@ -9,7 +11,7 @@ beforeEach(function () {
  * reload the document mid-test. window.location.reload itself is read-only
  * and can't be stubbed, so we swap the caller instead.
  */
-function stubRefreshCounter($page): void
+function stubRefreshCounter(PendingAwaitablePage $page): void
 {
     $page->page()->evaluate(<<<'JS'
         window.__refreshCalls = 0;
