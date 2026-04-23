@@ -79,7 +79,7 @@ new class extends Component {
     x-effect="if (open && !$store.overlays.is('branch-explorer')) closePanel()"
 >
     <div class="inline-flex items-stretch rounded-md border border-gh-border/70 bg-gh-surface/30 hover:border-gh-text/30 transition-colors">
-        <div x-data="contextMenu()" @contextmenu.prevent="openAt($event)" class="inline-flex">
+        <div x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" class="inline-flex">
             <flux:tooltip content="Switch branch · ⌘B">
                 <button
                     type="button"
@@ -103,7 +103,7 @@ new class extends Component {
 
         <span class="w-px self-stretch bg-gh-border/70" aria-hidden="true"></span>
 
-        <div x-data="contextMenu()" @contextmenu.prevent="openAt($event)" class="inline-flex">
+        <div x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" class="inline-flex">
             <flux:tooltip content="{{ $selectionTitle }} · ⌘B">
                 <button
                     type="button"
@@ -164,7 +164,7 @@ new class extends Component {
                                     <span class="section-label text-gh-muted">Local</span>
                                 </div>
                                 <template x-for="(branch, i) in filteredLocal" :key="branch.name">
-                                    <div x-data="contextMenu()" @contextmenu.prevent="openAt($event)">
+                                    <div x-data="contextMenu()" @contextmenu.prevent="openCtx($event)">
                                         <button
                                             @click="selectBranchAt(i)"
                                             class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors cursor-pointer"
@@ -193,7 +193,7 @@ new class extends Component {
                                     <span class="section-label text-gh-muted">Remote</span>
                                 </div>
                                 <template x-for="(branch, j) in filteredRemote" :key="branch.name">
-                                    <div x-data="contextMenu()" @contextmenu.prevent="openAt($event)">
+                                    <div x-data="contextMenu()" @contextmenu.prevent="openCtx($event)">
                                         <button
                                             @click="selectBranchAt(filteredLocal.length + j)"
                                             class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors cursor-pointer"
@@ -299,7 +299,7 @@ new class extends Component {
                                 data-testid="commit-row"
                                 :data-commit-hash="commit.hash"
                                 x-data="contextMenu()"
-                                @contextmenu.prevent="openAt($event)"
+                                @contextmenu.prevent="openCtx($event)"
                                 class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
                                 @click="viewCommit(commit.hash)"
                                 :class="{

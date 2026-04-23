@@ -285,7 +285,7 @@ new class extends Component {
     {{-- File header --}}
     <div data-testid="file-header"
          x-data="contextMenu()"
-         @contextmenu.prevent="openAt($event)"
+         @contextmenu.prevent="openCtx($event)"
          class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
 
         <x-remote-link-menu

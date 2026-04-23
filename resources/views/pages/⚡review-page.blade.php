@@ -929,7 +929,7 @@ new #[Layout('layouts.app')] class extends Component
     {{-- Header --}}
     <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
         <div class="flex items-center gap-2">
-            <div x-data="contextMenu()" @contextmenu.prevent="openAt($event)" class="inline-flex">
+            <div x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" class="inline-flex">
                 @native
                     <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" />
                 @else

@@ -70,7 +70,7 @@
                         .then(d => { status = d; loaded = true; })
                         .catch(() => { loaded = true; });
                 }, {{ $rowIndex * 40 }})"
-                @contextmenu.prevent="openAt($event)"
+                @contextmenu.prevent="openCtx($event)"
                 @class([
                     'group px-3 py-2.5 border-b border-gh-border/50 last:border-b-0 cursor-pointer transition-colors',
                     'bg-gh-link/5 border-l-2 border-l-gh-link' => $isCurrent,

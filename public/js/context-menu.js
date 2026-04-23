@@ -1,25 +1,28 @@
 // Alpine state factory for right-click context menus. Exposed both as an
 // Alpine.data('contextMenu') component and as a window-level factory so the
-// fields (`open`, `x`, `y`, `openAt`, `close`) can be spread into another
-// component's x-data, e.g. `{ ...contextMenuState(), status: null }`.
+// fields (`ctxOpen`, `ctxX`, `ctxY`, `openCtx`, `closeCtx`) can be spread into
+// another component's x-data.
+//
+// Field names are deliberately scoped (`ctx*`) so they don't collide with
+// panels / drawers that also use names like `open`, `x`, or `y`.
 (function () {
     window.contextMenuState = function () {
         return {
-            open: false,
-            x: 0,
-            y: 0,
+            ctxOpen: false,
+            ctxX: 0,
+            ctxY: 0,
 
-            openAt(event) {
+            openCtx(event) {
                 const margin = 8;
                 const menuW = 200;
                 const menuH = 80;
-                this.x = Math.min(event.clientX, window.innerWidth - menuW - margin);
-                this.y = Math.min(event.clientY, window.innerHeight - menuH - margin);
-                this.open = true;
+                this.ctxX = Math.min(event.clientX, window.innerWidth - menuW - margin);
+                this.ctxY = Math.min(event.clientY, window.innerHeight - menuH - margin);
+                this.ctxOpen = true;
             },
 
-            close() {
-                this.open = false;
+            closeCtx() {
+                this.ctxOpen = false;
             },
         };
     };

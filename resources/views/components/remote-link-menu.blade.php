@@ -2,7 +2,7 @@
     Right-click menu for "Open on remote" + "Copy remote link" actions.
 
     Must be rendered inside an `x-data="contextMenu()"` scope whose trigger
-    element dispatches `openAt($event)` from `@contextmenu.prevent`. The
+    element dispatches `openCtx($event)` from `@contextmenu.prevent`. The
     enclosing Livewire component must `use App\Concerns\InteractsWithRemoteLinks`.
 
     Static use (target known at render time):
@@ -48,20 +48,20 @@
 
 <template x-teleport="body">
     <div
-        x-show="open"
+        x-show="ctxOpen"
         x-cloak
         x-transition.opacity.duration.75ms
-        @click.outside="close()"
-        @keydown.escape.window="close()"
-        @click="close()"
+        @click.outside="closeCtx()"
+        @keydown.escape.window="closeCtx()"
+        @click="closeCtx()"
         class="fixed z-[100] min-w-[180px] py-1 rounded-md border border-gh-border bg-gh-surface shadow-lg"
-        :style="`left:${x}px; top:${y}px`"
+        :style="`left:${ctxX}px; top:${ctxY}px`"
     >
         @foreach($actions as $action)
             @if($action['nativeOnly'])@native @endif
                 <button
                     type="button"
-                    @click.stop="$wire.{{ $action['method'] }}(@js($projectSlug), {{ $typeExpr }}, {{ $paramsExpr }}); close()"
+                    @click.stop="$wire.{{ $action['method'] }}(@js($projectSlug), {{ $typeExpr }}, {{ $paramsExpr }}); closeCtx()"
                     class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer"
                 >
                     <flux:icon icon="{{ $action['icon'] }}" variant="outline" class="!size-3.5 text-gh-muted" />

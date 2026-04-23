@@ -66,4 +66,7 @@ test('fromWire rejects unknown type', function () {
 test('fromWire rejects missing required params via the factory', function () {
     expect(fn () => RemoteTarget::fromWire('branch', []))->toThrow(InvalidArgumentException::class);
     expect(fn () => RemoteTarget::fromWire('commit', []))->toThrow(InvalidArgumentException::class);
+    expect(fn () => RemoteTarget::fromWire('file', ['ref' => 'main']))->toThrow(InvalidArgumentException::class);
+    expect(fn () => RemoteTarget::fromWire('file', ['path' => 'a.php']))->toThrow(InvalidArgumentException::class);
+    expect(fn () => RemoteTarget::fromWire('line', ['ref' => 'main', 'path' => 'a.php', 'start' => 0]))->toThrow(InvalidArgumentException::class);
 });
