@@ -12,7 +12,7 @@ trait InteractsWithTestRepositories
      */
     protected function createTestProject(array $overrides = []): Project
     {
-        $slug = $overrides['slug'] ?? 'test-proj-'.uniqid();
+        $slug = $overrides['slug'] ?? 'test-proj-'.bin2hex(random_bytes(8));
         $path = $overrides['path'] ?? '/tmp/'.$slug;
 
         return Project::create(array_merge([
@@ -29,7 +29,10 @@ trait InteractsWithTestRepositories
 
     protected function createTempDirectory(string $prefix = 'rfa_test_'): string
     {
-        $path = sys_get_temp_dir().'/'.$prefix.uniqid();
+        // random_bytes avoids the uniqid() collisions hit by parallel Pest workers
+        // sharing a microsecond; uniqid's 13-char time-only output is not unique
+        // across forked processes.
+        $path = sys_get_temp_dir().'/'.$prefix.bin2hex(random_bytes(8));
 
         File::makeDirectory($path, 0755, true);
 
