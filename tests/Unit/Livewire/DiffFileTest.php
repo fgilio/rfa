@@ -100,6 +100,65 @@ test('file-level saved comments use border-b class', function () {
         ->and($borderPos)->not->toBeFalse();
 });
 
+test('saved comment renders copy, edit, and delete buttons', function () {
+    $comments = [[
+        'id' => 'saved-1',
+        'fileId' => $this->file['id'],
+        'file' => 'src/Test.php',
+        'side' => 'file',
+        'startLine' => null,
+        'endLine' => null,
+        'body' => 'Saved body',
+    ]];
+
+    $html = mountDiffFile($this->file, $comments)->html();
+
+    expect($html)->toContain('data-testid="copy-comment"')
+        ->and($html)->toContain('data-testid="edit-comment"')
+        ->and($html)->toContain('aria-label="Delete comment"');
+});
+
+test('draft comment renders copy, edit, and delete buttons', function () {
+    $comments = [[
+        'id' => 'draft-1',
+        'fileId' => $this->file['id'],
+        'file' => 'src/Test.php',
+        'side' => 'file',
+        'startLine' => null,
+        'endLine' => null,
+        'body' => 'Draft body',
+        'isDraft' => true,
+    ]];
+
+    $html = mountDiffFile($this->file, $comments)->html();
+
+    $draftPos = strpos($html, 'data-testid="draft-comment"');
+    expect($draftPos)->not->toBeFalse();
+
+    // All three buttons must render inside the draft bubble (before the closing wrapper).
+    $slice = substr($html, $draftPos);
+    expect($slice)->toContain('data-testid="copy-comment"')
+        ->and($slice)->toContain('data-testid="edit-comment"')
+        ->and($slice)->toContain('aria-label="Delete comment"');
+});
+
+test('single-line comment displays "Line N" label', function () {
+    $comments = [[
+        'id' => 'c-line',
+        'fileId' => $this->file['id'],
+        'file' => 'src/Test.php',
+        'side' => 'right',
+        'startLine' => 7,
+        'endLine' => 7,
+        'body' => 'Single line',
+    ]];
+
+    $html = mountDiffFile($this->file, $comments)->html();
+
+    expect($html)->toContain('Line 7')
+        ->and($html)->not->toContain('Lines 7-7');
+});
+
 test('comment count badge markup is present', function () {
     $html = mountDiffFile($this->file, loadDiff: false)->html();
 

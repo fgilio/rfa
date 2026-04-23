@@ -167,7 +167,7 @@ class extends Component
                 <div class="border-b border-gh-border/50">
                     <div class="px-4 py-2 bg-gh-surface/40 font-mono text-xs text-gh-text truncate">{{ $filePath }}</div>
                     @foreach($comments as $c)
-                        <div class="px-4 py-2.5 border-t border-gh-border/30 text-xs">
+                        <div x-data class="group px-4 py-2.5 border-t border-gh-border/30 text-xs">
                             <div class="flex items-center gap-2 text-[10px] font-mono text-gh-muted mb-1">
                                 @if(! empty($c['origin_ref']))
                                     <span>{{ $c['origin_ref'] === 'working' ? 'WD' : Str::limit($c['origin_ref'], 7, '') }}</span>
@@ -176,11 +176,28 @@ class extends Component
                                     <span>&middot;</span>
                                     <span>L{{ $c['start_line'] }}@if(! empty($c['end_line']) && $c['end_line'] !== $c['start_line'])-L{{ $c['end_line'] }}@endif</span>
                                 @endif
-                                @if(! empty($c['is_draft']))
-                                    <span class="ml-auto px-1.5 py-0.5 rounded bg-gh-draft/10 text-gh-draft text-[9px]">draft</span>
-                                @elseif(! empty($c['submitted_at']))
-                                    <span class="ml-auto px-1.5 py-0.5 rounded bg-gh-border/40 text-gh-muted text-[9px]">submitted</span>
-                                @endif
+                                <div class="ml-auto flex items-center gap-1">
+                                    @if(! empty($c['is_draft']))
+                                        <span class="px-1.5 py-0.5 rounded bg-gh-draft/10 text-gh-draft text-[9px]">draft</span>
+                                    @elseif(! empty($c['submitted_at']))
+                                        <span class="px-1.5 py-0.5 rounded bg-gh-border/40 text-gh-muted text-[9px]">submitted</span>
+                                    @endif
+                                    <flux:tooltip content="Copy comment">
+                                        <flux:button
+                                            icon="clipboard-document"
+                                            icon:variant="outline"
+                                            variant="ghost"
+                                            size="xs"
+                                            aria-label="Copy comment"
+                                            x-on:click="
+                                                navigator.clipboard.writeText(@js($c['body'])).then(() => {
+                                                    window.Flux && Flux.toast({ text: 'Copied', variant: 'success' });
+                                                }).catch(() => {});
+                                            "
+                                            class="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity hover:!text-gh-accent"
+                                        />
+                                    </flux:tooltip>
+                                </div>
                             </div>
                             <div class="text-gh-text whitespace-pre-wrap">{{ $c['body'] }}</div>
                         </div>
