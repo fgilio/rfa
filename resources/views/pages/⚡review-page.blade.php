@@ -1002,12 +1002,12 @@ new #[Layout('layouts.app')] class extends Component
             {{-- Expand/Collapse toggle --}}
             <div class="grid place-items-center">
                 <flux:button variant="ghost" size="sm" icon="expand-all" icon:variant="outline"
-                    tooltip="Expand all (Shift+E)"
+                    tooltip="Expand all · ⇧E" aria-label="Expand all (⇧E)"
                     class="col-start-1 row-start-1"
                     @click="$store.settings.collapseAll = false; $dispatch('expand-all-files')"
                     x-show="$store.settings.collapseAll" x-cloak />
                 <flux:button variant="ghost" size="sm" icon="collapse-all" icon:variant="outline"
-                    tooltip="Collapse all (Shift+C)"
+                    tooltip="Collapse all · ⇧C" aria-label="Collapse all (⇧C)"
                     class="col-start-1 row-start-1"
                     @click="$store.settings.collapseAll = true; $dispatch('collapse-all-files')"
                     x-show="!$store.settings.collapseAll" />
@@ -1038,9 +1038,9 @@ new #[Layout('layouts.app')] class extends Component
                     refresh() {
                         window.location.reload();
                     }
-                }" x-init="startPolling()" @fingerprint-reset.window="fingerprint = null; hasChanges = false" class="relative flex items-center">
+                }" x-init="startPolling(); $store.keymap.register('⌘R', () => refresh(), { allowInEditable: true })" @fingerprint-reset.window="fingerprint = null; hasChanges = false" class="relative flex items-center">
                     <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
-                        tooltip="Refresh page" @click="refresh()" />
+                        tooltip="Refresh page · ⌘R" aria-label="Refresh page (⌘R)" @click="refresh()" />
                     <span x-show="hasChanges" x-cloak
                         class="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
