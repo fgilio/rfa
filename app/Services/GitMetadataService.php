@@ -86,6 +86,21 @@ class GitMetadataService
         return trim($this->git->run($directory, ['rev-parse', '--abbrev-ref', 'HEAD']));
     }
 
+    /**
+     * Read the URL configured for `origin`. Returns null when no origin is set
+     * (e.g. repos with no remote, or remotes under a different name).
+     */
+    public function getRemoteUrl(string $directory, string $remoteName = 'origin'): ?string
+    {
+        try {
+            $url = trim($this->git->run($directory, ['config', '--get', 'remote.'.$remoteName.'.url']));
+        } catch (GitCommandException) {
+            return null;
+        }
+
+        return $url === '' ? null : $url;
+    }
+
     public function getHeadSha(string $directory): string
     {
         return trim($this->git->run($directory, ['rev-parse', 'HEAD']));
