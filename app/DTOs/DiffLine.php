@@ -6,12 +6,18 @@ namespace App\DTOs;
 
 class DiffLine
 {
+    /**
+     * @param  int[]  $headingAncestors
+     */
     public function __construct(
         public readonly string $type, // 'context', 'add', 'remove'
         public readonly string $content,
         public readonly ?int $oldLineNum,
         public readonly ?int $newLineNum,
         public readonly ?string $highlightedContent = null,
+        public readonly ?int $headingLevel = null,
+        public readonly ?int $headingId = null,
+        public readonly array $headingAncestors = [],
     ) {}
 
     /** @return array<string, mixed> */
@@ -26,6 +32,15 @@ class DiffLine
 
         if ($this->highlightedContent !== null) {
             $array['highlightedContent'] = $this->highlightedContent;
+        }
+
+        if ($this->headingLevel !== null) {
+            $array['headingLevel'] = $this->headingLevel;
+            $array['headingId'] = $this->headingId;
+        }
+
+        if ($this->headingAncestors !== []) {
+            $array['headingAncestors'] = $this->headingAncestors;
         }
 
         return $array;

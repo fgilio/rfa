@@ -25,6 +25,21 @@
             dragStartLine: null,
             dragSide: null,
 
+            // Markdown heading fold state (id -> true when collapsed)
+            foldedHeadings: {},
+
+            toggleHeadingFold(id) {
+                this.foldedHeadings[id] = !this.foldedHeadings[id];
+            },
+
+            isLineFolded(ancestors) {
+                if (!ancestors || ancestors.length === 0) return false;
+                for (let i = 0; i < ancestors.length; i++) {
+                    if (this.foldedHeadings[ancestors[i]]) return true;
+                }
+                return false;
+            },
+
             onLineContextmenu(event, lineNum, side) {
                 const inSelection = this.formLine !== null
                     && lineNum >= this.formLine
