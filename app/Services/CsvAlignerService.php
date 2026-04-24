@@ -135,8 +135,6 @@ class CsvAlignerService
     }
 
     /**
-     * Parse a CSV line into its source-preserving cells (quotes kept intact).
-     *
      * @return array{cells: string[], unterminatedQuote: bool}
      */
     private function parseCells(string $content): array
