@@ -12,6 +12,9 @@
             selectedHashes: [],
             lastSelectionIndex: -1,
             _loadId: 0, // Stale-response guard: incremented before each async load, checked after
+            _dragActive: false,
+            _dragAnchorIdx: -1,
+            _dragMoved: false,
 
             _filterBranches(key) {
                 const list = this.allBranches[key] || [];
@@ -135,6 +138,12 @@
             toggleSelection(hash, idx, event) {
                 event.stopPropagation();
 
+                if (this._dragMoved) {
+                    // Drag already committed a range; the trailing click is vestigial.
+                    this._dragMoved = false;
+                    return;
+                }
+
                 if (event.shiftKey && this.lastSelectionIndex >= 0) {
                     const start = Math.min(this.lastSelectionIndex, idx);
                     const end = Math.max(this.lastSelectionIndex, idx);
@@ -157,6 +166,59 @@
             clearSelection() {
                 this.selectedHashes = [];
                 this.lastSelectionIndex = -1;
+            },
+
+            // Press-and-hold on a commit's checkbox, then drag across rows to extend
+            // the selection from the anchor. Mirrors the diff-file line-range gesture
+            // so the app has one "mouse path selects a range" pattern, not two.
+            startDrag(idx, event) {
+                if (event.button !== 0) return;
+                if (event.shiftKey) return; // shift+click keeps the additive-range behaviour
+                this._dragActive = true;
+                this._dragAnchorIdx = idx;
+                this._dragMoved = false;
+
+                const onPointerOver = (e) => {
+                    if (!this._dragActive) return;
+                    if (e.buttons === 0) {
+                        // Mouse released outside the window — recover on first re-entry.
+                        endDrag();
+                        return;
+                    }
+                    const row = e.target?.closest?.('[data-commit-idx]');
+                    if (!row) return;
+                    const hovered = parseInt(row.dataset.commitIdx, 10);
+                    if (Number.isNaN(hovered)) return;
+                    if (hovered === this._dragAnchorIdx && !this._dragMoved) return;
+                    this._dragMoved = true;
+                    const start = Math.min(this._dragAnchorIdx, hovered);
+                    const end = Math.max(this._dragAnchorIdx, hovered);
+                    this.selectedHashes = this.$wire.commits.slice(start, end + 1).map(c => c.hash);
+                };
+
+                const endDrag = () => {
+                    if (!this._dragActive) return;
+                    window.removeEventListener('pointerover', onPointerOver);
+                    window.removeEventListener('pointerup', endDrag);
+                    window.removeEventListener('blur', endDrag);
+                    const moved = this._dragMoved;
+                    this._dragActive = false;
+                    if (moved) {
+                        // Whichever element mouseup landed on, its click fires next.
+                        // Swallow it so we don't navigate into a commit or re-toggle.
+                        const swallow = (ev) => {
+                            ev.stopPropagation();
+                            ev.preventDefault();
+                            window.removeEventListener('click', swallow, true);
+                        };
+                        window.addEventListener('click', swallow, true);
+                        this.lastSelectionIndex = this._dragAnchorIdx;
+                    }
+                };
+
+                window.addEventListener('pointerover', onPointerOver);
+                window.addEventListener('pointerup', endDrag);
+                window.addEventListener('blur', endDrag);
             },
 
             applySelection() {

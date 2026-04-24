@@ -309,6 +309,7 @@ new class extends Component {
                             <div
                                 data-testid="commit-row"
                                 :data-commit-hash="commit.hash"
+                                :data-commit-idx="commitIdx"
                                 @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif
                                 class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
                                 @click="viewCommit(commit.hash)"
@@ -322,12 +323,12 @@ new class extends Component {
                                         type="button"
                                         data-testid="commit-select-toggle"
                                         @click.stop="toggleSelection(commit.hash, commitIdx, $event)"
-                                        @mousedown.stop
+                                        @mousedown.stop="startDrag(commitIdx, $event)"
                                         class="mt-0.5 size-4 shrink-0 grid place-items-center rounded border transition-colors cursor-pointer"
                                         :class="isSelected(commit.hash)
                                             ? 'border-gh-link bg-gh-link/20 text-gh-link'
                                             : 'border-gh-border opacity-0 group-hover:opacity-100 hover:border-gh-text/40'"
-                                        :title="isSelected(commit.hash) ? 'Remove from selection' : 'Add to selection (shift+click for range)'"
+                                        :title="isSelected(commit.hash) ? 'Remove from selection' : 'Click to add, drag to extend range'"
                                     >
                                         <template x-if="isSelected(commit.hash)">
                                             <flux:icon icon="check" variant="outline" class="!size-3" />
