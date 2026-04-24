@@ -90,8 +90,15 @@ new #[Layout('layouts.app')] class extends Component
 ?>
 
 <div class="min-h-screen flex flex-col">
-    {{-- Sticky top region: update banner + header pin together so the banner stays at the top while scrolling --}}
-    <div class="sticky top-0 z-50">
+    <div
+        class="sticky top-0 z-50"
+        x-data
+        x-init="
+            const update = () => document.documentElement.style.setProperty('--header-h', $el.offsetHeight + 'px');
+            update();
+            new ResizeObserver(update).observe($el);
+        "
+    >
         @native
             <livewire:update-banner />
         @endnative

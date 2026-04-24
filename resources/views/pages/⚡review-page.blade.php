@@ -1008,7 +1008,15 @@ new #[Layout('layouts.app')] class extends Component
         </template>
     @endif
 
-    <div class="sticky top-0 z-50">
+    <div
+        class="sticky top-0 z-50"
+        x-data
+        x-init="
+            const update = () => document.documentElement.style.setProperty('--header-h', $el.offsetHeight + 'px');
+            update();
+            new ResizeObserver(update).observe($el);
+        "
+    >
         @native
             <livewire:update-banner />
         @endnative
