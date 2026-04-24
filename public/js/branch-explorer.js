@@ -203,6 +203,63 @@
                 this.lastSelectionIndex = -1;
             },
 
+            // Press-and-hold on a commit's checkbox, then drag across rows to extend
+            // the selection from the anchor. Mirrors the diff-file line-range gesture
+            // so the app has one "mouse path selects a range" pattern, not two.
+            startDrag(idx, event) {
+                if (event.button !== 0) return;
+                if (event.shiftKey) return;
+                let moved = false;
+                let active = true;
+                let lastHoveredIdx = idx;
+
+                const onPointerOver = (e) => {
+                    if (!active) return;
+                    if (e.buttons === 0) {
+                        // Mouse released outside the window — recover on first re-entry.
+                        // Release wasn't in-window, so there's no trailing click to swallow.
+                        endDrag(false);
+                        return;
+                    }
+                    const row = e.target?.closest?.('[data-commit-idx]');
+                    if (!row) return;
+                    const hovered = parseInt(row.dataset.commitIdx, 10);
+                    if (Number.isNaN(hovered)) return;
+                    if (hovered === lastHoveredIdx) return;
+                    lastHoveredIdx = hovered;
+                    moved = true;
+                    const start = Math.min(idx, hovered);
+                    const end = Math.max(idx, hovered);
+                    this.selectedHashes = this.$wire.commits.slice(start, end + 1).map(c => c.hash);
+                };
+
+                const endDrag = (swallowClick) => {
+                    if (!active) return;
+                    active = false;
+                    window.removeEventListener('pointerover', onPointerOver);
+                    window.removeEventListener('pointerup', onPointerUp);
+                    window.removeEventListener('blur', onBlur);
+                    if (!moved) return;
+                    this.lastSelectionIndex = idx;
+                    if (!swallowClick) return;
+                    // Whichever element mouseup landed on, its click fires next.
+                    // Swallow it so we don't navigate into a commit or re-toggle.
+                    const swallow = (ev) => {
+                        ev.stopPropagation();
+                        ev.preventDefault();
+                        window.removeEventListener('click', swallow, true);
+                    };
+                    window.addEventListener('click', swallow, true);
+                };
+
+                const onPointerUp = () => endDrag(true);
+                const onBlur = () => endDrag(false);
+
+                window.addEventListener('pointerover', onPointerOver);
+                window.addEventListener('pointerup', onPointerUp);
+                window.addEventListener('blur', onBlur);
+            },
+
             applySelection() {
                 if (!this.hasAnySelection) return;
 
