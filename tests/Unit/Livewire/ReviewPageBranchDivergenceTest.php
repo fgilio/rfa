@@ -230,6 +230,73 @@ test('switchReviewToHead persists the new branch and clears the banner', functio
     expect($this->project->fresh()->branch)->toBe('feature-x');
 });
 
+test('head-divergence-transitioned event triggers checkHeadDivergence on review-page', function () {
+    Comment::create([
+        'id' => 'c1',
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => 'main',
+        'file_path' => 'src/Foo.php',
+        'side' => 'new',
+        'start_line' => 1,
+        'end_line' => 1,
+        'file_content_hash' => 'mock-hash',
+        'body' => 'hello',
+        'is_draft' => false,
+        'submitted_at' => now(),
+    ]);
+
+    $fake = bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'main', sha: 'a'.str_repeat('0', 39), detached: false, targetExists: true));
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Aligned);
+
+    // Simulate the child poller detecting a change and dispatching to the parent.
+    $fake->result = new CurrentHeadResult(branch: 'feature-x', sha: 'b'.str_repeat('0', 39), detached: false, targetExists: true);
+    $component->dispatch('head-divergence-transitioned');
+
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Diverged);
+    expect($component->get('divergenceContext.currentBranch'))->toBe('feature-x');
+});
+
+test('clearing the last persisted comment while HEAD is diverged auto-follows to HEAD', function () {
+    Comment::create([
+        'id' => 'c1',
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => 'main',
+        'file_path' => 'src/Foo.php',
+        'side' => 'new',
+        'start_line' => 1,
+        'end_line' => 1,
+        'file_content_hash' => 'mock-hash',
+        'body' => 'hello',
+        'is_draft' => false,
+        'submitted_at' => now(),
+    ]);
+
+    bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'feature-x', sha: 'a'.str_repeat('0', 39), detached: false, targetExists: true));
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Diverged);
+
+    $component->set('comments', [[
+        'id' => 'c1',
+        'fileId' => 'abc123',
+        'file' => 'src/Foo.php',
+        'side' => 'new',
+        'startLine' => 1,
+        'endLine' => 1,
+        'body' => 'hello',
+        'isDraft' => false,
+    ]]);
+    $component->call('clearAllComments');
+
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Aligned);
+    expect($component->get('projectBranch'))->toBe('feature-x');
+});
+
 test('sentinel HEAD result leaves state untouched', function () {
     $fake = bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'main', sha: 'a'.str_repeat('0', 39), detached: false, targetExists: true));
 
