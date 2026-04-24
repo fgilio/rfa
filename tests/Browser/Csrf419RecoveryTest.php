@@ -46,6 +46,31 @@ function waitForSessionValue($page, string $key, string $expected, float $timeou
     return $latest;
 }
 
+/**
+ * Read a sessionStorage value once, retrying on the "execution context was
+ * destroyed" errors that naturally fire while a reload navigation is in
+ * flight. `waitForLoadState('load')` only guarantees the current page is
+ * loaded — browser-internal navigations or late beforeunload→load cycles can
+ * still destroy the context between two statements. Raises the last caught
+ * error if every attempt within $timeoutSec fails.
+ */
+function readSessionValue($page, string $key, float $timeoutSec = 3.0): ?string
+{
+    $deadline = microtime(true) + $timeoutSec;
+    $lastError = null;
+
+    while (microtime(true) < $deadline) {
+        try {
+            return $page->page()->evaluate("sessionStorage.getItem('{$key}')");
+        } catch (Throwable $e) {
+            $lastError = $e;
+            usleep(100_000);
+        }
+    }
+
+    throw $lastError ?? new RuntimeException("readSessionValue('{$key}') timed out");
+}
+
 test('interceptor silently reloads on 419 instead of showing Livewire confirm dialog', function () {
     $page = $this->visit($this->projectUrl());
 
@@ -81,9 +106,9 @@ test('interceptor silently reloads on 419 instead of showing Livewire confirm di
     expect(waitForSessionValue($page, '__csrf419ReloadRan', '1'))->toBe('1');
 
     // beforeunload fired, but the reload navigation may still be in flight.
-    // Wait for it to settle before reading sessionStorage again — otherwise
-    // the evaluate races the destroyed execution context.
+    // Wait for it to settle before reading sessionStorage again, and retry
+    // the read because late nav cycles can still destroy the context.
     $page->page()->waitForLoadState('load');
 
-    expect($page->page()->evaluate("sessionStorage.getItem('__csrf419Dialog')"))->toBeNull();
+    expect(readSessionValue($page, '__csrf419Dialog'))->toBeNull();
 });

@@ -3,11 +3,18 @@
     // (⌘K / ⌘B / ⌘J) on init; one window listener dispatches.
     //
     // Registration is keyed by the combo string, so re-registrations during
-    // hydration overwrite instead of stacking. Components do not need to
-    // unregister on teardown for this app — the three overlay panels are
-    // always mounted on the review page.
+    // hydration overwrite instead of stacking.
+    //
+    // Livewire `wire:navigate` re-executes head scripts, so the attach guard
+    // is anchored on `window` to survive across script re-evaluations. The
+    // store itself persists across SPA navigations — `bindings` is cleared on
+    // `livewire:navigating` so stale shortcuts from the previous page don't
+    // keep firing (and `preventDefault`-ing native keys) on pages that don't
+    // re-register them; the incoming page's `x-init` repopulates after swap.
     function init() {
-        Alpine.store('keymap', {
+        if (window.__keymapAttached) return;
+        window.__keymapAttached = true;
+        const store = {
             bindings: new Map(),
             /**
              * @param {string} combo       e.g. '⌘K' (also matches Ctrl on non-mac)
@@ -21,12 +28,21 @@
             unregister(combo) {
                 this.bindings.delete(combo);
             },
+        };
+        Alpine.store('keymap', store);
+
+        document.addEventListener('livewire:navigating', () => {
+            store.bindings.clear();
         });
 
         const matches = (combo, e) => {
-            const mod = (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey;
-            if (!mod) return false;
-            const key = combo.replace(/^⌘/, '').toLowerCase();
+            const wantCmd = combo.includes('⌘');
+            const wantShift = combo.includes('⇧');
+            const hasCmd = e.metaKey || e.ctrlKey;
+            if (wantCmd !== hasCmd) return false;
+            if (wantShift !== e.shiftKey) return false;
+            if (e.altKey) return false;
+            const key = combo.replace(/[⌘⇧]/g, '').toLowerCase();
             return e.key.toLowerCase() === key;
         };
 

@@ -2,7 +2,6 @@
 
 use App\Actions\AddCommentAction;
 use App\Actions\BackfillGlobalGitignoreAction;
-use App\Concerns\InteractsWithRemoteLinks;
 use App\Actions\CleanExpiredTrashAction;
 use App\Actions\DeleteCommentAction;
 use App\Actions\DeleteReviewFilesAction;
@@ -12,7 +11,6 @@ use App\Actions\ExportReviewAction;
 use App\Actions\GetCurrentHeadAction;
 use App\Actions\GetFileListAction;
 use App\Actions\GroupReviewFilesAction;
-use App\Actions\ScanReviewFilesAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
@@ -20,10 +18,12 @@ use App\Actions\ResolveRangeAction;
 use App\Actions\ResolveRangeToWorkingAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\RestoreDiscardedFileAction;
+use App\Actions\ScanReviewFilesAction;
 use App\Actions\SessionStateAction;
 use App\Actions\ToggleReviewedAction;
 use App\Actions\UpdateCommentAction;
 use App\Actions\UpdateProjectSettingAction;
+use App\Concerns\InteractsWithRemoteLinks;
 use App\DTOs\CurrentHeadResult;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
@@ -183,6 +183,7 @@ new #[Layout('layouts.app')] class extends Component
 
     private function rehydrateForTarget(): void
     {
+        $this->cachedTarget = null;
         $this->refreshFileList();
         $this->scanReviewFiles();
 
@@ -261,6 +262,45 @@ new #[Layout('layouts.app')] class extends Component
         }
     }
 
+    public function softRefresh(): void
+    {
+        $before = $this->fileFingerprints($this->files);
+
+        $this->rehydrateForTarget();
+        $divergenceChanged = $this->refreshDivergenceState();
+
+        $after = $this->fileFingerprints($this->files);
+        $changedCount = count(array_diff_assoc($after, $before))
+            + count(array_diff_key($before, $after));
+
+        $this->dispatch('fingerprint-reset');
+        $this->dispatch('refresh-completed', changedCount: $changedCount);
+
+        if ($changedCount === 0 && ! $divergenceChanged) {
+            $this->skipRender();
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $files
+     * @return array<string, string>
+     */
+    private function fileFingerprints(array $files): array
+    {
+        return collect($files)
+            ->mapWithKeys(fn (array $f) => [
+                (string) $f['id'] => sprintf(
+                    '%s|%s|%s|%s|%s',
+                    $f['status'] ?? '',
+                    $f['additions'] ?? 0,
+                    $f['deletions'] ?? 0,
+                    $f['lastModified'] ?? '',
+                    $f['fileSize'] ?? '',
+                ),
+            ])
+            ->all();
+    }
+
     // endregion: Initialization & Diff Context
 
     // region: Branch Divergence
@@ -268,13 +308,25 @@ new #[Layout('layouts.app')] class extends Component
     #[On('head-divergence-transitioned')]
     public function checkHeadDivergence(): void
     {
+        if (! $this->refreshDivergenceState()) {
+            $this->skipRender();
+        }
+    }
+
+    /**
+     * Recompute divergence state. Returns true if state changed since the last
+     * check (i.e. the caller should render), false when the caller can skip.
+     * Kept separate from `checkHeadDivergence()` so callers like `softRefresh`
+     * can update divergence without latching `skipRender()` onto a response
+     * that still needs to morph because files did change.
+     */
+    private function refreshDivergenceState(): bool
+    {
         if ($this->isCommitMode()) {
-            if ($this->divergenceChecked) {
-                $this->skipRender();
-            }
+            $changed = ! $this->divergenceChecked;
             $this->divergenceChecked = true;
 
-            return;
+            return $changed;
         }
 
         $before = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->projectBranch];
@@ -284,11 +336,10 @@ new #[Layout('layouts.app')] class extends Component
 
         $after = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->projectBranch];
 
-        if ($this->divergenceChecked && $before === $after) {
-            $this->skipRender();
-        }
-
+        $changed = ! $this->divergenceChecked || $before !== $after;
         $this->divergenceChecked = true;
+
+        return $changed;
     }
 
     private function resolveDivergenceState(CurrentHeadResult $head): void
@@ -397,7 +448,6 @@ new #[Layout('layouts.app')] class extends Component
         app(UpdateProjectSettingAction::class)->handle($this->projectId, ['branch' => $newBranch]);
 
         $this->projectBranch = $newBranch;
-        $this->cachedTarget = null;
         $this->dismissedAtHead = null;
         $this->markAligned();
 
@@ -1146,12 +1196,25 @@ new #[Layout('layouts.app')] class extends Component
                                 if (!document.hidden) this.check();
                             }, 60000);
                         },
-                        refresh() {
-                            window.location.reload();
-                        }
-                    }" x-init="startPolling(); $store.keymap.register('⌘R', () => refresh(), { allowInEditable: true })" @fingerprint-reset.window="fingerprint = null; hasChanges = false" class="relative flex items-center">
+                        softRefresh() { $wire.softRefresh(); },
+                        hardReload() { window.location.reload(); }
+                    }"
+                    x-init="startPolling();
+                        $store.keymap.register('⌘R', () => softRefresh(), { allowInEditable: true });
+                        $store.keymap.register('⌘⇧R', () => hardReload(), { allowInEditable: true });"
+                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; clearInterval(polling); startPolling();"
+                    @refresh-completed.window="
+                        const n = $event.detail?.changedCount ?? 0;
+                        Flux.toast({
+                            text: n === 0 ? 'Up to date' : (n === 1 ? '1 file updated' : `${n} files updated`),
+                            variant: n === 0 ? 'info' : 'success',
+                        });
+                    "
+                    class="relative flex items-center">
                         <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
-                            tooltip="Refresh · ⌘R" aria-label="Refresh · ⌘R" @click="refresh()" />
+                            tooltip="Refresh · ⌘R · ⌘⇧R to hard reload"
+                            aria-label="Refresh · ⌘R · ⌘⇧R to hard reload"
+                            wire:click.preserve-scroll="softRefresh" />
                         <span x-show="hasChanges" x-cloak
                             class="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
