@@ -12,9 +12,6 @@
             selectedHashes: [],
             lastSelectionIndex: -1,
             _loadId: 0, // Stale-response guard: incremented before each async load, checked after
-            _dragActive: false,
-            _dragAnchorIdx: -1,
-            _dragMoved: false,
 
             _filterBranches(key) {
                 const list = this.allBranches[key] || [];
@@ -138,12 +135,6 @@
             toggleSelection(hash, idx, event) {
                 event.stopPropagation();
 
-                if (this._dragMoved) {
-                    // Drag already committed a range; the trailing click is vestigial.
-                    this._dragMoved = false;
-                    return;
-                }
-
                 if (event.shiftKey && this.lastSelectionIndex >= 0) {
                     const start = Math.min(this.lastSelectionIndex, idx);
                     const end = Math.max(this.lastSelectionIndex, idx);
@@ -173,13 +164,13 @@
             // so the app has one "mouse path selects a range" pattern, not two.
             startDrag(idx, event) {
                 if (event.button !== 0) return;
-                if (event.shiftKey) return; // shift+click keeps the additive-range behaviour
-                this._dragActive = true;
-                this._dragAnchorIdx = idx;
-                this._dragMoved = false;
+                if (event.shiftKey) return;
+                let moved = false;
+                let active = true;
+                let lastHoveredIdx = idx;
 
                 const onPointerOver = (e) => {
-                    if (!this._dragActive) return;
+                    if (!active) return;
                     if (e.buttons === 0) {
                         // Mouse released outside the window — recover on first re-entry.
                         endDrag();
@@ -189,20 +180,20 @@
                     if (!row) return;
                     const hovered = parseInt(row.dataset.commitIdx, 10);
                     if (Number.isNaN(hovered)) return;
-                    if (hovered === this._dragAnchorIdx && !this._dragMoved) return;
-                    this._dragMoved = true;
-                    const start = Math.min(this._dragAnchorIdx, hovered);
-                    const end = Math.max(this._dragAnchorIdx, hovered);
+                    if (hovered === lastHoveredIdx) return;
+                    lastHoveredIdx = hovered;
+                    moved = true;
+                    const start = Math.min(idx, hovered);
+                    const end = Math.max(idx, hovered);
                     this.selectedHashes = this.$wire.commits.slice(start, end + 1).map(c => c.hash);
                 };
 
                 const endDrag = () => {
-                    if (!this._dragActive) return;
+                    if (!active) return;
+                    active = false;
                     window.removeEventListener('pointerover', onPointerOver);
                     window.removeEventListener('pointerup', endDrag);
                     window.removeEventListener('blur', endDrag);
-                    const moved = this._dragMoved;
-                    this._dragActive = false;
                     if (moved) {
                         // Whichever element mouseup landed on, its click fires next.
                         // Swallow it so we don't navigate into a commit or re-toggle.
@@ -212,7 +203,7 @@
                             window.removeEventListener('click', swallow, true);
                         };
                         window.addEventListener('click', swallow, true);
-                        this.lastSelectionIndex = this._dragAnchorIdx;
+                        this.lastSelectionIndex = idx;
                     }
                 };
 
