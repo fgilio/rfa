@@ -14,6 +14,7 @@ new class extends Component
     #[Locked]
     public string $target = '';
 
+    #[Locked]
     public string $fingerprint = '';
 
     public function mount(): void
