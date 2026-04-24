@@ -30,6 +30,11 @@ final readonly class DiffTarget
         return new self(from: $from, to: $to);
     }
 
+    public static function rangeToWorking(string $from): self
+    {
+        return new self(from: $from, to: null);
+    }
+
     /** Build from raw ref strings - null $to means working directory */
     public static function fromRefs(string $from, ?string $to): self
     {
@@ -60,7 +65,7 @@ final readonly class DiffTarget
 
     public function contextKey(): string
     {
-        return $this->to === null ? GitRef::Working->value : $this->from.'..'.$this->to;
+        return $this->from.'..'.($this->to ?? GitRef::Working->value);
     }
 
     /** @return list<string> Git diff command prefix args */

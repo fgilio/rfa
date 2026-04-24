@@ -1,17 +1,43 @@
 // Alpine component for livewire/⚡branch-explorer.blade.php
 (function () {
     function init() {
-        Alpine.data('branchExplorer', ({ currentBranch, activeCommitHash, projectSlug, branches }) => ({
+        Alpine.data('branchExplorer', ({ currentBranch, activeCommitHash, activeDiffFrom, projectSlug, branches }) => ({
             open: false,
             search: '',
             selectedIndex: 0,
             selectedBranch: currentBranch,
             allBranches: branches,
             activeCommitHash,
+            activeDiffFrom: activeDiffFrom || 'HEAD',
             projectSlug,
             selectedHashes: [],
+            workingTreeSelected: false,
             lastSelectionIndex: -1,
             _loadId: 0, // Stale-response guard: incremented before each async load, checked after
+
+            get isWorkingTreeActive() {
+                return this.activeCommitHash === null;
+            },
+
+            get hasAnySelection() {
+                return this.workingTreeSelected || this.selectedHashes.length > 0;
+            },
+
+            get selectionBadge() {
+                const n = this.selectedHashes.length;
+                if (this.workingTreeSelected && n > 0) return `WT+${n}`;
+                if (this.workingTreeSelected) return 'WT';
+                return String(n);
+            },
+
+            get selectionDescription() {
+                const parts = [];
+                if (this.workingTreeSelected) parts.push('working tree');
+                if (this.selectedHashes.length > 0) {
+                    parts.push(`${this.selectedHashes.length} commit${this.selectedHashes.length === 1 ? '' : 's'}`);
+                }
+                return parts.join(' + ') || 'nothing';
+            },
 
             _filterBranches(key) {
                 const list = this.allBranches[key] || [];
@@ -154,13 +180,31 @@
                 this.lastSelectionIndex = idx;
             },
 
+            toggleWorkingTreeSelection(event) {
+                event.stopPropagation();
+
+                // Shift-click with a prior commit selection extends the range from the
+                // working tree down through commit index [0..lastSelectionIndex].
+                if (event.shiftKey && this.lastSelectionIndex >= 0) {
+                    const rangeHashes = this.$wire.commits.slice(0, this.lastSelectionIndex + 1).map(c => c.hash);
+                    const merged = new Set(this.selectedHashes);
+                    rangeHashes.forEach(h => merged.add(h));
+                    this.selectedHashes = [...merged];
+                    this.workingTreeSelected = true;
+                    return;
+                }
+
+                this.workingTreeSelected = !this.workingTreeSelected;
+            },
+
             clearSelection() {
                 this.selectedHashes = [];
+                this.workingTreeSelected = false;
                 this.lastSelectionIndex = -1;
             },
 
             applySelection() {
-                if (this.selectedHashes.length === 0) return;
+                if (!this.hasAnySelection) return;
 
                 const indices = [...new Set(
                     this.selectedHashes
@@ -168,7 +212,36 @@
                         .filter(i => i >= 0)
                 )].sort((a, b) => a - b);
 
-                if (indices.length === 0) return;
+                // Working tree alone → plain working-tree view.
+                if (this.workingTreeSelected && indices.length === 0) {
+                    Livewire.navigate(`/p/${this.projectSlug}`);
+                    this.closePanel();
+                    return;
+                }
+
+                // A non-contiguous commit pick (e.g. A and C without B) would silently pull B
+                // into the diff if we just used min/max. Reject it so users have to
+                // explicitly include every commit in their range.
+                if (indices.length > 0 && indices[indices.length - 1] - indices[0] + 1 !== indices.length) {
+                    window.alert('Selection is not contiguous — pick every commit between the oldest and newest you want to review.');
+                    return;
+                }
+
+                // Commits are listed newest-first; lowest index = tip, highest = oldest.
+                // Working tree is conceptually at index -1 (one step newer than the tip).
+                // When WT is selected alongside commits, the commits must start at index 0.
+                if (this.workingTreeSelected && indices.length > 0 && indices[0] !== 0) {
+                    window.alert('Selection is not contiguous — working tree must be paired with the newest commits.');
+                    return;
+                }
+
+                if (this.workingTreeSelected) {
+                    const oldest = this.$wire.commits[indices[indices.length - 1]];
+                    const fromRef = encodeURIComponent(oldest.hash + '^');
+                    Livewire.navigate(`/p/${this.projectSlug}/rw/${fromRef}`);
+                    this.closePanel();
+                    return;
+                }
 
                 if (indices.length === 1) {
                     Livewire.navigate(`/p/${this.projectSlug}/c/${this.$wire.commits[indices[0]].hash}`);
@@ -176,15 +249,6 @@
                     return;
                 }
 
-                // A non-contiguous pick (e.g. A and C without B) would silently pull B
-                // into the diff if we just used min/max. Reject it so users have to
-                // explicitly include every commit in their range.
-                if (indices[indices.length - 1] - indices[0] + 1 !== indices.length) {
-                    window.alert('Selection is not contiguous — pick every commit between the oldest and newest you want to review.');
-                    return;
-                }
-
-                // Commits are listed newest-first; lowest index = tip, highest = oldest.
                 const newest = this.$wire.commits[indices[0]];
                 const oldest = this.$wire.commits[indices[indices.length - 1]];
                 const baseRef = encodeURIComponent(oldest.hash + '^');

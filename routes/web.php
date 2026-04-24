@@ -16,6 +16,9 @@ Route::livewire('/p/{slug}/r/{from}..{to}', 'pages::review-page')
     ->where('from', '[0-9a-fA-F]{4,40}')
     ->where('to', '[0-9a-fA-F]{4,40}')
     ->name('review-page.range');
+Route::livewire('/p/{slug}/rw/{rangeFromWorking}', 'pages::review-page')
+    ->where('rangeFromWorking', '[0-9a-fA-F]{4,40}\^?')
+    ->name('review-page.range-to-working');
 Route::livewire('/p/{slug}/{ref?}/{baseRef?}', 'pages::review-page')->name('review-page');
 
 Route::get('/api/status/{project}', function (Project $project) {
