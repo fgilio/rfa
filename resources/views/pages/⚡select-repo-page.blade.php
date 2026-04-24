@@ -90,21 +90,31 @@ new #[Layout('layouts.app')] class extends Component
 ?>
 
 <div class="min-h-screen flex flex-col">
-    @native
-        <livewire:update-banner />
-    @endnative
+    <div
+        class="sticky top-0 z-50"
+        x-data
+        x-init="
+            const update = () => document.documentElement.style.setProperty('--header-h', $el.offsetHeight + 'px');
+            update();
+            new ResizeObserver(update).observe($el);
+        "
+    >
+        @native
+            <livewire:update-banner />
+        @endnative
 
-    <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-6 py-4 flex items-center justify-between">
-        <div class="flex items-baseline gap-2">
-            <span class="rfa-logo text-2xl">rfa</span>
-            @native
-                <span class="font-mono text-xs text-gh-muted">v{{ config('nativephp.version') }}</span>
-            @endnative
-        </div>
-        <div class="flex items-center gap-3">
-            <livewire:theme-switcher />
-        </div>
-    </header>
+        <header class="bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-6 py-4 flex items-center justify-between">
+            <div class="flex items-baseline gap-2">
+                <span class="rfa-logo text-2xl">rfa</span>
+                @native
+                    <span class="font-mono text-xs text-gh-muted">v{{ config('nativephp.version') }}</span>
+                @endnative
+            </div>
+            <div class="flex items-center gap-3">
+                <livewire:theme-switcher />
+            </div>
+        </header>
+    </div>
 
     <main class="flex-1 flex items-center justify-center px-6 py-10">
         @if($totalProjects === 0)
