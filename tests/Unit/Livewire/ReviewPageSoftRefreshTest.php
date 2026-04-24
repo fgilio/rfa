@@ -122,3 +122,33 @@ test('softRefresh preserves activeFileId across the call', function () {
 
     expect($component->get('activeFileId'))->toBe('abc123');
 });
+
+/**
+ * Regression: after mount, `divergenceChecked` is true, so an unchanged
+ * divergence poll inside softRefresh would latch `skipRender()` onto the
+ * response. If files also changed, the toast fires but the Blade never
+ * morphs and the UI stays stale until a hard reload. softRefresh must
+ * still render when `changedCount > 0`, even with stable divergence.
+ */
+test('softRefresh with file changes renders the new file list despite stable divergence', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
+
+    expect($component->get('divergenceChecked'))->toBeTrue();
+
+    $this->fileListFake->files = [
+        ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 5, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T00:00:00Z', 'fileSize' => '100'],
+        ['id' => 'def456', 'path' => 'src/NewlyAdded.php', 'status' => 'added', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T01:00:00Z', 'fileSize' => '200'],
+    ];
+
+    $component->call('softRefresh')
+        ->assertDispatched('refresh-completed', changedCount: 1)
+        ->assertSee('src/NewlyAdded.php');
+});
+
+test('softRefresh with no file changes and stable divergence skips the render', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
+
+    $component->call('softRefresh');
+
+    expect($component->effects['html'] ?? null)->toBeNull();
+});

@@ -2,7 +2,6 @@
 
 use App\Actions\AddCommentAction;
 use App\Actions\BackfillGlobalGitignoreAction;
-use App\Concerns\InteractsWithRemoteLinks;
 use App\Actions\CleanExpiredTrashAction;
 use App\Actions\DeleteCommentAction;
 use App\Actions\DeleteReviewFilesAction;
@@ -12,7 +11,6 @@ use App\Actions\ExportReviewAction;
 use App\Actions\GetCurrentHeadAction;
 use App\Actions\GetFileListAction;
 use App\Actions\GroupReviewFilesAction;
-use App\Actions\ScanReviewFilesAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
@@ -20,10 +18,12 @@ use App\Actions\ResolveRangeAction;
 use App\Actions\ResolveRangeToWorkingAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\RestoreDiscardedFileAction;
+use App\Actions\ScanReviewFilesAction;
 use App\Actions\SessionStateAction;
 use App\Actions\ToggleReviewedAction;
 use App\Actions\UpdateCommentAction;
 use App\Actions\UpdateProjectSettingAction;
+use App\Concerns\InteractsWithRemoteLinks;
 use App\DTOs\CurrentHeadResult;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
@@ -267,7 +267,7 @@ new #[Layout('layouts.app')] class extends Component
         $before = $this->fileFingerprints($this->files);
 
         $this->rehydrateForTarget();
-        $this->checkHeadDivergence();
+        $divergenceChanged = $this->refreshDivergenceState();
 
         $after = $this->fileFingerprints($this->files);
         $changedCount = count(array_diff_assoc($after, $before))
@@ -276,7 +276,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->dispatch('fingerprint-reset');
         $this->dispatch('refresh-completed', changedCount: $changedCount);
 
-        if ($changedCount === 0) {
+        if ($changedCount === 0 && ! $divergenceChanged) {
             $this->skipRender();
         }
     }
@@ -308,13 +308,25 @@ new #[Layout('layouts.app')] class extends Component
     #[On('head-divergence-transitioned')]
     public function checkHeadDivergence(): void
     {
+        if (! $this->refreshDivergenceState()) {
+            $this->skipRender();
+        }
+    }
+
+    /**
+     * Recompute divergence state. Returns true if state changed since the last
+     * check (i.e. the caller should render), false when the caller can skip.
+     * Kept separate from `checkHeadDivergence()` so callers like `softRefresh`
+     * can update divergence without latching `skipRender()` onto a response
+     * that still needs to morph because files did change.
+     */
+    private function refreshDivergenceState(): bool
+    {
         if ($this->isCommitMode()) {
-            if ($this->divergenceChecked) {
-                $this->skipRender();
-            }
+            $changed = ! $this->divergenceChecked;
             $this->divergenceChecked = true;
 
-            return;
+            return $changed;
         }
 
         $before = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->projectBranch];
@@ -324,11 +336,10 @@ new #[Layout('layouts.app')] class extends Component
 
         $after = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->projectBranch];
 
-        if ($this->divergenceChecked && $before === $after) {
-            $this->skipRender();
-        }
-
+        $changed = ! $this->divergenceChecked || $before !== $after;
         $this->divergenceChecked = true;
+
+        return $changed;
     }
 
     private function resolveDivergenceState(CurrentHeadResult $head): void

@@ -3,16 +3,18 @@
     // (⌘K / ⌘B / ⌘J) on init; one window listener dispatches.
     //
     // Registration is keyed by the combo string, so re-registrations during
-    // hydration overwrite instead of stacking. Components do not need to
-    // unregister on teardown for this app — the three overlay panels are
-    // always mounted on the review page.
-    // Livewire `wire:navigate` re-executes head scripts, so a module-local
-    // guard would reset to false and attach another listener on each navigation.
-    // Anchor the guard on `window` so it survives across script re-executions.
+    // hydration overwrite instead of stacking.
+    //
+    // Livewire `wire:navigate` re-executes head scripts, so the attach guard
+    // is anchored on `window` to survive across script re-evaluations. The
+    // store itself persists across SPA navigations — `bindings` is cleared on
+    // `livewire:navigating` so stale shortcuts from the previous page don't
+    // keep firing (and `preventDefault`-ing native keys) on pages that don't
+    // re-register them; the incoming page's `x-init` repopulates after swap.
     function init() {
         if (window.__keymapAttached) return;
         window.__keymapAttached = true;
-        Alpine.store('keymap', {
+        const store = {
             bindings: new Map(),
             /**
              * @param {string} combo       e.g. '⌘K' (also matches Ctrl on non-mac)
@@ -26,6 +28,11 @@
             unregister(combo) {
                 this.bindings.delete(combo);
             },
+        };
+        Alpine.store('keymap', store);
+
+        document.addEventListener('livewire:navigating', () => {
+            store.bindings.clear();
         });
 
         const matches = (combo, e) => {
