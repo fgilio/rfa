@@ -8,6 +8,7 @@ use App\Actions\OpenProjectFromPathAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Listeners\HandleDeepLink;
 use App\Listeners\HandleMenuItemClicked;
+use App\Support\ZoomRoleMenuItem;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
@@ -170,11 +171,17 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             // accelerators from role items, so the binding can't be retargeted
             // and the keydown never reaches the renderer. Keeping the View
             // menu lean here lets the ⌘R registration in the review page's
-            // keymap store fire as intended.
+            // keymap store fire as intended. The zoom role items are added
+            // explicitly because NativePHP's RolesEnum doesn't expose them,
+            // and dropping viewMenu also drops their default ⌘+/⌘-/⌘0 bindings.
             Menu::make(
-                Menu::devTools(),
+                new ZoomRoleMenuItem('resetZoom', 'Actual Size'),
+                new ZoomRoleMenuItem('zoomIn', 'Zoom In'),
+                new ZoomRoleMenuItem('zoomOut', 'Zoom Out'),
                 Menu::separator(),
                 Menu::fullscreen(),
+                Menu::separator(),
+                Menu::devTools(),
             )->label('View'),
             Menu::window(),
         );
