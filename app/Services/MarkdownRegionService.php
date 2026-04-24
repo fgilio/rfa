@@ -17,6 +17,9 @@ class MarkdownRegionService
      * fenced-code tracking; remove lines inherit the current ancestor chain so
      * they fold alongside their surrounding context.
      *
+     * Heading ids are the new-side line number so fold state remains stable
+     * across diff recomputes (e.g. expanding context).
+     *
      * @param  Hunk[]  $hunks
      * @return Hunk[]
      */
@@ -28,33 +31,37 @@ class MarkdownRegionService
 
         /** @var array<int, array{id: int, level: int}> $stack */
         $stack = [];
-        $inFence = false;
-        $nextId = 1;
+        /** @var array{char: string, length: int}|null $openFence */
+        $openFence = null;
 
         $result = [];
         foreach ($hunks as $hunk) {
             $newLines = [];
             foreach ($hunk->lines as $line) {
                 $isNewSide = $line->type !== 'remove';
-                $fenceLine = $isNewSide && $this->isFenceLine($line->content);
+                $fence = $isNewSide ? $this->fenceMarker($line->content) : null;
 
-                if ($fenceLine) {
-                    $inFence = ! $inFence;
+                if ($fence !== null) {
+                    if ($openFence === null) {
+                        $openFence = $fence;
+                    } elseif ($fence['char'] === $openFence['char'] && $fence['length'] >= $openFence['length']) {
+                        $openFence = null;
+                    }
                     $newLines[] = $this->withAncestors($line, $this->ancestorIds($stack));
 
                     continue;
                 }
 
-                $headingLevel = (! $inFence && $isNewSide)
+                $headingLevel = ($openFence === null && $isNewSide)
                     ? $this->headingLevel($line->content)
                     : null;
 
-                if ($headingLevel !== null) {
+                if ($headingLevel !== null && $line->newLineNum !== null) {
                     while ($stack !== [] && end($stack)['level'] >= $headingLevel) {
                         array_pop($stack);
                     }
                     $ancestors = $this->ancestorIds($stack);
-                    $id = $nextId++;
+                    $id = $line->newLineNum;
                     $stack[] = ['id' => $id, 'level' => $headingLevel];
                     $newLines[] = $this->annotateLine($line, $headingLevel, $id, $ancestors);
                 } else {
@@ -89,11 +96,20 @@ class MarkdownRegionService
     }
 
     /**
-     * Fenced code block delimiter: ``` or ~~~ (3+ of either), up to 3 leading spaces.
+     * Detect a fenced code block delimiter (``` or ~~~, 3+ chars, up to 3 leading spaces).
+     *
+     * @return array{char: string, length: int}|null
      */
-    private function isFenceLine(string $content): bool
+    private function fenceMarker(string $content): ?array
     {
-        return (bool) preg_match('/^ {0,3}(`{3,}|~{3,})/', $content);
+        if (! preg_match('/^ {0,3}((`{3,})|(~{3,}))/', $content, $m)) {
+            return null;
+        }
+
+        return [
+            'char' => $m[1][0],
+            'length' => strlen($m[1]),
+        ];
     }
 
     /**
