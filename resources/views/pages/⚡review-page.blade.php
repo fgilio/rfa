@@ -202,7 +202,9 @@ new #[Layout('layouts.app')] class extends Component
 
     private function buildDiffTarget(): DiffTarget
     {
-        return $this->cachedTarget ??= DiffTarget::fromRefs($this->diffFrom, $this->diffTo);
+        return $this->cachedTarget ??= $this->diffTo !== null
+            ? DiffTarget::range($this->diffFrom, $this->diffTo)
+            : DiffTarget::rangeToWorking($this->diffFrom);
     }
 
     private function loadCommitInfo(): void

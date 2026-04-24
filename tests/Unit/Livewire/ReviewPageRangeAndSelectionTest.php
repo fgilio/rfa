@@ -6,6 +6,7 @@ use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\ResolveRangeAction;
+use App\Actions\ResolveRangeToWorkingAction;
 use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
 use App\Models\Project;
@@ -100,6 +101,14 @@ beforeEach(function () {
         }
     });
 
+    app()->bind(ResolveRangeToWorkingAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, string $from): DiffTarget
+        {
+            return DiffTarget::rangeToWorking($from);
+        }
+    });
+
     $gitFileContentMock = Mockery::mock(GitFileContentService::class);
     $gitFileContentMock->shouldReceive('hashAt')->andReturn('mock-hash');
     app()->instance(GitFileContentService::class, $gitFileContentMock);
@@ -171,4 +180,34 @@ test('selection badge shows from..to when an explicit range is set', function ()
     ]);
 
     $component->assertSee('aaaa111..cccc222');
+});
+
+// -- Range-to-working route mount --
+
+test('mounting with /rw/{from} sets diffFrom to the commit and diffTo to null', function () {
+    $component = Livewire::test('pages::review-page', [
+        'slug' => 'test-project',
+        'rangeFromWorking' => 'abc1234',
+    ]);
+
+    expect($component->get('diffFrom'))->toBe('abc1234');
+    expect($component->get('diffTo'))->toBeNull();
+});
+
+test('buildDiffTarget preserves the base commit for range-to-working mounts', function () {
+    // Regression: fromRefs($from, null) silently collapses to workingDirectory(),
+    // which would reset diffFrom to HEAD and make every downstream consumer
+    // (cache keys, file list, comments) key off the wrong diff context.
+    $component = Livewire::test('pages::review-page', [
+        'slug' => 'test-project',
+        'rangeFromWorking' => 'abc1234',
+    ]);
+
+    $instance = $component->instance();
+    $method = new ReflectionMethod($instance, 'buildDiffTarget');
+    $target = $method->invoke($instance);
+
+    expect($target->from())->toBe('abc1234')
+        ->and($target->to())->toBeNull()
+        ->and($target->contextKey())->toBe('abc1234..working');
 });
