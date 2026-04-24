@@ -17,7 +17,8 @@ test('serializes zoom role with label', function () {
 test('omits label when none is provided', function () {
     $array = (new ZoomRoleMenuItem('resetZoom'))->toArray();
 
-    expect($array['type'])->toBe('role');
-    expect($array['role'])->toBe('resetZoom');
-    expect($array)->not->toHaveKey('label');
+    expect($array)
+        ->type->toBe('role')
+        ->role->toBe('resetZoom')
+        ->not->toHaveKey('label');
 });
