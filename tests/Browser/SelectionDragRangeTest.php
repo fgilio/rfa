@@ -62,3 +62,38 @@ test('pressing without drag falls back to the single-toggle click', function () 
 
     $page->page()->getByText('1 selected')->waitFor();
 });
+
+test('drag ended by out-of-window release does not eat the next intentional click', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+    $page->page()->getByLabel('Open selection drawer')->click();
+    $page->page()->getByText('Add greet function')->waitFor();
+
+    // Simulate: press on anchor, drag to another row, then release outside the
+    // window. Re-entering the window fires a pointerover with buttons===0 —
+    // that's the recovery path. After it, a real user click must still fire.
+    $clickFired = $page->script(<<<'JS'
+        (() => {
+            const anchor = document.querySelector('[data-commit-idx="0"]');
+            const far = document.querySelector('[data-commit-idx="2"]');
+            const checkbox = anchor.querySelector('[data-testid="commit-select-toggle"]');
+
+            checkbox.dispatchEvent(new MouseEvent('mousedown', { button: 0, bubbles: true }));
+            far.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, buttons: 1 }));
+            // No pointerup — simulates release outside the window. Cursor
+            // re-enters; buttons===0 drives the recovery branch.
+            anchor.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, buttons: 0 }));
+
+            let fired = false;
+            const probe = document.createElement('button');
+            probe.addEventListener('click', () => { fired = true; });
+            document.body.appendChild(probe);
+            probe.click();
+            probe.remove();
+            return fired;
+        })()
+    JS);
+
+    expect($clickFired)->toBeTrue();
+    // The drag itself still selected the range.
+    $page->page()->getByText('3 selected')->waitFor();
+});

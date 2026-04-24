@@ -173,7 +173,8 @@
                     if (!active) return;
                     if (e.buttons === 0) {
                         // Mouse released outside the window — recover on first re-entry.
-                        endDrag();
+                        // Release wasn't in-window, so there's no trailing click to swallow.
+                        endDrag(false);
                         return;
                     }
                     const row = e.target?.closest?.('[data-commit-idx]');
@@ -188,28 +189,31 @@
                     this.selectedHashes = this.$wire.commits.slice(start, end + 1).map(c => c.hash);
                 };
 
-                const endDrag = () => {
+                const endDrag = (swallowClick) => {
                     if (!active) return;
                     active = false;
                     window.removeEventListener('pointerover', onPointerOver);
-                    window.removeEventListener('pointerup', endDrag);
-                    window.removeEventListener('blur', endDrag);
-                    if (moved) {
-                        // Whichever element mouseup landed on, its click fires next.
-                        // Swallow it so we don't navigate into a commit or re-toggle.
-                        const swallow = (ev) => {
-                            ev.stopPropagation();
-                            ev.preventDefault();
-                            window.removeEventListener('click', swallow, true);
-                        };
-                        window.addEventListener('click', swallow, true);
-                        this.lastSelectionIndex = idx;
-                    }
+                    window.removeEventListener('pointerup', onPointerUp);
+                    window.removeEventListener('blur', onBlur);
+                    if (!moved) return;
+                    this.lastSelectionIndex = idx;
+                    if (!swallowClick) return;
+                    // Whichever element mouseup landed on, its click fires next.
+                    // Swallow it so we don't navigate into a commit or re-toggle.
+                    const swallow = (ev) => {
+                        ev.stopPropagation();
+                        ev.preventDefault();
+                        window.removeEventListener('click', swallow, true);
+                    };
+                    window.addEventListener('click', swallow, true);
                 };
 
+                const onPointerUp = () => endDrag(true);
+                const onBlur = () => endDrag(false);
+
                 window.addEventListener('pointerover', onPointerOver);
-                window.addEventListener('pointerup', endDrag);
-                window.addEventListener('blur', endDrag);
+                window.addEventListener('pointerup', onPointerUp);
+                window.addEventListener('blur', onBlur);
             },
 
             applySelection() {
