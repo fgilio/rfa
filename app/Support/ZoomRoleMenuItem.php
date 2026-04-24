@@ -7,25 +7,19 @@ namespace App\Support;
 use Native\Desktop\Menu\Items\MenuItem;
 
 /**
- * Role-type menu item for Electron's zoom roles (`zoomIn`, `zoomOut`,
- * `resetZoom`). NativePHP's RolesEnum doesn't expose them, but Electron
- * accepts the role strings directly and ties each one to a default
- * accelerator (⌘+, ⌘-, ⌘0).
+ * Menu item for Electron's zoom roles (`zoomIn`, `zoomOut`, `resetZoom`),
+ * which NativePHP's RolesEnum doesn't expose.
  *
- * Why we emit `type='normal'` instead of `type='role'`:
+ * Emits `type='normal'` (not `type='role'`) so NativePHP's `compileMenu`
+ * helper passes the accelerator through — for role items it strips
+ * everything except `role` and `label`, leaving the keyboard binding to
+ * Electron's role-default lookup, which on Electron 38 silently fails
+ * to register ⌘- for `zoomOut` on macOS (the menu item shows ⌘- and
+ * clicks fire, but the keystroke does nothing).
  *
- * NativePHP's `compileMenu` helper strips everything except `role` and
- * `label` from role items before handing them to Electron, so any
- * `accelerator` we set is dropped. That leaves the menu binding entirely
- * to Electron's role-default lookup — which on Electron 38 silently
- * fails to register ⌘- for `zoomOut` on macOS (the menu item shows the
- * shortcut and clicks fire, but the keystroke does nothing).
- *
- * Per Electron's docs ("when specifying role on macOS, label and
- * accelerator are the only options that will affect the menu item"),
- * emitting `type='normal'` with `role` + `accelerator` lets the helper
- * pass the accelerator through; Electron honors both — the role still
- * drives the zoom action, and our explicit accelerator owns the binding.
+ * Per Electron's docs, when `role` is set on macOS only `label` and
+ * `accelerator` affect the item, so the role still drives the zoom
+ * action while our explicit accelerator owns the binding.
  *
  * @see https://github.com/electron/electron/issues/19559
  * @see https://github.com/electron/electron/issues/15496
