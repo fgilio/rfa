@@ -265,6 +265,7 @@ new #[Layout('layouts.app')] class extends Component
 
     // region: Branch Divergence
 
+    #[On('head-divergence-transitioned')]
     public function checkHeadDivergence(): void
     {
         if ($this->isCommitMode()) {
@@ -454,7 +455,7 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->comments[] = $comment;
         $this->dispatchFileComments($fileId);
-        $this->skipRender();
+        $this->checkHeadDivergence();
     }
 
     #[On('update-comment')]
@@ -500,7 +501,7 @@ new #[Layout('layouts.app')] class extends Component
             $this->dispatch('undo-available', type: 'delete', payload: [$deletedComment], message: 'Comment deleted');
         }
 
-        $this->skipRender();
+        $this->checkHeadDivergence();
     }
 
     public function clearAllComments(): void
@@ -523,7 +524,7 @@ new #[Layout('layouts.app')] class extends Component
         $count = count($deletedComments);
         $this->dispatch('undo-available', type: 'clear-all', payload: $deletedComments,
             message: "Cleared {$count} comment".($count === 1 ? '' : 's'));
-        $this->skipRender();
+        $this->checkHeadDivergence();
     }
 
     /** @param  array<int, array<string, mixed>>  $comments */
@@ -560,7 +561,7 @@ new #[Layout('layouts.app')] class extends Component
             ->unique()
             ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
 
-        $this->skipRender();
+        $this->checkHeadDivergence();
     }
 
     // endregion: Comment Management
@@ -1172,14 +1173,11 @@ new #[Layout('layouts.app')] class extends Component
 
     {{-- Branch divergence banner + polling island (working-tree mode only) --}}
     @if(! $this->isCommitMode())
-        <div wire:key="head-divergence-polling" data-testid="head-divergence-polling" x-data="{
-            interval: null,
-            start() {
-                this.interval = setInterval(() => {
-                    if (!document.hidden) $wire.checkHeadDivergence();
-                }, 2000);
-            }
-        }" x-init="start()" x-destroy="clearInterval(interval)" class="hidden"></div>
+        <livewire:head-divergence-poller
+            wire:key="head-divergence-poller-{{ $projectId }}-{{ $diffFrom }}-{{ $projectBranch }}"
+            :repo-path="$repoPath"
+            :target="$projectBranch"
+        />
 
         @if($divergenceState === DivergenceState::Diverged)
             <div class="px-5 py-3 border-b border-gh-border" data-testid="divergence-banner-diverged">
