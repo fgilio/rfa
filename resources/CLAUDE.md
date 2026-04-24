@@ -95,7 +95,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `delete-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{commentId}` |
 | `toggle-reviewed` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{filePath}` |
 | `comment-updated` | ReviewPage PHP dispatch | DiffFile Alpine `@window` | `{fileId, comments}` |
-| `copy-to-clipboard` | DiffFile Alpine/PHP, ReviewPage PHP | ReviewPage Alpine `@window` | `{text}` |
+| `copy-to-clipboard` | DiffFile Alpine/PHP, ReviewPage PHP, comment-display, comments-drawer | ReviewPage Alpine `@window` | `{text, toast?}` (if `toast` string is set, a success toast with that text shows on success) |
 | `file-reviewed-changed` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{id, reviewed}` |
 | `collapse-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
@@ -103,6 +103,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `undo-available` | ReviewPage PHP dispatch | undo-toast Alpine `@window` | `{type: 'delete'\|'clear-all'\|'discard', payload: comment[]\|int, message: string}` |
 | `discard-file` | DiffFile Alpine `$dispatch` | ReviewPage `#[On]` | `{fileId}` |
 | `fingerprint-reset` | ReviewPage PHP dispatch | change-polling Alpine `@window` | none |
+| `show-remote-menu` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{target: 'file'\|'line', fileId, filePath, oldPath, side?, start?, end?, clientX, clientY}` |
 
 ### Known Debt
 

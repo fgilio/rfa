@@ -23,7 +23,7 @@ Auto-updates work normally after that (handled by Electron, independent of code 
 The exported `.md` file is ready to paste into AI tools:
 
 ```
-review my comments on these changes in @.rfa/{timestamp}_comments_{hash}.md
+address my comments on these changes in @.rfa/{timestamp}_comments_{hash}.md
 ```
 
 ## Terminal Helper

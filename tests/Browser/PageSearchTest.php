@@ -20,11 +20,11 @@ test('Cmd+F opens the search bar, Escape closes it and clears marks', function (
     $page = $this->visitAndLoad($this->projectUrl());
     waitForDiffsLoaded($page);
 
-    expect($page->page()->getByPlaceholder('Find in page...')->isVisible())->toBeFalse();
+    expect($page->page()->getByPlaceholder('Find...')->isVisible())->toBeFalse();
 
     $page->page()->locator('body')->press('Meta+f');
 
-    $input = $page->page()->getByPlaceholder('Find in page...');
+    $input = $page->page()->getByPlaceholder('Find...');
     $input->waitFor();
     $input->fill('greet');
 
@@ -33,7 +33,7 @@ test('Cmd+F opens the search bar, Escape closes it and clears marks', function (
 
     $input->press('Escape');
 
-    $page->page()->getByPlaceholder('Find in page...')->waitFor(['state' => 'hidden']);
+    $page->page()->getByPlaceholder('Find...')->waitFor(['state' => 'hidden']);
     expect($page->page()->locator('.rfa-search-match')->count())->toBe(0);
 });
 
@@ -42,7 +42,7 @@ test('typing highlights every match, marks the first as current, and shows the c
     waitForDiffsLoaded($page);
 
     $page->page()->locator('body')->press('Meta+f');
-    $input = $page->page()->getByPlaceholder('Find in page...');
+    $input = $page->page()->getByPlaceholder('Find...');
     $input->waitFor();
     $input->fill('greet');
 
@@ -63,7 +63,7 @@ test('Enter advances and Shift+Enter goes back, wrapping at the ends', function 
     waitForDiffsLoaded($page);
 
     $page->page()->locator('body')->press('Meta+f');
-    $input = $page->page()->getByPlaceholder('Find in page...');
+    $input = $page->page()->getByPlaceholder('Find...');
     $input->waitFor();
     $input->fill('greet');
 
@@ -90,7 +90,7 @@ test('non-matching query shows No results and wraps no nodes', function () {
     waitForDiffsLoaded($page);
 
     $page->page()->locator('body')->press('Meta+f');
-    $input = $page->page()->getByPlaceholder('Find in page...');
+    $input = $page->page()->getByPlaceholder('Find...');
     $input->waitFor();
     $input->fill('zzzzz-no-match-for-this-token');
 
@@ -103,7 +103,7 @@ test('the search bar itself is skipped so the counter text is never wrapped', fu
     waitForDiffsLoaded($page);
 
     $page->page()->locator('body')->press('Meta+f');
-    $input = $page->page()->getByPlaceholder('Find in page...');
+    $input = $page->page()->getByPlaceholder('Find...');
     $input->waitFor();
     $input->fill('greet');
 

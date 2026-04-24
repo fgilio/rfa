@@ -3,6 +3,7 @@
 use App\Actions\ListProjectsAction;
 use App\Actions\RemoveProjectAction;
 use App\Actions\ResolveStartupRouteAction;
+use App\Concerns\InteractsWithRemoteLinks;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Session;
@@ -11,6 +12,8 @@ use Native\Desktop\Facades\Shell;
 
 new #[Layout('layouts.app')] class extends Component
 {
+    use InteractsWithRemoteLinks;
+
     public string $search = '';
 
     #[Session('select-repo-page.sort-by')]

@@ -23,15 +23,15 @@ function stubRefreshCounter(PendingAwaitablePage $page): void
 test('the header shows a refresh button labelled with the ⌘R shortcut', function () {
     $page = $this->visit($this->projectUrl());
 
-    $page->page()->getByLabel('Refresh page · ⌘R')->first()->waitFor();
-    expect($page->page()->getByLabel('Refresh page · ⌘R')->count())->toBeGreaterThan(0);
+    $page->page()->getByLabel('Refresh · ⌘R')->first()->waitFor();
+    expect($page->page()->getByLabel('Refresh · ⌘R')->count())->toBeGreaterThan(0);
 });
 
 test('pressing ⌘R triggers the refresh handler', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
     // Waiting for the button confirms the x-init keymap registration ran.
-    $page->page()->getByLabel('Refresh page · ⌘R')->first()->waitFor();
+    $page->page()->getByLabel('Refresh · ⌘R')->first()->waitFor();
 
     stubRefreshCounter($page);
 
@@ -44,7 +44,7 @@ test('pressing ⌘R triggers the refresh handler', function () {
 test('⌘R fires even while a comment input is focused', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
-    $page->page()->getByLabel('Refresh page · ⌘R')->first()->waitFor();
+    $page->page()->getByLabel('Refresh · ⌘R')->first()->waitFor();
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $input = $page->page()->getByPlaceholder('Write a comment', false);

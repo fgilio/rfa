@@ -29,8 +29,10 @@ final readonly class RegisterProjectAction
 
         if ($existing) {
             // Branch is owned by the review page's divergence logic once a project
-            // exists; only refresh gitignore on re-registration.
+            // exists; refresh gitignore + remote URL so `git remote set-url` and
+            // global-gitignore edits are picked up on re-registration.
             $existing->update([
+                'remote_url' => $this->git->getRemoteUrl($path),
                 'global_gitignore_path' => $this->git->resolveGlobalExcludesFile($path),
             ]);
 
@@ -56,6 +58,7 @@ final readonly class RegisterProjectAction
             'git_common_dir' => $gitCommonDir,
             'is_worktree' => $isWorktree,
             'branch' => $branch,
+            'remote_url' => $this->git->getRemoteUrl($path),
             'global_gitignore_path' => $this->git->resolveGlobalExcludesFile($path),
         ]);
     }

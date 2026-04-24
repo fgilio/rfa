@@ -24,6 +24,7 @@ class Project extends Model
         'git_common_dir',
         'is_worktree',
         'branch',
+        'remote_url',
         'global_gitignore_path',
         'respect_global_gitignore',
     ];
