@@ -7,6 +7,7 @@ namespace App\Actions;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileDiff;
 use App\Exceptions\GitCommandException;
+use App\Services\CsvAlignerService;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
 use App\Services\MarkdownRegionService;
@@ -22,6 +23,7 @@ final readonly class LoadFileDiffAction
         private DiffParser $diffParser,
         private SyntaxHighlightService $syntaxHighlightService,
         private MarkdownTableAlignerService $markdownTableAligner,
+        private CsvAlignerService $csvAligner,
         private MarkdownRegionService $markdownRegionService,
     ) {}
 
@@ -56,6 +58,10 @@ final readonly class LoadFileDiffAction
 
             $fileDiff = $fileDiff->withHunks(
                 $this->markdownTableAligner->alignTables($fileDiff->hunks, $fileDiff->path)
+            );
+
+            $fileDiff = $fileDiff->withHunks(
+                $this->csvAligner->alignRows($fileDiff->hunks, $fileDiff->path)
             );
 
             $highlightedHunks = $this->syntaxHighlightService->highlightHunks($fileDiff->hunks, $fileDiff->path);
