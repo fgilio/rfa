@@ -973,9 +973,11 @@ new #[Layout('layouts.app')] class extends Component
         @endif
     "
 >
-    @native
-        <livewire:update-banner />
-    @endnative
+    {{-- Sticky top region: update banner + header pin together so the banner stays at the top while scrolling --}}
+    <div class="sticky top-0 z-50">
+        @native
+            <livewire:update-banner />
+        @endnative
 
     @if($hasRemote)
         {{-- Shared remote-link context menu (one instance per review-page) --}}
@@ -1013,7 +1015,7 @@ new #[Layout('layouts.app')] class extends Component
     @endif
 
     {{-- Header --}}
-    <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
+    <header class="bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
         <div class="flex items-center gap-2">
             <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif class="inline-flex">
                 @native
@@ -1170,6 +1172,7 @@ new #[Layout('layouts.app')] class extends Component
             <livewire:theme-switcher />
         </div>
     </header>
+    </div>
 
     {{-- Branch divergence banner + polling island (working-tree mode only) --}}
     @if(! $this->isCommitMode())
