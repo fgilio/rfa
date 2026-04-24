@@ -79,5 +79,11 @@ test('interceptor silently reloads on 419 instead of showing Livewire confirm di
     $page->page()->evaluate('() => { Livewire.first().$refresh(); }');
 
     expect(waitForSessionValue($page, '__csrf419ReloadRan', '1'))->toBe('1');
+
+    // beforeunload fired, but the reload navigation may still be in flight.
+    // Wait for it to settle before reading sessionStorage again — otherwise
+    // the evaluate races the destroyed execution context.
+    $page->page()->waitForLoadState('load');
+
     expect($page->page()->evaluate("sessionStorage.getItem('__csrf419Dialog')"))->toBeNull();
 });
