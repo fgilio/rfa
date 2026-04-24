@@ -536,7 +536,7 @@ new class extends Component {
                             </tr>
                         @endif
 
-                        @foreach($hunk['lines'] as $lineIndex => $line)
+                        @foreach($hunk['lines'] as $line)
                             @php
                                 $lineNum = $line['newLineNum'] ?? $line['oldLineNum'];
                                 [$bgClass, $numBgClass, $prefix] = match($line['type']) {

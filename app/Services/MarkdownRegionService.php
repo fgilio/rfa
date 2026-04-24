@@ -6,11 +6,10 @@ namespace App\Services;
 
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
+use App\Support\MarkdownPath;
 
 class MarkdownRegionService
 {
-    private const MARKDOWN_EXTENSIONS = ['md', 'mdx', 'markdown'];
-
     /**
      * Annotate diff lines with ATX heading metadata so the UI can fold regions.
      *
@@ -23,7 +22,7 @@ class MarkdownRegionService
      */
     public function annotate(array $hunks, string $filePath): array
     {
-        if (! $this->isMarkdown($filePath)) {
+        if (! MarkdownPath::isMarkdown($filePath)) {
             return $hunks;
         }
 
@@ -41,7 +40,7 @@ class MarkdownRegionService
 
                 if ($fenceLine) {
                     $inFence = ! $inFence;
-                    $newLines[] = $this->annotateLine($line, null, null, $this->ancestorIds($stack));
+                    $newLines[] = $this->withAncestors($line, $this->ancestorIds($stack));
 
                     continue;
                 }
@@ -59,7 +58,7 @@ class MarkdownRegionService
                     $stack[] = ['id' => $id, 'level' => $headingLevel];
                     $newLines[] = $this->annotateLine($line, $headingLevel, $id, $ancestors);
                 } else {
-                    $newLines[] = $this->annotateLine($line, null, null, $this->ancestorIds($stack));
+                    $newLines[] = $this->withAncestors($line, $this->ancestorIds($stack));
                 }
             }
 
@@ -74,13 +73,6 @@ class MarkdownRegionService
         }
 
         return $result;
-    }
-
-    private function isMarkdown(string $filePath): bool
-    {
-        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-
-        return in_array($ext, self::MARKDOWN_EXTENSIONS, true);
     }
 
     /**
@@ -111,6 +103,20 @@ class MarkdownRegionService
     private function ancestorIds(array $stack): array
     {
         return array_map(fn (array $frame): int => $frame['id'], $stack);
+    }
+
+    /**
+     * Avoid reconstructing the DiffLine when there is nothing to attach.
+     *
+     * @param  int[]  $ancestors
+     */
+    private function withAncestors(DiffLine $line, array $ancestors): DiffLine
+    {
+        if ($ancestors === []) {
+            return $line;
+        }
+
+        return $this->annotateLine($line, null, null, $ancestors);
     }
 
     /**

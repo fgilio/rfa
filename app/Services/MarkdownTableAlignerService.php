@@ -6,29 +6,21 @@ namespace App\Services;
 
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
+use App\Support\MarkdownPath;
 
 class MarkdownTableAlignerService
 {
-    private const MARKDOWN_EXTENSIONS = ['md', 'mdx'];
-
     /**
      * @param  Hunk[]  $hunks
      * @return Hunk[]
      */
     public function alignTables(array $hunks, string $filePath): array
     {
-        if (! $this->isMarkdown($filePath)) {
+        if (! MarkdownPath::isMarkdown($filePath)) {
             return $hunks;
         }
 
         return array_map(fn (Hunk $hunk) => $this->alignHunk($hunk), $hunks);
-    }
-
-    private function isMarkdown(string $filePath): bool
-    {
-        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-
-        return in_array($ext, self::MARKDOWN_EXTENSIONS, true);
     }
 
     private function alignHunk(Hunk $hunk): Hunk
