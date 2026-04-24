@@ -1130,7 +1130,7 @@ new #[Layout('layouts.app')] class extends Component
                     }
                 }" x-init="startPolling(); $store.keymap.register('⌘R', () => refresh(), { allowInEditable: true })" @fingerprint-reset.window="fingerprint = null; hasChanges = false" class="relative flex items-center">
                     <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
-                        tooltip="Refresh page · ⌘R" aria-label="Refresh page (⌘R)" @click="refresh()" />
+                        tooltip="Refresh · ⌘R" aria-label="Refresh · ⌘R" @click="refresh()" />
                     <span x-show="hasChanges" x-cloak
                         class="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
