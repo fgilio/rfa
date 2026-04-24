@@ -183,6 +183,7 @@ new #[Layout('layouts.app')] class extends Component
 
     private function rehydrateForTarget(): void
     {
+        $this->cachedTarget = null;
         $this->refreshFileList();
         $this->scanReviewFiles();
 
@@ -261,17 +262,10 @@ new #[Layout('layouts.app')] class extends Component
         }
     }
 
-    /**
-     * Re-read the diff from disk and rehydrate session state without a browser
-     * reload. Preserves scroll, activeFileId, collapse state, and open forms —
-     * the renderer process keeps running. Paired with `wire:click.preserve-scroll`
-     * on the refresh button.
-     */
     public function softRefresh(): void
     {
         $before = $this->fileFingerprints($this->files);
 
-        $this->cachedTarget = null;
         $this->rehydrateForTarget();
         $this->checkHeadDivergence();
 
@@ -281,6 +275,10 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->dispatch('fingerprint-reset');
         $this->dispatch('refresh-completed', changedCount: $changedCount);
+
+        if ($changedCount === 0) {
+            $this->skipRender();
+        }
     }
 
     /**
@@ -439,7 +437,6 @@ new #[Layout('layouts.app')] class extends Component
         app(UpdateProjectSettingAction::class)->handle($this->projectId, ['branch' => $newBranch]);
 
         $this->projectBranch = $newBranch;
-        $this->cachedTarget = null;
         $this->dismissedAtHead = null;
         $this->markAligned();
 

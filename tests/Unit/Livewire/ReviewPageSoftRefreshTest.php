@@ -104,7 +104,6 @@ test('softRefresh re-reads file list and dispatches refresh-completed with zero 
 test('softRefresh reports changedCount when files differ', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
 
-    // Simulate: one file's line counts changed on disk, plus a brand new file appeared.
     $this->fileListFake->files = [
         ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 7, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T01:00:00Z', 'fileSize' => '120'],
         ['id' => 'def456', 'path' => 'src/Bar.php', 'status' => 'added', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T01:00:00Z', 'fileSize' => '200'],
