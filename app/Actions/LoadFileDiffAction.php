@@ -9,6 +9,7 @@ use App\DTOs\FileDiff;
 use App\Exceptions\GitCommandException;
 use App\Services\DiffParser;
 use App\Services\GitDiffService;
+use App\Services\MarkdownRegionService;
 use App\Services\MarkdownTableAlignerService;
 use App\Services\SyntaxHighlightService;
 use Illuminate\Support\Facades\Cache;
@@ -21,6 +22,7 @@ final readonly class LoadFileDiffAction
         private DiffParser $diffParser,
         private SyntaxHighlightService $syntaxHighlightService,
         private MarkdownTableAlignerService $markdownTableAligner,
+        private MarkdownRegionService $markdownRegionService,
     ) {}
 
     /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool, syntaxStyles: string} */
@@ -35,21 +37,21 @@ final readonly class LoadFileDiffAction
                 Log::warning('Git diff failed', ['path' => $path, 'stderr' => $e->stderr]);
 
                 return FileDiff::emptyArray($path, 'modified', tooLarge: false)
-                    + ['error' => 'Failed to load diff for this file.', 'syntaxStyles' => ''];
+                    + ['error' => 'Failed to load diff for this file.', 'syntaxStyles' => '', 'headingsAnnotated' => true];
             }
 
             if ($rawDiff === null) {
-                return FileDiff::emptyArray($path, 'modified', tooLarge: true) + ['syntaxStyles' => ''];
+                return FileDiff::emptyArray($path, 'modified', tooLarge: true) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
             }
 
             if (trim($rawDiff) === '') {
-                return FileDiff::emptyArray($path, 'modified', tooLarge: false) + ['syntaxStyles' => ''];
+                return FileDiff::emptyArray($path, 'modified', tooLarge: false) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
             }
 
             $fileDiff = $this->diffParser->parseSingle($rawDiff);
 
             if (! $fileDiff) {
-                return FileDiff::emptyArray($path, 'modified', tooLarge: false) + ['syntaxStyles' => ''];
+                return FileDiff::emptyArray($path, 'modified', tooLarge: false) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
             }
 
             $fileDiff = $fileDiff->withHunks(
@@ -57,6 +59,7 @@ final readonly class LoadFileDiffAction
             );
 
             $highlightedHunks = $this->syntaxHighlightService->highlightHunks($fileDiff->hunks, $fileDiff->path);
+            $annotatedHunks = $this->markdownRegionService->annotate($highlightedHunks, $fileDiff->path);
 
             $css = '';
             foreach ($this->syntaxHighlightService->getStyleMap() as $cls => $styles) {
@@ -72,12 +75,24 @@ final readonly class LoadFileDiffAction
                 ? null
                 : $this->gitDiffService->getNewFileLineCount($repoPath, $path, $target);
 
-            return $fileDiff->withHunks($highlightedHunks)->toArray() + ['tooLarge' => false, 'syntaxStyles' => $css, 'tableAligned' => true, 'newFileLineCount' => $newFileLineCount];
+            return $fileDiff->withHunks($annotatedHunks)->toArray() + [
+                'tooLarge' => false,
+                'syntaxStyles' => $css,
+                'tableAligned' => true,
+                'newFileLineCount' => $newFileLineCount,
+                'headingsAnnotated' => true,
+            ];
         };
 
         if ($cacheKey) {
             $cached = Cache::get($cacheKey);
-            if ($cached !== null && array_key_exists('syntaxStyles', $cached) && array_key_exists('isSymlink', $cached) && array_key_exists('tableAligned', $cached) && array_key_exists('newFileLineCount', $cached)) {
+            if ($cached !== null
+                && array_key_exists('syntaxStyles', $cached)
+                && array_key_exists('isSymlink', $cached)
+                && array_key_exists('tableAligned', $cached)
+                && array_key_exists('newFileLineCount', $cached)
+                && array_key_exists('headingsAnnotated', $cached)
+            ) {
                 return $cached;
             }
             $result = $compute();

@@ -549,6 +549,9 @@ new class extends Component {
                                     'add' => 'right',
                                     default => 'context',
                                 };
+                                $headingId = $line['headingId'] ?? null;
+                                $headingAncestors = $line['headingAncestors'] ?? [];
+                                $ancestorJs = $headingAncestors === [] ? null : json_encode($headingAncestors);
                             @endphp
                             <tr
                                 class="diff-line {{ $bgClass }}"
@@ -557,6 +560,7 @@ new class extends Component {
                                 @if($hasRemote && $lineNum !== null) @contextmenu.prevent="onLineContextmenu($event, {{ $lineNum }}, '{{ $lineSide === 'left' ? 'old' : 'new' }}')" @endif
                                 @if($line['newLineNum']) data-line-new="{{ $line['newLineNum'] }}" @endif
                                 @if($line['oldLineNum']) data-line-old="{{ $line['oldLineNum'] }}" @endif
+                                @if($ancestorJs) x-show="!isLineFolded({{ $ancestorJs }})" @endif
                             >
                                 {{-- Old line number --}}
                                 <td data-testid="diff-line-number" class="diff-line-num w-[1px] px-2 text-right text-gh-muted/50 select-none cursor-pointer {{ $numBgClass }}"
@@ -582,13 +586,21 @@ new class extends Component {
                                 </td>
 
                                 {{-- Content --}}
-                                <td class="px-2 whitespace-pre-wrap break-all">{!! $line['highlightedContent'] ?? e($line['content']) !!}</td>
+                                <td class="px-2 whitespace-pre-wrap break-all">@if($headingId !== null)<button
+                                        type="button"
+                                        data-testid="heading-fold-toggle"
+                                        data-heading-id="{{ $headingId }}"
+                                        @click.stop="toggleHeadingFold({{ $headingId }})"
+                                        :aria-label="foldedHeadings[{{ $headingId }}] ? 'Expand section' : 'Collapse section'"
+                                        :aria-expanded="!foldedHeadings[{{ $headingId }}]"
+                                        class="inline-flex align-middle -my-0.5 mr-1 size-4 items-center justify-center text-gh-muted/60 hover:text-gh-text"
+                                    ><flux:icon icon="chevron-down" variant="outline" class="!size-3" x-show="!foldedHeadings[{{ $headingId }}]" /><flux:icon icon="chevron-right" variant="outline" class="!size-3" x-show="foldedHeadings[{{ $headingId }}]" x-cloak /></button>@endif{!! $line['highlightedContent'] ?? e($line['content']) !!}</td>
                             </tr>
 
                             {{-- Inline comment form (shows after the target line) --}}
                             @if($lineNum !== null)
                                 <template x-if="showForm && formEndLine === {{ $lineNum }} && formSide !== 'file' && (@js($lineSide) === 'context' || formSide === @js($lineSide))">
-                                    <tr>
+                                    <tr @if($ancestorJs) x-show="!isLineFolded({{ $ancestorJs }})" @endif>
                                         <td colspan="4" class="p-0">
                                             <x-comment-form save="submitComment" placeholder="Write a comment..." border-class="border-y" />
                                         </td>
@@ -608,7 +620,7 @@ new class extends Component {
                                 }
                             @endphp
                             @foreach($lineComments as $comment)
-                                <tr x-data x-show="editingCommentId !== '{{ $comment['id'] }}'">
+                                <tr x-data x-show="editingCommentId !== '{{ $comment['id'] }}'@if($ancestorJs) && !isLineFolded({{ $ancestorJs }})@endif">
                                     <td colspan="4" class="p-0">
                                         <x-comment-display :comment="$comment" border-class="border-y" />
                                     </td>
