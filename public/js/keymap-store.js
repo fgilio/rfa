@@ -6,7 +6,12 @@
     // hydration overwrite instead of stacking. Components do not need to
     // unregister on teardown for this app — the three overlay panels are
     // always mounted on the review page.
+    // Livewire `wire:navigate` re-executes head scripts, so a module-local
+    // guard would reset to false and attach another listener on each navigation.
+    // Anchor the guard on `window` so it survives across script re-executions.
     function init() {
+        if (window.__keymapAttached) return;
+        window.__keymapAttached = true;
         Alpine.store('keymap', {
             bindings: new Map(),
             /**
@@ -24,9 +29,13 @@
         });
 
         const matches = (combo, e) => {
-            const mod = (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey;
-            if (!mod) return false;
-            const key = combo.replace(/^⌘/, '').toLowerCase();
+            const wantCmd = combo.includes('⌘');
+            const wantShift = combo.includes('⇧');
+            const hasCmd = e.metaKey || e.ctrlKey;
+            if (wantCmd !== hasCmd) return false;
+            if (wantShift !== e.shiftKey) return false;
+            if (e.altKey) return false;
+            const key = combo.replace(/[⌘⇧]/g, '').toLowerCase();
             return e.key.toLowerCase() === key;
         };
 

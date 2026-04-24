@@ -261,6 +261,48 @@ new #[Layout('layouts.app')] class extends Component
         }
     }
 
+    /**
+     * Re-read the diff from disk and rehydrate session state without a browser
+     * reload. Preserves scroll, activeFileId, collapse state, and open forms —
+     * the renderer process keeps running. Paired with `wire:click.preserve-scroll`
+     * on the refresh button.
+     */
+    public function softRefresh(): void
+    {
+        $before = $this->fileFingerprints($this->files);
+
+        $this->cachedTarget = null;
+        $this->rehydrateForTarget();
+        $this->checkHeadDivergence();
+
+        $after = $this->fileFingerprints($this->files);
+        $changedCount = count(array_diff_assoc($after, $before))
+            + count(array_diff_key($before, $after));
+
+        $this->dispatch('fingerprint-reset');
+        $this->dispatch('refresh-completed', changedCount: $changedCount);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $files
+     * @return array<string, string>
+     */
+    private function fileFingerprints(array $files): array
+    {
+        return collect($files)
+            ->mapWithKeys(fn (array $f) => [
+                (string) $f['id'] => sprintf(
+                    '%s|%s|%s|%s|%s',
+                    $f['status'] ?? '',
+                    $f['additions'] ?? 0,
+                    $f['deletions'] ?? 0,
+                    $f['lastModified'] ?? '',
+                    $f['fileSize'] ?? '',
+                ),
+            ])
+            ->all();
+    }
+
     // endregion: Initialization & Diff Context
 
     // region: Branch Divergence
@@ -1146,12 +1188,25 @@ new #[Layout('layouts.app')] class extends Component
                                 if (!document.hidden) this.check();
                             }, 60000);
                         },
-                        refresh() {
-                            window.location.reload();
-                        }
-                    }" x-init="startPolling(); $store.keymap.register('⌘R', () => refresh(), { allowInEditable: true })" @fingerprint-reset.window="fingerprint = null; hasChanges = false" class="relative flex items-center">
+                        softRefresh() { $wire.softRefresh(); },
+                        hardReload() { window.location.reload(); }
+                    }"
+                    x-init="startPolling();
+                        $store.keymap.register('⌘R', () => softRefresh(), { allowInEditable: true });
+                        $store.keymap.register('⌘⇧R', () => hardReload(), { allowInEditable: true });"
+                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; clearInterval(polling); startPolling();"
+                    @refresh-completed.window="
+                        const n = $event.detail?.changedCount ?? 0;
+                        Flux.toast({
+                            text: n === 0 ? 'Up to date' : (n === 1 ? '1 file updated' : `${n} files updated`),
+                            variant: n === 0 ? 'info' : 'success',
+                        });
+                    "
+                    class="relative flex items-center">
                         <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
-                            tooltip="Refresh · ⌘R" aria-label="Refresh · ⌘R" @click="refresh()" />
+                            tooltip="Refresh · ⌘R · ⌘⇧R to hard reload"
+                            aria-label="Refresh · ⌘R · ⌘⇧R to hard reload"
+                            wire:click.preserve-scroll="softRefresh" />
                         <span x-show="hasChanges" x-cloak
                             class="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
