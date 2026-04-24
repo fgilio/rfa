@@ -7,3 +7,9 @@ parameters:
         - app/
     scanDirectories:
         - database/factories/
+    ignoreErrors:
+        # Traits in app/Concerns are consumed by Livewire SFC anonymous classes in
+        # resources/views, which PHPStan doesn't analyse — so `trait.unused` false-positives.
+        -
+            identifier: trait.unused
+            path: app/Concerns/*.php

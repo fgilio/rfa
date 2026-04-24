@@ -1,9 +1,10 @@
 // Alpine component for livewire/⚡diff-file.blade.php
 (function () {
     function init() {
-        Alpine.data('diffFile', ({ fileId, filePath, isReviewed, singleFile = false }) => ({
+        Alpine.data('diffFile', ({ fileId, filePath, oldPath = null, isReviewed, singleFile = false }) => ({
             fileId,
             filePath,
+            oldPath,
             collapsed: singleFile ? false : (Alpine.store('settings')?.collapseAll || isReviewed),
             reviewed: isReviewed,
 
@@ -23,6 +24,23 @@
             isDragging: false,
             dragStartLine: null,
             dragSide: null,
+
+            onLineContextmenu(event, lineNum, side) {
+                const inSelection = this.formLine !== null
+                    && lineNum >= this.formLine
+                    && lineNum <= (this.formEndLine ?? this.formLine);
+                this.$dispatch('show-remote-menu', {
+                    target: 'line',
+                    fileId: this.fileId,
+                    filePath: this.filePath,
+                    oldPath: this.oldPath,
+                    side,
+                    start: inSelection ? this.formLine : lineNum,
+                    end: inSelection ? (this.formEndLine ?? this.formLine) : null,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                });
+            },
             _dragMouseX: 0,
             _dragMouseY: 0,
             _scrollRafId: null,

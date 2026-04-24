@@ -2,6 +2,7 @@
 
 use App\Actions\AddCommentAction;
 use App\Actions\BackfillGlobalGitignoreAction;
+use App\Concerns\InteractsWithRemoteLinks;
 use App\Actions\CleanExpiredTrashAction;
 use App\Actions\DeleteCommentAction;
 use App\Actions\DeleteReviewFilesAction;
@@ -37,6 +38,8 @@ use Livewire\Component;
 
 new #[Layout('layouts.app')] class extends Component
 {
+    use InteractsWithRemoteLinks;
+
     /** @var array<int, array<string, mixed>> */
     public array $files = [];
 
@@ -60,6 +63,8 @@ new #[Layout('layouts.app')] class extends Component
     public string $projectBranch = '';
 
     public string $projectSlug = '';
+
+    public bool $hasRemote = false;
 
     public ?string $exportResult = null;
 
@@ -125,6 +130,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->projectName = $project['name'];
         $this->projectBranch = $project['branch'] ?? '';
         $this->projectSlug = $project['slug'];
+        $this->hasRemote = ! empty($project['remote_url']);
 
         app(ResolveStartupRouteAction::class)->rememberLastOpened($slug);
 
@@ -843,6 +849,42 @@ new #[Layout('layouts.app')] class extends Component
         sourceFileEntries: @js(collect($sourceFiles)->map(fn($f) => ['id' => $f['id'], 'path' => $f['path']])->values()->all()),
         sidebarWidth: $store.settings.sidebarWidth,
         resizing: false,
+        remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '' },
+        showRemoteMenu($event) {
+            const d = $event.detail;
+            const projectBranch = @js($projectBranch);
+            const diffFrom = @js($diffFrom);
+            const diffTo = @js($diffTo);
+            const refNew = diffTo || projectBranch || 'HEAD';
+            const refOld = diffTo !== null ? diffFrom : (projectBranch || 'HEAD');
+            const pathOld = d.oldPath || d.filePath;
+            let type, params, label;
+            if (d.target === 'file') {
+                type = 'file';
+                params = { ref: refNew, path: d.filePath };
+                label = 'file';
+            } else {
+                type = 'line';
+                params = {
+                    ref: d.side === 'old' ? refOld : refNew,
+                    path: d.side === 'old' ? pathOld : d.filePath,
+                    start: d.start,
+                    end: d.end,
+                };
+                label = (d.end === null || d.end === d.start) ? 'line ' + d.start : 'lines ' + d.start + '-' + d.end;
+            }
+            const margin = 8;
+            const menuW = 220;
+            const menuH = 80;
+            this.remoteMenu = {
+                open: true,
+                x: Math.min(d.clientX, window.innerWidth - menuW - margin),
+                y: Math.min(d.clientY, window.innerHeight - menuH - margin),
+                projectSlug: @js($projectSlug),
+                type, params, label,
+            };
+        },
+        closeRemoteMenu() { this.remoteMenu.open = false; },
         get reviewedCount() {
             return Object.values(this.reviewedFiles).filter(Boolean).length;
         },
@@ -902,8 +944,11 @@ new #[Layout('layouts.app')] class extends Component
     }"
     @file-reviewed-changed.window="reviewedFiles[$event.detail.id] = $event.detail.reviewed"
     @reset-reviewed-files.window="reviewedFiles = {}"
+    @show-remote-menu.window="showRemoteMenu($event)"
     @copy-to-clipboard.window="
-        navigator.clipboard.writeText($event.detail.text).catch(() => {});
+        navigator.clipboard.writeText($event.detail.text).then(() => {
+            if ($event.detail.toast) Flux.toast({ text: $event.detail.toast, variant: 'success' });
+        }).catch(() => {});
     "
     @keydown.window="
         if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {
@@ -923,14 +968,58 @@ new #[Layout('layouts.app')] class extends Component
         <livewire:update-banner />
     @endnative
 
+    @if($hasRemote)
+        {{-- Shared remote-link context menu (one instance per review-page) --}}
+        <template x-teleport="body">
+            <div
+                x-show="remoteMenu.open"
+                x-cloak
+                x-transition.opacity.duration.75ms
+                @click.outside="closeRemoteMenu()"
+                @keydown.escape.window="closeRemoteMenu()"
+                @click="closeRemoteMenu()"
+                class="fixed z-[100] min-w-[200px] py-1 rounded-md border border-gh-border bg-gh-surface shadow-lg"
+                :style="`left:${remoteMenu.x}px; top:${remoteMenu.y}px`"
+            >
+                @native
+                    <button
+                        type="button"
+                        @click.stop="$wire.openRemote(remoteMenu.projectSlug, remoteMenu.type, remoteMenu.params); closeRemoteMenu()"
+                        class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer"
+                    >
+                        <flux:icon icon="arrow-top-right-on-square" variant="outline" class="!size-3.5 text-gh-muted" />
+                        <span>Open </span><span x-text="remoteMenu.label"></span>
+                    </button>
+                @endnative
+                <button
+                    type="button"
+                    @click.stop="$wire.copyRemoteLink(remoteMenu.projectSlug, remoteMenu.type, remoteMenu.params); closeRemoteMenu()"
+                    class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer"
+                >
+                    <flux:icon icon="link" variant="outline" class="!size-3.5 text-gh-muted" />
+                    <span>Copy </span><span x-text="remoteMenu.label"></span><span> link</span>
+                </button>
+            </div>
+        </template>
+    @endif
+
     {{-- Header --}}
     <header class="sticky top-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
         <div class="flex items-center gap-2">
-            @native
-                <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" />
-            @else
-                <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
-            @endnative
+            <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif class="inline-flex">
+                @native
+                    <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" />
+                @else
+                    <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
+                @endnative
+                @if($hasRemote)
+                    <x-remote-link-menu
+                        :project-slug="$projectSlug"
+                        type="repo"
+                        label="repository"
+                    />
+                @endif
+            </div>
             @php
                 $shortFrom = $diffFrom === 'HEAD' ? 'HEAD' : substr($diffFrom, 0, 7);
                 $shortTo = $diffTo ? substr($diffTo, 0, 7) : null;
@@ -952,6 +1041,7 @@ new #[Layout('layouts.app')] class extends Component
                     :current-branch="$projectBranch"
                     :project-slug="$projectSlug"
                     :active-commit-hash="$diffTo"
+                    :has-remote="$hasRemote"
                     :selection-label="$selectionLabel"
                     :selection-title="$selectionTitle"
                 />
@@ -1338,6 +1428,7 @@ new #[Layout('layouts.app')] class extends Component
                                         :is-reviewed="array_key_exists($pair['jsonFile']['path'], $reviewedFiles)"
                                         :repo-path="$repoPath"
                                         :project-id="$projectId"
+                                        :has-remote="$hasRemote"
                                         :diff-from="$diffFrom"
                                         :diff-to="$diffTo"
                                     />
@@ -1351,6 +1442,7 @@ new #[Layout('layouts.app')] class extends Component
                                         :is-reviewed="array_key_exists($pair['mdFile']['path'], $reviewedFiles)"
                                         :repo-path="$repoPath"
                                         :project-id="$projectId"
+                                        :has-remote="$hasRemote"
                                         :diff-from="$diffFrom"
                                         :diff-to="$diffTo"
                                     />
@@ -1373,6 +1465,7 @@ new #[Layout('layouts.app')] class extends Component
                             :single-file="$singleFile"
                             :repo-path="$repoPath"
                             :project-id="$projectId"
+                            :has-remote="$hasRemote"
                             :diff-from="$diffFrom"
                             :diff-to="$diffTo"
                         />

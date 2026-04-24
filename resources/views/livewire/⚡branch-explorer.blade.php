@@ -2,10 +2,13 @@
 
 use App\Actions\GetBranchListAction;
 use App\Actions\GetCommitHistoryAction;
+use App\Concerns\InteractsWithRemoteLinks;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 new class extends Component {
+    use InteractsWithRemoteLinks;
+
     #[Locked]
     public string $repoPath = '';
 
@@ -17,6 +20,9 @@ new class extends Component {
 
     #[Locked]
     public ?string $activeCommitHash = null;
+
+    #[Locked]
+    public bool $hasRemote = false;
 
     #[Locked]
     public string $selectionLabel = 'Working tree';
@@ -76,36 +82,65 @@ new class extends Component {
     x-effect="if (open && !$store.overlays.is('branch-explorer')) closePanel()"
 >
     <div class="inline-flex items-stretch rounded-md border border-gh-border/70 bg-gh-surface/30 hover:border-gh-text/30 transition-colors">
-        <flux:tooltip content="Switch branch · ⌘B">
-            <button
-                type="button"
-                class="group inline-flex items-center gap-1.5 px-2 py-1 text-xs font-mono text-gh-muted hover:text-gh-text hover:bg-gh-border/25 rounded-l-md transition-colors cursor-pointer"
-                aria-label="Switch branch (⌘B)"
-                aria-haspopup="dialog"
-                x-on:click="openPanel()"
-                x-bind:aria-expanded="open"
-            >
-                <flux:icon icon="share" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
-                <span class="tracking-tight">{{ $currentBranch }}</span>
-            </button>
-        </flux:tooltip>
+        <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif class="inline-flex">
+            <flux:tooltip content="Switch branch · ⌘B">
+                <button
+                    type="button"
+                    class="group inline-flex items-center gap-1.5 px-2 py-1 text-xs font-mono text-gh-muted hover:text-gh-text hover:bg-gh-border/25 rounded-l-md transition-colors cursor-pointer"
+                    aria-label="Switch branch (⌘B)"
+                    aria-haspopup="dialog"
+                    x-on:click="openPanel()"
+                    x-bind:aria-expanded="open"
+                >
+                    <flux:icon icon="share" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
+                    <span class="tracking-tight">{{ $currentBranch }}</span>
+                </button>
+            </flux:tooltip>
+            @if($hasRemote)
+                <x-remote-link-menu
+                    :project-slug="$projectSlug"
+                    type="branch"
+                    :params="['name' => $currentBranch]"
+                    label="branch"
+                />
+            @endif
+        </div>
 
         <span class="w-px self-stretch bg-gh-border/70" aria-hidden="true"></span>
 
-        <flux:tooltip content="{{ $selectionTitle }} · ⌘B">
-            <button
-                type="button"
-                class="group inline-flex items-center gap-1.5 px-2 py-1 text-xs font-mono text-gh-text hover:bg-gh-border/25 rounded-r-md transition-colors cursor-pointer"
-                aria-label="Open selection drawer"
-                aria-haspopup="dialog"
-                x-on:click="openPanel()"
-                x-bind:aria-expanded="open"
-            >
-                <flux:icon icon="square-3-stack-3d" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
-                <span>{{ $selectionLabel }}</span>
-                <x-chevron-icon variant="mono" />
-            </button>
-        </flux:tooltip>
+        <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif class="inline-flex">
+            <flux:tooltip content="{{ $selectionTitle }} · ⌘B">
+                <button
+                    type="button"
+                    class="group inline-flex items-center gap-1.5 px-2 py-1 text-xs font-mono text-gh-text hover:bg-gh-border/25 rounded-r-md transition-colors cursor-pointer"
+                    aria-label="Open selection drawer (⌘B)"
+                    aria-haspopup="dialog"
+                    x-on:click="openPanel()"
+                    x-bind:aria-expanded="open"
+                >
+                    <flux:icon icon="square-3-stack-3d" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
+                    <span>{{ $selectionLabel }}</span>
+                    <x-chevron-icon variant="mono" />
+                </button>
+            </flux:tooltip>
+            @if($hasRemote)
+                @if($activeCommitHash !== null)
+                    <x-remote-link-menu
+                        :project-slug="$projectSlug"
+                        type="commit"
+                        :params="['sha' => $activeCommitHash]"
+                        label="commit"
+                    />
+                @else
+                    <x-remote-link-menu
+                        :project-slug="$projectSlug"
+                        type="branch"
+                        :params="['name' => $currentBranch]"
+                        label="branch"
+                    />
+                @endif
+            @endif
+        </div>
     </div>
 
     <x-overlay-panel name="branch-explorer" aria-label="Switch branch" size="lg" on-close="closePanel()">
@@ -136,16 +171,26 @@ new class extends Component {
                                     <span class="section-label text-gh-muted">Local</span>
                                 </div>
                                 <template x-for="(branch, i) in filteredLocal" :key="branch.name">
-                                    <button
-                                        @click="selectBranchAt(i)"
-                                        class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors"
-                                        :class="selectedIndex === i ? 'bg-gh-text/10 text-gh-text font-medium' : 'text-gh-muted hover:bg-gh-border/30 hover:text-gh-text'"
-                                        :data-selected="selectedIndex === i"
-                                    >
-                                        <flux:icon icon="check" variant="outline" class="shrink-0" x-show="branch.isCurrent" x-cloak />
-                                        <span class="shrink-0 w-3" x-show="!branch.isCurrent"></span>
-                                        <span class="truncate" x-text="branch.name"></span>
-                                    </button>
+                                    <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif>
+                                        <button
+                                            @click="selectBranchAt(i)"
+                                            class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors cursor-pointer"
+                                            :class="selectedIndex === i ? 'bg-gh-text/10 text-gh-text font-medium' : 'text-gh-muted hover:bg-gh-border/30 hover:text-gh-text'"
+                                            :data-selected="selectedIndex === i"
+                                        >
+                                            <flux:icon icon="check" variant="outline" class="shrink-0" x-show="branch.isCurrent" x-cloak />
+                                            <span class="shrink-0 w-3" x-show="!branch.isCurrent"></span>
+                                            <span class="truncate" x-text="branch.name"></span>
+                                        </button>
+                                        @if($hasRemote)
+                                            <x-remote-link-menu
+                                                :project-slug="$projectSlug"
+                                                type-js="'branch'"
+                                                params-js="{ name: branch.name }"
+                                                label-js="'branch ' + branch.name"
+                                            />
+                                        @endif
+                                    </div>
                                 </template>
                             </div>
                         </template>
@@ -157,15 +202,25 @@ new class extends Component {
                                     <span class="section-label text-gh-muted">Remote</span>
                                 </div>
                                 <template x-for="(branch, j) in filteredRemote" :key="branch.name">
-                                    <button
-                                        @click="selectBranchAt(filteredLocal.length + j)"
-                                        class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors"
-                                        :class="selectedIndex === (filteredLocal.length + j) ? 'bg-gh-text/10 text-gh-text font-medium' : 'text-gh-muted hover:bg-gh-border/30 hover:text-gh-text'"
-                                        :data-selected="selectedIndex === (filteredLocal.length + j)"
-                                    >
-                                        <span class="shrink-0 w-3"></span>
-                                        <span class="truncate" x-text="branch.name"></span>
-                                    </button>
+                                    <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif>
+                                        <button
+                                            @click="selectBranchAt(filteredLocal.length + j)"
+                                            class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors cursor-pointer"
+                                            :class="selectedIndex === (filteredLocal.length + j) ? 'bg-gh-text/10 text-gh-text font-medium' : 'text-gh-muted hover:bg-gh-border/30 hover:text-gh-text'"
+                                            :data-selected="selectedIndex === (filteredLocal.length + j)"
+                                        >
+                                            <span class="shrink-0 w-3"></span>
+                                            <span class="truncate" x-text="branch.name"></span>
+                                        </button>
+                                        @if($hasRemote)
+                                            <x-remote-link-menu
+                                                :project-slug="$projectSlug"
+                                                type-js="'branch'"
+                                                params-js="{ name: branch.remote && branch.name.startsWith(branch.remote + '/') ? branch.name.slice(branch.remote.length + 1) : branch.name }"
+                                                label-js="'branch ' + branch.name"
+                                            />
+                                        @endif
+                                    </div>
                                 </template>
                             </div>
                         </template>
@@ -254,6 +309,7 @@ new class extends Component {
                             <div
                                 data-testid="commit-row"
                                 :data-commit-hash="commit.hash"
+                                @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif
                                 class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
                                 @click="viewCommit(commit.hash)"
                                 :class="{
@@ -295,6 +351,14 @@ new class extends Component {
                                         ></button>
                                     </div>
                                 </div>
+                                @if($hasRemote)
+                                    <x-remote-link-menu
+                                        :project-slug="$projectSlug"
+                                        type-js="'commit'"
+                                        params-js="{ sha: commit.hash }"
+                                        label-js="'commit ' + commit.shortHash"
+                                    />
+                                @endif
                             </div>
                         </template>
 

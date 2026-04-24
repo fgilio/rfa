@@ -21,6 +21,9 @@ new class extends Component {
     public int $projectId = 0;
 
     #[Locked]
+    public bool $hasRemote = false;
+
+    #[Locked]
     public int $loadDelay = 0;
 
     #[Locked]
@@ -215,6 +218,7 @@ new class extends Component {
     x-data="diffFile({
         fileId: @js($file['id']),
         filePath: @js($file['path']),
+        oldPath: @js($file['oldPath'] ?? null),
         isReviewed: @js($isReviewed ?? false),
         singleFile: @js($singleFile ?? false),
     })"
@@ -227,7 +231,9 @@ new class extends Component {
     class="group"
 >
     {{-- File header --}}
-    <div data-testid="file-header" class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
+    <div data-testid="file-header"
+         @if($hasRemote) @contextmenu.prevent="$dispatch('show-remote-menu', {target: 'file', fileId, filePath, oldPath, clientX: $event.clientX, clientY: $event.clientY})" @endif
+         class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
 
         {{-- Toggle zone: click anywhere here to expand/collapse --}}
         <div data-testid="toggle-zone"
@@ -548,6 +554,7 @@ new class extends Component {
                                 class="diff-line {{ $bgClass }}"
                                 :class="isLineInSelection({{ $lineNum ?? 'null' }}) ? 'line-selected' : ''"
                                 @mouseenter="onDragOver({{ $line['newLineNum'] ?? 'null' }}, {{ $line['oldLineNum'] ?? 'null' }})"
+                                @if($hasRemote && $lineNum !== null) @contextmenu.prevent="onLineContextmenu($event, {{ $lineNum }}, '{{ $lineSide === 'left' ? 'old' : 'new' }}')" @endif
                                 @if($line['newLineNum']) data-line-new="{{ $line['newLineNum'] }}" @endif
                                 @if($line['oldLineNum']) data-line-old="{{ $line['oldLineNum'] }}" @endif
                             >

@@ -2,6 +2,7 @@
 
 use App\Actions\ListProjectsAction;
 use App\Actions\RemoveProjectAction;
+use App\Concerns\InteractsWithRemoteLinks;
 use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -12,6 +13,8 @@ new
 #[Lazy]
 class extends Component
 {
+    use InteractsWithRemoteLinks;
+
     #[Locked]
     public string $currentSlug = '';
 

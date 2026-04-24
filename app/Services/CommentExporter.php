@@ -52,7 +52,7 @@ class CommentExporter
         return [
             'json' => $disk->path("{$basename}.json"),
             'md' => $disk->path("{$basename}.md"),
-            'clipboard' => "review my comments on these changes in @.rfa/{$basename}.md",
+            'clipboard' => "address my comments on these changes in @.rfa/{$basename}.md",
         ];
     }
 }
