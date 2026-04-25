@@ -48,8 +48,15 @@ jobs:
             phpstan-${{ runner.os }}-php${{ env.PHP_VERSION }}-
       - run: composer test:types
 
-  test-core:
+  # Core suite is sharded for wall-clock speed while preserving one required
+  # aggregate check (`test-core`) for branch protection and release gating.
+  test-core-shard:
+    name: test-core-shard (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-php-composer
@@ -58,7 +65,19 @@ jobs:
       - run: cp .env.example .env
       - run: php artisan key:generate
       # No `migrate` step: tests use DB_DATABASE=:memory: from phpunit.xml.
-      - run: composer test
+      - run: ./vendor/bin/pest --testsuite=Core --shard=${{ matrix.shard }}/3 --parallel --compact
+
+  test-core:
+    runs-on: ubuntu-latest
+    needs: test-core-shard
+    if: always()
+    steps:
+      - name: All core shards passed
+        run: |
+          if [ "${{ needs.test-core-shard.result }}" != "success" ]; then
+            echo "::error::test-core-shard matrix result = ${{ needs.test-core-shard.result }}"
+            exit 1
+          fi
 
   # Browser tests are split into 5 parallel runners via Pest's native
   # `--shard=X/Y` (4.6+). Each shard also runs `--parallel` internally, so
@@ -86,7 +105,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      - run: npm ci
+      - run: npm ci --prefer-offline --no-audit --no-fund
       - name: Get Playwright version
         id: playwright-version
         run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
@@ -180,8 +199,8 @@ jobs:
             echo '{"generated_at":"bootstrap","results":{}}' > /tmp/rfa-perf-baseline.json
             echo "Benchmark command not available on base branch - using empty baseline"
           fi
-      - name: Compare PR benchmark to baseline
-        if: github.event_name == 'pull_request'
+      - if: github.event_name == 'pull_request'
+        name: Compare PR benchmark to baseline
         run: |
           git checkout --force ${{ github.event.pull_request.head.sha }}
           composer install --no-interaction --prefer-dist --no-progress
@@ -190,6 +209,6 @@ jobs:
           touch database/database.sqlite
           php artisan migrate:fresh --force
           php artisan rfa:benchmark-perf --compare=/tmp/rfa-perf-baseline.json --max-regression=5
-      - name: Report benchmark on main
-        if: github.event_name != 'pull_request'
+      - if: github.event_name != 'pull_request'
+        name: Report benchmark on main
         run: php artisan rfa:benchmark-perf --compare=/tmp/rfa-perf-baseline.json --max-regression=5
