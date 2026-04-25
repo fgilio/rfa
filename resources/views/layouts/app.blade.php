@@ -131,12 +131,6 @@
             width: 3px;
             background: rgb(var(--gh-muted) / 0.5);
         }
-        /* Scrollbar styling */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--gh-scrollbar-thumb); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--gh-scrollbar-hover); }
-
         /* Prevent Flux menu scroll-lock from hiding scrollbar and causing layout shift */
         html { overflow-y: scroll !important; }
 

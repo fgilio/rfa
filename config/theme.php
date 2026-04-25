@@ -43,9 +43,6 @@ return [
             'hunk-bg' => 'rgba(9,9,11,0.03)',
             'hover-bg' => 'rgba(9,9,11,0.04)',
             'selected-bg' => 'rgba(9,9,11,0.08)',
-            'scrollbar-track' => 'transparent',
-            'scrollbar-thumb' => '#d4d4d8',
-            'scrollbar-hover' => '#a1a1aa',
         ],
         'dark' => [
             'add-bg' => 'rgba(74,222,128,0.10)',
@@ -55,9 +52,6 @@ return [
             'hunk-bg' => 'rgba(250,250,250,0.04)',
             'hover-bg' => 'rgba(250,250,250,0.05)',
             'selected-bg' => 'rgba(250,250,250,0.10)',
-            'scrollbar-track' => 'transparent',
-            'scrollbar-thumb' => '#3f3f46',
-            'scrollbar-hover' => '#52525b',
         ],
     ],
 ];
