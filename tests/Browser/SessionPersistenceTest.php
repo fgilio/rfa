@@ -38,14 +38,31 @@ test('global comment persists after page reload', function () {
 test('reviewed files persist after page reload', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
+    $page->script(<<<'JS'
+        window.__reviewedPersisted = false;
+        window.__reviewedPendingCommits = 0;
+
+        const wireId = document.querySelector('[data-testid="review-component"]').getAttribute('wire:id');
+
+        Livewire.hook('commit', ({ component, succeed, fail }) => {
+            if (component.id !== wireId) return;
+
+            window.__reviewedPendingCommits++;
+
+            const done = () => {
+                window.__reviewedPendingCommits--;
+                window.__reviewedPersisted = true;
+            };
+
+            succeed(done);
+            fail(done);
+        });
+    JS);
+
     $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
     // Alpine updates the counter on the next microtask; poll until it renders.
     $page->page()->waitForFunction("document.querySelector('[data-testid=\"reviewed-counter\"]')?.textContent?.includes('1/3 reviewed')");
-    // Counter above is driven by Alpine's local mirror, which fires before the
-    // toggleReviewed Livewire POST reaches the DB. Refreshing mid-POST aborts
-    // the request (net::ERR_ABORTED) and the toggle is lost on reload — flake
-    // amplified under --parallel. Wait for network idle to drain the round-trip.
-    $page->waitForEvent('networkidle');
+    $page->page()->waitForFunction('window.__reviewedPersisted === true && window.__reviewedPendingCommits === 0');
 
     $page->refresh();
     $page->page()->waitForFunction("document.querySelector('[data-testid=\"reviewed-counter\"]')?.textContent?.includes('1/3 reviewed')");
