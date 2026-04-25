@@ -3,6 +3,11 @@ includes:
 
 parameters:
     level: 6
+    # Pin the result-cache dir so CI can persist it between runs (see
+    # `Cache PHPStan result cache` in .github/workflows/ci.yml). PHPStan
+    # writes %tmpDir%/cache/PHPStan/resultCache.php and reuses per-file
+    # analysis when source/dependency hashes are unchanged.
+    tmpDir: /tmp/phpstan
     paths:
         - app/
     scanDirectories:
