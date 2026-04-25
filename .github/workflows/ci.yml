@@ -88,13 +88,18 @@ jobs:
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-chromium
+          # Include env.ImageVersion (runner image build id, bumped every
+          # ~1-2 weeks). Without it the cache key only reflected OS +
+          # Playwright version, so a runner-image bump that dropped a shared
+          # lib could leave us with a cached Chromium that fails to launch
+          # because install-deps was never re-run.
+          key: playwright-${{ runner.os }}-${{ env.ImageVersion }}-${{ steps.playwright-version.outputs.version }}-chromium
       # On cache hit we do *nothing*: ubuntu-latest already ships Google Chrome
       # and the shared libraries Chromium needs, so the cached browser binary
       # launches without `playwright install-deps`. Skipping this step saves
-      # ~18s per shard on every PR (apt update + apt install). On cache miss
-      # (Playwright version bump) we still pay `--with-deps` once so a future
-      # runner image change can't silently break us.
+      # ~18s per shard on every PR (apt update + apt install). The cache key
+      # above bakes in env.ImageVersion, so a Playwright bump *or* a runner
+      # image roll forces a miss → `--with-deps` re-runs.
       - if: steps.playwright-cache.outputs.cache-hit != 'true'
         name: Install Chromium + OS deps
         run: npx playwright install chromium --with-deps
