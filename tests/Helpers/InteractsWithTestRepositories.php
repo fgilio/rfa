@@ -68,19 +68,20 @@ trait InteractsWithTestRepositories
 
     protected function initTestRepo(string $directory): void
     {
-        $this->runTestRepoCommand($directory, [
-            'git init -b main',
-            "git config user.email 'test@rfa.test'",
-            "git config user.name 'RFA Test'",
-            'git config commit.gpgsign false',
-        ]);
+        $template = RepoTemplate::path(fn (string $cmd, string $err) => $this->execOrThrow($cmd, $err));
+        $target = rtrim($directory, '/').'/.git';
+
+        $this->execOrThrow(
+            'cp -R '.escapeshellarg($template).' '.escapeshellarg($target),
+            "Failed to copy git template into [{$directory}]",
+        );
     }
 
     protected function commitTestRepo(string $directory, string $message = 'commit'): void
     {
         $this->runTestRepoCommand($directory, [
             'git add -A',
-            'git commit -m '.escapeshellarg($message),
+            'git commit -q -m '.escapeshellarg($message),
         ]);
     }
 
@@ -90,19 +91,24 @@ trait InteractsWithTestRepositories
             ? implode(' && ', $commands)
             : $commands;
 
+        return $this->execOrThrow(
+            'cd '.escapeshellarg($directory)." && {$command}",
+            "Test repository command failed in [{$directory}]: {$command}",
+        );
+    }
+
+    private function execOrThrow(string $command, string $errorPrefix): string
+    {
         $output = [];
         $exitCode = 0;
-
-        exec('cd '.escapeshellarg($directory)." && {$command} 2>&1", $output, $exitCode);
+        exec($command.' 2>&1', $output, $exitCode);
 
         if ($exitCode === 0) {
             return implode("\n", $output);
         }
 
-        $details = implode("\n", $output);
-
         throw new \RuntimeException(
-            "Test repository command failed in [{$directory}] with exit code {$exitCode}: {$command}\n{$details}"
+            "{$errorPrefix} (exit code {$exitCode}):\n".implode("\n", $output)
         );
     }
 }

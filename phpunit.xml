@@ -46,5 +46,12 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="GIT_AUTHOR_NAME" value="RFA Test" force="true"/>
+        <env name="GIT_AUTHOR_EMAIL" value="test@rfa.test" force="true"/>
+        <env name="GIT_COMMITTER_NAME" value="RFA Test" force="true"/>
+        <env name="GIT_COMMITTER_EMAIL" value="test@rfa.test" force="true"/>
+        <env name="GIT_CONFIG_COUNT" value="1" force="true"/>
+        <env name="GIT_CONFIG_KEY_0" value="commit.gpgsign" force="true"/>
+        <env name="GIT_CONFIG_VALUE_0" value="false" force="true"/>
     </php>
 </phpunit>
