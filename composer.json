@@ -22,7 +22,6 @@
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
-        "joshcirre/instruckt-laravel": "^0.4.26",
         "larastan/larastan": "^3.0",
         "laravel/pint": "^1.24",
         "laravel/tinker": "^3.0",

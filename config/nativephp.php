@@ -91,7 +91,6 @@ return [
         'content',
         'node_modules',
         '*/tests',
-        'resources/views/partials/instruckt.blade.php',
     ],
 
     /**

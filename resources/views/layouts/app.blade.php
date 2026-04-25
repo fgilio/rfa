@@ -225,8 +225,5 @@
     <livewire:keepalive />
     {{ $slot }}
     @fluxScripts
-    @browser
-        @includeIf('partials.instruckt')
-    @endbrowser
 </body>
 </html>

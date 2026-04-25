@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "c064dcb0b18c86640bab0f50e4b2bfdb",
+    "content-hash": "32b1ef3b597372cf64dcbd932ac5c00d",
     "packages": [
         {
             "name": "brick/math",
@@ -1343,16 +1343,16 @@
         },
         {
             "name": "laravel/mcp",
-            "version": "v0.6.5",
+            "version": "v0.6.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/mcp.git",
-                "reference": "583a6282bf0f074d754f7ff5cd1fff9d34244691"
+                "reference": "c3775e57b95d7eadb580d543689d9971ec8721f2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/mcp/zipball/583a6282bf0f074d754f7ff5cd1fff9d34244691",
-                "reference": "583a6282bf0f074d754f7ff5cd1fff9d34244691",
+                "url": "https://api.github.com/repos/laravel/mcp/zipball/c3775e57b95d7eadb580d543689d9971ec8721f2",
+                "reference": "c3775e57b95d7eadb580d543689d9971ec8721f2",
                 "shasum": ""
             },
             "require": {
@@ -1412,7 +1412,7 @@
                 "issues": "https://github.com/laravel/mcp/issues",
                 "source": "https://github.com/laravel/mcp"
             },
-            "time": "2026-03-30T19:17:10+00:00"
+            "time": "2026-04-15T08:30:42+00:00"
         },
         {
             "name": "laravel/prompts",
@@ -8353,58 +8353,6 @@
             "time": "2025-03-19T14:43:43+00:00"
         },
         {
-            "name": "joshcirre/instruckt-laravel",
-            "version": "v0.4.28",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/joshcirre/instruckt-laravel.git",
-                "reference": "e04b53bf576646bbd1941cbbfed66d8909e3561c"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/joshcirre/instruckt-laravel/zipball/e04b53bf576646bbd1941cbbfed66d8909e3561c",
-                "reference": "e04b53bf576646bbd1941cbbfed66d8909e3561c",
-                "shasum": ""
-            },
-            "require": {
-                "laravel/framework": "^11.0|^12.0|^13.0",
-                "laravel/mcp": "^0.1 || ^0.2 || ^0.3 || ^0.4 || ^0.5 || ^0.6",
-                "php": "^8.2"
-            },
-            "type": "library",
-            "extra": {
-                "laravel": {
-                    "providers": [
-                        "Instruckt\\Laravel\\InstrucktServiceProvider"
-                    ]
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "Instruckt\\Laravel\\": "src/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "description": "Visual feedback for AI coding agents — Laravel MCP package",
-            "keywords": [
-                "Agent",
-                "ai",
-                "feedback",
-                "instruckt",
-                "laravel",
-                "livewire",
-                "mcp"
-            ],
-            "support": {
-                "issues": "https://github.com/joshcirre/instruckt-laravel/issues",
-                "source": "https://github.com/joshcirre/instruckt-laravel/tree/v0.4.28"
-            },
-            "time": "2026-03-25T08:36:16+00:00"
-        },
-        {
             "name": "kelunik/certificate",
             "version": "v1.1.3",
             "source": {
@@ -11764,5 +11712,5 @@
     "platform-overrides": {
         "php": "8.4.19"
     },
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }
