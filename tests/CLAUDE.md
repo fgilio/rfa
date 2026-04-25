@@ -3,12 +3,25 @@
 ## Stack
 
 - Pest 4 on PHPUnit 12
-- Default fast path: `composer test` or `php artisan test`
+- Default fast path: `composer test` (parallel via paratest, ~6s)
+- Single-process fallback: `composer test:serial` (when debugging worker isolation)
 - Arch only: `composer test:arch`
 - Browser: `composer test:browser`
 - Perf benchmark: `composer test:perf`
 - Perf smoke suite: `composer test:perf:smoke`
 - Full local suite pass: `composer test:all`
+
+## Parallel test isolation
+
+`composer test` runs Pest with `--parallel` (paratest under the hood). Each
+worker gets its own SQLite (via `:memory:`), blade compile dir
+(`storage/framework/views/test_<token>`), and Livewire compile dir
+(`storage/framework/views/livewire_test_<token>`, set up in `Tests\TestCase`).
+Child PHP processes spawned during a test inherit `VIEW_COMPILED_PATH` so they
+target the same isolated blade dir.
+
+If you need shared mutable state in a test, switch to `composer test:serial`
+or scope the test to its own file so it gets its own worker.
 
 ## Suite Model
 
@@ -32,6 +45,10 @@
 - Prefer `InteractsWithTestRepositories::createTempDirectory()` for tracked temp dirs
 - If a test needs git repo setup, use `InteractsWithTestRepositories::initTestRepo()` and `commitTestRepo()`
 - Global cleanup in `tests/Pest.php` removes tracked temp dirs after each test
+- `initTestRepo()` copies a per-process `.git` template (single `cp -R`) instead
+  of running `git init` + 3 `git config` calls. Author/committer/`commit.gpgsign`
+  are set globally via `GIT_AUTHOR_*` / `GIT_CONFIG_*` env vars on first call,
+  so don't expect tests to override these via `.git/config`.
 
 ## Assertions
 

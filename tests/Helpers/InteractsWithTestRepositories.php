@@ -8,6 +8,16 @@ use Illuminate\Support\Facades\File;
 trait InteractsWithTestRepositories
 {
     /**
+     * Per-process cached path to a pre-initialized `.git` directory used as a
+     * template. New test repos are created by copying this directory instead
+     * of running `git init` + `git config` four times each.
+     */
+    private static ?string $cachedRepoTemplate = null;
+
+    /** Set git env vars once per PHP process so we don't need `git config` calls. */
+    private static bool $gitEnvironmentInitialized = false;
+
+    /**
      * @param  array<string, mixed>  $overrides
      */
     protected function createTestProject(array $overrides = []): Project
@@ -68,19 +78,34 @@ trait InteractsWithTestRepositories
 
     protected function initTestRepo(string $directory): void
     {
-        $this->runTestRepoCommand($directory, [
-            'git init -b main',
-            "git config user.email 'test@rfa.test'",
-            "git config user.name 'RFA Test'",
-            'git config commit.gpgsign false',
-        ]);
+        $this->ensureGitTestEnvironment();
+
+        $template = $this->ensureRepoTemplate();
+
+        // Copy the pre-initialized .git directory into the test directory.
+        // Single fork — replaces 4 git invocations (init + 3 config).
+        $output = [];
+        $exitCode = 0;
+        exec(
+            'cp -R '.escapeshellarg($template).' '.escapeshellarg(rtrim($directory, '/').'/.git').' 2>&1',
+            $output,
+            $exitCode,
+        );
+
+        if ($exitCode !== 0) {
+            throw new \RuntimeException(
+                "Failed to copy git template into [{$directory}]: ".implode("\n", $output)
+            );
+        }
     }
 
     protected function commitTestRepo(string $directory, string $message = 'commit'): void
     {
+        $this->ensureGitTestEnvironment();
+
         $this->runTestRepoCommand($directory, [
             'git add -A',
-            'git commit -m '.escapeshellarg($message),
+            'git commit -q -m '.escapeshellarg($message),
         ]);
     }
 
@@ -104,5 +129,84 @@ trait InteractsWithTestRepositories
         throw new \RuntimeException(
             "Test repository command failed in [{$directory}] with exit code {$exitCode}: {$command}\n{$details}"
         );
+    }
+
+    /**
+     * Set git author/committer + commit.gpgsign env vars so we don't need
+     * `git config` calls per test. These propagate to all child git processes
+     * (including the production `GitProcessService`).
+     */
+    private function ensureGitTestEnvironment(): void
+    {
+        if (self::$gitEnvironmentInitialized) {
+            return;
+        }
+
+        putenv('GIT_AUTHOR_NAME=RFA Test');
+        putenv('GIT_AUTHOR_EMAIL=test@rfa.test');
+        putenv('GIT_COMMITTER_NAME=RFA Test');
+        putenv('GIT_COMMITTER_EMAIL=test@rfa.test');
+        putenv('GIT_CONFIG_COUNT=1');
+        putenv('GIT_CONFIG_KEY_0=commit.gpgsign');
+        putenv('GIT_CONFIG_VALUE_0=false');
+
+        self::$gitEnvironmentInitialized = true;
+    }
+
+    /**
+     * Lazily create a per-process `.git` template directory by running
+     * `git init -b main` exactly once. Subsequent `initTestRepo()` calls
+     * within the same process copy from this template.
+     */
+    private function ensureRepoTemplate(): string
+    {
+        if (self::$cachedRepoTemplate !== null && is_dir(self::$cachedRepoTemplate)) {
+            return self::$cachedRepoTemplate;
+        }
+
+        $base = sys_get_temp_dir().'/rfa_repo_tpl_'.getmypid().'_'.bin2hex(random_bytes(4));
+
+        File::makeDirectory($base, 0755, true);
+
+        $output = [];
+        $exitCode = 0;
+        exec('git init -b main -q '.escapeshellarg($base).' 2>&1', $output, $exitCode);
+
+        if ($exitCode !== 0) {
+            File::deleteDirectory($base);
+
+            throw new \RuntimeException(
+                'Failed to initialize git repo template: '.implode("\n", $output)
+            );
+        }
+
+        register_shutdown_function(static function () use ($base): void {
+            // Use raw PHP recursion — facades aren't available at shutdown.
+            self::removeDirectoryRecursive($base);
+        });
+
+        return self::$cachedRepoTemplate = $base.'/.git';
+    }
+
+    private static function removeDirectoryRecursive(string $path): void
+    {
+        if (! is_dir($path)) {
+            return;
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+
+        foreach ($iterator as $entry) {
+            if ($entry->isDir() && ! $entry->isLink()) {
+                @rmdir($entry->getPathname());
+            } else {
+                @unlink($entry->getPathname());
+            }
+        }
+
+        @rmdir($path);
     }
 }
