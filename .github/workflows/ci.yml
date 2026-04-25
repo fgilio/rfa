@@ -61,8 +61,8 @@ jobs:
       - run: composer test
 
   # Browser tests are split into 4 parallel runners via Pest's native
-  # `--shard=X/Y` (4.6+). Each shard also runs `--parallel` internally, so total
-  # concurrency is (shards × per-runner workers).
+  # `--shard=X/Y` (4.6+). Each shard also runs `--parallel` internally, so
+  # total concurrency is (shards × per-runner workers).
   test-browser-shard:
     name: test-browser-shard (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
