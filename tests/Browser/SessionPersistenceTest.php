@@ -31,7 +31,7 @@ test('global comment persists after page reload', function () {
 
     $value = $page->page()->getByPlaceholder('Overall review comment', false)->inputValue();
     expect($value)->toBe('Global persisted note');
-})->repeat(30);
+})->repeat(100);
 
 test('reviewed files persist after page reload', function () {
     $page = $this->visitAndLoad($this->projectUrl());
