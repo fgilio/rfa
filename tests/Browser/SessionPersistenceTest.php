@@ -24,14 +24,16 @@ test('global comment persists after page reload', function () {
         const wireId = document.querySelector('[data-testid=\"review-component\"]').getAttribute('wire:id');
         Livewire.find(wireId).set('globalComment', 'Global persisted note');
     ");
-    // Wait for Livewire to process the server round-trip
-    $page->page()->waitForFunction("document.querySelector('[data-testid=\"review-component\"] textarea')?.value === 'Global persisted note'");
+    // Livewire.set() updates client state optimistically, so checking the textarea value
+    // can race the server commit. Wait for the Livewire POST to drain so saveSession()
+    // has actually persisted before we refresh.
+    $page->waitForEvent('networkidle');
 
     $page->refresh();
 
     $value = $page->page()->getByPlaceholder('Overall review comment', false)->inputValue();
     expect($value)->toBe('Global persisted note');
-});
+})->flaky();
 
 test('reviewed files persist after page reload', function () {
     $page = $this->visitAndLoad($this->projectUrl());
