@@ -3,11 +3,20 @@
 namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Foundation\Testing\WithCachedConfig;
+use Illuminate\Foundation\Testing\WithCachedRoutes;
 use Livewire\Compiler\CacheManager;
 use Livewire\Compiler\Compiler;
 
 abstract class TestCase extends BaseTestCase
 {
+    // Memoize config + routes across the worker so each test reuses the
+    // already-built application state instead of rebuilding it from scratch.
+    // Added in Laravel 12.38; reports 10–40% faster boot in route-/config-heavy
+    // suites.
+    use WithCachedConfig;
+    use WithCachedRoutes;
+
     /** Per-process cached path; null when not running under parallel testing. */
     private static ?string $isolatedLivewireCachePath = null;
 
