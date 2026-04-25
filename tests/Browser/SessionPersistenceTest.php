@@ -24,8 +24,12 @@ test('global comment persists after page reload', function () {
         const wireId = document.querySelector('[data-testid=\"review-component\"]').getAttribute('wire:id');
         Livewire.find(wireId).set('globalComment', 'Global persisted note');
     ");
-    // Wait for Livewire to process the server round-trip
-    $page->page()->waitForFunction("document.querySelector('[data-testid=\"review-component\"] textarea')?.value === 'Global persisted note'");
+    // Livewire.set() updates client state optimistically, so checking the textarea
+    // value can pass before the actual POST reaches PHP — and refresh() then aborts
+    // the in-flight commit before updatedGlobalComment -> saveSession() runs. Wait
+    // for network idle to drain the round-trip. Confirmed via CI experiment on
+    // PR #54: pre-fix repro fails on shard 3 under --parallel; this fix passes.
+    $page->waitForEvent('networkidle');
 
     $page->refresh();
 
