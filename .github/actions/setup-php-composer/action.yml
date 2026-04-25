@@ -1,5 +1,7 @@
 name: Setup PHP + Composer
-description: Installs PHP, restores the Composer cache, and runs composer install.
+description: >
+  Installs PHP, restores vendor/ + the Composer download cache, and runs
+  `composer install` only when the vendor cache misses.
 
 inputs:
   php-version:
@@ -19,12 +21,30 @@ runs:
       id: composer-cache-dir
       shell: bash
       run: echo "dir=$(composer config --global cache-files-dir)" >> "$GITHUB_OUTPUT"
-    - name: Cache Composer packages
+    # Always restore the Composer download cache. Even when vendor/ is a hit
+    # and we skip `composer install` here, downstream jobs (benchmark-perf
+    # checks out an older SHA and runs `composer install` against a
+    # potentially different lockfile) reuse this cache.
+    - name: Cache Composer downloads
       uses: actions/cache@v5
       with:
         path: ${{ steps.composer-cache-dir.outputs.dir }}
         key: composer-${{ runner.os }}-php${{ inputs.php-version }}-${{ hashFiles('composer.lock') }}
         restore-keys: composer-${{ runner.os }}-php${{ inputs.php-version }}-
+    # Restoring vendor/ + the post-autoload-dump artefacts (packages.php /
+    # services.php) lets us skip `composer install` entirely on a cache hit.
+    # Key includes patch-native-preload.php because that script runs as a
+    # post-autoload-dump hook and mutates files inside vendor/.
+    - name: Cache vendor + bootstrap/cache
+      id: vendor-cache
+      uses: actions/cache@v5
+      with:
+        path: |
+          vendor
+          bootstrap/cache/packages.php
+          bootstrap/cache/services.php
+        key: vendor-${{ runner.os }}-php${{ inputs.php-version }}-${{ hashFiles('composer.lock', 'composer.json', 'scripts/patch-native-preload.php') }}
     - name: Install Composer dependencies
+      if: steps.vendor-cache.outputs.cache-hit != 'true'
       shell: bash
       run: composer install --no-interaction --prefer-dist --no-progress

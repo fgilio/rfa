@@ -35,6 +35,17 @@ jobs:
       - uses: ./.github/actions/setup-php-composer
         with:
           php-version: ${{ env.PHP_VERSION }}
+      # PHPStan stores per-file analysis results so unchanged code is skipped
+      # on subsequent runs. Cache key only needs to flip when the analysed
+      # source or PHPStan config changes; restore-keys lets us reuse a partial
+      # cache when only a few files changed.
+      - name: Cache PHPStan result cache
+        uses: actions/cache@v5
+        with:
+          path: /tmp/phpstan
+          key: phpstan-${{ runner.os }}-php${{ env.PHP_VERSION }}-${{ hashFiles('phpstan.neon.dist', 'app/**/*.php', 'database/factories/**/*.php') }}
+          restore-keys: |
+            phpstan-${{ runner.os }}-php${{ env.PHP_VERSION }}-
       - run: composer test:types
 
   test-core:
@@ -46,20 +57,19 @@ jobs:
           php-version: ${{ env.PHP_VERSION }}
       - run: cp .env.example .env
       - run: php artisan key:generate
-      - run: touch database/database.sqlite
-      - run: php artisan migrate --force
+      # No `migrate` step: tests use DB_DATABASE=:memory: from phpunit.xml.
       - run: composer test
 
-  # Browser tests are split into 3 parallel runners via Pest's native
+  # Browser tests are split into 4 parallel runners via Pest's native
   # `--shard=X/Y` (4.6+). Each shard also runs `--parallel` internally, so total
   # concurrency is (shards × per-runner workers).
   test-browser-shard:
-    name: test-browser-shard (${{ matrix.shard }}/3)
+    name: test-browser-shard (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-php-composer
@@ -79,18 +89,21 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-chromium
+      # On cache hit we do *nothing*: ubuntu-latest already ships Google Chrome
+      # and the shared libraries Chromium needs, so the cached browser binary
+      # launches without `playwright install-deps`. Skipping this step saves
+      # ~18s per shard on every PR (apt update + apt install). On cache miss
+      # (Playwright version bump) we still pay `--with-deps` once so a future
+      # runner image change can't silently break us.
       - if: steps.playwright-cache.outputs.cache-hit != 'true'
         name: Install Chromium + OS deps
         run: npx playwright install chromium --with-deps
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
-        name: Install Chromium OS deps only
-        run: npx playwright install-deps chromium
       - run: cp .env.example .env
       - run: php artisan key:generate
-      - run: touch database/database.sqlite
-      - run: php artisan migrate --force
-      - name: Run browser tests (shard ${{ matrix.shard }}/3)
-        run: ./vendor/bin/pest --testsuite=Browser --shard=${{ matrix.shard }}/3 --parallel --compact
+      # No `migrate` step: browser tests use DB_DATABASE=:memory: from phpunit.xml,
+      # and Pest spins the test server up in-process so it inherits that env.
+      - name: Run browser tests (shard ${{ matrix.shard }}/4)
+        run: ./vendor/bin/pest --testsuite=Browser --shard=${{ matrix.shard }}/4 --parallel --compact
       - name: Upload browser screenshots on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -126,8 +139,10 @@ jobs:
           php-version: ${{ env.PHP_VERSION }}
       - run: cp .env.example .env
       - run: php artisan key:generate
-      - run: touch database/database.sqlite
-      - run: php artisan migrate --force
+      # No upfront `migrate`: BenchmarkPerformanceCommand provisions its own
+      # isolated sqlite via BenchmarkIsolation::activate() and runs migrate
+      # against that. The baseline / head sections below also run
+      # `migrate:fresh` themselves.
       - name: Capture baseline benchmark on main
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
