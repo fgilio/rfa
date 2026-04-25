@@ -3,13 +3,10 @@
 namespace Tests\Helpers;
 
 use App\Models\Project;
-use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\File;
 
 trait InteractsWithTestRepositories
 {
-    private static ?string $cachedRepoTemplate = null;
-
     /**
      * @param  array<string, mixed>  $overrides
      */
@@ -71,7 +68,7 @@ trait InteractsWithTestRepositories
 
     protected function initTestRepo(string $directory): void
     {
-        $template = $this->ensureRepoTemplate();
+        $template = RepoTemplate::path(fn (string $cmd, string $err) => $this->execOrThrow($cmd, $err));
         $target = rtrim($directory, '/').'/.git';
 
         $this->execOrThrow(
@@ -113,33 +110,5 @@ trait InteractsWithTestRepositories
         throw new \RuntimeException(
             "{$errorPrefix} (exit code {$exitCode}):\n".implode("\n", $output)
         );
-    }
-
-    private function ensureRepoTemplate(): string
-    {
-        if (self::$cachedRepoTemplate !== null) {
-            return self::$cachedRepoTemplate;
-        }
-
-        $base = sys_get_temp_dir().'/rfa_repo_tpl_'.getmypid().'_'.bin2hex(random_bytes(4));
-        File::makeDirectory($base, 0755, true);
-
-        try {
-            $this->execOrThrow(
-                'git init -b main -q '.escapeshellarg($base),
-                'Failed to initialize git repo template',
-            );
-        } catch (\Throwable $e) {
-            File::deleteDirectory($base);
-            throw $e;
-        }
-
-        // Resolve the Filesystem now; the container is gone by shutdown.
-        $filesystem = new Filesystem;
-        register_shutdown_function(static function () use ($filesystem, $base): void {
-            $filesystem->deleteDirectory($base);
-        });
-
-        return self::$cachedRepoTemplate = $base.'/.git';
     }
 }
