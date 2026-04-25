@@ -47,8 +47,8 @@ or scope the test to its own file so it gets its own worker.
 - Global cleanup in `tests/Pest.php` removes tracked temp dirs after each test
 - `initTestRepo()` copies a per-process `.git` template (single `cp -R`) instead
   of running `git init` + 3 `git config` calls. Author/committer/`commit.gpgsign`
-  are set globally via `GIT_AUTHOR_*` / `GIT_CONFIG_*` env vars on first call,
-  so don't expect tests to override these via `.git/config`.
+  come from `GIT_AUTHOR_*` / `GIT_CONFIG_*` env vars in `phpunit.xml`, so
+  don't expect tests to override these via `.git/config`.
 
 ## Assertions
 

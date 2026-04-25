@@ -5,33 +5,21 @@ namespace Tests;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Foundation\Testing\WithCachedConfig;
 use Illuminate\Foundation\Testing\WithCachedRoutes;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\ParallelTesting;
 use Livewire\Compiler\CacheManager;
 use Livewire\Compiler\Compiler;
 
 abstract class TestCase extends BaseTestCase
 {
-    // Memoize config + routes across the worker so each test reuses the
-    // already-built application state instead of rebuilding it from scratch.
-    // Added in Laravel 12.38; reports 10–40% faster boot in route-/config-heavy
-    // suites.
     use WithCachedConfig;
     use WithCachedRoutes;
 
-    /** Per-process cached path; null when not running under parallel testing. */
-    private static ?string $isolatedLivewireCachePath = null;
+    private const ENV_VIEW_COMPILED = 'VIEW_COMPILED_PATH';
 
-    private static bool $isolatedPathsResolved = false;
+    /** False = unresolved, null = no token, string = path. */
+    private static string|false|null $isolatedLivewireCachePath = false;
 
-    /**
-     * Laravel's parallel-testing trait isolates blade compiled views
-     * (storage/framework/views/test_<token>) and SQLite (per-process :memory:).
-     * Livewire's compiler singleton, though, points at a fixed
-     * storage/framework/views/livewire path — which causes flaky races across
-     * workers (one worker deletes/rewrites a file while another reads it).
-     *
-     * Re-bind the compiler to a per-process directory whenever a token is
-     * present so each worker reads/writes its own livewire cache.
-     */
     protected function setUp(): void
     {
         parent::setUp();
@@ -43,40 +31,35 @@ abstract class TestCase extends BaseTestCase
         }
     }
 
+    /**
+     * Livewire's compiler singleton points at a fixed
+     * `storage/framework/views/livewire` path; under parallel testing that
+     * shared dir races (one worker rewriting a file while another reads it).
+     * Per-token paths give each worker its own cache.
+     */
     private function resolveIsolatedLivewireCachePath(): ?string
     {
-        if (self::$isolatedPathsResolved) {
+        if (self::$isolatedLivewireCachePath !== false) {
             return self::$isolatedLivewireCachePath;
         }
 
-        self::$isolatedPathsResolved = true;
+        $token = ParallelTesting::token();
 
-        $token = $_SERVER['TEST_TOKEN'] ?? $_ENV['TEST_TOKEN'] ?? getenv('TEST_TOKEN');
-
-        if ($token === false || $token === null || $token === '') {
+        if ($token === false) {
             return self::$isolatedLivewireCachePath = null;
         }
 
         $path = storage_path('framework/views/livewire_test_'.$token);
+        File::ensureDirectoryExists($path);
 
-        if (! is_dir($path)) {
-            @mkdir($path, 0o755, true);
-        }
-
-        // Propagate the per-worker compiled blade path to any child PHP
-        // processes spawned during the test (e.g. `BenchmarkPerformanceCommand`
-        // forks `php artisan rfa:benchmark-perf --child`). Without this they
-        // share `storage/framework/views/` with every other worker and race.
+        // Child PHP processes spawned mid-test must inherit the per-worker
+        // compiled blade dir, otherwise they fall back to the shared default
+        // and race other workers.
         $compiled = $this->app['config']->get('view.compiled');
 
         if (is_string($compiled) && $compiled !== '') {
-            if (! is_dir($compiled)) {
-                @mkdir($compiled, 0o755, true);
-            }
-
-            putenv('VIEW_COMPILED_PATH='.$compiled);
-            $_ENV['VIEW_COMPILED_PATH'] = $compiled;
-            $_SERVER['VIEW_COMPILED_PATH'] = $compiled;
+            File::ensureDirectoryExists($compiled);
+            putenv(self::ENV_VIEW_COMPILED.'='.$compiled);
         }
 
         return self::$isolatedLivewireCachePath = $path;
