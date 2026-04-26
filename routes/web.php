@@ -32,9 +32,9 @@ Route::get('/api/status/{project}', function (Project $project) {
 Route::get('/api/changes/{project}', function (Project $project) {
     $globalGitignorePath = $project->respect_global_gitignore ? $project->global_gitignore_path : null;
 
-    $fingerprint = app(CheckForChangesAction::class)->handle($project->path, $globalGitignorePath);
-
-    return response()->json(['fingerprint' => $fingerprint]);
+    return response()->json(
+        app(CheckForChangesAction::class)->handle($project->path, $globalGitignorePath)
+    );
 })->name('api.changes');
 
 Route::get('/api/image/{project}/{ref}/{path}', function (Project $project, string $ref, string $path) {

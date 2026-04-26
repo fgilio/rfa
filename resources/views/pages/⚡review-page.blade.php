@@ -1268,6 +1268,7 @@ new #[Layout('layouts.app')] class extends Component
                     <div data-testid="change-polling" x-data="{
                         hasChanges: false,
                         fingerprint: null,
+                        currentCount: 0,
                         polling: null,
                         async check() {
                             try {
@@ -1277,6 +1278,7 @@ new #[Layout('layouts.app')] class extends Component
                                     this.fingerprint = data.fingerprint;
                                 } else if (data.fingerprint !== this.fingerprint) {
                                     this.hasChanges = true;
+                                    this.currentCount = data.count ?? 0;
                                 }
                             } catch {}
                         },
@@ -1287,12 +1289,18 @@ new #[Layout('layouts.app')] class extends Component
                             }, 60000);
                         },
                         softRefresh() { $wire.softRefresh(); },
-                        hardReload() { window.location.reload(); }
+                        hardReload() { window.location.reload(); },
+                        get tooltip() {
+                            if (!this.hasChanges) return 'Refresh · ⌘R · ⌘⇧R to hard reload';
+                            const n = this.currentCount;
+                            const noun = n === 1 ? 'file' : 'files';
+                            return `${n} ${noun} changed externally — click to refresh`;
+                        }
                     }"
                     x-init="startPolling();
                         $store.keymap.register('⌘R', () => softRefresh(), { allowInEditable: true });
                         $store.keymap.register('⌘⇧R', () => hardReload(), { allowInEditable: true });"
-                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; clearInterval(polling); startPolling();"
+                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; currentCount = 0; clearInterval(polling); startPolling();"
                     @refresh-completed.window="
                         const n = $event.detail?.changedCount ?? 0;
                         Flux.toast({
@@ -1302,11 +1310,12 @@ new #[Layout('layouts.app')] class extends Component
                     "
                     class="relative flex items-center">
                         <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
-                            tooltip="Refresh · ⌘R · ⌘⇧R to hard reload"
-                            aria-label="Refresh · ⌘R · ⌘⇧R to hard reload"
+                            x-bind:tooltip="tooltip"
+                            x-bind:aria-label="tooltip"
+                            x-bind:class="hasChanges && '!text-amber-500 dark:!text-amber-400'"
                             wire:click.preserve-scroll="softRefresh" />
                         <span x-show="hasChanges" x-cloak
-                            class="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                            class="pointer-events-none absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                             <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
                         </span>
