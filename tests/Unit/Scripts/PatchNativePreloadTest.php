@@ -42,9 +42,17 @@ function tempPreload(?string $content = null): string
 }
 
 afterEach(function () {
-    // Clean up any temp files created during the test
+    // Clean up any temp files created during the test (including .tmp siblings
+    // left by atomic-write failures).
     foreach (glob(sys_get_temp_dir().'/rfa_test_preload_*', GLOB_ONLYDIR) as $dir) {
-        array_map('unlink', glob($dir.'/*'));
+        foreach (glob($dir.'/*') ?: [] as $file) {
+            unlink($file);
+        }
+        foreach (glob($dir.'/.*') ?: [] as $file) {
+            if (! is_dir($file)) {
+                unlink($file);
+            }
+        }
         rmdir($dir);
     }
 });
@@ -81,7 +89,10 @@ test('patches unpatched preload and returns patched', function () {
         ->toContain('import { ipcRenderer, contextBridge, webUtils } from "electron";')
         ->toContain("contextBridge.exposeInMainWorld('nativeGetFilePath'")
         ->toContain('webUtils.getPathForFile(file)')
-        ->toContain('[rfa patch]');
+        ->toContain("contextBridge.exposeInMainWorld('rfaLifecycle'")
+        ->toContain("ipcRenderer.send('rfa:force-quit')")
+        ->toContain("ipcRenderer.send('rfa:restart')")
+        ->toContain('[rfa patch] preload v1');
 });
 
 test('replaces the original import without duplicating it', function () {
@@ -127,4 +138,14 @@ test('preserves existing preload code', function () {
         ->toContain('import remote from "@electron/remote"')
         ->toContain("contextBridge.exposeInMainWorld('Native', Native)")
         ->toContain('contextMenu: (template)');
+});
+
+// -- Atomic writes --
+
+test('does not leave a .tmp sibling after a successful patch', function () {
+    $path = tempPreload(stockPreload());
+
+    patchNativePreload($path);
+
+    expect(file_exists($path.'.tmp'))->toBeFalse();
 });

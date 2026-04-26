@@ -1,18 +1,20 @@
 <?php
 
 /**
- * Patch NativePHP's Electron preload to expose webUtils.getPathForFile().
+ * Patch NativePHP's Electron preload to expose:
+ *   - webUtils.getPathForFile (drag-and-drop; Electron 38+ removed File.path)
+ *   - window.rfaLifecycle.{forceQuit,restart} (renderer escape hatch when Laravel is dead)
  *
- * Electron 38+ removed File.path from the renderer. The replacement,
- * webUtils.getPathForFile(), is only available in the preload context.
- * NativePHP's preload doesn't expose it, so we patch the compiled JS
- * to bridge it via contextBridge.
- *
- * Runs automatically via composer post-autoload-dump.
+ * Bumping the sentinel version is a deliberate signal that the patch shape
+ * changed and any pre-existing patched file needs re-patching.
  */
 
+require_once __DIR__.'/lib/native-patch-helpers.php';
+
+const PRELOAD_SENTINEL = '[rfa patch] preload v1';
+
 /**
- * @return 'patched'|'already_patched'|'import_not_found'|'not_found'
+ * @return 'patched'|'already_patched'|'import_not_found'|'not_found'|'write_failed'
  */
 function patchNativePreload(string $preloadPath): string
 {
@@ -22,45 +24,47 @@ function patchNativePreload(string $preloadPath): string
 
     $content = file_get_contents($preloadPath);
 
-    if (str_contains($content, '[rfa patch]')) {
+    if (str_contains($content, PRELOAD_SENTINEL)) {
         return 'already_patched';
     }
 
-    // Add webUtils to the electron import
     $original = $content;
     $content = str_replace(
         'import { ipcRenderer, contextBridge } from "electron";',
         'import { ipcRenderer, contextBridge, webUtils } from "electron";',
         $content
     );
-
     if ($content === $original) {
         return 'import_not_found';
     }
 
-    // Expose getPathForFile to the renderer via contextBridge
-    $content .= <<<'JS'
+    $sentinel = PRELOAD_SENTINEL;
+    $content .= <<<JS
 
-// [rfa patch] Expose webUtils.getPathForFile for drag-and-drop support.
-// File objects pass through contextBridge via structured cloning.
+// {$sentinel}
 contextBridge.exposeInMainWorld('nativeGetFilePath', (file) => webUtils.getPathForFile(file));
+
+// Strict-capability bridge: no secret, no HTTP. Main process patch in
+// scripts/patch-native-electron-main.php registers the matching ipcMain.on handlers.
+contextBridge.exposeInMainWorld('rfaLifecycle', {
+    forceQuit: () => ipcRenderer.send('rfa:force-quit'),
+    restart: () => ipcRenderer.send('rfa:restart'),
+});
 JS;
 
-    file_put_contents($preloadPath, $content."\n");
-
-    return 'patched';
+    return nativePatchWriteAtomic($preloadPath, $content."\n") ? 'patched' : 'write_failed';
 }
 
-// Run when executed directly (not when required by tests)
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
     $preloadPath = __DIR__.'/../vendor/nativephp/desktop/resources/electron/electron-plugin/dist/preload/index.mjs';
 
     $result = patchNativePreload($preloadPath);
 
     match ($result) {
-        'patched' => print "  NativePHP preload patched: webUtils.getPathForFile exposed.\n",
-        'already_patched' => print "  NativePHP preload already patched (webUtils).\n",
-        'import_not_found' => fwrite(STDERR, "  WARNING: NativePHP preload import line not found. Patch skipped.\n"),
-        'not_found' => null,
+        'patched' => print "  NativePHP preload patched (preload v1: nativeGetFilePath, rfaLifecycle).\n",
+        'already_patched' => print "  NativePHP preload already patched.\n",
+        'not_found' => nativePatchExitWithError("NativePHP preload not found at {$preloadPath}. Vendor missing or path changed."),
+        'import_not_found' => nativePatchExitWithError('NativePHP preload import line not found. Upstream shape may have changed; this script needs updating.'),
+        'write_failed' => nativePatchExitWithError("Failed to write patched preload to {$preloadPath}."),
     };
 }

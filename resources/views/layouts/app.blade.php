@@ -12,6 +12,7 @@
     <script src="/js/keymap-store.js"></script>
     <script src="/js/page-search.js"></script>
     <script src="/js/session-recovery.js"></script>
+    <script src="/js/backend-health.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -221,6 +222,8 @@
             </svg>
         </button>
     </div>
+
+    <x-backend-health-overlay />
 
     <livewire:keepalive />
     {{ $slot }}
