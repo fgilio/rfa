@@ -30,7 +30,7 @@ JS;
 
 function tempPreload(?string $content = null): string
 {
-    $dir = sys_get_temp_dir().'/rfa_test_preload_'.uniqid();
+    $dir = sys_get_temp_dir().'/rfa_test_preload_'.getmypid().'_'.uniqid('', true);
     mkdir($dir, 0755, true);
     $path = $dir.'/index.mjs';
 
@@ -42,8 +42,7 @@ function tempPreload(?string $content = null): string
 }
 
 afterEach(function () {
-    // Clean up any temp files created during the test
-    foreach (glob(sys_get_temp_dir().'/rfa_test_preload_*', GLOB_ONLYDIR) as $dir) {
+    foreach (glob(sys_get_temp_dir().'/rfa_test_preload_'.getmypid().'_*', GLOB_ONLYDIR) as $dir) {
         array_map('unlink', glob($dir.'/*'));
         rmdir($dir);
     }

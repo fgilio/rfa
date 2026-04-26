@@ -3,6 +3,9 @@
 use App\Services\IgnoreService;
 use Faker\Factory as Faker;
 use Illuminate\Support\Facades\File;
+use Tests\TestCase;
+
+uses(TestCase::class);
 
 beforeEach(function () {
     $this->faker = Faker::create();
