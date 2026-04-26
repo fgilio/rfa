@@ -228,6 +228,8 @@ new class extends Component {
     @collapse-all-files.window="autoExpandedForComment = false; collapsed = true"
     @expand-all-files.window="autoExpandedForComment = false; collapsed = false"
     @expand-file.window="if ($event.detail.id === fileId) { autoExpandedForComment = false; collapsed = false }"
+    @reset-reviewed-files.window="reviewed = false; collapsed = false"
+    @reviewed-files-reverted.window="if ($event.detail.fileIds?.includes(fileId)) { reviewed = false; collapsed = false }"
     class="group"
 >
     {{-- File header --}}

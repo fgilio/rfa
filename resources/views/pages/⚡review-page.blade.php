@@ -41,6 +41,9 @@ new #[Layout('layouts.app')] class extends Component
 {
     use InteractsWithRemoteLinks;
 
+    /** Undo-toast `type` for the "marked file as reviewed" action. */
+    private const UNDO_TYPE_MARK_REVIEWED = 'mark-reviewed';
+
     /** @var array<int, array<string, mixed>> */
     public array $files = [];
 
@@ -75,6 +78,15 @@ new #[Layout('layouts.app')] class extends Component
 
     /** @var array<string, string> */
     public array $reviewedFiles = [];
+
+    /**
+     * MRU-ordered file IDs marked as reviewed during the current "Hide reviewed" session.
+     * Surfaced as a sticky "Recently reviewed" sidebar group so the user can un-mark
+     * without leaving Hide-reviewed mode. Capped at 5; reset when the user shows all files.
+     *
+     * @var array<int, string>
+     */
+    public array $recentlyReviewedIds = [];
 
     public ?string $activeFileId = null;
 
@@ -704,8 +716,46 @@ new #[Layout('layouts.app')] class extends Component
         match ($type) {
             'delete', 'clear-all' => $this->restoreComments($payload),
             'discard' => $this->restoreDiscardedFile($payload),
+            self::UNDO_TYPE_MARK_REVIEWED => $this->unmarkReviewed($payload['filePaths'] ?? []),
             default => null,
         };
+    }
+
+    /** @param array<int, string> $filePaths */
+    public function unmarkReviewed(array $filePaths): void
+    {
+        if (empty($filePaths)) {
+            return;
+        }
+
+        // Delete by path directly so the undo survives a refresh: if content-hash drift
+        // dropped the entry from $reviewedFiles between mark and undo, the action's
+        // toggle would no-op and the DB row would linger despite the toast firing.
+        \App\Models\ReviewedFile::query()
+            ->forProjectOrRepo($this->projectId ?: null, $this->repoPath)
+            ->whereIn('file_path', $filePaths)
+            ->delete();
+
+        foreach ($filePaths as $filePath) {
+            unset($this->reviewedFiles[$filePath]);
+        }
+
+        $pathToId = array_column($this->files, 'id', 'path');
+        $revertedIds = array_values(array_filter(array_map(
+            fn (string $path): ?string => $pathToId[$path] ?? null,
+            $filePaths,
+        )));
+
+        $this->recentlyReviewedIds = array_values(array_filter(
+            $this->recentlyReviewedIds,
+            fn (string $id): bool => ! in_array($id, $revertedIds, true),
+        ));
+
+        if (! empty($revertedIds)) {
+            $this->dispatch('reviewed-files-reverted', fileIds: $revertedIds);
+        }
+
+        $this->skipRender();
     }
 
     // endregion: Trash & Discard
@@ -715,6 +765,8 @@ new #[Layout('layouts.app')] class extends Component
     #[On('toggle-reviewed')]
     public function toggleReviewed(string $filePath): void
     {
+        $wasReviewed = array_key_exists($filePath, $this->reviewedFiles);
+
         $result = app(ToggleReviewedAction::class)->handle(
             $this->reviewedFiles,
             $filePath,
@@ -729,6 +781,45 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $this->reviewedFiles = $result;
+
+        $isNowReviewed = array_key_exists($filePath, $this->reviewedFiles);
+        // Source-file lookup (not $this->files) so review-pair artifacts
+        // (.json/.md) never consume a slot in the "Recently reviewed" group —
+        // that group renders from sourceFiles only.
+        $fileId = collect($this->sourceFiles)->firstWhere('path', $filePath)['id'] ?? null;
+
+        if (! $wasReviewed && $isNowReviewed) {
+            if ($fileId !== null) {
+                $this->recentlyReviewedIds = array_slice(
+                    array_values(array_unique(array_merge([$fileId], $this->recentlyReviewedIds))),
+                    0, 5,
+                );
+            }
+
+            $this->dispatch(
+                'undo-available',
+                type: self::UNDO_TYPE_MARK_REVIEWED,
+                payload: ['filePaths' => [$filePath]],
+                message: 'Marked '.basename($filePath).' as reviewed',
+            );
+        } elseif ($wasReviewed && ! $isNowReviewed && $fileId !== null) {
+            $this->recentlyReviewedIds = array_values(array_filter(
+                $this->recentlyReviewedIds,
+                fn (string $id): bool => $id !== $fileId,
+            ));
+
+            // Single un-mark transition uses the same broadcast as bulk undo so the
+            // sidebar's reviewedFiles map and DiffFile's `reviewed` mirror flip in lockstep
+            // — callers (e.g. the "Recently reviewed" group) don't have to dual-dispatch.
+            $this->dispatch('reviewed-files-reverted', fileIds: [$fileId]);
+        }
+
+        $this->skipRender();
+    }
+
+    public function clearRecentlyReviewed(): void
+    {
+        $this->recentlyReviewedIds = [];
         $this->skipRender();
     }
 
@@ -906,6 +997,22 @@ new #[Layout('layouts.app')] class extends Component
         hideReviewed: false,
         fileFilter: '',
         sourceFileEntries: @js(collect($sourceFiles)->map(fn($f) => ['id' => $f['id'], 'path' => $f['path']])->values()->all()),
+        filesById: @js(collect($sourceFiles)->mapWithKeys(fn($f) => [$f['id'] => [
+            'path' => $f['path'],
+            'badgeLabel' => match($f['status']) {
+                'added' => 'A',
+                'deleted' => 'D',
+                'renamed' => 'R',
+                'commented' => 'C',
+                default => 'M',
+            },
+            'badgeClass' => match($f['status']) {
+                'added' => 'text-gh-green',
+                'deleted' => 'text-gh-red',
+                'commented' => 'text-gh-muted',
+                default => 'text-amber-500 dark:text-amber-400',
+            },
+        ]])->all()),
         sidebarWidth: $store.settings.sidebarWidth,
         resizing: false,
         remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '' },
@@ -1003,6 +1110,7 @@ new #[Layout('layouts.app')] class extends Component
     }"
     @file-reviewed-changed.window="reviewedFiles[$event.detail.id] = $event.detail.reviewed"
     @reset-reviewed-files.window="reviewedFiles = {}"
+    @reviewed-files-reverted.window="($event.detail.fileIds || []).forEach(id => { reviewedFiles[id] = false })"
     @show-remote-menu.window="showRemoteMenu($event)"
     @copy-to-clipboard.window="
         navigator.clipboard.writeText($event.detail.text).then(() => {
@@ -1156,7 +1264,7 @@ new #[Layout('layouts.app')] class extends Component
                     <flux:button variant="ghost" size="sm" icon="eye" icon:variant="outline"
                         tooltip="Show all files"
                         class="col-start-1 row-start-1"
-                        @click="hideReviewed = false"
+                        @click="hideReviewed = false; $wire.clearRecentlyReviewed()"
                         x-show="hideReviewed" x-cloak />
                 </div>
 
@@ -1361,6 +1469,39 @@ new #[Layout('layouts.app')] class extends Component
                     x-ref="fileFilterInput"
                     @keydown.escape="fileFilter = ''; $el.blur()"
                 />
+                {{-- Recently reviewed: surfaces just-marked files in Hide-reviewed mode so the user can un-mark in place --}}
+                <template x-if="hideReviewed && $wire.recentlyReviewedIds.length">
+                    <div data-testid="recently-reviewed-group" class="mb-3">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="section-label text-gh-muted">Recently reviewed</span>
+                            <button type="button"
+                                @click="$wire.clearRecentlyReviewed()"
+                                class="text-[10px] uppercase tracking-wider text-gh-muted hover:text-gh-text transition-colors"
+                                title="Clear recently reviewed list">Clear</button>
+                        </div>
+                        <template x-for="id in $wire.recentlyReviewedIds" :key="id">
+                            <div
+                                x-show="filesById[id] && (fileFilter === '' || filesById[id].path.toLowerCase().includes(fileFilter.toLowerCase()))"
+                                x-collapse.duration.200ms
+                                class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-opacity duration-150 ease-out text-gh-muted/70"
+                            >
+                                <button type="button" @click="scrollToFile(id)" class="flex items-center gap-2.5 min-w-0 flex-1">
+                                    <span class="font-mono font-medium shrink-0" :class="filesById[id]?.badgeClass" x-text="filesById[id]?.badgeLabel"></span>
+                                    <span class="truncate font-mono line-through opacity-80" :title="filesById[id]?.path" x-text="filesById[id]?.path"></span>
+                                </button>
+                                <flux:tooltip content="Un-mark as reviewed">
+                                    <button type="button"
+                                        @click="$wire.dispatch('toggle-reviewed', { filePath: filesById[id]?.path })"
+                                        class="shrink-0 size-3.5 flex items-center justify-center text-gh-green hover:text-gh-text transition-colors"
+                                        aria-label="Un-mark as reviewed">
+                                        <flux:icon icon="check" variant="outline" class="!size-3.5" />
+                                    </button>
+                                </flux:tooltip>
+                            </div>
+                        </template>
+                        <div class="border-b border-gh-border my-3"></div>
+                    </div>
+                </template>
                 @foreach($sourceFiles as $file)
                     @php
                         [$badgeColor, $badgeLabel] = match($file['status']) {
@@ -1373,8 +1514,12 @@ new #[Layout('layouts.app')] class extends Component
                     @endphp
                     <div
                         x-show="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}')"
-                        class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-colors"
-                        :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-link/10 text-gh-link' : 'text-gh-muted'"
+                        x-collapse.duration.200ms
+                        class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-[opacity,colors] duration-150 ease-out"
+                        :class="[
+                            activeFile === '{{ $file['id'] }}' ? 'bg-gh-link/10 text-gh-link' : 'text-gh-muted',
+                            fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}') ? 'opacity-100' : 'opacity-0',
+                        ]"
                     >
                         <button @click="scrollToFile('{{ $file['id'] }}')" class="flex items-center gap-2.5 min-w-0 flex-1">
                             <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', 'C' => 'text-gh-muted', default => 'text-amber-500 dark:text-amber-400' } }}">{{ $badgeLabel }}</span>
@@ -1537,7 +1682,11 @@ new #[Layout('layouts.app')] class extends Component
                 {{-- Source Files --}}
                 @php $singleFile = count($sourceFiles) === 1 && count($reviewPairs) === 0; @endphp
                 @foreach($sourceFiles as $file)
-                    <div id="{{ $file['id'] }}" class="border-b border-gh-border" x-show="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}')">
+                    <div id="{{ $file['id'] }}"
+                         class="border-b border-gh-border transition-opacity duration-150 ease-out"
+                         x-show="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}')"
+                         x-collapse.duration.200ms
+                         :class="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}') ? 'opacity-100' : 'opacity-0'">
                         <livewire:diff-file
                             :key="$file['id']"
                             :file="$file"

@@ -32,6 +32,59 @@
 - Adaptive density: chrome elements breathe, code areas stay compact
 - Prefer plain text + font styling over Flux badges for inline stats
 
+## UX Principles
+
+These are the rules of thumb we audit against. They're drawn from Material Design Motion, Apple HIG, Nielsen Norman Group research, WCAG 2.3.x, and the Doherty Threshold (sub-400ms responsiveness). When auditing or adding new UI, walk through this list.
+
+### Motion
+- **Durations**: 150–250ms for ordinary state changes; never exceed 400ms (perceived as lag).
+- **Easing**: `ease-out` for elements leaving (fast start, soft landing — reads as "departing"); `ease-in-out` or Material's standard easing `cubic-bezier(0.4, 0.0, 0.2, 1)` for state changes that stay on-screen.
+- **Direction**: prefer **fade + vertical height-collapse** over horizontal slides for items that belong to a list. Horizontal slides break Gestalt continuity and pull the eye away from the surrounding rows. Use `x-collapse` for height (already loaded) and a CSS opacity transition for the fade — they compose.
+- **Asymmetric timing**: leaving slightly faster than entering. Re-appearing items (undo) get the slower entry to draw the eye back to where the change happened.
+- **In-flight cancellation**: never block interaction during a transition. Alpine's `x-show` + `x-collapse` snap to the final state when toggled mid-flight — don't reimplement.
+
+### Reversibility
+- Every action that hides, deletes, or moves user-visible content must offer undo. The bar is high: silent destructive UI is the bug, not the recovery affordance.
+- Reuse the central undo mechanism: dispatch `undo-available` from PHP (`resources/views/livewire/undo-toast.blade.php`) and add a case to `ReviewPage::undo()`. ⌘Z is wired centrally — don't reimplement per-component.
+- Payload shape: `{ type: string, payload: mixed, message: string, ttl?: int }`. Keep `payload` self-contained so the undo handler doesn't need ambient state.
+
+### Coalescing
+- Repeated same-type undo entries within **3 seconds** merge into one stack entry. Avoids toast spam during bursts (e.g., marking 10 files in a row). Implemented in `undo-toast.blade.php`'s `push()`.
+- Counter-pattern: don't coalesce across different types or across long gaps — the user's intent has shifted.
+
+### Accessibility
+- Honor `prefers-reduced-motion`: the global rule in `resources/css/app.css` collapses transition/animation durations to ~0ms. Don't fight it with inline styles or `!important` overrides.
+- Use `aria-live="polite"` for transient feedback (toasts already do this).
+- Provide keyboard parity for any mouse-only action. ⌘Z for undo, `/` for filter focus, `Esc` to clear.
+- Focus must not jump unexpectedly when items are added/removed.
+
+### Spatial continuity
+- Items that belong to a list reflow vertically when added/removed; don't slide them in/out horizontally on a vertical list.
+- When hiding many items in a burst, batch-acknowledge (one coalesced toast) rather than animating each individually.
+- Provide an in-place recovery surface for hidden items when feasible (e.g., the "Recently reviewed" sidebar group on `⚡review-page` shows the last 5 marked-reviewed files so the user can un-mark without leaving Hide-reviewed mode).
+
+### Feedback latency (Doherty Threshold)
+- Perceived latency under 100ms = "instant"; under 400ms = "responsive"; above = "lag".
+- Use `skipRender()` aggressively on Livewire actions whose UI update is handled client-side via Alpine. The `skipRender` table in this file is the canonical reference — extend it when adding new actions.
+- Never wait for the server before showing visual feedback for actions whose outcome is locally predictable.
+
+### Anti-patterns to flag in audits
+- Instant DOM-style hide (`display: none`) on user-initiated actions without motion or acknowledgment.
+- Horizontal slide-in/out on rows of a vertical list.
+- Animations longer than 400ms or shorter than 100ms.
+- Missing `prefers-reduced-motion` fallback (covered globally now — flag any per-component overrides that bypass it).
+- Destructive or hide-from-view actions without an undo path.
+- Toasts that stack visually (one toast per action) rather than coalescing during bursts.
+- Server round-trip required to render the result of a purely visual toggle.
+- Loss of focus or scroll position when items reflow.
+
+### References
+- [Material Design — Motion](https://m3.material.io/styles/motion/overview): durations, easing, choreography.
+- [Apple HIG — Motion](https://developer.apple.com/design/human-interface-guidelines/motion): subtlety, reduce-motion semantics.
+- Nielsen Norman Group — animation duration research (sub-400ms perceived as responsive).
+- WCAG 2.3.3 (Animation from Interactions) and Success Criterion on `prefers-reduced-motion`.
+- Doherty Threshold (1982): sub-400ms feedback for productivity.
+
 ## Livewire SFC Components
 
 Page components live in `resources/views/pages/` (namespace `pages::`). Non-page components live in `resources/views/livewire/` (default namespace).
@@ -100,11 +153,12 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `collapse-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-file` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | `{id}` |
-| `undo-available` | ReviewPage PHP dispatch | undo-toast Alpine `@window` | `{type: 'delete'\|'clear-all'\|'discard', payload: comment[]\|int, message: string}` |
+| `undo-available` | ReviewPage PHP dispatch | undo-toast Alpine `@window` | `{type: 'delete'\|'clear-all'\|'discard'\|'mark-reviewed', payload: comment[]\|int\|{filePaths: string[]}, message: string}` |
+| `reviewed-files-reverted` | ReviewPage PHP dispatch (`unmarkReviewed`) | DiffFile + ReviewPage Alpine `@window` | `{fileIds: string[]}` |
 | `discard-file` | DiffFile Alpine `$dispatch` | ReviewPage `#[On]` | `{fileId}` |
 | `fingerprint-reset` | ReviewPage PHP dispatch | change-polling Alpine `@window` | none |
 | `show-remote-menu` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{target: 'file'\|'line', fileId, filePath, oldPath, side?, start?, end?, clientX, clientY}` |
 
 ### Known Debt
 
-- **diff-file's Alpine `reviewed` state isn't reset by `reset-reviewed-files`.** The DiffFile's local `reviewed` mirror (initialized from the `isReviewed` Livewire prop, driving the checkbox and auto-collapse) has no `@reset-reviewed-files.window` listener. If any flow fires `reset-reviewed-files`, the review-page sidebar clears its `reviewedFiles` map and the comments-drawer refreshes, but individual diff-file checkboxes can visually remain checked until the component re-hydrates. Today this is masked because reset paths are paired with full reloads / navigation. Fix is a one-line handler: `@reset-reviewed-files.window="reviewed = false; collapsed = false"` on the diff-file root. Deferred to keep the mirror decision reversible; migrating the whole file to `@entangle('isReviewed').live` would be the alternative but requires moving `toggleReviewed` from review-page into diff-file.
+_(Empty — the previous "diff-file `reset-reviewed-files` listener" item was resolved alongside the mark-reviewed undo work; the listener now exists on diff-file's root.)_
