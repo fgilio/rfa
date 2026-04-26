@@ -3,6 +3,7 @@
     x-data="{
         stack: [],
         intervalId: null,
+        coalesceWindowMs: 3000,
 
         get current() { return this.stack[0] ?? null },
         get visible() { return this.current !== null },
@@ -12,11 +13,30 @@
         },
 
         push(detail) {
+            // Coalesce: bursts of same-type 'mark-reviewed' within 3s merge into one
+            // toast so power users marking many files don't see a wall of toasts.
+            const top = this.stack[0];
+            const ttl = detail.ttl ?? 10;
+            if (
+                detail.type === 'mark-reviewed'
+                && top && top.type === 'mark-reviewed'
+                && (Date.now() - top.createdAt) < this.coalesceWindowMs
+                && Array.isArray(detail.payload?.filePaths)
+                && Array.isArray(top.payload?.filePaths)
+            ) {
+                top.payload.filePaths.push(...detail.payload.filePaths);
+                top.createdAt = Date.now();
+                top.expiresAt = Date.now() + ttl * 1000;
+                const n = top.payload.filePaths.length;
+                top.message = n + ' files marked as reviewed';
+                return;
+            }
             this.stack.unshift({
                 type: detail.type,
                 payload: detail.payload,
                 message: detail.message ?? 'Action completed',
-                expiresAt: Date.now() + (detail.ttl ?? 10) * 1000,
+                createdAt: Date.now(),
+                expiresAt: Date.now() + ttl * 1000,
             });
             this.startTicker();
         },
