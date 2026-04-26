@@ -863,6 +863,12 @@ new #[Layout('layouts.app')] class extends Component
         $affectedFileIds->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
     }
 
+    public function startNewReview(): void
+    {
+        $this->submitted = false;
+        $this->exportResult = null;
+    }
+
     // endregion: Review State & Export
 
     // region: Computed, Helpers & Persistence

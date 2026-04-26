@@ -1,13 +1,32 @@
 {{-- Fixed bottom submit bar --}}
 <div class="fixed bottom-0 left-0 right-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-t border-gh-border">
     @if($submitted)
-        <div class="px-5 py-3.5 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <flux:icon icon="check-circle" variant="outline" class="text-gh-green" />
-                <span class="font-semibold tracking-brutal">Review submitted</span>
-                <span class="font-mono text-xs text-gh-muted px-2 py-0.5 rounded border border-gh-border">{{ $exportResult }}</span>
+        <div class="px-5 py-3.5 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 min-w-0">
+                <flux:icon icon="check-circle" variant="outline" class="text-gh-green shrink-0" />
+                <span class="font-semibold tracking-brutal shrink-0">Review submitted</span>
+                <span class="font-mono text-xs text-gh-muted px-2 py-0.5 rounded border border-gh-border truncate">{{ $exportResult }}</span>
             </div>
-            <span class="text-xs text-gh-muted">Copied to clipboard &mdash; Ctrl+C to exit</span>
+            <div class="flex items-center gap-2 shrink-0">
+                <span class="font-mono text-[11px] text-gh-muted">Copied to clipboard</span>
+                <flux:button
+                    size="sm"
+                    icon="clipboard-document"
+                    icon:variant="outline"
+                    @click="$dispatch('copy-to-clipboard', { text: @js($exportResult), toast: 'Copied again' })"
+                >
+                    Copy again
+                </flux:button>
+                <flux:button
+                    variant="primary"
+                    size="sm"
+                    icon="pencil-square"
+                    icon:variant="outline"
+                    wire:click="startNewReview"
+                >
+                    Start a new review
+                </flux:button>
+            </div>
         </div>
     @else
         <div class="px-5 py-3.5 flex items-center gap-4"

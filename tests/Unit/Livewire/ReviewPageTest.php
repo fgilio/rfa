@@ -239,6 +239,17 @@ test('submitReview refreshes file list and populates reviewPairs', function () {
     expect($component->get('submitted'))->toBeTrue();
 });
 
+test('startNewReview returns the submit bar to the input state', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project']);
+    $component->set('submitted', true);
+    $component->set('exportResult', 'address my comments on these changes in @.rfa/foo.md');
+
+    $component->call('startNewReview');
+
+    expect($component->get('submitted'))->toBeFalse();
+    expect($component->get('exportResult'))->toBeNull();
+});
+
 // -- Clear all comments --
 
 test('clearAllComments empties comments and saves', function () {
