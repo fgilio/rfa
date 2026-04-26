@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use App\Actions\OpenProjectFromPathAction;
 use App\Actions\ResolveStartupRouteAction;
+use App\Console\Benchmark\BenchmarkIsolation;
 use App\Listeners\HandleDeepLink;
 use App\Listeners\HandleMenuItemClicked;
 use App\Support\ZoomRoleMenuItem;
@@ -281,6 +282,14 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     private function clearCompiledViewsForDev(): void
     {
         if (! config('app.debug')) {
+            return;
+        }
+
+        if (app()->environment('testing')) {
+            return;
+        }
+
+        if ((string) getenv(BenchmarkIsolation::ENV_ENABLED) === '1') {
             return;
         }
 
