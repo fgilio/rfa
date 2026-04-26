@@ -99,12 +99,19 @@ test('un-marking a file does not dispatch undo-available', function () {
         ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
         ->assertDispatched('undo-available');
 
-    // The second dispatch is its own request; effects reset, and the un-mark must
-    // produce no new undo-available dispatch.
     $component->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
         ->assertNotDispatched('undo-available');
 
     expect($component->get('reviewedFiles'))->toBe([]);
+});
+
+test('un-marking a file dispatches reviewed-files-reverted so DiffFile + sidebar mirror flip in lockstep', function () {
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
+        ->assertDispatched('reviewed-files-reverted', function (string $event, array $params) {
+            return $params['fileIds'] === ['id-foo'];
+        });
 });
 
 test('undo mark-reviewed restores file to unreviewed state', function () {

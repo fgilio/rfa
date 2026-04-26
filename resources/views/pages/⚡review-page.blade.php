@@ -41,6 +41,9 @@ new #[Layout('layouts.app')] class extends Component
 {
     use InteractsWithRemoteLinks;
 
+    /** Undo-toast `type` for the "marked file as reviewed" action. */
+    private const UNDO_TYPE_MARK_REVIEWED = 'mark-reviewed';
+
     /** @var array<int, array<string, mixed>> */
     public array $files = [];
 
@@ -713,18 +716,12 @@ new #[Layout('layouts.app')] class extends Component
         match ($type) {
             'delete', 'clear-all' => $this->restoreComments($payload),
             'discard' => $this->restoreDiscardedFile($payload),
-            'mark-reviewed' => $this->unmarkReviewed($payload['filePaths'] ?? []),
+            self::UNDO_TYPE_MARK_REVIEWED => $this->unmarkReviewed($payload['filePaths'] ?? []),
             default => null,
         };
     }
 
-    /**
-     * Undo handler for "mark-reviewed". Re-runs the toggle for each path so persistence
-     * mirrors the user's path back to unreviewed; broadcasts a reset event so DiffFile's
-     * Alpine `reviewed` mirror flips off.
-     *
-     * @param  array<int, string>  $filePaths
-     */
+    /** @param array<int, string> $filePaths */
     public function unmarkReviewed(array $filePaths): void
     {
         if (empty($filePaths)) {
@@ -761,10 +758,11 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
-        $revertedIds = collect($this->files)
-            ->whereIn('path', $reverted)
-            ->pluck('id')
-            ->all();
+        $pathToId = array_column($this->files, 'id', 'path');
+        $revertedIds = array_values(array_filter(array_map(
+            fn (string $path): ?string => $pathToId[$path] ?? null,
+            $reverted,
+        )));
 
         $this->recentlyReviewedIds = array_values(array_filter(
             $this->recentlyReviewedIds,
@@ -802,26 +800,29 @@ new #[Layout('layouts.app')] class extends Component
         $fileId = collect($this->files)->firstWhere('path', $filePath)['id'] ?? null;
 
         if (! $wasReviewed && $isNowReviewed) {
-            // Promote to MRU front of "Recently reviewed", dedupe, cap at 5.
             if ($fileId !== null) {
-                $this->recentlyReviewedIds = array_values(array_unique(
-                    array_merge([$fileId], $this->recentlyReviewedIds)
-                ));
-                $this->recentlyReviewedIds = array_slice($this->recentlyReviewedIds, 0, 5);
+                $this->recentlyReviewedIds = array_slice(
+                    array_values(array_unique(array_merge([$fileId], $this->recentlyReviewedIds))),
+                    0, 5,
+                );
             }
 
             $this->dispatch(
                 'undo-available',
-                type: 'mark-reviewed',
+                type: self::UNDO_TYPE_MARK_REVIEWED,
                 payload: ['filePaths' => [$filePath]],
                 message: 'Marked '.basename($filePath).' as reviewed',
             );
         } elseif ($wasReviewed && ! $isNowReviewed && $fileId !== null) {
-            // User un-marked manually; remove from recents so the group stays accurate.
             $this->recentlyReviewedIds = array_values(array_filter(
                 $this->recentlyReviewedIds,
                 fn (string $id): bool => $id !== $fileId,
             ));
+
+            // Single un-mark transition uses the same broadcast as bulk undo so the
+            // sidebar's reviewedFiles map and DiffFile's `reviewed` mirror flip in lockstep
+            // — callers (e.g. the "Recently reviewed" group) don't have to dual-dispatch.
+            $this->dispatch('reviewed-files-reverted', fileIds: [$fileId]);
         }
 
         $this->skipRender();
@@ -1501,7 +1502,7 @@ new #[Layout('layouts.app')] class extends Component
                                 </button>
                                 <flux:tooltip content="Un-mark as reviewed">
                                     <button type="button"
-                                        @click="$wire.dispatch('toggle-reviewed', { filePath: filesById[id]?.path }); $dispatch('file-reviewed-changed', { id, reviewed: false })"
+                                        @click="$wire.dispatch('toggle-reviewed', { filePath: filesById[id]?.path })"
                                         class="shrink-0 size-3.5 flex items-center justify-center text-gh-green hover:text-gh-text transition-colors"
                                         aria-label="Un-mark as reviewed">
                                         <flux:icon icon="check" variant="outline" class="!size-3.5" />
