@@ -93,7 +93,6 @@
     data-testid="undo-toast"
     class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 max-w-sm"
 >
-    {{-- Visual language matches flux:toast: rounded-xl, shadow-lg, surface bg + border --}}
     <div class="p-2 flex rounded-xl shadow-lg bg-gh-surface border border-gh-border"
         :class="current?.type === 'discard' && 'border-l-2 border-l-gh-accent'">
         <div class="flex-1 flex items-center gap-3 py-1.5 px-2.5 text-sm">

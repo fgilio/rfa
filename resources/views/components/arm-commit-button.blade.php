@@ -1,20 +1,13 @@
 @props([
-    'confirm',
-    'label' => null,
-    'confirmLabel' => 'Confirm?',
-    'icon' => null,
-    'iconConfirm' => null,
+    'icon',
     'tooltip' => null,
     'ariaLabel' => null,
-    'variant' => 'ghost',
-    'size' => 'sm',
+    'confirmLabel' => 'Confirm?',
     'duration' => 3000,
-    'buttonClass' => '',
 ])
 
 @php
-    $resolvedIconConfirm = $iconConfirm ?? $icon;
-    $resolvedAriaLabel = $ariaLabel ?? $label ?? 'Action';
+    $resolvedAriaLabel = $ariaLabel ?? $tooltip ?? 'Action';
     $armedTooltip = 'Click again to confirm — cancels in '.(int) round($duration / 1000).'s';
 @endphp
 
@@ -22,30 +15,36 @@
     x-data="{
         armed: false,
         timer: null,
-        arm() { this.armed = true; this.timer = setTimeout(() => this.disarm(), {{ (int) $duration }}); },
-        disarm() { this.armed = false; if (this.timer) { clearTimeout(this.timer); this.timer = null; } },
-        handle() { if (!this.armed) { this.arm(); return; } this.disarm(); {{ $confirm }}; },
+        arm() {
+            this.armed = true;
+            this.timer = setTimeout(() => this.disarm(), {{ (int) $duration }});
+        },
+        disarm() {
+            if (! this.armed) return;
+            this.armed = false;
+            clearTimeout(this.timer);
+            this.timer = null;
+        },
+        handle() {
+            if (! this.armed) { this.arm(); return; }
+            this.disarm();
+            this.$dispatch('confirmed');
+        },
+        destroy() { clearTimeout(this.timer); },
     }"
     @keydown.escape.window="disarm()"
     @click.outside="disarm()"
-    {{ $attributes->only('class')->class('relative inline-flex') }}
+    {{ $attributes->class('relative inline-flex') }}
 >
     <flux:button
-        variant="{{ $variant }}"
-        size="{{ $size }}"
+        variant="ghost"
+        size="sm"
         x-bind:tooltip="armed ? @js($armedTooltip) : @js($tooltip)"
         x-bind:aria-label="armed ? @js($confirmLabel) : @js($resolvedAriaLabel)"
         @click.stop.prevent="handle()"
         x-bind:class="armed && '!text-red-500 dark:!text-red-400 hover:!bg-red-500/10'"
-        class="{{ $buttonClass }}"
     >
-        @if($icon)
-            <flux:icon x-show="!armed" icon="{{ $icon }}" variant="outline" />
-            <flux:icon x-show="armed" x-cloak icon="{{ $resolvedIconConfirm }}" variant="outline" />
-        @endif
-        @if($label !== null)
-            <span x-text="armed ? @js($confirmLabel) : @js($label)"></span>
-        @endif
+        <flux:icon icon="{{ $icon }}" variant="outline" />
     </flux:button>
     <div
         aria-hidden="true"

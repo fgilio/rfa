@@ -56,9 +56,8 @@
                     <div class="flex items-center gap-3">
                         <x-arm-commit-button
                             icon="trash"
-                            aria-label="Clear all comments"
                             tooltip="Clear all comments"
-                            confirm="$wire.clearAllComments()"
+                            @confirmed="$wire.clearAllComments()"
                         />
                         <span class="w-px h-4 bg-gh-border"></span>
                     </div>

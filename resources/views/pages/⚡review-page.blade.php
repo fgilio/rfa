@@ -1277,8 +1277,11 @@ new #[Layout('layouts.app')] class extends Component
                                 if (this.fingerprint === null) {
                                     this.fingerprint = data.fingerprint;
                                 } else if (data.fingerprint !== this.fingerprint) {
-                                    this.hasChanges = true;
-                                    this.currentCount = data.count ?? 0;
+                                    const newCount = data.count ?? 0;
+                                    if (! this.hasChanges || this.currentCount !== newCount) {
+                                        this.hasChanges = true;
+                                        this.currentCount = newCount;
+                                    }
                                 }
                             } catch {}
                         },
@@ -1447,9 +1450,8 @@ new #[Layout('layouts.app')] class extends Component
                         @if(count($reviewPairs) > 1)
                             <x-arm-commit-button
                                 icon="trash"
-                                aria-label="Delete all reviews"
                                 tooltip="Delete all reviews"
-                                confirm="$wire.deleteAllReviewPairs()"
+                                @confirmed="$wire.deleteAllReviewPairs()"
                             />
                         @endif
                     </div>
@@ -1461,9 +1463,8 @@ new #[Layout('layouts.app')] class extends Component
                             </button>
                             <x-arm-commit-button
                                 icon="trash"
-                                aria-label="Delete review"
                                 tooltip="Delete review"
-                                confirm="$wire.deleteReviewPair('{{ $pair['basename'] }}')"
+                                @confirmed="$wire.deleteReviewPair('{{ $pair['basename'] }}')"
                                 class="opacity-0 group-hover:opacity-100 transition-opacity ml-auto"
                             />
                         </div>
@@ -1595,9 +1596,8 @@ new #[Layout('layouts.app')] class extends Component
                                 </button>
                                 <x-arm-commit-button
                                     icon="trash"
-                                    aria-label="Permanently delete"
                                     tooltip="Permanently delete"
-                                    confirm="$wire.permanentlyDeleteTrashed({{ $trashed['id'] }})"
+                                    @confirmed="$wire.permanentlyDeleteTrashed({{ $trashed['id'] }})"
                                     class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                                 />
                             </div>
@@ -1662,9 +1662,8 @@ new #[Layout('layouts.app')] class extends Component
                                 <span class="ml-auto">
                                     <x-arm-commit-button
                                         icon="trash"
-                                        aria-label="Delete review"
                                         tooltip="Delete review"
-                                        confirm="$wire.deleteReviewPair('{{ $pair['basename'] }}')"
+                                        @confirmed="$wire.deleteReviewPair('{{ $pair['basename'] }}')"
                                     />
                                 </span>
                             </div>
