@@ -23,6 +23,15 @@ target the same isolated blade dir.
 If you need shared mutable state in a test, switch to `composer test:serial`
 or scope the test to its own file so it gets its own worker.
 
+Boot-time code (service providers, registered macros, etc.) that mutates
+shared paths like `storage/framework/views` must short-circuit if **either**
+of the following is true: `app()->environment('testing')`, or
+`getenv(BenchmarkIsolation::ENV_ENABLED) === '1'`. Either flag alone is
+enough to trigger the guard. Otherwise it races against other workers'
+isolated compile dirs and produces flakes that only reproduce under
+`--parallel`. See `NativeAppServiceProvider::clearCompiledViewsForDev` for
+the pattern.
+
 ## Suite Model
 
 - `Core` = `Unit` + `Arch`
@@ -45,6 +54,12 @@ or scope the test to its own file so it gets its own worker.
 - Prefer `InteractsWithTestRepositories::createTempDirectory()` for tracked temp dirs
 - If a test needs git repo setup, use `InteractsWithTestRepositories::initTestRepo()` and `commitTestRepo()`
 - Global cleanup in `tests/Pest.php` removes tracked temp dirs after each test
+- If you must build an ad-hoc path under `sys_get_temp_dir()`, scope it by
+  **both** `getmypid()` and `uniqid('', true)` (e.g.
+  `sys_get_temp_dir().'/rfa_test_foo_'.getmypid().'_'.uniqid('', true)`).
+  `afterEach` cleanup must glob the same PID-scoped prefix — a bare
+  `rfa_test_foo_*` glob wipes other parallel workers' files mid-run and
+  produces flakes that only surface under `--parallel`.
 - `initTestRepo()` copies a per-process `.git` template (single `cp -R`) instead
   of running `git init` + 3 `git config` calls. Author/committer/`commit.gpgsign`
   come from `GIT_AUTHOR_*` / `GIT_CONFIG_*` env vars in `phpunit.xml`, so
