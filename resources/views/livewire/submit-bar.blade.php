@@ -54,21 +54,12 @@
                 </template>
                 <template x-if="commentCount + draftCount > 0">
                     <div class="flex items-center gap-3">
-                        <flux:tooltip content="Clear all comments">
-                            <flux:button
-                                variant="ghost"
-                                size="sm"
-                                icon="trash"
-                                icon:variant="outline"
-                                @click="
-                                    let parts = [];
-                                    if (commentCount > 0) parts.push(commentCount + ' comment' + (commentCount === 1 ? '' : 's'));
-                                    if (draftCount > 0) parts.push(draftCount + ' draft' + (draftCount === 1 ? '' : 's'));
-                                    if (confirm('Clear ' + parts.join(' and ') + '?')) $wire.clearAllComments()
-                                "
-                                class="hover:!text-red-400"
-                            />
-                        </flux:tooltip>
+                        <x-arm-commit-button
+                            icon="trash"
+                            aria-label="Clear all comments"
+                            tooltip="Clear all comments"
+                            confirm="$wire.clearAllComments()"
+                        />
                         <span class="w-px h-4 bg-gh-border"></span>
                     </div>
                 </template>

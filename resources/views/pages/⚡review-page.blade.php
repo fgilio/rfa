@@ -1436,10 +1436,12 @@ new #[Layout('layouts.app')] class extends Component
                     <div class="flex items-center justify-between mb-3">
                         <span class="section-label text-gh-muted">Reviews</span>
                         @if(count($reviewPairs) > 1)
-                            <button class="text-gh-muted hover:text-red-400 transition-colors"
-                                @click="if (confirm('Delete all review files?')) $wire.deleteAllReviewPairs()">
-                                <flux:icon icon="trash" variant="outline" class="!size-4" />
-                            </button>
+                            <x-arm-commit-button
+                                icon="trash"
+                                aria-label="Delete all reviews"
+                                tooltip="Delete all reviews"
+                                confirm="$wire.deleteAllReviewPairs()"
+                            />
                         @endif
                     </div>
                     @foreach($reviewPairs as $pair)
@@ -1448,10 +1450,13 @@ new #[Layout('layouts.app')] class extends Component
                             <button @click="scrollToFile('{{ $pair['id'] }}')" class="truncate text-left font-mono" title="{{ $pair['basename'] }}">
                                 {{ $pair['displayName'] }}
                             </button>
-                            <button class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0 ml-auto"
-                                @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')">
-                                <flux:icon icon="trash" variant="outline" class="!size-4" />
-                            </button>
+                            <x-arm-commit-button
+                                icon="trash"
+                                aria-label="Delete review"
+                                tooltip="Delete review"
+                                confirm="$wire.deleteReviewPair('{{ $pair['basename'] }}')"
+                                class="opacity-0 group-hover:opacity-100 transition-opacity ml-auto"
+                            />
                         </div>
                     @endforeach
                     <div class="border-b border-gh-border my-3"></div>
@@ -1579,10 +1584,13 @@ new #[Layout('layouts.app')] class extends Component
                                     class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-green hover:text-green-400 shrink-0">
                                     <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
                                 </button>
-                                <button @click="if (confirm('Permanently delete?')) $wire.permanentlyDeleteTrashed({{ $trashed['id'] }})" title="Delete permanently"
-                                    class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0">
-                                    <flux:icon icon="trash" variant="outline" class="!size-3.5" />
-                                </button>
+                                <x-arm-commit-button
+                                    icon="trash"
+                                    aria-label="Permanently delete"
+                                    tooltip="Permanently delete"
+                                    confirm="$wire.permanentlyDeleteTrashed({{ $trashed['id'] }})"
+                                    class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                />
                             </div>
                         @endforeach
                     </div>
@@ -1643,8 +1651,12 @@ new #[Layout('layouts.app')] class extends Component
                                     <span class="text-[10px] font-mono text-gh-muted">.md</span>
                                 @endif
                                 <span class="ml-auto">
-                                    <flux:button variant="ghost" size="sm" icon="trash" icon:variant="outline"
-                                        @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')" />
+                                    <x-arm-commit-button
+                                        icon="trash"
+                                        aria-label="Delete review"
+                                        tooltip="Delete review"
+                                        confirm="$wire.deleteReviewPair('{{ $pair['basename'] }}')"
+                                    />
                                 </span>
                             </div>
                             <div x-show="!collapsed" x-collapse.duration.150ms>
