@@ -24,12 +24,13 @@ If you need shared mutable state in a test, switch to `composer test:serial`
 or scope the test to its own file so it gets its own worker.
 
 Boot-time code (service providers, registered macros, etc.) that mutates
-shared paths like `storage/framework/views` must bail when
-`app()->environment('testing')` **and** when
-`getenv(BenchmarkIsolation::ENV_ENABLED) === '1'`. Otherwise it races
-against other workers' isolated compile dirs and produces flakes that only
-reproduce under `--parallel`. See `NativeAppServiceProvider::clearCompiledViewsForDev`
-for the pattern.
+shared paths like `storage/framework/views` must short-circuit if **either**
+of the following is true: `app()->environment('testing')`, or
+`getenv(BenchmarkIsolation::ENV_ENABLED) === '1'`. Either flag alone is
+enough to trigger the guard. Otherwise it races against other workers'
+isolated compile dirs and produces flakes that only reproduce under
+`--parallel`. See `NativeAppServiceProvider::clearCompiledViewsForDev` for
+the pattern.
 
 ## Suite Model
 
