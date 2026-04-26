@@ -1227,33 +1227,7 @@ new #[Layout('layouts.app')] class extends Component
                 @endif
                 <livewire:comments-drawer :repo-path="$repoPath" :project-id="$projectId ?: null" />
             </div>
-            <div class="flex items-center gap-2.5 text-xs">
-                {{-- Stats --}}
-                <span class="font-mono text-gh-muted"
-                    x-text="fileFilter === '' && !hideReviewed
-                        ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
-                        : sourceFileEntries.filter(f => fileMatchesFilter(f.path, f.id)).length + '/{{ count($sourceFiles) }} files'"
-                >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</span>
-                <span class="font-mono text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
-                <span class="font-mono text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
-
-                {{-- Reviewed progress --}}
-                <div x-show="reviewedCount > 0" x-cloak class="flex items-center gap-1.5">
-                    <span class="w-px h-3.5 bg-gh-border"></span>
-                    <div class="flex flex-col items-center min-w-[2.5rem]">
-                        <span data-testid="reviewed-counter" class="font-mono text-gh-muted" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
-                        <div class="w-full h-0.5 bg-gh-border/50 rounded-full overflow-hidden mt-0.5">
-                            <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
-                        </div>
-                    </div>
-                </div>
-
-                @if(count($reviewPairs) > 0)
-                    <span class="font-mono text-xs text-gh-muted px-1.5 py-0.5 rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
-                @endif
-
-                <span class="w-px h-4 bg-gh-border"></span>
-
+            <div class="flex items-center gap-2 text-xs">
                 {{-- Hide reviewed toggle --}}
                 <div x-show="reviewedCount > 0" x-cloak class="grid place-items-center">
                     <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
@@ -1281,6 +1255,8 @@ new #[Layout('layouts.app')] class extends Component
                         @click="$store.settings.collapseAll = true; $dispatch('collapse-all-files')"
                         x-show="!$store.settings.collapseAll" />
                 </div>
+
+                <span class="w-px h-4 bg-gh-border" aria-hidden="true"></span>
 
                 @if(! $this->isCommitMode())
                     <div data-testid="change-polling" x-data="{
@@ -1331,8 +1307,6 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                 @endif
 
-                <span class="w-px h-4 bg-gh-border"></span>
-
                 {{-- Settings --}}
                 @if(! $this->isCommitMode())
                     <flux:dropdown position="bottom" align="end">
@@ -1349,6 +1323,28 @@ new #[Layout('layouts.app')] class extends Component
                 <livewire:theme-switcher />
             </div>
         </header>
+
+        {{-- Status strip: state, not actions --}}
+        <div data-testid="status-strip" class="bg-gh-bg/60 border-b border-gh-border px-5 py-1 flex items-center gap-3 font-mono text-[11px] text-gh-muted">
+            <span
+                x-text="fileFilter === '' && !hideReviewed
+                    ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
+                    : sourceFileEntries.filter(f => fileMatchesFilter(f.path, f.id)).length + '/{{ count($sourceFiles) }} files'"
+            >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</span>
+            <span class="text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
+            <span class="text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
+
+            @if(count($reviewPairs) > 0)
+                <span class="px-1.5 py-px rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
+            @endif
+
+            <div x-show="reviewedCount > 0" x-cloak class="ml-auto flex items-center gap-2">
+                <span data-testid="reviewed-counter" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
+                <div class="w-24 h-0.5 bg-gh-border/50 rounded-full overflow-hidden">
+                    <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     {{-- Branch divergence banner + polling island (working-tree mode only) --}}
