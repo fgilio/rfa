@@ -77,10 +77,13 @@ test('dev compiled view cleanup skips deletion when benchmark isolation is activ
     $sentinel = $viewsPath.'/sentinel-'.bin2hex(random_bytes(4)).'.php';
     File::put($sentinel, '<?php // sentinel');
 
-    putenv(BenchmarkIsolation::ENV_ENABLED.'=1');
-    app()->detectEnvironment(fn () => 'local');
+    $originalEnvVar = getenv(BenchmarkIsolation::ENV_ENABLED);
+    $originalEnvironment = app()->environment();
 
     try {
+        putenv(BenchmarkIsolation::ENV_ENABLED.'=1');
+        app()->detectEnvironment(fn () => 'local');
+
         $provider = new ReflectionClass(NativeAppServiceProvider::class);
         $clearCompiledViewsForDev = $provider->getMethod('clearCompiledViewsForDev');
         $clearCompiledViewsForDev->setAccessible(true);
@@ -91,7 +94,13 @@ test('dev compiled view cleanup skips deletion when benchmark isolation is activ
         expect($provider->getProperty('compiledViewsClearedForDev')->getValue())->toBeFalse();
     } finally {
         File::delete($sentinel);
-        putenv(BenchmarkIsolation::ENV_ENABLED);
-        app()->detectEnvironment(fn () => 'testing');
+
+        if ($originalEnvVar === false) {
+            putenv(BenchmarkIsolation::ENV_ENABLED);
+        } else {
+            putenv(BenchmarkIsolation::ENV_ENABLED.'='.$originalEnvVar);
+        }
+
+        app()->detectEnvironment(fn () => $originalEnvironment);
     }
 });
