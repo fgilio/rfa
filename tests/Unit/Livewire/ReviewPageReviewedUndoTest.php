@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Actions\BackfillGlobalGitignoreAction;
 use App\Actions\GetFileListAction;
+use App\Actions\GroupReviewFilesAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
@@ -218,4 +219,69 @@ test('clearRecentlyReviewed skips parent re-render', function () {
         ->call('clearRecentlyReviewed');
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+});
+
+test('unmarkReviewed skips parent re-render to avoid 1+N child hydration', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
+        ->call('undo', 'mark-reviewed', ['filePaths' => ['src/Foo.php']]);
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+});
+
+test('undo mark-reviewed deletes the DB row even when reviewedFiles map dropped the entry (refresh / hash drift)', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php');
+
+    expect(ReviewedFile::where('file_path', 'src/Foo.php')->count())->toBe(1);
+
+    // Simulate hash drift / refresh dropping the path from the in-memory map while
+    // the DB row remains. The toast still holds the path and undo must clean up the row.
+    $component->set('reviewedFiles', []);
+    $component->call('undo', 'mark-reviewed', ['filePaths' => ['src/Foo.php']]);
+
+    expect(ReviewedFile::where('file_path', 'src/Foo.php')->count())->toBe(0);
+});
+
+test('marking a review-pair artifact does not consume a "Recently reviewed" slot', function () {
+    // Bind a GroupReviewFilesAction that puts notes.json into reviewPairs and
+    // leaves Foo as the only source file. The page-level $files still includes
+    // the pair artifact, so toggleReviewed must look it up via $sourceFiles.
+    app()->bind(GroupReviewFilesAction::class, fn () => new class
+    {
+        public function handle(array $files): array
+        {
+            $pairs = [];
+            $source = [];
+            foreach ($files as $f) {
+                if (str_ends_with($f['path'], 'notes.json')) {
+                    $pairs[] = ['basename' => 'notes', 'id' => $f['id'], 'displayName' => 'notes'];
+                } else {
+                    $source[] = $f;
+                }
+            }
+
+            return ['reviewPairs' => $pairs, 'sourceFiles' => $source];
+        }
+    });
+
+    $files = [
+        ['id' => 'id-foo', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 1, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false],
+        ['id' => 'id-pair', 'path' => 'reviews/notes.json', 'status' => 'added', 'oldPath' => null, 'additions' => 1, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false],
+    ];
+    app()->bind(GetFileListAction::class, fn () => new class($files)
+    {
+        public function __construct(private array $files) {}
+
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        {
+            return $this->files;
+        }
+    });
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('toggle-reviewed', filePath: 'reviews/notes.json');
+
+    expect($component->get('recentlyReviewedIds'))->toBe([]);
+    expect($component->get('reviewedFiles'))->toHaveKey('reviews/notes.json');
 });

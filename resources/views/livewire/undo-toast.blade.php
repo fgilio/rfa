@@ -24,11 +24,18 @@
                 && Array.isArray(detail.payload?.filePaths)
                 && Array.isArray(top.payload?.filePaths)
             ) {
-                top.payload.filePaths.push(...detail.payload.filePaths);
+                // Dedupe so the displayed count never inflates when the same file
+                // is marked → un-marked → marked again within the coalesce window.
+                top.payload.filePaths = Array.from(new Set([
+                    ...top.payload.filePaths,
+                    ...detail.payload.filePaths,
+                ]));
                 top.createdAt = Date.now();
                 top.expiresAt = Date.now() + ttl * 1000;
                 const n = top.payload.filePaths.length;
-                top.message = n + ' files marked as reviewed';
+                top.message = n === 1
+                    ? '1 file marked as reviewed'
+                    : n + ' files marked as reviewed';
                 return;
             }
             this.stack.unshift({

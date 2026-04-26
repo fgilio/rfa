@@ -728,40 +728,22 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
-        $action = app(ToggleReviewedAction::class);
-        $target = $this->buildDiffTarget();
-        $reverted = [];
+        // Delete by path directly so the undo survives a refresh: if content-hash drift
+        // dropped the entry from $reviewedFiles between mark and undo, the action's
+        // toggle would no-op and the DB row would linger despite the toast firing.
+        \App\Models\ReviewedFile::query()
+            ->forProjectOrRepo($this->projectId ?: null, $this->repoPath)
+            ->whereIn('file_path', $filePaths)
+            ->delete();
 
         foreach ($filePaths as $filePath) {
-            if (! array_key_exists($filePath, $this->reviewedFiles)) {
-                continue;
-            }
-
-            $result = $action->handle(
-                $this->reviewedFiles,
-                $filePath,
-                $this->files,
-                $this->repoPath,
-                $target,
-                $this->projectId ?: null,
-            );
-
-            if ($result === null) {
-                continue;
-            }
-
-            $this->reviewedFiles = $result;
-            $reverted[] = $filePath;
-        }
-
-        if (empty($reverted)) {
-            return;
+            unset($this->reviewedFiles[$filePath]);
         }
 
         $pathToId = array_column($this->files, 'id', 'path');
         $revertedIds = array_values(array_filter(array_map(
             fn (string $path): ?string => $pathToId[$path] ?? null,
-            $reverted,
+            $filePaths,
         )));
 
         $this->recentlyReviewedIds = array_values(array_filter(
@@ -769,7 +751,11 @@ new #[Layout('layouts.app')] class extends Component
             fn (string $id): bool => ! in_array($id, $revertedIds, true),
         ));
 
-        $this->dispatch('reviewed-files-reverted', fileIds: $revertedIds);
+        if (! empty($revertedIds)) {
+            $this->dispatch('reviewed-files-reverted', fileIds: $revertedIds);
+        }
+
+        $this->skipRender();
     }
 
     // endregion: Trash & Discard
@@ -797,7 +783,10 @@ new #[Layout('layouts.app')] class extends Component
         $this->reviewedFiles = $result;
 
         $isNowReviewed = array_key_exists($filePath, $this->reviewedFiles);
-        $fileId = collect($this->files)->firstWhere('path', $filePath)['id'] ?? null;
+        // Source-file lookup (not $this->files) so review-pair artifacts
+        // (.json/.md) never consume a slot in the "Recently reviewed" group —
+        // that group renders from sourceFiles only.
+        $fileId = collect($this->sourceFiles)->firstWhere('path', $filePath)['id'] ?? null;
 
         if (! $wasReviewed && $isNowReviewed) {
             if ($fileId !== null) {
