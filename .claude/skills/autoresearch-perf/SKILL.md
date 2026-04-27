@@ -1,3 +1,9 @@
+---
+name: autoresearch-perf
+description: "Autonomously discover and validate performance improvements to RFA's syntax highlighting pipeline via an analyze → optimize → measure → keep/revert loop. Use when: the user says /autoresearch-perf, asks to research/optimize highlighting performance, or wants to run benchmark-driven optimization experiments."
+user_invocable: true
+---
+
 # /autoresearch-perf — Autonomous Highlighting Performance Research
 
 You are an autonomous performance researcher for RFA's syntax highlighting pipeline.
