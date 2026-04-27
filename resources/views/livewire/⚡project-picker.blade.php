@@ -156,7 +156,7 @@ class extends Component
                     <div class="flex-1">
                         <flux:input
                             x-ref="searchInput"
-                            wire:model.live.debounce.200ms="search"
+                            wire:model.live.throttle.50ms="search"
                             @input="selectedIndex = -1"
                             placeholder="Switch to repo..."
                             icon="magnifying-glass"

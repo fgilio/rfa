@@ -137,7 +137,7 @@ new #[Layout('layouts.app')] class extends Component
                 <div class="mb-3 flex items-center gap-2">
                     <div class="flex-1">
                         <flux:input
-                            wire:model.live.debounce.200ms="search"
+                            wire:model.live.throttle.50ms="search"
                             placeholder="Search repos..."
                             icon="magnifying-glass"
                             icon:variant="outline"
