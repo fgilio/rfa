@@ -119,7 +119,7 @@ new #[Layout('layouts.app')] class extends Component
     <main class="flex-1 flex items-center justify-center px-6 py-10">
         @if($totalProjects === 0)
             <div class="text-center">
-                <p class="rfa-logo text-7xl text-gh-fg mb-3 tracking-brutal-tight">rfa</p>
+                <h1 class="rfa-logo text-7xl text-gh-fg mb-3 tracking-brutal-tight">rfa</h1>
                 <p class="font-mono text-sm text-gh-muted mb-10">Be in the loop.</p>
                 @native
                     <livewire:add-project-menu variant="expanded" />

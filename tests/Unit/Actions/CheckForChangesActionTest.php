@@ -42,7 +42,7 @@ test('returns same fingerprint for unchanged repo', function () {
     expect($first['count'])->toBe($second['count']);
 });
 
-test('returns different fingerprint after file modification', function () {
+test('returns different fingerprint and count after file modification', function () {
     $action = new CheckForChangesAction(new GitDiffService(new GitProcessService, new IgnoreService));
     $before = $action->handle($this->tmpDir);
 
@@ -54,7 +54,7 @@ test('returns different fingerprint after file modification', function () {
     expect($before['count'])->toBe(0);
 });
 
-test('returns different fingerprint after adding untracked file', function () {
+test('returns different fingerprint and count after adding untracked file', function () {
     $action = new CheckForChangesAction(new GitDiffService(new GitProcessService, new IgnoreService));
     $before = $action->handle($this->tmpDir);
 
@@ -65,7 +65,7 @@ test('returns different fingerprint after adding untracked file', function () {
     expect($after['count'])->toBe(1);
 });
 
-test('returns different fingerprint after deleting tracked file', function () {
+test('returns different fingerprint and count after deleting tracked file', function () {
     $action = new CheckForChangesAction(new GitDiffService(new GitProcessService, new IgnoreService));
     $before = $action->handle($this->tmpDir);
 

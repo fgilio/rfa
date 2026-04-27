@@ -8,11 +8,11 @@
                 <span class="font-mono text-xs text-gh-muted px-2 py-0.5 rounded border border-gh-border truncate">{{ $exportResult }}</span>
             </div>
             <div class="flex items-center gap-2 shrink-0">
-                <span class="font-mono text-[11px] text-gh-muted">Copied to clipboard</span>
                 <flux:button
                     size="sm"
                     icon="clipboard-document"
                     icon:variant="outline"
+                    tooltip="Already on your clipboard — re-copy if you've copied something else since"
                     @click="$dispatch('copy-to-clipboard', { text: @js($exportResult), toast: 'Copied again' })"
                 >
                     Copy again

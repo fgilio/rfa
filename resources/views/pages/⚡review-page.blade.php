@@ -1347,7 +1347,7 @@ new #[Layout('layouts.app')] class extends Component
             <span
                 x-text="fileFilter === '' && !hideReviewed
                     ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
-                    : sourceFileEntries.filter(f => fileMatchesFilter(f.path, f.id)).length + '/{{ count($sourceFiles) }} files'"
+                    : sourceFileEntries.filter(f => fileMatchesFilter(f.path, f.id)).length + '/{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'"
             >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</span>
             <span class="text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
             <span class="text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>

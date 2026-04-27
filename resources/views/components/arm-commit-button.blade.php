@@ -41,16 +41,18 @@
         size="sm"
         x-bind:tooltip="armed ? @js($armedTooltip) : @js($tooltip)"
         x-bind:aria-label="armed ? @js($confirmLabel) : @js($resolvedAriaLabel)"
+        x-bind:aria-pressed="armed"
         @click.stop.prevent="handle()"
-        x-bind:class="armed && '!text-red-500 dark:!text-red-400 hover:!bg-red-500/10'"
+        x-bind:class="armed && '!text-gh-red hover:!bg-gh-red/10'"
     >
-        <flux:icon icon="{{ $icon }}" variant="outline" />
+        <flux:icon :icon="$icon" variant="outline" />
     </flux:button>
     <div
         aria-hidden="true"
-        class="pointer-events-none absolute inset-x-1 -bottom-px h-0.5 origin-left rounded-full bg-red-500/70"
+        class="pointer-events-none absolute inset-x-1 -bottom-px h-0.5 origin-left rounded-full bg-gh-red/70"
         x-bind:style="armed
             ? 'transform:scaleX(0); transition:transform {{ (int) $duration }}ms linear'
             : 'transform:scaleX(1); opacity:0; transition:none'"
     ></div>
+    <span class="sr-only" aria-live="polite" x-text="armed ? @js($armedTooltip) : ''"></span>
 </div>
