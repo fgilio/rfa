@@ -53,9 +53,7 @@ reviews:
 
     - path: "resources/views/livewire/**/*.blade.php"
       instructions: >
-        Livewire SFC components. Thin UI adapters delegating to Actions. Do
-        not suggest moving comment writes into comments-drawer — it is
-        intentionally a lazy read-model and writes stay on the parent page.
+        Livewire SFC components. Thin UI adapters delegating to Actions.
         Prefer server-side logic over Alpine/JS.
 
     - path: "app/**/*.php"
