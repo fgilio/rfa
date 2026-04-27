@@ -18,15 +18,6 @@
     const STORAGE_KEY = '__rfa419RecoveryAt';
     const RECOVERY_TTL_MS = 10_000;
 
-    /**
-     * Decide whether a failing Livewire response should trigger a silent
-     * reload. Only 419s qualify, and only if we haven't recovered within
-     * the TTL window (so a recurring 419 falls through to Livewire's
-     * default handler instead of reload-looping).
-     *
-     * @param {{ status: number, now: number, lastRecoveryAt: ?number }} args
-     * @returns {boolean}
-     */
     function shouldRecover({ status, now, lastRecoveryAt }) {
         if (status !== 419) {
             return false;

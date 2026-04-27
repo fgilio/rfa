@@ -108,6 +108,10 @@
             markMatches(query) {
                 const pattern = new RegExp(escapeRegex(query), 'gi');
                 const needle = query.toLowerCase();
+                // Sibling text nodes share a parent (very common in diff rows),
+                // so memoize the per-walk visibility answer to avoid re-walking
+                // the style chain for each one.
+                const visibility = new WeakMap();
                 const walker = document.createTreeWalker(
                     document.body,
                     NodeFilter.SHOW_TEXT,
@@ -124,12 +128,15 @@
                             // display:none, visibility:hidden, opacity:0) so
                             // the counter and next/prev navigation only target
                             // visible matches.
-                            if (!parent.checkVisibility({
-                                checkOpacity: true,
-                                checkVisibilityCSS: true,
-                            })) {
-                                return NodeFilter.FILTER_REJECT;
+                            let visible = visibility.get(parent);
+                            if (visible === undefined) {
+                                visible = parent.checkVisibility({
+                                    checkOpacity: true,
+                                    checkVisibilityCSS: true,
+                                });
+                                visibility.set(parent, visible);
                             }
+                            if (!visible) return NodeFilter.FILTER_REJECT;
                             // Substring check (not pattern.test) avoids
                             // mutating the shared regex's lastIndex.
                             return node.nodeValue.toLowerCase().includes(needle)

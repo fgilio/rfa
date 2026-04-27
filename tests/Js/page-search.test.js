@@ -1,17 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import pageSearch from '../../public/js/page-search.js';
 
 const { escapeRegex, createPageSearch, install } = pageSearch;
 
-// happy-dom does not implement Element#checkVisibility (verified at write
-// time). The TreeWalker filter in markMatches calls it on every text node's
-// parent, so without a polyfill every walk returns zero matches and the
-// suite cannot meaningfully exercise the production logic. We polyfill with
-// a layout-aware-ish stub that respects the two cases we actually test
-// (display:none, [hidden]) and returns true otherwise. Real Chromium uses
-// computed style; happy-dom doesn't have a layout engine so a true polyfill
-// isn't possible here.
-function installCheckVisibilityPolyfill() {
+// happy-dom does not implement Element#checkVisibility, but markMatches's
+// TreeWalker filter calls it on every text-node parent. Without a polyfill
+// every walk returns zero matches and the suite can't exercise production
+// logic. Stub it with a style-string scan covering the cases we test
+// (display:none, [hidden]). Real Chromium uses computed style; happy-dom
+// has no layout engine so a true polyfill isn't possible here.
+beforeAll(() => {
     Element.prototype.checkVisibility = function () {
         let el = this;
         while (el && el.nodeType === 1) {
@@ -24,7 +22,11 @@ function installCheckVisibilityPolyfill() {
         }
         return true;
     };
-}
+});
+
+afterAll(() => {
+    delete Element.prototype.checkVisibility;
+});
 
 function buildPageSearchHarness() {
     const data = createPageSearch();
@@ -51,13 +53,11 @@ describe('markMatches', () => {
     let data;
 
     beforeEach(() => {
-        installCheckVisibilityPolyfill();
         data = buildPageSearchHarness();
     });
 
     afterEach(() => {
         document.body.innerHTML = '';
-        delete Element.prototype.checkVisibility;
     });
 
     it('returns one span per match, wrapped with the match class', () => {
@@ -129,13 +129,11 @@ describe('refresh', () => {
     let data;
 
     beforeEach(() => {
-        installCheckVisibilityPolyfill();
         data = buildPageSearchHarness();
     });
 
     afterEach(() => {
         document.body.innerHTML = '';
-        delete Element.prototype.checkVisibility;
     });
 
     it('treats a whitespace-only query as empty (no spans, currentMatch reset)', () => {
@@ -154,14 +152,12 @@ describe('find', () => {
     let data;
 
     beforeEach(() => {
-        installCheckVisibilityPolyfill();
         data = buildPageSearchHarness();
         document.body.innerHTML = '<p>cat one</p><p>cat two</p><p>cat three</p>';
     });
 
     afterEach(() => {
         document.body.innerHTML = '';
-        delete Element.prototype.checkVisibility;
     });
 
     it('wraps forward at the last match and backward at the first', () => {
@@ -215,13 +211,11 @@ describe('clearMarks', () => {
     let data;
 
     beforeEach(() => {
-        installCheckVisibilityPolyfill();
         data = buildPageSearchHarness();
     });
 
     afterEach(() => {
         document.body.innerHTML = '';
-        delete Element.prototype.checkVisibility;
     });
 
     it('round-trips: textContent restored, no spans, parent text nodes merged', () => {
@@ -250,14 +244,12 @@ describe('close', () => {
     let data;
 
     beforeEach(() => {
-        installCheckVisibilityPolyfill();
         data = buildPageSearchHarness();
         document.body.innerHTML = '<p>cat sat on the mat</p>';
     });
 
     afterEach(() => {
         document.body.innerHTML = '';
-        delete Element.prototype.checkVisibility;
     });
 
     it('clears marks and resets open/query/currentMatch', () => {
@@ -281,7 +273,6 @@ describe('updateCurrent', () => {
     let data;
 
     beforeEach(() => {
-        installCheckVisibilityPolyfill();
         Element.prototype.scrollIntoView = vi.fn();
         data = buildPageSearchHarness();
         document.body.innerHTML = '<p>cat one</p><p>cat two</p><p>cat three</p>';
@@ -289,7 +280,6 @@ describe('updateCurrent', () => {
 
     afterEach(() => {
         document.body.innerHTML = '';
-        delete Element.prototype.checkVisibility;
         delete Element.prototype.scrollIntoView;
     });
 

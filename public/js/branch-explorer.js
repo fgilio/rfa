@@ -9,10 +9,6 @@
     }
 })(typeof window !== 'undefined' ? window : null, function () {
     /**
-     * Pure helper that decides what `applySelection` should do given the
-     * current selection state. Extracted so the validation/URL-composition
-     * matrix can be unit-tested without an Alpine harness.
-     *
      * @param {object} input
      * @param {Array<{hash: string}>} input.commits  newest-first; index 0 = tip.
      * @param {string[]} input.selectedHashes        subset of commits[].hash, any order.
@@ -43,7 +39,7 @@
         // A non-contiguous commit pick (e.g. A and C without B) would silently pull B
         // into the diff if we just used min/max. Reject it so users have to
         // explicitly include every commit in their range.
-        if (indices.length > 0 && indices[indices.length - 1] - indices[0] + 1 !== indices.length) {
+        if (indices[indices.length - 1] - indices[0] + 1 !== indices.length) {
             return {
                 kind: 'alert',
                 message: 'Selection is not contiguous — pick every commit between the oldest and newest you want to review.',

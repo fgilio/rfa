@@ -8,19 +8,9 @@
         api.autoInstall(root);
     }
 })(typeof window !== 'undefined' ? window : null, function () {
-    /**
-     * Pure auto-scroll velocity computation. Returns px/sec; the caller
-     * multiplies by frame delta to get pixel offset for the current tick.
-     *
-     * Boundaries match the original `_getScrollSpeed`:
-     * - `y < headerBottom` strictly above sticky header → -600 (max up)
-     * - `y < headerBottom + edgeZone` → proportional ramp -100..-600
-     * - `y > viewportHeight - edgeZone` → proportional ramp +100..+600
-     * - At exactly `headerBottom + edgeZone` and exactly `viewportHeight - edgeZone`
-     *   the function returns 0 (`<` and `>` are exclusive in original).
-     * - When the cursor leaves the window vertically (y > viewportHeight),
-     *   `depth` exceeds 1 and velocity exceeds 600 — deliberate, no clamp.
-     */
+    // Returns velocity in px/sec; caller multiplies by frame delta. Velocity is
+    // intentionally not clamped: when the cursor leaves the viewport vertically
+    // `depth` exceeds 1 and the page should keep accelerating past 600.
     function getScrollSpeed({ y, viewportHeight, headerBottom, edgeZone }) {
         if (y < headerBottom) {
             return -600;
@@ -36,14 +26,9 @@
         return 0;
     }
 
-    /**
-     * Walk a DOM root (typically the file's wrapper) and pull the textContent
-     * of the rightmost `<td>` of each `tr[data-line-old="N"]` (or
-     * `data-line-new`) row in the inclusive [startLine, endLine] range.
-     *
-     * Returns null when there's nothing to extract (file-level comment,
-     * null start, or no matching rows).
-     */
+    // Reads the rightmost `<td>` of each `tr[data-line-old|new="N"]` row in
+    // [startLine, endLine]. Returns null for file-level comments, null start,
+    // or no matching rows.
     function extractLineSnippet({ root, side, startLine, endLine }) {
         if (startLine == null || side === 'file') return null;
         const attr = side === 'left' ? 'data-line-old' : 'data-line-new';
