@@ -76,7 +76,19 @@
             },
 
             focusCommentInput() {
-                this.$nextTick(() => { this.$refs.commentInput?.focus(); });
+                this.$nextTick(() => {
+                    // Both unified and split tables can render comment-form templates;
+                    // the hidden one (display:none) has offsetParent === null. Pick the
+                    // first visible textarea so focus lands in the active view.
+                    const inputs = this.$el.querySelectorAll('[data-comment-form] textarea');
+                    for (const input of inputs) {
+                        if (input.offsetParent !== null) {
+                            input.focus();
+                            return;
+                        }
+                    }
+                    this.$refs.commentInput?.focus();
+                });
             },
 
             handleLineMousedown(lineNum, side, event) {
@@ -345,6 +357,13 @@
                 if (this.formLine === null) return false;
                 if (!this.showForm && !this.isDragging) return false;
                 return lineNum >= this.formLine && lineNum <= (this.formEndLine ?? this.formLine);
+            },
+
+            // Split view: only highlight the side that owns the current selection.
+            isLineSideInSelection(lineNum, side) {
+                if (lineNum === null) return false;
+                if (this.formSide !== side) return false;
+                return this.isLineInSelection(lineNum);
             },
 
             onReviewedChange() {

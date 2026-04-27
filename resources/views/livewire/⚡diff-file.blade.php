@@ -500,6 +500,7 @@ new class extends Component {
             @if($diffData['syntaxStyles'] ?? '')
                 {!! '<style>' . $diffData['syntaxStyles'] . '</style>' !!}
             @endif
+            <template x-if="$store.settings.diffViewMode !== 'split'">
             <div class="overflow-x-auto">
                 <table class="w-full border-collapse font-mono text-xs leading-5" :class="isDragging ? 'select-none' : ''">
                     @if($hasGaps)
@@ -647,6 +648,199 @@ new class extends Component {
                     @endif
                 </table>
             </div>
+            </template>
+
+            {{-- Split (side-by-side) view --}}
+            <template x-if="$store.settings.diffViewMode === 'split'">
+            <div class="overflow-x-auto">
+                <table class="w-full border-collapse font-mono text-xs leading-5 table-fixed" :class="isDragging ? 'select-none' : ''">
+                    <colgroup>
+                        <col class="w-[1px]">
+                        <col style="width: calc(50% - 1px)">
+                        <col class="w-[1px]">
+                        <col style="width: calc(50% - 1px)">
+                    </colgroup>
+                    @if($hasGaps)
+                        <tr class="bg-gh-hunk-bg">
+                            <td colspan="4" class="px-4 py-1 text-center">
+                                <button
+                                    wire:click="expandContext"
+                                    wire:loading.attr="disabled"
+                                    wire:target="expandContext"
+                                    class="text-gh-link text-xs hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                                >
+                                    <flux:icon wire:loading wire:target="expandContext" icon="arrow-path" variant="outline" class="animate-spin" />
+                                    Show full file
+                                </button>
+                            </td>
+                        </tr>
+                    @endif
+
+                    @foreach($diffData['hunks'] as $hunkIndex => $hunk)
+                        @if($hunkIndex > 0 || $hunk['newStart'] > 1)
+                            <tr class="bg-gh-hunk-bg">
+                                <td colspan="4" class="py-1.5 text-center text-xs border-y border-dashed border-gh-border/20">
+                                    @if($hunkIndex > 0)
+                                        @php
+                                            $prevHunk = $hunks[$hunkIndex - 1];
+                                            $hiddenCount = $hunk['newStart'] - ($prevHunk['newStart'] + $prevHunk['newCount']);
+                                        @endphp
+                                        <x-tiered-expand-gap :hunk-index="$hunkIndex" :hidden-count="$hiddenCount" />
+                                    @else
+                                        @php $hiddenCount = $hunk['newStart'] - 1; @endphp
+                                        <x-tiered-expand-gap :hunk-index="0" :hidden-count="$hiddenCount" />
+                                    @endif
+                                </td>
+                            </tr>
+                        @elseif($hunk['header'] !== '')
+                            <tr class="bg-gh-hunk-bg">
+                                <td colspan="4" class="px-4 py-1 text-gh-muted text-xs">
+                                    @@ -{{ $hunk['oldStart'] }} +{{ $hunk['newStart'] }} @@
+                                    <span class="text-gh-muted/60">{{ $hunk['header'] }}</span>
+                                </td>
+                            </tr>
+                        @endif
+
+                        @foreach($hunk['splitRows'] ?? [] as $row)
+                            @php
+                                $left = $row['left'];
+                                $right = $row['right'];
+                                $leftLineNum = $left['oldLineNum'] ?? null;
+                                $rightLineNum = $right['newLineNum'] ?? null;
+
+                                [$leftBgClass, $leftNumBgClass] = match($left['type'] ?? null) {
+                                    'remove' => ['bg-gh-del-bg', 'bg-gh-del-line'],
+                                    'context' => ['', ''],
+                                    default => ['bg-gh-hunk-bg/40', 'bg-gh-hunk-bg/40'],
+                                };
+                                [$rightBgClass, $rightNumBgClass] = match($right['type'] ?? null) {
+                                    'add' => ['bg-gh-add-bg', 'bg-gh-add-line'],
+                                    'context' => ['', ''],
+                                    default => ['bg-gh-hunk-bg/40', 'bg-gh-hunk-bg/40'],
+                                };
+
+                                $leftAncestors = $left['headingAncestors'] ?? [];
+                                $rightAncestors = $right['headingAncestors'] ?? [];
+                                $leftAncestorsJs = $leftAncestors === [] ? null : json_encode($leftAncestors);
+                                $rightAncestorsJs = $rightAncestors === [] ? null : json_encode($rightAncestors);
+                                if ($leftAncestorsJs && $rightAncestorsJs && $leftAncestorsJs === $rightAncestorsJs) {
+                                    $foldExpr = "!isLineFolded($leftAncestorsJs)";
+                                } elseif ($leftAncestorsJs && $rightAncestorsJs) {
+                                    $foldExpr = "!isLineFolded($leftAncestorsJs) && !isLineFolded($rightAncestorsJs)";
+                                } elseif ($leftAncestorsJs) {
+                                    $foldExpr = "!isLineFolded($leftAncestorsJs)";
+                                } elseif ($rightAncestorsJs) {
+                                    $foldExpr = "!isLineFolded($rightAncestorsJs)";
+                                } else {
+                                    $foldExpr = null;
+                                }
+
+                                $leftHeadingId = $left['headingId'] ?? null;
+                                $rightHeadingId = $right['headingId'] ?? null;
+                                // Show heading button on left side; if only right has one, show on right.
+                                $showLeftHeading = $leftHeadingId !== null;
+                                $showRightHeading = ! $showLeftHeading && $rightHeadingId !== null;
+                            @endphp
+                            <tr
+                                class="diff-line"
+                                @mouseenter="onDragOver({{ $rightLineNum ?? 'null' }}, {{ $leftLineNum ?? 'null' }})"
+                                @if($rightLineNum) data-line-new="{{ $rightLineNum }}" @endif
+                                @if($leftLineNum) data-line-old="{{ $leftLineNum }}" @endif
+                                @if($foldExpr) x-show="{{ $foldExpr }}" @endif
+                            >
+                                {{-- Old line number --}}
+                                <td data-testid="diff-line-number"
+                                    class="diff-line-num px-2 text-right text-gh-muted/50 select-none cursor-pointer {{ $leftNumBgClass }}"
+                                    :class="isLineSideInSelection({{ $leftLineNum ?? 'null' }}, 'left') ? 'line-selected' : ''"
+                                    @if($leftLineNum) @mousedown.prevent="handleLineMousedown({{ $leftLineNum }}, 'left', $event)" @endif
+                                >{{ $leftLineNum ?? '' }}</td>
+
+                                {{-- Old content --}}
+                                <td class="p-0 align-top {{ $leftBgClass }}"
+                                    :class="isLineSideInSelection({{ $leftLineNum ?? 'null' }}, 'left') ? 'line-selected' : ''"
+                                    @if($hasRemote && $leftLineNum) @contextmenu.prevent="onLineContextmenu($event, {{ $leftLineNum }}, 'old')" @endif
+                                >@if($left)<div class="overflow-x-auto whitespace-pre px-2">@if($showLeftHeading)<button
+                                            type="button"
+                                            data-testid="heading-fold-toggle"
+                                            data-heading-id="{{ $leftHeadingId }}"
+                                            @click.stop="toggleHeadingFold({{ $leftHeadingId }})"
+                                            :aria-label="foldedHeadings[{{ $leftHeadingId }}] ? 'Expand section' : 'Collapse section'"
+                                            :aria-expanded="!foldedHeadings[{{ $leftHeadingId }}]"
+                                            class="inline-flex align-middle -my-0.5 mr-1 size-4 items-center justify-center text-gh-muted/60 hover:text-gh-text"
+                                        ><flux:icon icon="chevron-down" variant="outline" class="!size-3" x-show="!foldedHeadings[{{ $leftHeadingId }}]" /><flux:icon icon="chevron-right" variant="outline" class="!size-3" x-show="foldedHeadings[{{ $leftHeadingId }}]" x-cloak /></button>@endif{!! $left['highlightedContent'] ?? e($left['content']) !!}</div>@else<div class="px-2">&nbsp;</div>@endif</td>
+
+                                {{-- New line number --}}
+                                <td data-testid="diff-line-number"
+                                    class="diff-line-num px-2 text-right text-gh-muted/50 select-none cursor-pointer border-l border-gh-border {{ $rightNumBgClass }}"
+                                    :class="isLineSideInSelection({{ $rightLineNum ?? 'null' }}, 'right') ? 'line-selected' : ''"
+                                    @if($rightLineNum) @mousedown.prevent="handleLineMousedown({{ $rightLineNum }}, 'right', $event)" @endif
+                                >{{ $rightLineNum ?? '' }}</td>
+
+                                {{-- New content --}}
+                                <td class="p-0 align-top {{ $rightBgClass }}"
+                                    :class="isLineSideInSelection({{ $rightLineNum ?? 'null' }}, 'right') ? 'line-selected' : ''"
+                                    @if($hasRemote && $rightLineNum) @contextmenu.prevent="onLineContextmenu($event, {{ $rightLineNum }}, 'new')" @endif
+                                >@if($right)<div class="overflow-x-auto whitespace-pre px-2">@if($showRightHeading)<button
+                                            type="button"
+                                            data-testid="heading-fold-toggle"
+                                            data-heading-id="{{ $rightHeadingId }}"
+                                            @click.stop="toggleHeadingFold({{ $rightHeadingId }})"
+                                            :aria-label="foldedHeadings[{{ $rightHeadingId }}] ? 'Expand section' : 'Collapse section'"
+                                            :aria-expanded="!foldedHeadings[{{ $rightHeadingId }}]"
+                                            class="inline-flex align-middle -my-0.5 mr-1 size-4 items-center justify-center text-gh-muted/60 hover:text-gh-text"
+                                        ><flux:icon icon="chevron-down" variant="outline" class="!size-3" x-show="!foldedHeadings[{{ $rightHeadingId }}]" /><flux:icon icon="chevron-right" variant="outline" class="!size-3" x-show="foldedHeadings[{{ $rightHeadingId }}]" x-cloak /></button>@endif{!! $right['highlightedContent'] ?? e($right['content']) !!}</div>@else<div class="px-2">&nbsp;</div>@endif</td>
+                            </tr>
+
+                            {{-- Inline comment form (one row per side) --}}
+                            @if($leftLineNum !== null)
+                                <template x-if="showForm && formSide === 'left' && formEndLine === {{ $leftLineNum }}">
+                                    <tr @if($foldExpr) x-show="{{ $foldExpr }}" @endif>
+                                        <td colspan="4" class="p-0">
+                                            <x-comment-form save="submitComment" placeholder="Write a comment..." border-class="border-y" />
+                                        </td>
+                                    </tr>
+                                </template>
+                            @endif
+                            @if($rightLineNum !== null)
+                                <template x-if="showForm && formSide === 'right' && formEndLine === {{ $rightLineNum }}">
+                                    <tr @if($foldExpr) x-show="{{ $foldExpr }}" @endif>
+                                        <td colspan="4" class="p-0">
+                                            <x-comment-form save="submitComment" placeholder="Write a comment..." border-class="border-y" />
+                                        </td>
+                                    </tr>
+                                </template>
+                            @endif
+
+                            {{-- Saved comments inline --}}
+                            @php
+                                $rowComments = collect();
+                                if ($leftLineNum !== null) {
+                                    $rowComments = $rowComments->merge($commentsByLine["left:{$leftLineNum}"] ?? collect());
+                                }
+                                if ($rightLineNum !== null) {
+                                    $rowComments = $rowComments->merge($commentsByLine["right:{$rightLineNum}"] ?? collect());
+                                }
+                            @endphp
+                            @foreach($rowComments as $comment)
+                                <tr x-data x-show="editingCommentId !== '{{ $comment['id'] }}'@if($foldExpr) && {{ $foldExpr }}@endif">
+                                    <td colspan="4" class="p-0">
+                                        <x-comment-display :comment="$comment" border-class="border-y" />
+                                    </td>
+                                </tr>
+                            @endforeach
+                        @endforeach
+                    @endforeach
+
+                    @if($hasTrailingGap)
+                        <tr class="bg-gh-hunk-bg">
+                            <td colspan="4" class="py-1.5 text-center text-xs border-y border-dashed border-gh-border/20">
+                                <x-tiered-expand-gap :hunk-index="count($hunks)" :hidden-count="$trailingHiddenCount" />
+                            </td>
+                        </tr>
+                    @endif
+                </table>
+            </div>
+            </template>
         @endif
 
     </div>

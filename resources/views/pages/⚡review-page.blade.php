@@ -1262,6 +1262,22 @@ new #[Layout('layouts.app')] class extends Component
                         x-show="!$store.settings.collapseAll" />
                 </div>
 
+                {{-- Unified/Split diff view toggle --}}
+                <div class="grid place-items-center">
+                    <flux:button variant="ghost" size="sm" icon="view-columns" icon:variant="outline"
+                        tooltip="Switch to split view"
+                        aria-label="Switch to split view"
+                        class="col-start-1 row-start-1"
+                        @click="$store.settings.diffViewMode = 'split'"
+                        x-show="$store.settings.diffViewMode !== 'split'" />
+                    <flux:button variant="ghost" size="sm" icon="bars-3" icon:variant="outline"
+                        tooltip="Switch to unified view"
+                        aria-label="Switch to unified view"
+                        class="col-start-1 row-start-1"
+                        @click="$store.settings.diffViewMode = 'unified'"
+                        x-show="$store.settings.diffViewMode === 'split'" x-cloak />
+                </div>
+
                 <span class="w-px h-4 bg-gh-border" aria-hidden="true"></span>
 
                 @if(! $this->isCommitMode())

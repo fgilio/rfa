@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Services\DiffSplitPairerService;
+
 final readonly class ExpandDiffGapAction
 {
+    public function __construct(
+        private DiffSplitPairerService $diffSplitPairer,
+    ) {}
+
     /**
      * Expand a gap between diff hunks by inserting lines from the full-context diff.
      *
@@ -107,6 +113,10 @@ final readonly class ExpandDiffGapAction
             ];
 
             array_splice($hunks, $hunkIndex - 1, 2, [$merged]);
+        }
+
+        foreach ($hunks as $i => $hunk) {
+            $hunks[$i]['splitRows'] = $this->diffSplitPairer->pair($hunk['lines']);
         }
 
         return $hunks;

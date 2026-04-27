@@ -9,6 +9,7 @@ use App\DTOs\FileDiff;
 use App\Exceptions\GitCommandException;
 use App\Services\CsvAlignerService;
 use App\Services\DiffParser;
+use App\Services\DiffSplitPairerService;
 use App\Services\GitDiffService;
 use App\Services\MarkdownRegionService;
 use App\Services\MarkdownTableAlignerService;
@@ -25,6 +26,7 @@ final readonly class LoadFileDiffAction
         private MarkdownTableAlignerService $markdownTableAligner,
         private CsvAlignerService $csvAligner,
         private MarkdownRegionService $markdownRegionService,
+        private DiffSplitPairerService $diffSplitPairer,
     ) {}
 
     /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool, syntaxStyles: string} */
@@ -81,13 +83,17 @@ final readonly class LoadFileDiffAction
                 ? null
                 : $this->gitDiffService->getNewFileLineCount($repoPath, $path, $target);
 
-            return $fileDiff->withHunks($annotatedHunks)->toArray() + [
+            $result = $fileDiff->withHunks($annotatedHunks)->toArray() + [
                 'tooLarge' => false,
                 'syntaxStyles' => $css,
                 'tableAligned' => true,
                 'newFileLineCount' => $newFileLineCount,
                 'headingsAnnotated' => true,
             ];
+
+            $result['hunks'] = $this->withSplitRows($result['hunks']);
+
+            return $result;
         };
 
         if ($cacheKey) {
@@ -98,6 +104,7 @@ final readonly class LoadFileDiffAction
                 && array_key_exists('tableAligned', $cached)
                 && array_key_exists('newFileLineCount', $cached)
                 && array_key_exists('headingsAnnotated', $cached)
+                && $this->cachedHunksHaveSplitRows($cached)
             ) {
                 return $cached;
             }
@@ -108,5 +115,35 @@ final readonly class LoadFileDiffAction
         }
 
         return $compute();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $hunks
+     * @return array<int, array<string, mixed>>
+     */
+    private function withSplitRows(array $hunks): array
+    {
+        foreach ($hunks as $i => $hunk) {
+            $hunks[$i]['splitRows'] = $this->diffSplitPairer->pair($hunk['lines'] ?? []);
+        }
+
+        return $hunks;
+    }
+
+    /** @param  array<string, mixed>  $cached */
+    private function cachedHunksHaveSplitRows(array $cached): bool
+    {
+        $hunks = $cached['hunks'] ?? [];
+        if ($hunks === []) {
+            return true;
+        }
+
+        foreach ($hunks as $hunk) {
+            if (! array_key_exists('splitRows', $hunk)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
