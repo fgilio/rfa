@@ -223,7 +223,13 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
     match ($result) {
         'patched' => print "  NativePHP electron-main patched (lifecycle + phpserver-reg + auto-restart + quit-deadline).\n",
         'already_patched' => print "  NativePHP electron-main already patched.\n",
-        'not_found' => nativePatchExitWithError("NativePHP electron-main not found at {$mainPath}. Vendor missing or path changed."),
+        // out/main/index.js is an electron-vite build artifact, not shipped in
+        // the package dist. On a fresh `composer install` (CI, post-clone) it
+        // legitimately doesn't exist yet — skip without failing so non-build
+        // jobs (lint, types, tests) stay green. The patch reapplies the next
+        // time composer's autoload hook fires after `electron-vite build` has
+        // produced the file.
+        'not_found' => print "  NativePHP electron-main not built yet at {$mainPath} — skipping patch.\n",
         'anchor_not_found' => nativePatchExitWithError('NativePHP electron-main anchor missing. Upstream shape may have changed; this script needs updating.'),
         'write_failed' => nativePatchExitWithError("Failed to write patched electron-main to {$mainPath}."),
     };
