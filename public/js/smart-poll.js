@@ -19,7 +19,8 @@
         if (!match) return null;
         const n = parseInt(match[1], 10);
         const unit = match[2] || 'ms';
-        return n * UNIT_MS[unit];
+        const ms = n * UNIT_MS[unit];
+        return ms > 0 ? ms : null;
     }
 
     function isFocused(doc) {
@@ -41,17 +42,20 @@
     function startSmartPoll({ window: win, document: doc, getInterval, onTick }) {
         let timeoutId = null;
         let inflight = false;
+        let stopped = false;
         let lastFocused = isFocused(doc);
 
         function schedule() {
             clearTimeout(timeoutId);
             timeoutId = null;
+            if (stopped) return;
             const ms = getInterval();
             if (ms === null) return;
             timeoutId = setTimeout(tick, ms);
         }
 
         async function tick() {
+            if (stopped) return;
             if (inflight || doc.hidden) {
                 schedule();
                 return;
@@ -87,7 +91,9 @@
         schedule();
 
         return function stop() {
+            stopped = true;
             clearTimeout(timeoutId);
+            timeoutId = null;
             win.removeEventListener('focus', onTransition);
             win.removeEventListener('blur', onTransition);
             doc.removeEventListener('visibilitychange', onTransition);

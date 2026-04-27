@@ -36,6 +36,11 @@ describe('parseDuration', () => {
             expect(parseDuration(input)).toBeNull();
         }
     );
+
+    // Non-positive durations would tight-loop setTimeout, so treat them as "pause".
+    it.each(['0', '0s', '0ms', '0m'])('returns null for non-positive %j', (input) => {
+        expect(parseDuration(input)).toBeNull();
+    });
 });
 
 describe('createDirectiveHandler', () => {
@@ -238,6 +243,49 @@ describe('createDirectiveHandler', () => {
 
         await vi.advanceTimersByTimeAsync(10_000);
         expect(component.$wire.call).toHaveBeenCalledTimes(2);
+    });
+
+    it('pauses on visibilitychange to hidden and resumes on visible', async () => {
+        el.dataset.focus = '10s';
+        attach();
+
+        setHidden(true);
+        document.dispatchEvent(new Event('visibilitychange'));
+
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(component.$wire.call).not.toHaveBeenCalled();
+
+        setHidden(false);
+        document.dispatchEvent(new Event('visibilitychange'));
+
+        // Visible-again is treated as a refocus → immediate tick.
+        await vi.advanceTimersByTimeAsync(0);
+        expect(component.$wire.call).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not re-arm after stop() runs while a tick is in flight', async () => {
+        el.dataset.focus = '10s';
+
+        let resolveCall;
+        component.$wire.call = vi.fn(
+            () => new Promise((resolve) => {
+                resolveCall = resolve;
+            })
+        );
+
+        attach();
+
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(component.$wire.call).toHaveBeenCalledTimes(1);
+
+        // Tear down while the request is still pending.
+        cleanupCallbacks.forEach((cb) => cb());
+
+        // Resolving the in-flight call must not install a new timer.
+        resolveCall();
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(component.$wire.call).toHaveBeenCalledTimes(1);
     });
 });
 

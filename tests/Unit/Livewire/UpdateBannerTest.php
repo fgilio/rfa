@@ -259,4 +259,5 @@ test('pollCadence returns expected pairs per status', function (?string $status,
     'up-to-date' => ['up-to-date', '30s', '5m'],
     'ready' => ['ready', '30s', '5m'],
     'error' => ['error', '30s', '5m'],
+    'checked-dev' => ['checked-dev', '30s', '5m'],
 ]);
