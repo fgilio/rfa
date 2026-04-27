@@ -1269,7 +1269,11 @@ new #[Layout('layouts.app')] class extends Component
                         hasChanges: false,
                         fingerprint: null,
                         currentCount: 0,
-                        polling: null,
+                        timer: null,
+                        // Focus-aware cadence: matches the head-poller / update-banner pattern
+                        // — tight when the user is here, lazy when they're not.
+                        focusedMs: 60000,
+                        blurredMs: 300000,
                         async check() {
                             try {
                                 const res = await fetch('/api/changes/{{ $projectId }}');
@@ -1285,11 +1289,37 @@ new #[Layout('layouts.app')] class extends Component
                                 }
                             } catch {}
                         },
+                        currentInterval() {
+                            if (document.hidden) return null;
+                            return document.hasFocus() ? this.focusedMs : this.blurredMs;
+                        },
+                        scheduleNext() {
+                            clearTimeout(this.timer);
+                            this.timer = null;
+                            const ms = this.currentInterval();
+                            if (ms === null) return;
+                            this.timer = setTimeout(() => this.tick(), ms);
+                        },
+                        async tick() {
+                            if (!document.hidden) await this.check();
+                            this.scheduleNext();
+                        },
                         startPolling() {
+                            clearTimeout(this.timer);
+                            this.lastFocused = document.hasFocus() && !document.hidden;
                             this.check();
-                            this.polling = setInterval(() => {
-                                if (!document.hidden) this.check();
-                            }, 60000);
+                            this.scheduleNext();
+                        },
+                        onFocusChange() {
+                            const focusedNow = document.hasFocus() && !document.hidden;
+                            if (!this.lastFocused && focusedNow) {
+                                this.lastFocused = true;
+                                clearTimeout(this.timer);
+                                this.tick();
+                                return;
+                            }
+                            this.lastFocused = focusedNow;
+                            this.scheduleNext();
                         },
                         softRefresh() { $wire.softRefresh(); },
                         hardReload() { window.location.reload(); },
@@ -1303,7 +1333,10 @@ new #[Layout('layouts.app')] class extends Component
                     x-init="startPolling();
                         $store.keymap.register('⌘R', () => softRefresh(), { allowInEditable: true });
                         $store.keymap.register('⌘⇧R', () => hardReload(), { allowInEditable: true });"
-                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; currentCount = 0; clearInterval(polling); startPolling();"
+                    @focus.window="onFocusChange()"
+                    @blur.window="onFocusChange()"
+                    @visibilitychange.document="onFocusChange()"
+                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; currentCount = 0; startPolling();"
                     @refresh-completed.window="
                         const n = $event.detail?.changedCount ?? 0;
                         Flux.toast({

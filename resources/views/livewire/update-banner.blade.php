@@ -197,11 +197,31 @@ new class extends Component
 
         return $text ? trim(strip_tags($text)) : $text;
     }
+
+    /**
+     * Smart-poll cadence per status. Active flows (checking/downloading) need a
+     * tight focused loop so the progress UI feels live, but idle/terminal
+     * states only need to catch cache TTL expiry — minutes are enough.
+     *
+     * @return array{focus: string, blur: string}
+     */
+    public function pollCadence(): array
+    {
+        return match (true) {
+            in_array($this->status, ['checking', 'downloading'], true) => ['focus' => '2s', 'blur' => '30s'],
+            $this->status === null => ['focus' => '1m', 'blur' => '30m'],
+            default => ['focus' => '30s', 'blur' => '5m'],
+        };
+    }
 };
 ?>
 
+@php($cadence = $this->pollCadence())
+
 <div
-    wire:poll.{{ match(true) { $status === null => '5s', in_array($status, ['checking', 'downloading']) => '2s', default => '30s' } }}="refreshState"
+    wire:smart-poll="refreshState"
+    data-focus="{{ $cadence['focus'] }}"
+    data-blur="{{ $cadence['blur'] }}"
 >
     @if($status === 'checking')
         <div

@@ -62,6 +62,22 @@ test('keepalive component uses wire:poll.keep-alive', function () {
     expect($content)->toMatch('/wire:poll\.\d+s\.keep-alive/');
 });
 
+test('wire:smart-poll always pairs data-focus and data-blur', function () {
+    $violations = [];
+    foreach (bladeFiles() as $file) {
+        $content = file_get_contents($file);
+        preg_match_all('/<[^>]*\bwire:smart-poll\b[^>]*>/s', $content, $matches);
+        foreach ($matches[0] as $tag) {
+            $hasFocus = preg_match('/\bdata-focus=/', $tag);
+            $hasBlur = preg_match('/\bdata-blur=/', $tag);
+            if (! $hasFocus || ! $hasBlur) {
+                $violations[] = basename($file).": {$tag}";
+            }
+        }
+    }
+    expect($violations)->toBeEmpty();
+});
+
 test('no hardcoded dark class on html element', function () {
     $violations = [];
     foreach (bladeFiles() as $file) {
