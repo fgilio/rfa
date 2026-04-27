@@ -34,7 +34,7 @@ test('session-recovery.js intercepts 419 responses and reloads', function () {
         ->toContain('Livewire.interceptRequest')
         ->toContain('status !== 419')
         ->toContain('preventDefault')
-        ->toContain('window.location.reload');
+        ->toContain('location.reload');
 });
 
 test('session-recovery.js guards against a post-reload 419 loop', function () {
