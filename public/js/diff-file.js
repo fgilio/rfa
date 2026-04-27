@@ -45,11 +45,12 @@
         return lines.length ? lines.join('\n').trimEnd() : null;
     }
 
-    function createDiffFile({ fileId, filePath, oldPath = null, isReviewed, singleFile = false }) {
+    function createDiffFile({ fileId, filePath, oldPath = null, status = 'modified', isReviewed, singleFile = false }) {
         return {
             fileId,
             filePath,
             oldPath,
+            status,
             collapsed: singleFile ? false : (Alpine.store('settings')?.collapseAll || isReviewed),
             reviewed: isReviewed,
 
@@ -89,11 +90,12 @@
                 const inSelection = this.formLine !== null
                     && lineNum >= this.formLine
                     && lineNum <= (this.formEndLine ?? this.formLine);
-                this.$dispatch('show-remote-menu', {
+                this.$dispatch('open-remote-menu', {
                     target: 'line',
                     fileId: this.fileId,
                     filePath: this.filePath,
                     oldPath: this.oldPath,
+                    status: this.status,
                     side,
                     start: inSelection ? this.formLine : lineNum,
                     end: inSelection ? (this.formEndLine ?? this.formLine) : null,

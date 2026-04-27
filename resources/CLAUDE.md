@@ -180,7 +180,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `reviewed-files-reverted` | ReviewPage PHP dispatch (`unmarkReviewed`) | DiffFile + ReviewPage Alpine `@window` | `{fileIds: string[]}` |
 | `discard-file` | DiffFile Alpine `$dispatch` | ReviewPage `#[On]` | `{fileId}` |
 | `fingerprint-reset` | ReviewPage PHP dispatch | change-polling Alpine `@window` | none |
-| `show-remote-menu` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{target: 'file'\|'line', fileId, filePath, oldPath, side?, start?, end?, clientX, clientY}` |
+| `open-remote-menu` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{target: 'file'\|'line', fileId, filePath, oldPath, status, side?, start?, end?, clientX, clientY}` |
 
 ### Known Debt
 

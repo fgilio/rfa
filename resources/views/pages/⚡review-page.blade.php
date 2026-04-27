@@ -1021,7 +1021,7 @@ new #[Layout('layouts.app')] class extends Component
         ]])->all()),
         sidebarWidth: $store.settings.sidebarWidth,
         resizing: false,
-        remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '' },
+        remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '', disabled: false, disabledReason: '' },
         showRemoteMenu($event) {
             const d = $event.detail;
             const projectBranch = @js($projectBranch);
@@ -1045,15 +1045,30 @@ new #[Layout('layouts.app')] class extends Component
                 };
                 label = (d.end === null || d.end === d.start) ? 'line ' + d.start : 'lines ' + d.start + '-' + d.end;
             }
+            // Old-side line links always resolve (refOld is where the file existed).
+            // For new-side links we only disable when we're sure: pure working-tree
+            // mode for `added`, commit/range mode for `deleted`. /rw/{from} mixes
+            // working tree and committed history, so we can't tell which side a
+            // status belongs to — leave it enabled rather than mis-disable.
+            const isWorkingTreeOnly = diffTo === null && diffFrom === 'HEAD';
+            const isCommitOrRange = diffTo !== null;
+            const usesNewSideRef = d.target === 'file' || d.side !== 'old';
+            const newSideBroken =
+                (d.status === 'added'   && isWorkingTreeOnly) ||
+                (d.status === 'deleted' && isCommitOrRange);
+            const disabled = usesNewSideRef && newSideBroken;
+            const disabledReason = disabled
+                ? (d.status === 'added' ? 'File not pushed to remote yet' : 'File was removed at this commit')
+                : '';
             const margin = 8;
             const menuW = 220;
-            const menuH = 80;
+            const menuH = disabled ? 110 : 80;
             this.remoteMenu = {
                 open: true,
                 x: Math.min(d.clientX, window.innerWidth - menuW - margin),
                 y: Math.min(d.clientY, window.innerHeight - menuH - margin),
                 projectSlug: @js($projectSlug),
-                type, params, label,
+                type, params, label, disabled, disabledReason,
             };
         },
         closeRemoteMenu() { this.remoteMenu.open = false; },
@@ -1117,7 +1132,7 @@ new #[Layout('layouts.app')] class extends Component
     @file-reviewed-changed.window="reviewedFiles[$event.detail.id] = $event.detail.reviewed"
     @reset-reviewed-files.window="reviewedFiles = {}"
     @reviewed-files-reverted.window="($event.detail.fileIds || []).forEach(id => { reviewedFiles[id] = false })"
-    @show-remote-menu.window="showRemoteMenu($event)"
+    @open-remote-menu.window="showRemoteMenu($event)"
     @copy-to-clipboard.window="
         navigator.clipboard.writeText($event.detail.text).then(() => {
             if ($event.detail.toast) Flux.toast({ text: $event.detail.toast, variant: 'success' });
@@ -1150,11 +1165,13 @@ new #[Layout('layouts.app')] class extends Component
                 class="fixed z-[100] min-w-[200px] py-1 rounded-md border border-gh-border bg-gh-surface shadow-lg"
                 :style="`left:${remoteMenu.x}px; top:${remoteMenu.y}px`"
             >
+                <div x-show="remoteMenu.disabled" x-cloak class="px-3 py-1.5 text-xs font-mono text-gh-muted italic" x-text="remoteMenu.disabledReason"></div>
                 @native
                     <button
                         type="button"
+                        :disabled="remoteMenu.disabled"
                         @click.stop="$wire.openRemote(remoteMenu.projectSlug, remoteMenu.type, remoteMenu.params); closeRemoteMenu()"
-                        class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer"
+                        class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer disabled:text-gh-muted/60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                     >
                         <flux:icon icon="arrow-top-right-on-square" variant="outline" class="!size-3.5 text-gh-muted" />
                         <span>Open </span><span x-text="remoteMenu.label"></span>
@@ -1162,8 +1179,9 @@ new #[Layout('layouts.app')] class extends Component
                 @endnative
                 <button
                     type="button"
+                    :disabled="remoteMenu.disabled"
                     @click.stop="$wire.copyRemoteLink(remoteMenu.projectSlug, remoteMenu.type, remoteMenu.params); closeRemoteMenu()"
-                    class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer"
+                    class="w-full text-left px-3 py-1.5 text-xs font-mono text-gh-text hover:bg-gh-border/40 flex items-center gap-2 cursor-pointer disabled:text-gh-muted/60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                     <flux:icon icon="link" variant="outline" class="!size-3.5 text-gh-muted" />
                     <span>Copy </span><span x-text="remoteMenu.label"></span><span> link</span>
@@ -1539,10 +1557,22 @@ new #[Layout('layouts.app')] class extends Component
                             'commented' => ['zinc', 'C'],
                             default => ['yellow', 'M'],
                         };
+                        $remoteStatus = ($file['isUntracked'] ?? false) ? 'added' : ($file['status'] ?? 'modified');
                     @endphp
                     <div
                         x-show="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}')"
                         x-collapse.duration.200ms
+                        @if($hasRemote)
+                            @contextmenu.prevent="$dispatch('open-remote-menu', {
+                                target: 'file',
+                                fileId: @js($file['id']),
+                                filePath: @js($file['path']),
+                                oldPath: @js($file['oldPath'] ?? null),
+                                status: @js($remoteStatus),
+                                clientX: $event.clientX,
+                                clientY: $event.clientY,
+                            })"
+                        @endif
                         class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-[opacity,colors] duration-150 ease-out"
                         :class="[
                             activeFile === '{{ $file['id'] }}' ? 'bg-gh-link/10 text-gh-link' : 'text-gh-muted',

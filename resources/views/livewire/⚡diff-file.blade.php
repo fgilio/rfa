@@ -219,6 +219,7 @@ new class extends Component {
         fileId: @js($file['id']),
         filePath: @js($file['path']),
         oldPath: @js($file['oldPath'] ?? null),
+        status: @js(($file['isUntracked'] ?? false) ? 'added' : ($file['status'] ?? 'modified')),
         isReviewed: @js($isReviewed ?? false),
         singleFile: @js($singleFile ?? false),
     })"
@@ -243,7 +244,7 @@ new class extends Component {
 >
     {{-- File header --}}
     <div data-testid="file-header"
-         @if($hasRemote) @contextmenu.prevent="$dispatch('show-remote-menu', {target: 'file', fileId, filePath, oldPath, clientX: $event.clientX, clientY: $event.clientY})" @endif
+         @if($hasRemote) @contextmenu.prevent="$dispatch('open-remote-menu', {target: 'file', fileId, filePath, oldPath, status, clientX: $event.clientX, clientY: $event.clientY})" @endif
          class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
 
         {{-- Toggle zone: click anywhere here to expand/collapse --}}
