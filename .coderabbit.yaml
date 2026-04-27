@@ -1,0 +1,102 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: en-US
+
+tone_instructions: >
+  NativePHP desktop app — single local user, no web exposure. Skip auth,
+  multi-tenancy, CSRF, rate limiting, mobile/responsive, public URLs/SEO,
+  network-DB failure modes, Storage::disk('public') semantics.
+
+reviews:
+  profile: chill
+  high_level_summary: true
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+    ignore_title_keywords:
+      - WIP
+      - wip
+      - "chore(release)"
+
+  path_filters:
+    - "!vendor/**"
+    - "!node_modules/**"
+    - "!public/build/**"
+    - "!storage/**"
+    - "!*.lock"
+    - "!composer.lock"
+    - "!package-lock.json"
+
+  path_instructions:
+    - path: "app/Actions/**/*.php"
+      instructions: >
+        Actions are single use-cases callable from any interface (Livewire,
+        Artisan, API). Constructor-inject Services. No UI concerns. Stateful
+        actions (read/write DB) are explicit; otherwise pass data via params.
+        Actions may accept an optional cacheKey for opt-in caching.
+
+    - path: "app/Services/**/*.php"
+      instructions: >
+        Stateless domain services for technical concerns (git ops, diff
+        parsing, markdown formatting, file ignoring). No persistence. Injected
+        into Actions.
+
+    - path: "resources/views/pages/**/*.blade.php"
+      instructions: >
+        Livewire SFC pages (pages:: namespace). Thin UI adapters: handle
+        events, manage component state, delegate to Actions. No business
+        logic. Prefer server-side state over Alpine/JS — Livewire round-trips
+        have negligible latency in the NativePHP renderer.
+
+    - path: "resources/views/livewire/**/*.blade.php"
+      instructions: >
+        Livewire SFC components. Thin UI adapters delegating to Actions. Do
+        not suggest moving comment writes into comments-drawer — it is
+        intentionally a lazy read-model and writes stay on the parent page.
+        Prefer server-side logic over Alpine/JS.
+
+    - path: "app/**/*.php"
+      instructions: >
+        Use the Storage facade for user-generated/external file operations.
+        Casts go in a casts() method on models. Use Laravel collections over
+        foreach/for. Use PHP 8 constructor property promotion and explicit
+        return type declarations.
+
+    - path: "tests/**/*.php"
+      instructions: >
+        Pest 4 syntax (it(), expect()). Use factories with custom states.
+        Most tests are feature tests; arch tests live in tests/Arch.
+        Browser tests use Pest 4 visit/click/fill API.
+
+  tools:
+    # larastan level 6 already runs in CI (composer test:types) — disable
+    # here to avoid duplicate / conflicting findings.
+    phpstan:
+      enabled: false
+    # Not part of this project's stack; would conflict with Pint.
+    phpmd:
+      enabled: false
+    phpcs:
+      enabled: false
+
+  finishing_touches:
+    # Project convention: default to no comments; PHPDoc only when WHY is
+    # non-obvious. Auto-generated docstrings/tests would fight that.
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "CLAUDE.md"
+      - ".github/CLAUDE.md"
+      - "AGENTS.md"
+
+chat:
+  auto_reply: true
