@@ -1294,6 +1294,7 @@ new #[Layout('layouts.app')] class extends Component
                             return `${n} ${noun} changed externally — click to refresh`;
                         },
                         init() {
+                            this.check();
                             this.stopPoll = window.smartPoll.startSmartPoll({
                                 window,
                                 document,
