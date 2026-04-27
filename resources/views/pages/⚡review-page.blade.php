@@ -1269,11 +1269,7 @@ new #[Layout('layouts.app')] class extends Component
                         hasChanges: false,
                         fingerprint: null,
                         currentCount: 0,
-                        timer: null,
-                        // Focus-aware cadence: matches the head-poller / update-banner pattern
-                        // — tight when the user is here, lazy when they're not.
-                        focusedMs: 60000,
-                        blurredMs: 300000,
+                        stopPoll: null,
                         async check() {
                             try {
                                 const res = await fetch('/api/changes/{{ $projectId }}');
@@ -1289,38 +1285,6 @@ new #[Layout('layouts.app')] class extends Component
                                 }
                             } catch {}
                         },
-                        currentInterval() {
-                            if (document.hidden) return null;
-                            return document.hasFocus() ? this.focusedMs : this.blurredMs;
-                        },
-                        scheduleNext() {
-                            clearTimeout(this.timer);
-                            this.timer = null;
-                            const ms = this.currentInterval();
-                            if (ms === null) return;
-                            this.timer = setTimeout(() => this.tick(), ms);
-                        },
-                        async tick() {
-                            if (!document.hidden) await this.check();
-                            this.scheduleNext();
-                        },
-                        startPolling() {
-                            clearTimeout(this.timer);
-                            this.lastFocused = document.hasFocus() && !document.hidden;
-                            this.check();
-                            this.scheduleNext();
-                        },
-                        onFocusChange() {
-                            const focusedNow = document.hasFocus() && !document.hidden;
-                            if (!this.lastFocused && focusedNow) {
-                                this.lastFocused = true;
-                                clearTimeout(this.timer);
-                                this.tick();
-                                return;
-                            }
-                            this.lastFocused = focusedNow;
-                            this.scheduleNext();
-                        },
                         softRefresh() { $wire.softRefresh(); },
                         hardReload() { window.location.reload(); },
                         get tooltip() {
@@ -1328,15 +1292,22 @@ new #[Layout('layouts.app')] class extends Component
                             const n = this.currentCount;
                             const noun = n === 1 ? 'file' : 'files';
                             return `${n} ${noun} changed externally — click to refresh`;
-                        }
+                        },
+                        init() {
+                            this.stopPoll = window.smartPoll.startSmartPoll({
+                                window,
+                                document,
+                                getInterval: () => window.smartPoll.isFocused(document) ? 60000 : (document.hidden ? null : 300000),
+                                onTick: () => this.check(),
+                            });
+                            $store.keymap.register('⌘R', () => this.softRefresh(), { allowInEditable: true });
+                            $store.keymap.register('⌘⇧R', () => this.hardReload(), { allowInEditable: true });
+                        },
+                        destroy() {
+                            if (this.stopPoll) this.stopPoll();
+                        },
                     }"
-                    x-init="startPolling();
-                        $store.keymap.register('⌘R', () => softRefresh(), { allowInEditable: true });
-                        $store.keymap.register('⌘⇧R', () => hardReload(), { allowInEditable: true });"
-                    @focus.window="onFocusChange()"
-                    @blur.window="onFocusChange()"
-                    @visibilitychange.document="onFocusChange()"
-                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; currentCount = 0; startPolling();"
+                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; currentCount = 0; check();"
                     @refresh-completed.window="
                         const n = $event.detail?.changedCount ?? 0;
                         Flux.toast({

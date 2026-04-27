@@ -1,32 +1,13 @@
-/**
- * `wire:smart-poll` — focus-aware Livewire poll directive.
- *
- * Drop-in alternative to `wire:poll` that backs off when the window loses
- * focus and pauses entirely when the document is hidden. Intervals are read
- * fresh from `data-focus`/`data-blur` on every tick, so a component re-render
- * (e.g. status-driven intervals on `update-banner`) updates the cadence
- * without re-attaching the directive.
- *
- * Usage:
- *   <div
- *       wire:smart-poll="poll"
- *       data-focus="10s"
- *       data-blur="5m"
- *   ></div>
- *
- * Durations accept the same suffixes as `wire:poll`: `ms`, `s`, `m`, `h`
- * (default `ms` if unspecified, matching Livewire). Missing or unparseable
- * values pause that mode — useful for "only poll when focused".
- *
- * On regaining focus (window focus or tab visibility) we fire one immediate
- * tick before resuming the focused-cadence interval, so foregrounding feels
- * instant instead of waiting up to a full focused interval.
- */
+// `wire:smart-poll` — focus-aware Livewire poll directive. The directive's
+// public contract lives in `resources/CLAUDE.md` ("Polling"); this file owns
+// the timing primitive `startSmartPoll`, which is also exposed on
+// `window.smartPoll` for Alpine blocks that poll non-Livewire endpoints.
 (function (root, factory) {
     const api = factory();
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api;
     } else if (root) {
+        root.smartPoll = api;
         api.autoInstall(root);
     }
 })(typeof window !== 'undefined' ? window : null, function () {
@@ -46,13 +27,73 @@
     }
 
     /**
-     * Builds the per-element directive callback. Exported separately from the
-     * Livewire registration so tests can drive it without spinning up Livewire.
+     * Drives a focus-aware polling loop. Pauses while the document is hidden,
+     * fires one immediate tick on regaining focus, and serializes overlapping
+     * ticks via an inflight guard.
      *
-     * @param {object} deps
-     * @param {Window}   deps.window
-     * @param {Document} deps.document
+     * @param {object} opts
+     * @param {Window}   opts.window
+     * @param {Document} opts.document
+     * @param {() => number|null} opts.getInterval  ms until next tick, or null to pause.
+     * @param {() => Promise<void>|void} opts.onTick
+     * @returns {() => void} stop() — clears the timer and detaches listeners.
      */
+    function startSmartPoll({ window: win, document: doc, getInterval, onTick }) {
+        let timeoutId = null;
+        let inflight = false;
+        let lastFocused = isFocused(doc);
+
+        function schedule() {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+            const ms = getInterval();
+            if (ms === null) return;
+            timeoutId = setTimeout(tick, ms);
+        }
+
+        async function tick() {
+            if (inflight || doc.hidden) {
+                schedule();
+                return;
+            }
+            inflight = true;
+            try {
+                await onTick();
+            } catch (e) {
+                // Caller surfaces errors elsewhere; we just retry next tick.
+            } finally {
+                inflight = false;
+            }
+            schedule();
+        }
+
+        function onTransition() {
+            const focusedNow = isFocused(doc);
+            if (!lastFocused && focusedNow) {
+                lastFocused = true;
+                clearTimeout(timeoutId);
+                timeoutId = null;
+                tick();
+                return;
+            }
+            lastFocused = focusedNow;
+            schedule();
+        }
+
+        win.addEventListener('focus', onTransition);
+        win.addEventListener('blur', onTransition);
+        doc.addEventListener('visibilitychange', onTransition);
+
+        schedule();
+
+        return function stop() {
+            clearTimeout(timeoutId);
+            win.removeEventListener('focus', onTransition);
+            win.removeEventListener('blur', onTransition);
+            doc.removeEventListener('visibilitychange', onTransition);
+        };
+    }
+
     function createDirectiveHandler(deps) {
         const win = deps.window;
         const doc = deps.document;
@@ -60,65 +101,18 @@
         return function attach({ el, directive, component, cleanup }) {
             const method = ((directive && directive.expression) || '').trim() || 'poll';
 
-            let timeoutId = null;
-            let inflight = false;
-            let lastFocused = isFocused(doc);
-
-            function readInterval() {
-                if (doc.hidden) return null;
-                const attr = doc.hasFocus() ? 'focus' : 'blur';
-                return parseDuration(el.dataset[attr]);
-            }
-
-            function schedule() {
-                clearTimeout(timeoutId);
-                timeoutId = null;
-                const ms = readInterval();
-                if (ms === null) return;
-                timeoutId = setTimeout(tick, ms);
-            }
-
-            async function tick() {
-                if (inflight || doc.hidden) {
-                    schedule();
-                    return;
-                }
-                inflight = true;
-                try {
-                    await component.$wire.call(method);
-                } catch (e) {
-                    // Swallow — Livewire surfaces network errors elsewhere; we just retry next tick.
-                } finally {
-                    inflight = false;
-                }
-                schedule();
-            }
-
-            function onTransition() {
-                const focusedNow = isFocused(doc);
-                if (!lastFocused && focusedNow) {
-                    lastFocused = true;
-                    clearTimeout(timeoutId);
-                    timeoutId = null;
-                    tick();
-                    return;
-                }
-                lastFocused = focusedNow;
-                schedule();
-            }
-
-            win.addEventListener('focus', onTransition);
-            win.addEventListener('blur', onTransition);
-            doc.addEventListener('visibilitychange', onTransition);
-
-            schedule();
-
-            cleanup(() => {
-                clearTimeout(timeoutId);
-                win.removeEventListener('focus', onTransition);
-                win.removeEventListener('blur', onTransition);
-                doc.removeEventListener('visibilitychange', onTransition);
+            const stop = startSmartPoll({
+                window: win,
+                document: doc,
+                getInterval() {
+                    if (doc.hidden) return null;
+                    const attr = doc.hasFocus() ? 'focus' : 'blur';
+                    return parseDuration(el.dataset[attr]);
+                },
+                onTick: () => component.$wire.call(method),
             });
+
+            cleanup(stop);
         };
     }
 
@@ -138,5 +132,5 @@
         }
     }
 
-    return { parseDuration, isFocused, createDirectiveHandler, install, autoInstall };
+    return { parseDuration, isFocused, startSmartPoll, createDirectiveHandler, install, autoInstall };
 });

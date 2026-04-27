@@ -127,7 +127,7 @@ Behavior:
 When NOT to use it:
 - Sub-second cadence requirements (use `wire:poll` directly — but reconsider whether you actually need that).
 - `keep-alive`-style heartbeats — keep using `wire:poll.{N}s.keep-alive`.
-- Pure Alpine timers that don't call into Livewire — they should still respect focus/visibility, but mirror the helper functions in `change-polling` on `⚡review-page.blade.php` instead of going through this directive.
+- Pure Alpine timers that don't call into Livewire — call `window.smartPoll.startSmartPoll({ window, document, getInterval, onTick })` from `init()` and stop it from `destroy()`. Same focus/visibility/inflight semantics as the directive; see `change-polling` on `⚡review-page.blade.php` for the canonical shape.
 
 The arch test `wire:smart-poll always pairs data-focus and data-blur` enforces the contract.
 
