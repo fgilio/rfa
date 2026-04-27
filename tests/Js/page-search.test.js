@@ -1,0 +1,270 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import pageSearch from '../../public/js/page-search.js';
+
+const { escapeRegex, createPageSearch, install } = pageSearch;
+
+// happy-dom does not implement Element#checkVisibility (verified at write
+// time). The TreeWalker filter in markMatches calls it on every text node's
+// parent, so without a polyfill every walk returns zero matches and the
+// suite cannot meaningfully exercise the production logic. We polyfill with
+// a layout-aware-ish stub that respects the two cases we actually test
+// (display:none, [hidden]) and returns true otherwise. Real Chromium uses
+// computed style; happy-dom doesn't have a layout engine so a true polyfill
+// isn't possible here.
+function installCheckVisibilityPolyfill() {
+    Element.prototype.checkVisibility = function () {
+        let el = this;
+        while (el && el.nodeType === 1) {
+            if (el.hasAttribute('hidden')) return false;
+            const style = el.getAttribute('style') || '';
+            if (/display\s*:\s*none/i.test(style)) return false;
+            if (/visibility\s*:\s*hidden/i.test(style)) return false;
+            if (/opacity\s*:\s*0(?!\.)/i.test(style)) return false;
+            el = el.parentElement;
+        }
+        return true;
+    };
+}
+
+function buildPageSearchHarness() {
+    const data = createPageSearch();
+    data.$nextTick = (cb) => cb();
+    data.$refs = { input: null };
+    return data;
+}
+
+describe('escapeRegex', () => {
+    it.each([
+        ['foo', 'foo'],
+        ['foo.bar', 'foo\\.bar'],
+        ['a+b', 'a\\+b'],
+        ['(test)', '\\(test\\)'],
+        ['$^|?*', '\\$\\^\\|\\?\\*'],
+        // Input is a single backslash; expected output is two escaped backslashes.
+        ['no\\backslash', 'no\\\\backslash'],
+    ])('escapes %j as %j', (input, expected) => {
+        expect(escapeRegex(input)).toBe(expected);
+    });
+});
+
+describe('markMatches', () => {
+    let data;
+
+    beforeEach(() => {
+        installCheckVisibilityPolyfill();
+        data = buildPageSearchHarness();
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = '';
+        delete Element.prototype.checkVisibility;
+    });
+
+    it('returns one span per match, wrapped with the match class', () => {
+        document.body.innerHTML = '<p>the cat sat on the cat mat</p>';
+
+        const matches = data.markMatches('cat');
+
+        expect(matches).toHaveLength(2);
+        matches.forEach((span) => {
+            expect(span.tagName).toBe('SPAN');
+            expect(span.classList.contains('rfa-search-match')).toBe(true);
+            expect(span.textContent).toBe('cat');
+        });
+        expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(2);
+    });
+
+    it('matches case-insensitively and preserves original casing in each span', () => {
+        document.body.innerHTML = '<p>Cat cat CAT</p>';
+
+        const matches = data.markMatches('Cat');
+
+        expect(matches).toHaveLength(3);
+        expect(matches.map((m) => m.textContent)).toEqual(['Cat', 'cat', 'CAT']);
+    });
+
+    it('skips text inside script, style, input, textarea, and [data-search-ignore]', () => {
+        document.body.innerHTML = `
+            <p>visible cat one</p>
+            <script>var s = 'cat in script';</script>
+            <style>.cat { color: red; }</style>
+            <input value="cat in input">
+            <textarea>cat in textarea</textarea>
+            <div data-search-ignore>cat ignored</div>
+            <p>visible cat two</p>
+        `;
+
+        const matches = data.markMatches('cat');
+
+        // Only the two visible <p> matches should be wrapped.
+        expect(matches).toHaveLength(2);
+        expect(matches[0].closest('p').textContent).toBe('visible cat one');
+        expect(matches[1].closest('p').textContent).toBe('visible cat two');
+    });
+
+    it('skips text inside elements with display:none', () => {
+        document.body.innerHTML = `
+            <p>visible cat</p>
+            <p style="display: none">hidden cat</p>
+        `;
+
+        const matches = data.markMatches('cat');
+
+        expect(matches).toHaveLength(1);
+        expect(matches[0].closest('p').textContent).toBe('visible cat');
+    });
+
+    it('escapes special regex chars in the query', () => {
+        document.body.innerHTML = '<p>literal . here, but xyz should not match</p>';
+
+        const matches = data.markMatches('.');
+
+        // Only the literal period matches; '.' as a regex would match every char.
+        expect(matches).toHaveLength(1);
+        expect(matches[0].textContent).toBe('.');
+    });
+});
+
+describe('refresh', () => {
+    let data;
+
+    beforeEach(() => {
+        installCheckVisibilityPolyfill();
+        data = buildPageSearchHarness();
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = '';
+        delete Element.prototype.checkVisibility;
+    });
+
+    it('treats a whitespace-only query as empty (no spans, currentMatch reset)', () => {
+        document.body.innerHTML = '<p>cat sat on the mat</p>';
+        data.query = '   ';
+
+        data.refresh();
+
+        expect(data.matchElements).toHaveLength(0);
+        expect(data.currentMatch).toBe(0);
+        expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(0);
+    });
+});
+
+describe('find', () => {
+    let data;
+
+    beforeEach(() => {
+        installCheckVisibilityPolyfill();
+        data = buildPageSearchHarness();
+        document.body.innerHTML = '<p>cat one</p><p>cat two</p><p>cat three</p>';
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = '';
+        delete Element.prototype.checkVisibility;
+    });
+
+    it('wraps forward at the last match and backward at the first', () => {
+        data.query = 'cat';
+        data.refresh();
+
+        expect(data.matchElements).toHaveLength(3);
+        expect(data.currentMatch).toBe(1);
+
+        data.find(false);
+        expect(data.currentMatch).toBe(2);
+
+        data.find(false);
+        expect(data.currentMatch).toBe(3);
+
+        // Wrap forward 3 -> 1.
+        data.find(false);
+        expect(data.currentMatch).toBe(1);
+
+        // Wrap backward 1 -> 3.
+        data.find(true);
+        expect(data.currentMatch).toBe(3);
+
+        data.find(true);
+        expect(data.currentMatch).toBe(2);
+    });
+
+    it('triggers a refresh when matchElements is empty but query is set', () => {
+        data.query = 'cat';
+        // Note: no refresh() call before find(). matchElements starts as [].
+        expect(data.matchElements).toHaveLength(0);
+
+        data.find(false);
+
+        expect(data.matchElements).toHaveLength(3);
+        expect(data.currentMatch).toBe(1);
+    });
+
+    it('is a no-op when query is empty and matchElements is empty', () => {
+        data.query = '';
+
+        data.find(false);
+
+        expect(data.matchElements).toHaveLength(0);
+        expect(data.currentMatch).toBe(0);
+        expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(0);
+    });
+});
+
+describe('clearMarks', () => {
+    let data;
+
+    beforeEach(() => {
+        installCheckVisibilityPolyfill();
+        data = buildPageSearchHarness();
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = '';
+        delete Element.prototype.checkVisibility;
+    });
+
+    it('round-trips: textContent restored, no spans, parent text nodes merged', () => {
+        document.body.innerHTML = '<p>the cat sat on the cat mat</p>';
+        const p = document.querySelector('p');
+        const originalText = p.textContent;
+        const originalChildCount = p.childNodes.length;
+
+        data.markMatches('cat');
+
+        // After marking: text/span/text/span/text — 5 child nodes.
+        expect(p.childNodes.length).toBeGreaterThan(originalChildCount);
+        expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(2);
+
+        data.clearMarks();
+
+        expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(0);
+        expect(p.textContent).toBe(originalText);
+        // normalize() should merge adjacent text nodes back into a single text node.
+        expect(p.childNodes.length).toBe(originalChildCount);
+        expect(data.matchElements).toEqual([]);
+    });
+});
+
+describe('install', () => {
+    afterEach(() => {
+        delete window.Alpine;
+        delete window.__pageSearchAttached;
+    });
+
+    it('registers pageSearch with Alpine and is idempotent', () => {
+        const dataFn = vi.fn();
+        window.Alpine = { data: dataFn };
+
+        expect(install(window)).toBe(true);
+        expect(dataFn).toHaveBeenCalledTimes(1);
+        expect(dataFn).toHaveBeenCalledWith('pageSearch', expect.any(Function));
+
+        expect(install(window)).toBe(false);
+        expect(dataFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('is a no-op when Alpine is not present', () => {
+        expect(install(window)).toBe(false);
+    });
+});

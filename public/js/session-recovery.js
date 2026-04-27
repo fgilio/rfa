@@ -6,22 +6,69 @@
 // recurring (e.g. broken session storage): after one silent reload
 // within 10s, fall through to Livewire's default handler so the user
 // sees a surface they can act on instead of a reload spinner.
-document.addEventListener('livewire:init', () => {
-    Livewire.interceptRequest(({ onError }) => {
-        onError(({ response, preventDefault }) => {
-            if (response.status !== 419) {
-                return;
-            }
+(function (root, factory) {
+    const api = factory();
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
+    } else if (root) {
+        root.sessionRecovery = api;
+        api.autoInstall(root);
+    }
+})(typeof window !== 'undefined' ? window : null, function () {
+    const STORAGE_KEY = '__rfa419RecoveryAt';
+    const RECOVERY_TTL_MS = 10_000;
 
-            const key = '__rfa419RecoveryAt';
-            const lastRecoveryAt = Number(sessionStorage.getItem(key) || 0);
-            if (Date.now() - lastRecoveryAt < 10_000) {
-                return;
-            }
+    /**
+     * Decide whether a failing Livewire response should trigger a silent
+     * reload. Only 419s qualify, and only if we haven't recovered within
+     * the TTL window (so a recurring 419 falls through to Livewire's
+     * default handler instead of reload-looping).
+     *
+     * @param {{ status: number, now: number, lastRecoveryAt: ?number }} args
+     * @returns {boolean}
+     */
+    function shouldRecover({ status, now, lastRecoveryAt }) {
+        if (status !== 419) {
+            return false;
+        }
+        if (now - (lastRecoveryAt || 0) < RECOVERY_TTL_MS) {
+            return false;
+        }
+        return true;
+    }
 
-            sessionStorage.setItem(key, String(Date.now()));
-            preventDefault();
-            window.location.reload();
+    function install(root) {
+        if (typeof root.Livewire === 'undefined' || root.__sessionRecoveryAttached) {
+            return false;
+        }
+        root.__sessionRecoveryAttached = true;
+
+        root.Livewire.interceptRequest(({ onError }) => {
+            onError(({ response, preventDefault }) => {
+                const lastRecoveryAt = Number(
+                    root.sessionStorage.getItem(STORAGE_KEY) || 0
+                );
+
+                if (!shouldRecover({
+                    status: response.status,
+                    now: Date.now(),
+                    lastRecoveryAt,
+                })) {
+                    return;
+                }
+
+                root.sessionStorage.setItem(STORAGE_KEY, String(Date.now()));
+                preventDefault();
+                root.location.reload();
+            });
         });
-    });
+
+        return true;
+    }
+
+    function autoInstall(root) {
+        root.document.addEventListener('livewire:init', () => install(root));
+    }
+
+    return { shouldRecover, install, autoInstall };
 });

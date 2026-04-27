@@ -1,5 +1,13 @@
 // Alpine component for global find-in-page search (Cmd/Ctrl+F)
-(function () {
+(function (root, factory) {
+    const api = factory();
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
+    } else if (root) {
+        root.pageSearch = api;
+        api.autoInstall(root);
+    }
+})(typeof window !== 'undefined' ? window : null, function () {
     const MATCH_CLASS = 'rfa-search-match';
     const CURRENT_CLASS = 'rfa-search-match--current';
     const SKIP_SELECTOR = 'script,style,noscript,iframe,input,textarea,[data-search-ignore]';
@@ -8,8 +16,8 @@
         return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-    function init() {
-        Alpine.data('pageSearch', () => ({
+    function createPageSearch() {
+        return {
             open: false,
             query: '',
             currentMatch: 0,
@@ -168,12 +176,24 @@
                 });
                 return matches;
             },
-        }));
+        };
     }
 
-    if (window.Alpine) {
-        init();
-    } else {
-        document.addEventListener('alpine:init', init);
+    function install(root) {
+        if (root.__pageSearchAttached) return false;
+        if (typeof root.Alpine === 'undefined') return false;
+        root.__pageSearchAttached = true;
+        root.Alpine.data('pageSearch', createPageSearch);
+        return true;
     }
-})();
+
+    function autoInstall(root) {
+        if (root.Alpine) {
+            install(root);
+        } else {
+            root.document.addEventListener('alpine:init', () => install(root));
+        }
+    }
+
+    return { escapeRegex, createPageSearch, install, autoInstall };
+});
