@@ -3,7 +3,6 @@
     x-data="{
         stack: [],
         intervalId: null,
-        coalesceWindowMs: 3000,
 
         get current() { return this.stack[0] ?? null },
         get visible() { return this.current !== null },
@@ -13,36 +12,13 @@
         },
 
         push(detail) {
-            // Coalesce: bursts of same-type 'mark-reviewed' within 3s merge into one
-            // toast so power users marking many files don't see a wall of toasts.
-            const top = this.stack[0];
             const ttl = detail.ttl ?? 10;
-            if (
-                detail.type === 'mark-reviewed'
-                && top && top.type === 'mark-reviewed'
-                && (Date.now() - top.createdAt) < this.coalesceWindowMs
-                && Array.isArray(detail.payload?.filePaths)
-                && Array.isArray(top.payload?.filePaths)
-            ) {
-                // Dedupe so the displayed count never inflates when the same file
-                // is marked → un-marked → marked again within the coalesce window.
-                top.payload.filePaths = Array.from(new Set([
-                    ...top.payload.filePaths,
-                    ...detail.payload.filePaths,
-                ]));
-                top.createdAt = Date.now();
-                top.expiresAt = Date.now() + ttl * 1000;
-                const n = top.payload.filePaths.length;
-                top.message = n === 1
-                    ? '1 file marked as reviewed'
-                    : n + ' files marked as reviewed';
-                return;
-            }
             this.stack.unshift({
                 type: detail.type,
                 payload: detail.payload,
                 message: detail.message ?? 'Action completed',
                 createdAt: Date.now(),
+                ttl,
                 expiresAt: Date.now() + ttl * 1000,
             });
             this.startTicker();
@@ -52,17 +28,30 @@
             const entry = this.stack.shift();
             if (!entry) return;
             $wire.undo(entry.type, entry.payload);
+            this.refreshTopExpiry();
         },
 
         dismiss() {
             this.stack.shift();
+            this.refreshTopExpiry();
             if (!this.stack.length) this.stopTicker();
         },
 
         tick() {
-            const now = Date.now();
-            this.stack = this.stack.filter(e => e.expiresAt > now);
+            if (!this.current) { this.stopTicker(); return; }
+            if (this.current.expiresAt > Date.now()) return;
+            this.stack.shift();
+            this.refreshTopExpiry();
             if (!this.stack.length) this.stopTicker();
+        },
+
+        // Only the visible (topmost) entry counts down. When it leaves the stack,
+        // the next entry surfaces with a fresh TTL so older undos don't silently
+        // expire while a newer one was on screen.
+        refreshTopExpiry() {
+            const top = this.stack[0];
+            if (!top) return;
+            top.expiresAt = Date.now() + top.ttl * 1000;
         },
 
         startTicker() {

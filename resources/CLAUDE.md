@@ -48,9 +48,10 @@ These are the rules of thumb we audit against. They're drawn from Material Desig
 - Reuse the central undo mechanism: dispatch `undo-available` from PHP (`resources/views/livewire/undo-toast.blade.php`) and add a case to `ReviewPage::undo()`. ⌘Z is wired centrally — don't reimplement per-component.
 - Payload shape: `{ type: string, payload: mixed, message: string, ttl?: int }`. Keep `payload` self-contained so the undo handler doesn't need ambient state.
 
-### Coalescing
-- Repeated same-type undo entries within **3 seconds** merge into one stack entry. Avoids toast spam during bursts (e.g., marking 10 files in a row). Implemented in `undo-toast.blade.php`'s `push()`.
-- Counter-pattern: don't coalesce across different types or across long gaps — the user's intent has shifted.
+### Undo stack semantics
+- Each undoable action gets its own stack entry. ⌘Z pops the topmost entry only (LIFO queue), so a single press undoes exactly one action.
+- The toast always shows the most recent entry; older entries surface as you undo down the stack.
+- Don't coalesce bursts of same-type entries into one. The previous "merge mark-reviewed within 3s" rule made one ⌘Z revert many files, which violates the queue contract.
 
 ### Accessibility
 - Honor `prefers-reduced-motion`: the global rule in `resources/css/app.css` collapses transition/animation durations to ~0ms. Don't fight it with inline styles or `!important` overrides.
@@ -60,7 +61,6 @@ These are the rules of thumb we audit against. They're drawn from Material Desig
 
 ### Spatial continuity
 - Items that belong to a list reflow vertically when added/removed; don't slide them in/out horizontally on a vertical list.
-- When hiding many items in a burst, batch-acknowledge (one coalesced toast) rather than animating each individually.
 - Provide an in-place recovery surface for hidden items when feasible (e.g., the "Recently reviewed" sidebar group on `⚡review-page` shows the last 5 marked-reviewed files so the user can un-mark without leaving Hide-reviewed mode).
 
 ### Feedback latency (Doherty Threshold)
@@ -74,7 +74,7 @@ These are the rules of thumb we audit against. They're drawn from Material Desig
 - Animations longer than 400ms or shorter than 100ms.
 - Missing `prefers-reduced-motion` fallback (covered globally now — flag any per-component overrides that bypass it).
 - Destructive or hide-from-view actions without an undo path.
-- Toasts that stack visually (one toast per action) rather than coalescing during bursts.
+- Coalescing distinct user actions into a single undo entry — ⌘Z must undo exactly one action per press.
 - Server round-trip required to render the result of a purely visual toggle.
 - Loss of focus or scroll position when items reflow.
 
