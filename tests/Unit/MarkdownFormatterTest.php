@@ -90,3 +90,70 @@ test('handles file-level comment without line reference', function () {
     expect($md)->toContain($body);
     expect($md)->not->toContain('**Line');
 });
+
+// -- edge cases --
+
+test('preserves unicode and emoji in bodies', function () {
+    $body = 'café 日本語 ✨ — résumé';
+    $comments = [
+        new Comment('id', 'file-abc', 'f.php', DiffSide::Right, 1, 1, $body),
+    ];
+
+    $md = $this->formatter->format($comments, '🎉 ¡hola!', []);
+
+    expect($md)->toContain($body)
+        ->and($md)->toContain('🎉 ¡hola!');
+});
+
+test('passes through fenced code blocks inside a comment body verbatim', function () {
+    $body = "look at this:\n```php\n\$x = 1;\n```\nand this";
+    $comments = [
+        new Comment('id', 'file-abc', 'f.php', DiffSide::Right, 1, 1, $body),
+    ];
+
+    $md = $this->formatter->format($comments, '', []);
+
+    expect($md)->toContain("```php\n\$x = 1;\n```");
+});
+
+test('treats whitespace-only global comment as empty', function () {
+    $md = $this->formatter->format([], "   \n\t", []);
+
+    // Current behavior: whitespace is non-empty, so the section renders.
+    // Lock that in so a future "trim" change is intentional.
+    expect($md)->toContain('## General');
+});
+
+test('skips empty diff-context entries and falls back to the line ref alone', function () {
+    $comments = [
+        new Comment('id', 'file-abc', 'f.php', DiffSide::Right, 10, 10, 'body'),
+    ];
+
+    $md = $this->formatter->format($comments, '', ['f.php:right:10:10' => '']);
+
+    expect($md)->not->toContain('```')
+        ->and($md)->toContain('**Line 10**');
+});
+
+test('renders single-line range when endLine is null', function () {
+    $comments = [
+        new Comment('id', 'file-abc', 'f.php', DiffSide::Right, 7, null, 'body'),
+    ];
+
+    $md = $this->formatter->format($comments, '', []);
+
+    expect($md)->toContain('**Line 7**')
+        ->and($md)->not->toContain('Lines 7-');
+});
+
+test('handles a comment body that is just a newline', function () {
+    $comments = [
+        new Comment('id', 'file-abc', 'f.php', DiffSide::Right, 1, 1, "\n"),
+    ];
+
+    $md = $this->formatter->format($comments, '', []);
+
+    expect($md)->toContain('# Code Review Comments')
+        ->and($md)->toContain('---')
+        ->and(substr($md, -1))->toBe("\n");
+});

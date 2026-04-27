@@ -114,3 +114,85 @@ test('cross-references are consistent between files', function () {
     preg_match('/<!-- json: (.+?) -->/', $firstLine, $matches);
     expect($matches[1])->toBe('.rfa/'.basename($result['json']));
 });
+
+// -- edge cases --
+
+test('escapes quotes and backslashes in JSON bodies', function () {
+    $body = 'has "quotes" and \\ backslashes and `ticks`';
+    $comments = [
+        new Comment('id', 'file-1', 'f.php', DiffSide::Right, 1, 1, $body),
+    ];
+
+    $result = $this->exporter->export($this->tmpDir, $comments, '');
+
+    $raw = File::get($result['json']);
+    expect(json_validate($raw))->toBeTrue();
+
+    $json = json_decode($raw, true);
+    expect($json['comments'][0]['body'])->toBe($body);
+});
+
+test('preserves unicode and emoji round-trip through JSON', function () {
+    $body = 'café 日本語 ✨';
+    $comments = [
+        new Comment('id', 'file-1', 'f.php', DiffSide::Right, 1, 1, $body),
+    ];
+
+    $result = $this->exporter->export($this->tmpDir, $comments, '🎉 hola');
+
+    $json = json_decode(File::get($result['json']), true);
+    expect($json['comments'][0]['body'])->toBe($body)
+        ->and($json['global_comment'])->toBe('🎉 hola');
+});
+
+test('preserves embedded fenced code blocks in markdown output', function () {
+    $body = "see here:\n```php\n\$foo = 'bar';\n```";
+    $comments = [
+        new Comment('id', 'file-1', 'f.php', DiffSide::Right, 1, 1, $body),
+    ];
+
+    $result = $this->exporter->export($this->tmpDir, $comments, '');
+
+    $md = File::get($result['md']);
+    expect($md)->toContain("```php\n\$foo = 'bar';\n```");
+});
+
+test('exports multi-file diff context blocks under their respective headings', function () {
+    $comments = [
+        new Comment('id1', 'file-1', 'a.php', DiffSide::Right, 1, 1, 'body a'),
+        new Comment('id2', 'file-2', 'b.php', DiffSide::Right, 2, 2, 'body b'),
+    ];
+    $context = [
+        'a.php:right:1:1' => '+ snippet a',
+        'b.php:right:2:2' => '+ snippet b',
+    ];
+
+    $result = $this->exporter->export($this->tmpDir, $comments, '', $context);
+
+    $md = File::get($result['md']);
+
+    $aHeading = strpos($md, '## `a.php`');
+    $bHeading = strpos($md, '## `b.php`');
+    $aSnippet = strpos($md, '+ snippet a');
+    $bSnippet = strpos($md, '+ snippet b');
+
+    expect($aHeading)->not->toBeFalse()
+        ->and($bHeading)->not->toBeFalse()
+        ->and($aSnippet)->toBeGreaterThan($aHeading)
+        ->and($aSnippet)->toBeLessThan($bHeading)
+        ->and($bSnippet)->toBeGreaterThan($bHeading);
+});
+
+test('handles an empty comment body without truncating later comments', function () {
+    $comments = [
+        new Comment('id1', 'file-1', 'f.php', DiffSide::Right, 1, 1, ''),
+        new Comment('id2', 'file-1', 'f.php', DiffSide::Right, 5, 5, 'second body'),
+    ];
+
+    $result = $this->exporter->export($this->tmpDir, $comments, '');
+
+    $md = File::get($result['md']);
+    expect($md)->toContain('**Line 1**')
+        ->and($md)->toContain('**Line 5**')
+        ->and($md)->toContain('second body');
+});
