@@ -20,6 +20,7 @@ _Not yet captured. Run `/autoresearch-perf` to begin._
 | `app/Support/GrammarMap.php` | File extension → grammar | Static map |
 | `app/DTOs/DiffLine.php` | Line data container | Immutable DTO |
 | `app/DTOs/Hunk.php` | Hunk data container | Immutable DTO |
+| `resources/views/livewire/⚡diff-file.blade.php` | Diff rendering template | None |
 
 ## Experiments
 

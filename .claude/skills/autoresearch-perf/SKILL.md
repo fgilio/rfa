@@ -100,8 +100,8 @@ Run the compare command. Parse the output table to determine:
 ### 7. Decide: Keep or Revert
 
 **Keep** if:
-- At least one highlighting scenario improved by ≥2%
-- No scenario regressed by more than 5%
+- At least one highlighting scenario improved by ≥2% (i.e. ≤ −2% time change — faster execution shows as a negative percentage; see the JSONL example below)
+- No scenario regressed by more than 5% (i.e. > +5% time change)
 - Tests pass
 
 **Revert** if:
