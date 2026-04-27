@@ -1,7 +1,52 @@
 // Alpine component for livewire/⚡diff-file.blade.php
-(function () {
-    function init() {
-        Alpine.data('diffFile', ({ fileId, filePath, oldPath = null, isReviewed, singleFile = false }) => ({
+(function (root, factory) {
+    const api = factory();
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
+    } else if (root) {
+        root.diffFile = api;
+        api.autoInstall(root);
+    }
+})(typeof window !== 'undefined' ? window : null, function () {
+    // Returns velocity in px/sec; caller multiplies by frame delta. Velocity is
+    // intentionally not clamped: when the cursor leaves the viewport vertically
+    // `depth` exceeds 1 and the page should keep accelerating past 600.
+    function getScrollSpeed({ y, viewportHeight, headerBottom, edgeZone }) {
+        if (y < headerBottom) {
+            return -600;
+        }
+        if (y < headerBottom + edgeZone) {
+            const depth = 1 - (y - headerBottom) / edgeZone;
+            return -(100 + depth * 500);
+        }
+        if (y > viewportHeight - edgeZone) {
+            const depth = 1 - (viewportHeight - y) / edgeZone;
+            return 100 + depth * 500;
+        }
+        return 0;
+    }
+
+    // Reads the rightmost `<td>` of each `tr[data-line-old|new="N"]` row in
+    // [startLine, endLine]. Returns null for file-level comments, null start,
+    // or no matching rows.
+    function extractLineSnippet({ root, side, startLine, endLine }) {
+        if (startLine == null || side === 'file') return null;
+        const attr = side === 'left' ? 'data-line-old' : 'data-line-new';
+        const start = Math.min(startLine, endLine ?? startLine);
+        const end = Math.max(startLine, endLine ?? startLine);
+        const lines = [];
+        for (let n = start; n <= end; n++) {
+            const row = root.querySelector(`tr[${attr}="${n}"]`);
+            if (!row) continue;
+            const cells = row.querySelectorAll('td');
+            const content = cells[cells.length - 1]?.textContent;
+            if (content !== undefined) lines.push(content);
+        }
+        return lines.length ? lines.join('\n').trimEnd() : null;
+    }
+
+    function createDiffFile({ fileId, filePath, oldPath = null, isReviewed, singleFile = false }) {
+        return {
             fileId,
             filePath,
             oldPath,
@@ -242,20 +287,8 @@
             },
 
             _extractLineSnippet(side, startLine, endLine) {
-                if (startLine == null || side === 'file') return null;
-                const attr = side === 'left' ? 'data-line-old' : 'data-line-new';
-                const start = Math.min(startLine, endLine ?? startLine);
-                const end = Math.max(startLine, endLine ?? startLine);
                 const root = this.$el.closest(`[data-file-id="${this.fileId}"]`) ?? this.$el;
-                const lines = [];
-                for (let n = start; n <= end; n++) {
-                    const row = root.querySelector(`tr[${attr}="${n}"]`);
-                    if (!row) continue;
-                    const cells = row.querySelectorAll('td');
-                    const content = cells[cells.length - 1]?.textContent;
-                    if (content !== undefined) lines.push(content);
-                }
-                return lines.length ? lines.join('\n').trimEnd() : null;
+                return extractLineSnippet({ root, side, startLine, endLine });
             },
 
             _ensureScrollLoop() {
@@ -273,33 +306,16 @@
             },
 
             _getScrollSpeed(deltaMs) {
-                const y = this._dragMouseY;
-                const viewportBottom = window.innerHeight;
-
-                // Top edge: area below sticky file header
                 const headerBottom = this._cachedFileHeader
                     ? this._cachedFileHeader.getBoundingClientRect().bottom
                     : 0;
-                const edgeZone = 70;
-
-                if (y < headerBottom) {
-                    // Above sticky header: max speed up
-                    return -600 * (deltaMs / 1000);
-                }
-                if (y < headerBottom + edgeZone) {
-                    // Within top edge zone: proportional speed up
-                    const depth = 1 - (y - headerBottom) / edgeZone;
-                    const speed = 100 + depth * 500; // 100-600 px/s
-                    return -speed * (deltaMs / 1000);
-                }
-                if (y > viewportBottom - edgeZone) {
-                    // Within bottom edge zone: proportional speed down
-                    const depth = 1 - (viewportBottom - y) / edgeZone;
-                    const speed = 100 + depth * 500;
-                    return speed * (deltaMs / 1000);
-                }
-
-                return 0;
+                const velocity = getScrollSpeed({
+                    y: this._dragMouseY,
+                    viewportHeight: window.innerHeight,
+                    headerBottom,
+                    edgeZone: 70,
+                });
+                return velocity * (deltaMs / 1000);
             },
 
             _scrollTick(timestamp) {
@@ -352,8 +368,23 @@
                 this.$dispatch('file-reviewed-changed', { id: this.fileId, reviewed: this.reviewed });
                 this.$wire.dispatch('toggle-reviewed', { filePath: this.filePath });
             },
-        }));
+        };
     }
 
-    window.Alpine ? init() : document.addEventListener('alpine:init', init);
-})();
+    function install(root) {
+        if (typeof root.Alpine === 'undefined' || root.__diffFileAttached) return false;
+        root.__diffFileAttached = true;
+        root.Alpine.data('diffFile', createDiffFile);
+        return true;
+    }
+
+    function autoInstall(root) {
+        if (root.Alpine) {
+            install(root);
+        } else {
+            root.document.addEventListener('alpine:init', () => install(root));
+        }
+    }
+
+    return { getScrollSpeed, extractLineSnippet, createDiffFile, install, autoInstall };
+});
