@@ -11,12 +11,12 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 
 test('renders the empty state when no repos exist', function () {
     Livewire::test('pages::select-repo-page')
-        ->assertSee('No repos yet')
+        ->assertSee('Be in the loop.')
         ->assertStatus(200);
 });
 
 test('select-repo route serves the empty state when no repos exist', function () {
-    $this->get(route('select-repo'))->assertSee('No repos yet');
+    $this->get(route('select-repo'))->assertSee('Be in the loop.');
 });
 
 test('root route redirects to select-repo when no repos exist', function () {

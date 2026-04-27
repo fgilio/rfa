@@ -33,20 +33,20 @@ test('status route returns 404 for missing project', function () {
 
 // -- /api/changes --
 
-test('changes route returns fingerprint json', function () {
+test('changes route returns fingerprint and count json', function () {
     $project = Project::factory()->create();
 
     app()->bind(CheckForChangesAction::class, fn () => new class
     {
-        public function handle(string $repoPath, ?string $globalGitignorePath = null): string
+        public function handle(string $repoPath, ?string $globalGitignorePath = null): array
         {
-            return 'abc123fingerprint';
+            return ['fingerprint' => 'abc123fingerprint', 'count' => 7];
         }
     });
 
     $this->getJson("/api/changes/{$project->id}")
         ->assertOk()
-        ->assertJson(['fingerprint' => 'abc123fingerprint']);
+        ->assertJson(['fingerprint' => 'abc123fingerprint', 'count' => 7]);
 });
 
 test('changes route returns 404 for missing project', function () {

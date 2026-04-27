@@ -12,8 +12,11 @@ final readonly class CheckForChangesAction
         private GitDiffService $gitDiffService,
     ) {}
 
-    public function handle(string $repoPath, ?string $globalGitignorePath = null): string
+    /**
+     * @return array{fingerprint: string, count: int}
+     */
+    public function handle(string $repoPath, ?string $globalGitignorePath = null): array
     {
-        return $this->gitDiffService->getWorkingDirectoryFingerprint($repoPath, $globalGitignorePath);
+        return $this->gitDiffService->getWorkingDirectoryStatus($repoPath, $globalGitignorePath);
     }
 }

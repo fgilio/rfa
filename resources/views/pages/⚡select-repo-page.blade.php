@@ -119,10 +119,9 @@ new #[Layout('layouts.app')] class extends Component
     <main class="flex-1 flex items-center justify-center px-6 py-10">
         @if($totalProjects === 0)
             <div class="text-center">
-                <p class="rfa-logo text-5xl text-gh-muted/30 mb-6">rfa</p>
-                <flux:heading class="mb-3 font-display tracking-brutal">No repos yet</flux:heading>
+                <h1 class="rfa-logo text-7xl text-gh-fg mb-3 tracking-brutal-tight">rfa</h1>
+                <p class="font-mono text-sm text-gh-muted mb-10">Be in the loop.</p>
                 @native
-                    <flux:text variant="subtle" size="sm" class="mb-6">Open a git repository or scan a folder to get started</flux:text>
                     <livewire:add-project-menu variant="expanded" />
                 @else
                     <flux:text variant="subtle" size="sm">Run <code class="font-mono bg-gh-border/50 px-1.5 py-0.5 rounded text-xs">rfa</code> from a git repository to get started</flux:text>

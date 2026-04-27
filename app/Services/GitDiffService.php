@@ -196,6 +196,14 @@ class GitDiffService
 
     public function getWorkingDirectoryFingerprint(string $repoPath, ?string $globalGitignorePath = null): string
     {
+        return $this->getWorkingDirectoryStatus($repoPath, $globalGitignorePath)['fingerprint'];
+    }
+
+    /**
+     * @return array{fingerprint: string, count: int}
+     */
+    public function getWorkingDirectoryStatus(string $repoPath, ?string $globalGitignorePath = null): array
+    {
         $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
 
         $nameStatus = $this->git->run($repoPath, [
@@ -217,7 +225,6 @@ class GitDiffService
             ),
         ]);
 
-        // Filter untracked files through the same excludes as getFileList
         $lines = array_filter($lines, function (string $line) use ($excludes) {
             if (! str_starts_with($line, "?\t")) {
                 return true;
@@ -228,7 +235,10 @@ class GitDiffService
 
         sort($lines);
 
-        return hash('xxh128', implode("\n", $lines));
+        return [
+            'fingerprint' => hash('xxh128', implode("\n", $lines)),
+            'count' => count($lines),
+        ];
     }
 
     public function fileDiffFingerprint(string $repoPath, string $path, ?DiffTarget $target = null): string

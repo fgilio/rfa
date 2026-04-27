@@ -863,6 +863,12 @@ new #[Layout('layouts.app')] class extends Component
         $affectedFileIds->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
     }
 
+    public function startNewReview(): void
+    {
+        $this->submitted = false;
+        $this->exportResult = null;
+    }
+
     // endregion: Review State & Export
 
     // region: Computed, Helpers & Persistence
@@ -1227,33 +1233,7 @@ new #[Layout('layouts.app')] class extends Component
                 @endif
                 <livewire:comments-drawer :repo-path="$repoPath" :project-id="$projectId ?: null" />
             </div>
-            <div class="flex items-center gap-2.5 text-xs">
-                {{-- Stats --}}
-                <span class="font-mono text-gh-muted"
-                    x-text="fileFilter === '' && !hideReviewed
-                        ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
-                        : sourceFileEntries.filter(f => fileMatchesFilter(f.path, f.id)).length + '/{{ count($sourceFiles) }} files'"
-                >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</span>
-                <span class="font-mono text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
-                <span class="font-mono text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
-
-                {{-- Reviewed progress --}}
-                <div x-show="reviewedCount > 0" x-cloak class="flex items-center gap-1.5">
-                    <span class="w-px h-3.5 bg-gh-border"></span>
-                    <div class="flex flex-col items-center min-w-[2.5rem]">
-                        <span data-testid="reviewed-counter" class="font-mono text-gh-muted" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
-                        <div class="w-full h-0.5 bg-gh-border/50 rounded-full overflow-hidden mt-0.5">
-                            <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
-                        </div>
-                    </div>
-                </div>
-
-                @if(count($reviewPairs) > 0)
-                    <span class="font-mono text-xs text-gh-muted px-1.5 py-0.5 rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
-                @endif
-
-                <span class="w-px h-4 bg-gh-border"></span>
-
+            <div class="flex items-center gap-2 text-xs">
                 {{-- Hide reviewed toggle --}}
                 <div x-show="reviewedCount > 0" x-cloak class="grid place-items-center">
                     <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
@@ -1282,10 +1262,13 @@ new #[Layout('layouts.app')] class extends Component
                         x-show="!$store.settings.collapseAll" />
                 </div>
 
+                <span class="w-px h-4 bg-gh-border" aria-hidden="true"></span>
+
                 @if(! $this->isCommitMode())
                     <div data-testid="change-polling" x-data="{
                         hasChanges: false,
                         fingerprint: null,
+                        currentCount: 0,
                         polling: null,
                         async check() {
                             try {
@@ -1294,7 +1277,11 @@ new #[Layout('layouts.app')] class extends Component
                                 if (this.fingerprint === null) {
                                     this.fingerprint = data.fingerprint;
                                 } else if (data.fingerprint !== this.fingerprint) {
-                                    this.hasChanges = true;
+                                    const newCount = data.count ?? 0;
+                                    if (! this.hasChanges || this.currentCount !== newCount) {
+                                        this.hasChanges = true;
+                                        this.currentCount = newCount;
+                                    }
                                 }
                             } catch {}
                         },
@@ -1305,12 +1292,18 @@ new #[Layout('layouts.app')] class extends Component
                             }, 60000);
                         },
                         softRefresh() { $wire.softRefresh(); },
-                        hardReload() { window.location.reload(); }
+                        hardReload() { window.location.reload(); },
+                        get tooltip() {
+                            if (!this.hasChanges) return 'Refresh · ⌘R · ⌘⇧R to hard reload';
+                            const n = this.currentCount;
+                            const noun = n === 1 ? 'file' : 'files';
+                            return `${n} ${noun} changed externally — click to refresh`;
+                        }
                     }"
                     x-init="startPolling();
                         $store.keymap.register('⌘R', () => softRefresh(), { allowInEditable: true });
                         $store.keymap.register('⌘⇧R', () => hardReload(), { allowInEditable: true });"
-                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; clearInterval(polling); startPolling();"
+                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; currentCount = 0; clearInterval(polling); startPolling();"
                     @refresh-completed.window="
                         const n = $event.detail?.changedCount ?? 0;
                         Flux.toast({
@@ -1320,18 +1313,17 @@ new #[Layout('layouts.app')] class extends Component
                     "
                     class="relative flex items-center">
                         <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
-                            tooltip="Refresh · ⌘R · ⌘⇧R to hard reload"
-                            aria-label="Refresh · ⌘R · ⌘⇧R to hard reload"
+                            x-bind:tooltip="tooltip"
+                            x-bind:aria-label="tooltip"
+                            x-bind:class="hasChanges && '!text-amber-500 dark:!text-amber-400'"
                             wire:click.preserve-scroll="softRefresh" />
                         <span x-show="hasChanges" x-cloak
-                            class="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                            class="pointer-events-none absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                             <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
                         </span>
                     </div>
                 @endif
-
-                <span class="w-px h-4 bg-gh-border"></span>
 
                 {{-- Settings --}}
                 @if(! $this->isCommitMode())
@@ -1349,6 +1341,28 @@ new #[Layout('layouts.app')] class extends Component
                 <livewire:theme-switcher />
             </div>
         </header>
+
+        {{-- Status strip: state, not actions --}}
+        <div data-testid="status-strip" class="bg-gh-bg/60 border-b border-gh-border px-5 py-1 flex items-center gap-3 font-mono text-[11px] text-gh-muted">
+            <span
+                x-text="fileFilter === '' && !hideReviewed
+                    ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
+                    : sourceFileEntries.filter(f => fileMatchesFilter(f.path, f.id)).length + '/{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'"
+            >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</span>
+            <span class="text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
+            <span class="text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
+
+            @if(count($reviewPairs) > 0)
+                <span class="px-1.5 py-px rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
+            @endif
+
+            <div x-show="reviewedCount > 0" x-cloak class="ml-auto flex items-center gap-2">
+                <span data-testid="reviewed-counter" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
+                <div class="w-24 h-0.5 bg-gh-border/50 rounded-full overflow-hidden">
+                    <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     {{-- Branch divergence banner + polling island (working-tree mode only) --}}
@@ -1434,10 +1448,11 @@ new #[Layout('layouts.app')] class extends Component
                     <div class="flex items-center justify-between mb-3">
                         <span class="section-label text-gh-muted">Reviews</span>
                         @if(count($reviewPairs) > 1)
-                            <button class="text-gh-muted hover:text-red-400 transition-colors"
-                                @click="if (confirm('Delete all review files?')) $wire.deleteAllReviewPairs()">
-                                <flux:icon icon="trash" variant="outline" class="!size-4" />
-                            </button>
+                            <x-arm-commit-button
+                                icon="trash"
+                                tooltip="Delete all reviews"
+                                @confirmed="$wire.deleteAllReviewPairs()"
+                            />
                         @endif
                     </div>
                     @foreach($reviewPairs as $pair)
@@ -1446,10 +1461,12 @@ new #[Layout('layouts.app')] class extends Component
                             <button @click="scrollToFile('{{ $pair['id'] }}')" class="truncate text-left font-mono" title="{{ $pair['basename'] }}">
                                 {{ $pair['displayName'] }}
                             </button>
-                            <button class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0 ml-auto"
-                                @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')">
-                                <flux:icon icon="trash" variant="outline" class="!size-4" />
-                            </button>
+                            <x-arm-commit-button
+                                icon="trash"
+                                tooltip="Delete review"
+                                @confirmed="$wire.deleteReviewPair('{{ $pair['basename'] }}')"
+                                class="opacity-0 group-hover:opacity-100 transition-opacity ml-auto"
+                            />
                         </div>
                     @endforeach
                     <div class="border-b border-gh-border my-3"></div>
@@ -1577,10 +1594,12 @@ new #[Layout('layouts.app')] class extends Component
                                     class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-green hover:text-green-400 shrink-0">
                                     <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
                                 </button>
-                                <button @click="if (confirm('Permanently delete?')) $wire.permanentlyDeleteTrashed({{ $trashed['id'] }})" title="Delete permanently"
-                                    class="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 shrink-0">
-                                    <flux:icon icon="trash" variant="outline" class="!size-3.5" />
-                                </button>
+                                <x-arm-commit-button
+                                    icon="trash"
+                                    tooltip="Permanently delete"
+                                    @confirmed="$wire.permanentlyDeleteTrashed({{ $trashed['id'] }})"
+                                    class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                />
                             </div>
                         @endforeach
                     </div>
@@ -1641,8 +1660,11 @@ new #[Layout('layouts.app')] class extends Component
                                     <span class="text-[10px] font-mono text-gh-muted">.md</span>
                                 @endif
                                 <span class="ml-auto">
-                                    <flux:button variant="ghost" size="sm" icon="trash" icon:variant="outline"
-                                        @click="if (confirm('Delete this review?')) $wire.deleteReviewPair('{{ $pair['basename'] }}')" />
+                                    <x-arm-commit-button
+                                        icon="trash"
+                                        tooltip="Delete review"
+                                        @confirmed="$wire.deleteReviewPair('{{ $pair['basename'] }}')"
+                                    />
                                 </span>
                             </div>
                             <div x-show="!collapsed" x-collapse.duration.150ms>

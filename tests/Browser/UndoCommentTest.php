@@ -72,11 +72,9 @@ test('clear all comments shows undo toast and click undo restores all', function
 
     addInlineComment($page, 'Bulk undo comment');
 
-    // Auto-accept confirm dialog
-    $page->script('window.confirm = function() { return true; }');
-
-    // Click clear all button
+    // arm-commit pattern: first click arms, second click commits
     $page->page()->getByLabel('Clear all comments')->click();
+    $page->page()->getByLabel('Confirm?')->click();
 
     // Wait for toast
     $page->assertSee('Cleared 1 comment');

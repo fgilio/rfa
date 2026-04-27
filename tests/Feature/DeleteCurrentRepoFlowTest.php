@@ -39,5 +39,5 @@ test('deleting the last repo lands on select-repo empty state', function () {
         ->call('removeProject', $only->id)
         ->assertRedirect(route('select-repo'));
 
-    $this->get(route('select-repo'))->assertSee('No repos yet');
+    $this->get(route('select-repo'))->assertSee('Be in the loop.');
 });

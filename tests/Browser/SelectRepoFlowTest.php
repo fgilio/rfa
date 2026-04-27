@@ -39,5 +39,5 @@ test('deleting the final repo reveals the empty state', function () {
         $page->page()->getByText($this->projectName($i))->first()->waitFor(['state' => 'hidden']);
     }
 
-    $page->assertSee('No repos yet');
+    $page->assertSee('Be in the loop.');
 });
