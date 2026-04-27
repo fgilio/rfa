@@ -1312,11 +1312,15 @@ new #[Layout('layouts.app')] class extends Component
                         });
                     "
                     class="relative flex items-center">
-                        <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
-                            x-bind:tooltip="tooltip"
-                            x-bind:aria-label="tooltip"
-                            x-bind:class="hasChanges && '!text-amber-500 dark:!text-amber-400'"
-                            wire:click.preserve-scroll="softRefresh" />
+                        <flux:tooltip>
+                            <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
+                                x-bind:aria-label="tooltip"
+                                x-bind:class="hasChanges && '!text-amber-500 dark:!text-amber-400'"
+                                wire:click.preserve-scroll="softRefresh" />
+                            <flux:tooltip.content>
+                                <span x-text="tooltip"></span>
+                            </flux:tooltip.content>
+                        </flux:tooltip>
                         <span x-show="hasChanges" x-cloak
                             class="pointer-events-none absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -1328,8 +1332,10 @@ new #[Layout('layouts.app')] class extends Component
                 {{-- Settings --}}
                 @if(! $this->isCommitMode())
                     <flux:dropdown position="bottom" align="end">
-                        <flux:button variant="ghost" size="sm" icon="cog-6-tooth" icon:variant="outline"
-                            aria-label="Settings" />
+                        <flux:tooltip content="Settings">
+                            <flux:button variant="ghost" size="sm" icon="cog-6-tooth" icon:variant="outline"
+                                aria-label="Settings" />
+                        </flux:tooltip>
                         <flux:menu>
                             <flux:menu.item keep-open>
                                 <flux:checkbox wire:model.live="respectGlobalGitignore" label="Global .gitignore" class="text-xs whitespace-nowrap" />
@@ -1545,20 +1551,36 @@ new #[Layout('layouts.app')] class extends Component
                             @endif
                             <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['isSymlink'] ?? false) ? ' -> ' . $file['symlinkTarget'] : '' }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
                         </button>
-                        <span class="shrink-0 size-3.5 flex items-center justify-center">
-                            <flux:icon icon="check" variant="outline"
-                                class="!size-3.5 text-gh-green {{ array_key_exists($file['path'], $reviewedFiles) ? '' : 'invisible' }}"
-                                ::class="{ 'invisible': !reviewedFiles['{{ $file['id'] }}'] }" />
-                        </span>
+                        <flux:tooltip>
+                            <button type="button"
+                                @click.stop="
+                                    const next = !reviewedFiles['{{ $file['id'] }}'];
+                                    $dispatch('file-reviewed-changed', { id: '{{ $file['id'] }}', reviewed: next });
+                                    $wire.dispatch('toggle-reviewed', { filePath: @js($file['path']) });
+                                "
+                                class="shrink-0 size-3.5 flex items-center justify-center transition-[opacity,colors]"
+                                :class="reviewedFiles['{{ $file['id'] }}']
+                                    ? 'text-gh-green hover:text-gh-text'
+                                    : 'text-gh-muted/40 opacity-0 group-hover:opacity-100 hover:text-gh-text'"
+                                x-bind:aria-label="reviewedFiles['{{ $file['id'] }}'] ? 'Un-mark as reviewed' : 'Mark as reviewed'"
+                            >
+                                <flux:icon icon="check" variant="outline" class="!size-3.5" />
+                            </button>
+                            <flux:tooltip.content>
+                                <span x-text="reviewedFiles['{{ $file['id'] }}'] ? 'Un-mark as reviewed' : 'Mark as reviewed'"></span>
+                            </flux:tooltip.content>
+                        </flux:tooltip>
                         <span class="shrink-0 size-3.5 flex items-center justify-center">
                             @if(! $this->isCommitMode() && $file['status'] !== 'commented')
-                                <button
-                                    class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text data-loading:pointer-events-none data-loading:opacity-50"
-                                    title="Discard changes"
-                                    wire:click.stop="discardFileChanges('{{ $file['id'] }}')"
-                                >
-                                    <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
-                                </button>
+                                <flux:tooltip content="Discard changes">
+                                    <button
+                                        class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text data-loading:pointer-events-none data-loading:opacity-50"
+                                        aria-label="Discard changes"
+                                        wire:click.stop="discardFileChanges('{{ $file['id'] }}')"
+                                    >
+                                        <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
+                                    </button>
+                                </flux:tooltip>
                             @endif
                         </span>
                         <span class="ml-auto flex gap-1.5 shrink-0 font-mono">

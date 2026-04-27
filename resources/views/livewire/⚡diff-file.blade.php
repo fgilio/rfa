@@ -229,7 +229,16 @@ new class extends Component {
     @expand-all-files.window="autoExpandedForComment = false; collapsed = false"
     @expand-file.window="if ($event.detail.id === fileId) { autoExpandedForComment = false; collapsed = false }"
     @reset-reviewed-files.window="reviewed = false; collapsed = false"
-    @reviewed-files-reverted.window="if ($event.detail.fileIds?.includes(fileId)) { reviewed = false; collapsed = false }"
+    @reviewed-files-reverted.window="if ($event.detail.fileIds?.includes(fileId)) { reviewed = false }"
+    {{-- Sync from external mark/un-mark (e.g. sidebar file-list button). Self-dispatched
+         events from this component's own checkbox are no-ops since reviewed is already
+         in the same state. Only flips collapsed on mark — un-mark leaves it alone so it
+         doesn't auto-open and feel jarring (matches the cmd+z restore path). --}}
+    @file-reviewed-changed.window="
+        if ($event.detail.id !== fileId) return;
+        reviewed = $event.detail.reviewed;
+        if (reviewed) collapsed = true;
+    "
     class="group"
 >
     {{-- File header --}}
