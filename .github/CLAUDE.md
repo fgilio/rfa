@@ -8,7 +8,6 @@ git push --tags
 ```
 
 - Server-side ruleset "Protect release tags" rejects `v*` tag pushes on any SHA without green CI. Required checks: lint, types, test-js, test-core, test-browser, benchmark-perf. Admin bypass enabled for yanking bad tags. Because the ruleset is the CI gate, `release.yml` only runs the macOS build.
-- **`test-js` was added after the original ruleset was created — add it to the ruleset's required-checks list in GitHub settings before relying on it for release gating.**
 - Build runs on `macos-15` (arm64), publishes to GitHub Releases as **draft**
 - Publish the draft via `gh release edit vX.Y.Z --draft=false`
 - Tag must be `vX.Y.Z` (semver with `v` prefix). Version injected from tag automatically.

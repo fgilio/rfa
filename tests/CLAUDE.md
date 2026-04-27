@@ -14,20 +14,7 @@
 
 ## JS unit tests
 
-For loose scripts in `public/js/` that have non-trivial logic (timers, DOM
-event handling, state machines), add Vitest unit tests under `tests/Js/`.
-
-- File pattern: `tests/Js/*.test.js` (picked up by `vitest.config.js`).
-- Environment: `happy-dom` — provides `window`, `document`, events, but no
-  network. Override `document.hasFocus()` and `document.hidden` via
-  `vi.spyOn` / `Object.defineProperty` when driving focus transitions.
-- Use `vi.useFakeTimers()` + `vi.advanceTimersByTimeAsync(ms)` for any
-  `setTimeout`/`setInterval` logic. Real timers in DOM tests are flaky.
-- Loose scripts are imported via UMD-style detection: the file checks for
-  `module.exports` at evaluation and exports its internals to Node, while
-  still auto-installing in the browser. See `public/js/smart-poll.js`.
-- Don't import the production script in a way that triggers `autoInstall` —
-  the UMD wrapper handles that. Importing the default export is enough.
+See `tests/Js/CLAUDE.md`.
 
 ## Parallel test isolation
 
