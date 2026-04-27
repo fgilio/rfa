@@ -44,7 +44,7 @@
     }
 
     function install(root) {
-        if (root.__keymapAttached) return false;
+        if (typeof root.Alpine === 'undefined' || root.__keymapAttached) return false;
         root.__keymapAttached = true;
 
         const store = {

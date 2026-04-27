@@ -35,6 +35,11 @@
             return { kind: 'navigate', url: `/p/${projectSlug}` };
         }
 
+        // All hashes were unknown to `commits` — treat as nothing real selected.
+        // Without this guard, the single-commit branch below dereferences
+        // `commits[undefined].hash` and throws.
+        if (indices.length === 0) return { kind: 'noop' };
+
         // A non-contiguous commit pick (e.g. A and C without B) would silently pull B
         // into the diff if we just used min/max. Reject it so users have to
         // explicitly include every commit in their range.
@@ -353,9 +358,8 @@
     }
 
     function install(root) {
-        if (root.__branchExplorerAttached) return false;
+        if (typeof root.Alpine === 'undefined' || root.__branchExplorerAttached) return false;
         root.__branchExplorerAttached = true;
-        if (typeof root.Alpine === 'undefined') return false;
         root.Alpine.data('branchExplorer', createBranchExplorer);
         return true;
     }

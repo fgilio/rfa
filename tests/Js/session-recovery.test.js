@@ -20,11 +20,10 @@ describe('shouldRecover', () => {
         ).toBe(true);
     });
 
-    // The original comparison is `now - lastRecoveryAt < 10_000`, so:
-    //   - 9_999 ms ago → recent (suppress reload) → false
-    //   - 10_000 ms ago → boundary, NOT recent → false (since 10_000 < 10_000 is false,
-    //                     so `shouldRecover` returns true; verify exact behavior)
-    //   - 10_001 ms ago → not recent → true
+    // The comparison is strict `<`: `now - lastRecoveryAt < 10_000` means recent.
+    //   - 9_999 ms ago → recent → suppress (false)
+    //   - 10_000 ms ago → boundary, NOT recent → recover (true)
+    //   - 10_001 ms ago → not recent → recover (true)
     it('returns false at exactly 9_999 ms ago (still within TTL)', () => {
         expect(
             shouldRecover({ status: 419, now: 10_000, lastRecoveryAt: 1 })
@@ -153,6 +152,7 @@ describe('install', () => {
         // First 419 reloads.
         errorHandler({ response: { status: 419 }, preventDefault: vi.fn() });
         expect(reloadSpy).toHaveBeenCalledTimes(1);
+        const firstStamp = window.sessionStorage.getItem('__rfa419RecoveryAt');
 
         // 5s later, second 419 should fall through.
         vi.advanceTimersByTime(5_000);
@@ -161,5 +161,39 @@ describe('install', () => {
 
         expect(preventDefault).not.toHaveBeenCalled();
         expect(reloadSpy).toHaveBeenCalledTimes(1);
+        // The suppressed call must NOT re-stamp sessionStorage — otherwise a
+        // flapping 419 would extend the suppression window indefinitely.
+        expect(window.sessionStorage.getItem('__rfa419RecoveryAt')).toBe(firstStamp);
+    });
+});
+
+describe('autoInstall', () => {
+    const { autoInstall } = sessionRecovery;
+
+    afterEach(() => {
+        delete window.Livewire;
+        delete window.__sessionRecoveryAttached;
+    });
+
+    it('installs immediately when Livewire is already present', () => {
+        const interceptRequest = vi.fn();
+        window.Livewire = { interceptRequest };
+
+        autoInstall(window);
+
+        expect(interceptRequest).toHaveBeenCalledTimes(1);
+    });
+
+    it('defers install via livewire:init when Livewire is not yet present', () => {
+        autoInstall(window);
+
+        // Nothing should have happened yet.
+        expect(window.__sessionRecoveryAttached).toBeUndefined();
+
+        const interceptRequest = vi.fn();
+        window.Livewire = { interceptRequest };
+        document.dispatchEvent(new Event('livewire:init'));
+
+        expect(interceptRequest).toHaveBeenCalledTimes(1);
     });
 });

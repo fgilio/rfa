@@ -137,6 +137,22 @@ describe('extractLineSnippet', () => {
             .toBe('first old line\nsecond line\nleft-only line');
     });
 
+    it('skips rows that have zero <td> cells', () => {
+        // Defensive: `cells[cells.length - 1]?.textContent` returns undefined
+        // for a row with no cells, and the `if (content !== undefined)` check
+        // skips it. The row is otherwise indistinguishable from a missing one.
+        document.body.innerHTML = `
+            <table id="empty-row-root">
+                <tr data-line-old="1"><td>num</td><td>has cells</td></tr>
+                <tr data-line-old="2"></tr>
+                <tr data-line-old="3"><td>num</td><td>also has cells</td></tr>
+            </table>
+        `;
+        const emptyRoot = document.getElementById('empty-row-root');
+        expect(extractLineSnippet({ root: emptyRoot, side: 'left', startLine: 1, endLine: 3 }))
+            .toBe('has cells\nalso has cells');
+    });
+
     it('trimEnd strips trailing whitespace from the joined snippet only at the end', () => {
         document.body.innerHTML = `
             <table id="ws-root">
@@ -171,5 +187,17 @@ describe('install', () => {
 
     it('returns false when Alpine is not present', () => {
         expect(install(window)).toBe(false);
+    });
+
+    it('does not poison the attached flag when called before Alpine loads', () => {
+        // First attempt with no Alpine must NOT set the flag, otherwise a
+        // later attempt would silently no-op.
+        expect(install(window)).toBe(false);
+        expect(window.__diffFileAttached).toBeUndefined();
+
+        const data = vi.fn();
+        window.Alpine = { data };
+        expect(install(window)).toBe(true);
+        expect(data).toHaveBeenCalledTimes(1);
     });
 });

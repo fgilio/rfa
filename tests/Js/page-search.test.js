@@ -246,6 +246,83 @@ describe('clearMarks', () => {
     });
 });
 
+describe('close', () => {
+    let data;
+
+    beforeEach(() => {
+        installCheckVisibilityPolyfill();
+        data = buildPageSearchHarness();
+        document.body.innerHTML = '<p>cat sat on the mat</p>';
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = '';
+        delete Element.prototype.checkVisibility;
+    });
+
+    it('clears marks and resets open/query/currentMatch', () => {
+        data.open = true;
+        data.query = 'cat';
+        data.refresh();
+
+        expect(data.matchElements.length).toBeGreaterThan(0);
+        expect(data.currentMatch).toBe(1);
+
+        data.close();
+
+        expect(data.open).toBe(false);
+        expect(data.query).toBe('');
+        expect(data.currentMatch).toBe(0);
+        expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(0);
+    });
+});
+
+describe('updateCurrent', () => {
+    let data;
+
+    beforeEach(() => {
+        installCheckVisibilityPolyfill();
+        Element.prototype.scrollIntoView = vi.fn();
+        data = buildPageSearchHarness();
+        document.body.innerHTML = '<p>cat one</p><p>cat two</p><p>cat three</p>';
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = '';
+        delete Element.prototype.checkVisibility;
+        delete Element.prototype.scrollIntoView;
+    });
+
+    it('writes the "X of Y" badge as data-match-number on the current match only', () => {
+        data.query = 'cat';
+        data.refresh();
+
+        // After refresh, currentMatch === 1; badge should be on the first match.
+        expect(data.matchElements[0].getAttribute('data-match-number')).toBe('1 of 3');
+        expect(data.matchElements[1].hasAttribute('data-match-number')).toBe(false);
+        expect(data.matchElements[2].hasAttribute('data-match-number')).toBe(false);
+
+        data.find(false);
+
+        expect(data.matchElements[0].hasAttribute('data-match-number')).toBe(false);
+        expect(data.matchElements[1].getAttribute('data-match-number')).toBe('2 of 3');
+        expect(data.matchElements[2].hasAttribute('data-match-number')).toBe(false);
+    });
+
+    it('toggles the rfa-search-match--current class to track the current match', () => {
+        data.query = 'cat';
+        data.refresh();
+
+        expect(data.matchElements[0].classList.contains('rfa-search-match--current')).toBe(true);
+        expect(data.matchElements[1].classList.contains('rfa-search-match--current')).toBe(false);
+
+        data.find(false);
+
+        expect(data.matchElements[0].classList.contains('rfa-search-match--current')).toBe(false);
+        expect(data.matchElements[1].classList.contains('rfa-search-match--current')).toBe(true);
+    });
+});
+
 describe('install', () => {
     afterEach(() => {
         delete window.Alpine;
@@ -266,5 +343,15 @@ describe('install', () => {
 
     it('is a no-op when Alpine is not present', () => {
         expect(install(window)).toBe(false);
+    });
+
+    it('does not poison the attached flag when called before Alpine loads', () => {
+        expect(install(window)).toBe(false);
+        expect(window.__pageSearchAttached).toBeUndefined();
+
+        const dataFn = vi.fn();
+        window.Alpine = { data: dataFn };
+        expect(install(window)).toBe(true);
+        expect(dataFn).toHaveBeenCalledTimes(1);
     });
 });

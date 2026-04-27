@@ -145,14 +145,8 @@ describe('decideSelection — input cleaning', () => {
         });
     });
 
-    it('treats a selection of only-unknown hashes as no commits picked', () => {
-        // No real commits selected, no working tree → noop is wrong here:
-        // hasAnySelection is true (selectedHashes.length > 0) but indices is empty.
-        // With workingTreeSelected=false and indices=[], no branch matches the
-        // working-tree-only path; we fall through to the single-commit path
-        // where `commits[indices[0]]` would be undefined. The original code
-        // has the same shape, so we only assert WT+unknown lands on the
-        // working-tree-only branch.
+    it('lands on the working-tree path when WT is paired with only-unknown hashes', () => {
+        // The WT-only branch fires before the unknown-hash guard.
         expect(decide({
             workingTreeSelected: true,
             selectedHashes: ['unknown'],
@@ -160,6 +154,15 @@ describe('decideSelection — input cleaning', () => {
             kind: 'navigate',
             url: '/p/myproj',
         });
+    });
+
+    it.each([
+        ['single unknown', ['unknown']],
+        ['multiple unknown', ['unknown', 'gone']],
+    ])('treats %s without WT as noop', (_label, selectedHashes) => {
+        // Without this guard, the function dereferences `commits[undefined].hash`
+        // in the single-commit branch and throws.
+        expect(decide({ selectedHashes })).toEqual({ kind: 'noop' });
     });
 });
 
@@ -183,5 +186,18 @@ describe('install', () => {
 
     it('is a no-op when Alpine is not present', () => {
         expect(install(window)).toBe(false);
+    });
+
+    it('does not poison the attached flag when called before Alpine loads', () => {
+        // First attempt with no Alpine must NOT set the flag — otherwise a
+        // later attempt once Alpine is ready would silently no-op and the
+        // factory would never register.
+        expect(install(window)).toBe(false);
+        expect(window.__branchExplorerAttached).toBeUndefined();
+
+        const data = vi.fn();
+        window.Alpine = { data };
+        expect(install(window)).toBe(true);
+        expect(data).toHaveBeenCalledTimes(1);
     });
 });

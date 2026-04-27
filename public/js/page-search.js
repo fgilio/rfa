@@ -180,8 +180,7 @@
     }
 
     function install(root) {
-        if (root.__pageSearchAttached) return false;
-        if (typeof root.Alpine === 'undefined') return false;
+        if (typeof root.Alpine === 'undefined' || root.__pageSearchAttached) return false;
         root.__pageSearchAttached = true;
         root.Alpine.data('pageSearch', createPageSearch);
         return true;

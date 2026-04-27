@@ -67,7 +67,11 @@
     }
 
     function autoInstall(root) {
-        root.document.addEventListener('livewire:init', () => install(root));
+        if (root.Livewire) {
+            install(root);
+        } else {
+            root.document.addEventListener('livewire:init', () => install(root));
+        }
     }
 
     return { shouldRecover, install, autoInstall };

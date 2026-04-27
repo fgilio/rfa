@@ -85,6 +85,18 @@ describe('install', () => {
         expect(install(window)).toBe(false);
         expect(store).toHaveBeenCalledTimes(1);
     });
+
+    it('is a no-op when Alpine is not present and does not poison the flag', () => {
+        // If install set the flag before checking Alpine, a later attempt
+        // once Alpine is ready would silently no-op.
+        expect(install(window)).toBe(false);
+        expect(window.__keymapAttached).toBeUndefined();
+
+        const store = vi.fn();
+        window.Alpine = { store };
+        expect(install(window)).toBe(true);
+        expect(store).toHaveBeenCalledTimes(1);
+    });
 });
 
 describe('dispatch', () => {
@@ -149,6 +161,34 @@ describe('dispatch', () => {
         expect(handler).toHaveBeenCalledTimes(1);
 
         textarea.remove();
+    });
+
+    it('routes a keydown to only the matching combo, leaving other handlers untouched', () => {
+        setup();
+        const cmdK = vi.fn();
+        const cmdJ = vi.fn();
+        registeredStore.register('⌘K', cmdK);
+        registeredStore.register('⌘J', cmdJ);
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true, cancelable: true }));
+
+        expect(cmdK).toHaveBeenCalledTimes(1);
+        expect(cmdJ).not.toHaveBeenCalled();
+    });
+
+    it('replaces the prior handler when the same combo is registered twice', () => {
+        // Map-set semantics: re-registering by key overwrites. Without this,
+        // hydration on SPA navigations would stack handlers per visit.
+        setup();
+        const first = vi.fn();
+        const second = vi.fn();
+        registeredStore.register('⌘K', first);
+        registeredStore.register('⌘K', second);
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true, cancelable: true }));
+
+        expect(first).not.toHaveBeenCalled();
+        expect(second).toHaveBeenCalledTimes(1);
     });
 
     it('clears bindings on livewire:navigating so stale shortcuts do not fire', () => {
