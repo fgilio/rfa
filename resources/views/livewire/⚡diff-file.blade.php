@@ -723,17 +723,14 @@ new class extends Component {
                                 $rightAncestors = $right['headingAncestors'] ?? [];
                                 $leftAncestorsJs = $leftAncestors === [] ? null : json_encode($leftAncestors);
                                 $rightAncestorsJs = $rightAncestors === [] ? null : json_encode($rightAncestors);
-                                if ($leftAncestorsJs && $rightAncestorsJs && $leftAncestorsJs === $rightAncestorsJs) {
-                                    $foldExpr = "!isLineFolded($leftAncestorsJs)";
-                                } elseif ($leftAncestorsJs && $rightAncestorsJs) {
-                                    $foldExpr = "!isLineFolded($leftAncestorsJs) && !isLineFolded($rightAncestorsJs)";
-                                } elseif ($leftAncestorsJs) {
-                                    $foldExpr = "!isLineFolded($leftAncestorsJs)";
-                                } elseif ($rightAncestorsJs) {
-                                    $foldExpr = "!isLineFolded($rightAncestorsJs)";
-                                } else {
-                                    $foldExpr = null;
+                                $foldExprs = [];
+                                if ($leftAncestorsJs) {
+                                    $foldExprs[] = "!isLineFolded($leftAncestorsJs)";
                                 }
+                                if ($rightAncestorsJs && $rightAncestorsJs !== $leftAncestorsJs) {
+                                    $foldExprs[] = "!isLineFolded($rightAncestorsJs)";
+                                }
+                                $foldExpr = $foldExprs === [] ? null : implode(' && ', $foldExprs);
 
                                 $leftHeadingId = $left['headingId'] ?? null;
                                 $rightHeadingId = $right['headingId'] ?? null;
@@ -792,24 +789,17 @@ new class extends Component {
                             </tr>
 
                             {{-- Inline comment form (one row per side) --}}
-                            @if($leftLineNum !== null)
-                                <template x-if="showForm && formSide === 'left' && formEndLine === {{ $leftLineNum }}">
-                                    <tr @if($foldExpr) x-show="{{ $foldExpr }}" @endif>
-                                        <td colspan="4" class="p-0">
-                                            <x-comment-form save="submitComment" placeholder="Write a comment..." border-class="border-y" />
-                                        </td>
-                                    </tr>
-                                </template>
-                            @endif
-                            @if($rightLineNum !== null)
-                                <template x-if="showForm && formSide === 'right' && formEndLine === {{ $rightLineNum }}">
-                                    <tr @if($foldExpr) x-show="{{ $foldExpr }}" @endif>
-                                        <td colspan="4" class="p-0">
-                                            <x-comment-form save="submitComment" placeholder="Write a comment..." border-class="border-y" />
-                                        </td>
-                                    </tr>
-                                </template>
-                            @endif
+                            @foreach(['left' => $leftLineNum, 'right' => $rightLineNum] as $formSide => $formSideLineNum)
+                                @if($formSideLineNum !== null)
+                                    <template x-if="showForm && formSide === '{{ $formSide }}' && formEndLine === {{ $formSideLineNum }}">
+                                        <tr @if($foldExpr) x-show="{{ $foldExpr }}" @endif>
+                                            <td colspan="4" class="p-0">
+                                                <x-comment-form save="submitComment" placeholder="Write a comment..." border-class="border-y" />
+                                            </td>
+                                        </tr>
+                                    </template>
+                                @endif
+                            @endforeach
 
                             {{-- Saved comments inline --}}
                             @php

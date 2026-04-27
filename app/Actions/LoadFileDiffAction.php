@@ -89,6 +89,7 @@ final readonly class LoadFileDiffAction
                 'tableAligned' => true,
                 'newFileLineCount' => $newFileLineCount,
                 'headingsAnnotated' => true,
+                'hasSplitRows' => true,
             ];
 
             $result['hunks'] = $this->withSplitRows($result['hunks']);
@@ -104,7 +105,7 @@ final readonly class LoadFileDiffAction
                 && array_key_exists('tableAligned', $cached)
                 && array_key_exists('newFileLineCount', $cached)
                 && array_key_exists('headingsAnnotated', $cached)
-                && $this->cachedHunksHaveSplitRows($cached)
+                && array_key_exists('hasSplitRows', $cached)
             ) {
                 return $cached;
             }
@@ -128,22 +129,5 @@ final readonly class LoadFileDiffAction
         }
 
         return $hunks;
-    }
-
-    /** @param  array<string, mixed>  $cached */
-    private function cachedHunksHaveSplitRows(array $cached): bool
-    {
-        $hunks = $cached['hunks'] ?? [];
-        if ($hunks === []) {
-            return true;
-        }
-
-        foreach ($hunks as $hunk) {
-            if (! array_key_exists('splitRows', $hunk)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 }
