@@ -22,7 +22,14 @@
  * tick before resuming the focused-cadence interval, so foregrounding feels
  * instant instead of waiting up to a full focused interval.
  */
-(function () {
+(function (root, factory) {
+    const api = factory();
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
+    } else if (root) {
+        api.autoInstall(root);
+    }
+})(typeof window !== 'undefined' ? window : null, function () {
     const UNIT_MS = { ms: 1, s: 1000, m: 60000, h: 3600000 };
 
     function parseDuration(value) {
@@ -34,24 +41,32 @@
         return n * UNIT_MS[unit];
     }
 
-    function isFocused() {
-        return !document.hidden && document.hasFocus();
+    function isFocused(doc) {
+        return !doc.hidden && doc.hasFocus();
     }
 
-    function init() {
-        if (typeof window.Livewire === 'undefined' || window.__smartPollAttached) return;
-        window.__smartPollAttached = true;
+    /**
+     * Builds the per-element directive callback. Exported separately from the
+     * Livewire registration so tests can drive it without spinning up Livewire.
+     *
+     * @param {object} deps
+     * @param {Window}   deps.window
+     * @param {Document} deps.document
+     */
+    function createDirectiveHandler(deps) {
+        const win = deps.window;
+        const doc = deps.document;
 
-        window.Livewire.directive('smart-poll', ({ el, directive, component, cleanup }) => {
-            const method = (directive.expression || '').trim() || 'poll';
+        return function attach({ el, directive, component, cleanup }) {
+            const method = ((directive && directive.expression) || '').trim() || 'poll';
 
             let timeoutId = null;
             let inflight = false;
-            let lastFocused = isFocused();
+            let lastFocused = isFocused(doc);
 
             function readInterval() {
-                if (document.hidden) return null;
-                const attr = document.hasFocus() ? 'focus' : 'blur';
+                if (doc.hidden) return null;
+                const attr = doc.hasFocus() ? 'focus' : 'blur';
                 return parseDuration(el.dataset[attr]);
             }
 
@@ -64,7 +79,7 @@
             }
 
             async function tick() {
-                if (inflight || document.hidden) {
+                if (inflight || doc.hidden) {
                     schedule();
                     return;
                 }
@@ -80,7 +95,7 @@
             }
 
             function onTransition() {
-                const focusedNow = isFocused();
+                const focusedNow = isFocused(doc);
                 if (!lastFocused && focusedNow) {
                     lastFocused = true;
                     clearTimeout(timeoutId);
@@ -92,24 +107,36 @@
                 schedule();
             }
 
-            window.addEventListener('focus', onTransition);
-            window.addEventListener('blur', onTransition);
-            document.addEventListener('visibilitychange', onTransition);
+            win.addEventListener('focus', onTransition);
+            win.addEventListener('blur', onTransition);
+            doc.addEventListener('visibilitychange', onTransition);
 
             schedule();
 
             cleanup(() => {
                 clearTimeout(timeoutId);
-                window.removeEventListener('focus', onTransition);
-                window.removeEventListener('blur', onTransition);
-                document.removeEventListener('visibilitychange', onTransition);
+                win.removeEventListener('focus', onTransition);
+                win.removeEventListener('blur', onTransition);
+                doc.removeEventListener('visibilitychange', onTransition);
             });
-        });
+        };
     }
 
-    if (typeof window.Livewire !== 'undefined') {
-        init();
-    } else {
-        document.addEventListener('livewire:init', init);
+    function install(root) {
+        if (typeof root.Livewire === 'undefined' || root.__smartPollAttached) return false;
+        root.__smartPollAttached = true;
+        const handler = createDirectiveHandler({ window: root, document: root.document });
+        root.Livewire.directive('smart-poll', handler);
+        return true;
     }
-})();
+
+    function autoInstall(root) {
+        if (root.Livewire) {
+            install(root);
+        } else {
+            root.document.addEventListener('livewire:init', () => install(root));
+        }
+    }
+
+    return { parseDuration, isFocused, createDirectiveHandler, install, autoInstall };
+});
