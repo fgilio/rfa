@@ -108,6 +108,29 @@ Use `$this->redirect($url, navigate: true)` — not raw `$this->redirect($url)`,
 - Raw `$this->redirect()` or synchronous `window.location` writes from a **nested child** get clobbered by the parent's post-response DOM processing — the server action completes but the browser never navigates. Hit on `add-project-menu` (child of `project-picker`).
 - `Window::get('main')->url(...)` is for main-process listeners (`HandleDeepLink`, `HandleMenuItemClicked`), not in-renderer Livewire actions.
 
+### Polling: prefer `wire:smart-poll` over `wire:poll`
+
+`wire:poll` keeps firing at the same cadence whether or not the user is on the window. With multiple stacked pollers (head-divergence, update-banner, change-detection) that adds up to a constant request stream even on a backgrounded window. Use `wire:smart-poll` (custom directive registered in `public/js/smart-poll.js`) for any new component that doesn't need sub-second responsiveness.
+
+```blade
+<div wire:smart-poll="poll" data-focus="10s" data-blur="5m"></div>
+```
+
+Behavior:
+- `data-focus` runs while `document.hasFocus() && !document.hidden`.
+- `data-blur` runs while the window is unfocused but visible.
+- Polling pauses entirely when `document.hidden`.
+- Refocusing the window fires one immediate tick before resuming the focused cadence — foregrounding feels instant.
+- Intervals are re-read on every tick, so a Blade re-render with new `data-*` values picks up the new cadence on the next tick (see `update-banner.blade.php`'s `pollCadence()` for the status-driven pattern).
+- Durations accept the same suffixes as `wire:poll`: `ms`, `s`, `m`, `h`. Missing values pause that mode (e.g. omit `data-blur` for "only poll while focused").
+
+When NOT to use it:
+- Sub-second cadence requirements (use `wire:poll` directly — but reconsider whether you actually need that).
+- `keep-alive`-style heartbeats — keep using `wire:poll.{N}s.keep-alive`.
+- Pure Alpine timers that don't call into Livewire — call `window.smartPoll.startSmartPoll({ window, document, getInterval, onTick })` from `init()` and stop it from `destroy()`. Same focus/visibility/inflight semantics as the directive; see `change-polling` on `⚡review-page.blade.php` for the canonical shape.
+
+The arch test `wire:smart-poll always pairs data-focus and data-blur` enforces the contract.
+
 ### Parent-Child: Avoid 1+N Re-renders
 
 ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile children (`resources/views/livewire/⚡diff-file.blade.php`) - one per changed file. Livewire re-hydrates ALL children when a parent re-renders. With `#[Reactive]` props, Livewire's JS interceptor bundles every reactive child into every parent request - even if the prop didn't change. This hits `TooManyComponentsException` (default limit ~20) on repos with many files.

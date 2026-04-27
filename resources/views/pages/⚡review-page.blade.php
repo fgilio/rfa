@@ -1269,7 +1269,7 @@ new #[Layout('layouts.app')] class extends Component
                         hasChanges: false,
                         fingerprint: null,
                         currentCount: 0,
-                        polling: null,
+                        stopPoll: null,
                         async check() {
                             try {
                                 const res = await fetch('/api/changes/{{ $projectId }}');
@@ -1285,12 +1285,6 @@ new #[Layout('layouts.app')] class extends Component
                                 }
                             } catch {}
                         },
-                        startPolling() {
-                            this.check();
-                            this.polling = setInterval(() => {
-                                if (!document.hidden) this.check();
-                            }, 60000);
-                        },
                         softRefresh() { $wire.softRefresh(); },
                         hardReload() { window.location.reload(); },
                         get tooltip() {
@@ -1298,12 +1292,23 @@ new #[Layout('layouts.app')] class extends Component
                             const n = this.currentCount;
                             const noun = n === 1 ? 'file' : 'files';
                             return `${n} ${noun} changed externally — click to refresh`;
-                        }
+                        },
+                        init() {
+                            this.check();
+                            this.stopPoll = window.smartPoll.startSmartPoll({
+                                window,
+                                document,
+                                getInterval: () => window.smartPoll.isFocused(document) ? 60000 : (document.hidden ? null : 300000),
+                                onTick: () => this.check(),
+                            });
+                            $store.keymap.register('⌘R', () => this.softRefresh(), { allowInEditable: true });
+                            $store.keymap.register('⌘⇧R', () => this.hardReload(), { allowInEditable: true });
+                        },
+                        destroy() {
+                            if (this.stopPoll) this.stopPoll();
+                        },
                     }"
-                    x-init="startPolling();
-                        $store.keymap.register('⌘R', () => softRefresh(), { allowInEditable: true });
-                        $store.keymap.register('⌘⇧R', () => hardReload(), { allowInEditable: true });"
-                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; currentCount = 0; clearInterval(polling); startPolling();"
+                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; currentCount = 0; check();"
                     @refresh-completed.window="
                         const n = $event.detail?.changedCount ?? 0;
                         Flux.toast({

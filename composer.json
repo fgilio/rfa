@@ -71,8 +71,10 @@
         "test:browser:headed": "@php artisan test --testsuite=Browser --headed",
         "test:perf": "@php artisan rfa:benchmark-perf",
         "test:perf:smoke": "@php artisan test --testsuite=Performance",
+        "test:js": "npm test --silent",
         "test:all": [
             "@composer test",
+            "@composer test:js",
             "@composer test:browser",
             "@composer test:perf:smoke"
         ],

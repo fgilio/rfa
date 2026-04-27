@@ -202,7 +202,7 @@ test('does not render a custom renderer message bridge', function () {
         ->assertDontSeeHtml("window.addEventListener('message'");
 });
 
-test('uses fast polling during download', function () {
+test('uses fast smart-poll during download', function () {
     Cache::put('native-update-state', [
         'status' => 'downloading',
         'version' => '1.2.0',
@@ -210,22 +210,28 @@ test('uses fast polling during download', function () {
     ]);
 
     Livewire::test('update-banner')
-        ->assertSeeHtml('wire:poll.2s');
+        ->assertSeeHtml('wire:smart-poll="refreshState"')
+        ->assertSeeHtml('data-focus="2s"')
+        ->assertSeeHtml('data-blur="30s"');
 });
 
-test('uses fast polling during checking', function () {
+test('uses fast smart-poll during checking', function () {
     Cache::put('native-update-state', ['status' => 'checking'], now()->addSeconds(15));
 
     Livewire::test('update-banner')
-        ->assertSeeHtml('wire:poll.2s');
+        ->assertSeeHtml('wire:smart-poll="refreshState"')
+        ->assertSeeHtml('data-focus="2s"')
+        ->assertSeeHtml('data-blur="30s"');
 });
 
-test('uses idle polling when no state', function () {
+test('uses idle smart-poll when no state', function () {
     Livewire::test('update-banner')
-        ->assertSeeHtml('wire:poll.5s');
+        ->assertSeeHtml('wire:smart-poll="refreshState"')
+        ->assertSeeHtml('data-focus="1m"')
+        ->assertSeeHtml('data-blur="30m"');
 });
 
-test('uses standard polling for passive states', function () {
+test('uses standard smart-poll for passive states', function () {
     Cache::put('native-update-state', [
         'status' => 'ready',
         'version' => '1.2.0',
@@ -233,5 +239,25 @@ test('uses standard polling for passive states', function () {
     ]);
 
     Livewire::test('update-banner')
-        ->assertSeeHtml('wire:poll.30s');
+        ->assertSeeHtml('wire:smart-poll="refreshState"')
+        ->assertSeeHtml('data-focus="30s"')
+        ->assertSeeHtml('data-blur="5m"');
 });
+
+test('pollCadence returns expected pairs per status', function (?string $status, string $focus, string $blur) {
+    if ($status !== null) {
+        Cache::put('native-update-state', ['status' => $status], now()->addMinutes(5));
+    }
+
+    $instance = Livewire::test('update-banner')->instance();
+
+    expect($instance->pollCadence())->toBe(['focus' => $focus, 'blur' => $blur]);
+})->with([
+    'idle (null)' => [null, '1m', '30m'],
+    'checking' => ['checking', '2s', '30s'],
+    'downloading' => ['downloading', '2s', '30s'],
+    'up-to-date' => ['up-to-date', '30s', '5m'],
+    'ready' => ['ready', '30s', '5m'],
+    'error' => ['error', '30s', '5m'],
+    'checked-dev' => ['checked-dev', '30s', '5m'],
+]);

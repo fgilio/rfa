@@ -7,9 +7,14 @@
 - Single-process fallback: `composer test:serial` (when debugging worker isolation)
 - Arch only: `composer test:arch`
 - Browser: `composer test:browser`
+- JS unit (Vitest + happy-dom): `composer test:js`
 - Perf benchmark: `composer test:perf`
 - Perf smoke suite: `composer test:perf:smoke`
 - Full local suite pass: `composer test:all`
+
+## JS unit tests
+
+See `tests/Js/CLAUDE.md`.
 
 ## Parallel test isolation
 

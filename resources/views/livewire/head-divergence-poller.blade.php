@@ -64,4 +64,4 @@ new class extends Component
 };
 ?>
 
-<div wire:poll.2s="poll" class="hidden"></div>
+<div wire:smart-poll="poll" data-focus="10s" data-blur="5m" class="hidden"></div>
