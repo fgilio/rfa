@@ -39,7 +39,7 @@
 <div
     class="diff-line"
     data-type="{{ $type }}"
-    :class="isLineInSelection({{ $lineNum ?? 'null' }}) ? 'line-selected' : ''"
+    :class="isLineSideInSelection({{ $lineNum ?? 'null' }}, @js($lineSide)) ? 'line-selected' : ''"
     @mouseenter="onDragOver({{ $newNum ?? 'null' }}, {{ $oldNum ?? 'null' }})"
     @if($hasRemote && $lineNum !== null) @contextmenu.prevent="onLineContextmenu($event, {{ $lineNum }}, '{{ $lineSide === 'left' ? 'old' : 'new' }}')" @endif
     @if($newNum) data-line-new="{{ $newNum }}" @endif

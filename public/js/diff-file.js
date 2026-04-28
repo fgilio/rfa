@@ -364,10 +364,13 @@
                 return lineNum >= this.formLine && lineNum <= (this.formEndLine ?? this.formLine);
             },
 
-            // Split view: only highlight the side that owns the current selection.
+            // In split mode, remove and add rows live side-by-side and their
+            // line numbers can overlap; only highlight the side that owns the
+            // current selection. Context rows span both sides, so they match
+            // whichever side the drag started on.
             isLineSideInSelection(lineNum, side) {
                 if (lineNum === null) return false;
-                if (this.formSide !== side) return false;
+                if (side !== 'context' && this.formSide !== side) return false;
                 return this.isLineInSelection(lineNum);
             },
 
