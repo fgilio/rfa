@@ -501,7 +501,7 @@ new class extends Component {
                 {!! '<style>' . $diffData['syntaxStyles'] . '</style>' !!}
             @endif
             <template x-if="$store.settings.diffViewMode !== 'split'">
-            <div class="overflow-x-auto">
+            <div data-testid="diff-table-unified" class="overflow-x-auto">
                 <table class="w-full border-collapse font-mono text-xs leading-5" :class="isDragging ? 'select-none' : ''">
                     @if($hasGaps)
                         <tr class="bg-gh-hunk-bg">
@@ -652,13 +652,13 @@ new class extends Component {
 
             {{-- Split (side-by-side) view --}}
             <template x-if="$store.settings.diffViewMode === 'split'">
-            <div class="overflow-x-auto">
+            <div data-testid="diff-table-split" class="overflow-x-auto">
                 <table class="w-full border-collapse font-mono text-xs leading-5 table-fixed" :class="isDragging ? 'select-none' : ''">
                     <colgroup>
-                        <col class="w-[1px]">
-                        <col style="width: calc(50% - 1px)">
-                        <col class="w-[1px]">
-                        <col style="width: calc(50% - 1px)">
+                        <col class="w-12">
+                        <col>
+                        <col class="w-12">
+                        <col>
                     </colgroup>
                     @if($hasGaps)
                         <tr class="bg-gh-hunk-bg">
