@@ -1287,7 +1287,7 @@ new #[Layout('layouts.app')] class extends Component
                         aria-label="Switch to split view"
                         class="col-start-1 row-start-1"
                         @click="$store.settings.diffViewMode = 'split'"
-                        x-show="$store.settings.diffViewMode !== 'split'" />
+                        x-show="$store.settings.diffViewMode !== 'split'" x-cloak />
                     <flux:button variant="ghost" size="sm" icon="bars-3" icon:variant="outline"
                         tooltip="Switch to unified view"
                         aria-label="Switch to unified view"
