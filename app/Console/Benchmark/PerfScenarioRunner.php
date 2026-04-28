@@ -149,12 +149,13 @@ final class PerfScenarioRunner
 
         $start = hrtime(true);
 
+        // Mount-only renders the loading skeleton; `loadFileDiff` triggers the actual diff-grid + syntax-highlight work.
         Livewire::test('diff-file', [
             'file' => $file,
             'repoPath' => '/tmp/perf-repo',
             'projectId' => $project->id,
             'fileComments' => $comments,
-        ]);
+        ])->call('loadFileDiff');
 
         return (hrtime(true) - $start) / 1_000_000;
     }

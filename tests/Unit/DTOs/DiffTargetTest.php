@@ -36,6 +36,17 @@ test('rangeToWorking preserves the from commit with a null to', function () {
         ->and($target->isImmutable())->toBeFalse();
 });
 
+test('fromRefs preserves the from commit when to is null', function () {
+    // Regression: fromRefs($from, null) used to collapse to workingDirectory(),
+    // forcing per-file diffs in range-to-working views to run against HEAD
+    // and silently rendering "No content changes" for committed files.
+    $target = DiffTarget::fromRefs('abc123', null);
+
+    expect($target->from())->toBe('abc123')
+        ->and($target->to())->toBeNull()
+        ->and($target->toDiffArgs())->toBe(['diff', 'abc123']);
+});
+
 test('toDiffArgs emits single-arg diff for range-to-working', function () {
     expect(DiffTarget::rangeToWorking('abc123')->toDiffArgs())->toBe(['diff', 'abc123'])
         ->and(DiffTarget::workingDirectory()->toDiffArgs())->toBe(['diff', 'HEAD'])

@@ -87,6 +87,7 @@ final readonly class LoadFileDiffAction
                 'tableAligned' => true,
                 'newFileLineCount' => $newFileLineCount,
                 'headingsAnnotated' => true,
+                'gridLayout' => true,
             ];
         };
 
@@ -98,6 +99,7 @@ final readonly class LoadFileDiffAction
                 && array_key_exists('tableAligned', $cached)
                 && array_key_exists('newFileLineCount', $cached)
                 && array_key_exists('headingsAnnotated', $cached)
+                && array_key_exists('gridLayout', $cached)
             ) {
                 return $cached;
             }

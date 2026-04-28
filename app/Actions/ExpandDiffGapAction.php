@@ -77,10 +77,10 @@ final readonly class ExpandDiffGapAction
         $gapSize = count($gapLines);
 
         if ($isTrailing) {
-            $lastIdx = count($hunks) - 1;
-            $hunks[$lastIdx]['lines'] = array_merge($hunks[$lastIdx]['lines'], $gapLines);
-            $hunks[$lastIdx]['oldCount'] += $gapSize;
-            $hunks[$lastIdx]['newCount'] += $gapSize;
+            $lastIndex = count($hunks) - 1;
+            $hunks[$lastIndex]['lines'] = array_merge($hunks[$lastIndex]['lines'], $gapLines);
+            $hunks[$lastIndex]['oldCount'] += $gapSize;
+            $hunks[$lastIndex]['newCount'] += $gapSize;
         } elseif ($hunkIndex === 0) {
             $hunks[0]['lines'] = array_merge($gapLines, $hunks[0]['lines']);
             $hunks[0]['oldStart'] -= $gapSize;
@@ -89,9 +89,10 @@ final readonly class ExpandDiffGapAction
             $hunks[0]['newCount'] += $gapSize;
         } elseif ($isPartial) {
             // Partial middle: append to prev hunk, leave current for remaining gap
-            $hunks[$hunkIndex - 1]['lines'] = array_merge($hunks[$hunkIndex - 1]['lines'], $gapLines);
-            $hunks[$hunkIndex - 1]['oldCount'] += $gapSize;
-            $hunks[$hunkIndex - 1]['newCount'] += $gapSize;
+            $prevIndex = $hunkIndex - 1;
+            $hunks[$prevIndex]['lines'] = array_merge($hunks[$prevIndex]['lines'], $gapLines);
+            $hunks[$prevIndex]['oldCount'] += $gapSize;
+            $hunks[$prevIndex]['newCount'] += $gapSize;
         } else {
             // Full middle: merge prev + gap + current into one hunk
             $prev = $hunks[$hunkIndex - 1];

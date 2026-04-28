@@ -30,7 +30,7 @@ test('file comment form appears at top of file body', function () {
     expect($helloFile->getByPlaceholder('File comment', false)->count())->toBe(1);
 
     $formY = $helloFile->getByPlaceholder('File comment', false)->boundingBox()['y'];
-    $diffLineY = $helloFile->locator('td[data-testid="diff-line-number"]')->first()->boundingBox()['y'];
+    $diffLineY = $helloFile->locator('[data-testid="diff-line-number"]')->first()->boundingBox()['y'];
 
     expect($formY)->toBeLessThan($diffLineY);
 });
@@ -106,7 +106,7 @@ test('switching to inline comment clears auto-expand intent', function () {
     collapseAndAutoExpand($page, $helloFile);
 
     // Switch to inline comment (clears autoExpandedForComment via handleLineMousedown)
-    $helloFile->locator('td[data-testid="diff-line-number"]')->first()->click();
+    $helloFile->locator('[data-testid="diff-line-number"]')->first()->click();
     $helloFile->getByPlaceholder('Write a comment', false)->fill('Inline comment');
     $helloFile->getByRole('button', ['name' => 'Save'])->click();
 
@@ -127,7 +127,7 @@ test('saved file comment renders at top of file', function () {
     $page->assertSee('Top-level file note');
 
     $commentY = $helloFile->getByText('Top-level file note')->boundingBox()['y'];
-    $diffLineY = $helloFile->locator('td[data-testid="diff-line-number"]')->first()->boundingBox()['y'];
+    $diffLineY = $helloFile->locator('[data-testid="diff-line-number"]')->first()->boundingBox()['y'];
 
     expect($commentY)->toBeLessThan($diffLineY);
 });

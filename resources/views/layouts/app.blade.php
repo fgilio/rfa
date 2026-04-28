@@ -108,10 +108,71 @@
             text-transform: uppercase;
         }
 
-        .diff-line:hover { background: var(--gh-hover-bg) !important; }
-        .diff-line-num { cursor: pointer; user-select: none; }
-        .diff-line-num:hover { color: rgb(var(--gh-link)); }
-        .line-selected { background: var(--gh-selected-bg) !important; }
+        /* Outer 4-column grid; each hunk is a subgrid wrapper that owns its own
+           grid-auto-flow:dense, so remove+add pairing in split mode is scoped
+           to within the hunk and can't cross hunk boundaries. */
+        .diff-grid { display: grid; min-width: 0; }
+        .diff-grid[data-view-mode="unified"] {
+            grid-template-columns: max-content max-content max-content minmax(0, 1fr);
+        }
+        .diff-grid[data-view-mode="split"] {
+            grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
+        }
+
+        .diff-grid .diff-hunk {
+            display: grid;
+            grid-template-columns: subgrid;
+            grid-column: 1 / -1;
+        }
+        .diff-grid[data-view-mode="split"] .diff-hunk { grid-auto-flow: row dense; }
+
+        /* dense lets cells backfill earlier columns: in split-mode context
+           lines the DOM order is num-old(1), num-new(3), content(2),
+           mirror(4) — without dense, content lands on row 2. */
+        .diff-grid .diff-line { display: grid; grid-template-columns: subgrid; grid-auto-flow: row dense; }
+        .diff-grid[data-view-mode="unified"] .diff-line { grid-column: 1 / -1; }
+        .diff-grid[data-view-mode="split"] .diff-line[data-type="remove"]  { grid-column: 1 / 3; }
+        .diff-grid[data-view-mode="split"] .diff-line[data-type="add"]     { grid-column: 3 / 5; }
+        .diff-grid[data-view-mode="split"] .diff-line[data-type="context"] { grid-column: 1 / -1; }
+
+        .diff-grid .diff-fullspan { grid-column: 1 / -1; }
+        .diff-cell { min-width: 0; }
+        .diff-cell-num {
+            padding: 0 0.5rem;
+            text-align: right;
+            color: rgb(var(--gh-muted) / 0.5);
+            cursor: pointer;
+            user-select: none;
+        }
+        .diff-cell-num:hover { color: rgb(var(--gh-link)); }
+        .diff-cell-prefix { padding: 0 0.25rem; text-align: center; user-select: none; }
+        .diff-cell-content { padding: 0 0.5rem; white-space: pre-wrap; word-break: break-all; }
+
+        /* Unified: cells fill cols 1-4 in source order. */
+        .diff-grid[data-view-mode="unified"] .diff-cell-num-old { grid-column: 1; }
+        .diff-grid[data-view-mode="unified"] .diff-cell-num-new { grid-column: 2; }
+        .diff-grid[data-view-mode="unified"] .diff-cell-prefix  { grid-column: 3; }
+        .diff-grid[data-view-mode="unified"] .diff-cell-content { grid-column: 4; }
+        .diff-grid[data-view-mode="unified"] .diff-cell-content-mirror { display: none; }
+
+        /* Split: each line is a 2-col (remove/add) or 4-col (context) subgrid. */
+        .diff-grid[data-view-mode="split"] .diff-cell-prefix,
+        .diff-grid[data-view-mode="split"] .diff-line[data-type="remove"] .diff-cell-num-new,
+        .diff-grid[data-view-mode="split"] .diff-line[data-type="add"] .diff-cell-num-old { display: none; }
+
+        .diff-grid[data-view-mode="split"] .diff-cell-num-old,
+        .diff-grid[data-view-mode="split"] .diff-line[data-type="add"] .diff-cell-num-new { grid-column: 1; }
+        .diff-grid[data-view-mode="split"] .diff-cell-content { grid-column: 2; }
+        .diff-grid[data-view-mode="split"] .diff-line[data-type="context"] .diff-cell-num-new        { grid-column: 3; }
+        .diff-grid[data-view-mode="split"] .diff-line[data-type="context"] .diff-cell-content-mirror { grid-column: 4; }
+
+        .diff-grid[data-view-mode="split"] .diff-cell-num-new { border-left: 1px solid rgb(var(--gh-border)); }
+
+        /* Cells paint their own bg on add/remove rows (bg-gh-add-bg etc.),
+           which would hide a row-level background. Apply on the cells. */
+        .diff-line:hover .diff-cell { background: var(--gh-hover-bg); }
+        .diff-line.line-selected .diff-cell { background: var(--gh-selected-bg); }
+
         .comment-indicator { position: relative; }
         .comment-indicator::before {
             content: '';

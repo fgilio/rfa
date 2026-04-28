@@ -77,12 +77,12 @@ describe('extractLineSnippet', () => {
 
     beforeEach(() => {
         document.body.innerHTML = `
-            <table id="root">
-                <tr data-line-old="10" data-line-new="10"><td class="num">10</td><td class="content">first old line</td></tr>
-                <tr data-line-old="11" data-line-new="11"><td class="num">11</td><td class="content">second line</td></tr>
-                <tr data-line-old="12"><td class="num">12</td><td class="content">left-only line</td></tr>
-                <tr data-line-new="13"><td class="num">13</td><td class="content">right-only line</td></tr>
-            </table>
+            <div id="root">
+                <div class="diff-line" data-line-old="10" data-line-new="10"><div class="diff-cell-num">10</div><div class="diff-cell-content">first old line</div></div>
+                <div class="diff-line" data-line-old="11" data-line-new="11"><div class="diff-cell-num">11</div><div class="diff-cell-content">second line</div></div>
+                <div class="diff-line" data-line-old="12"><div class="diff-cell-num">12</div><div class="diff-cell-content">left-only line</div></div>
+                <div class="diff-line" data-line-new="13"><div class="diff-cell-num">13</div><div class="diff-cell-content">right-only line</div></div>
+            </div>
         `;
         root = document.getElementById('root');
     });
@@ -112,7 +112,7 @@ describe('extractLineSnippet', () => {
     });
 
     it('returns null when no rows match the side attribute', () => {
-        // No `tr[data-line-new="12"]` exists — that row is left-only.
+        // No `.diff-line[data-line-new="12"]` exists — that row is left-only.
         expect(extractLineSnippet({ root, side: 'right', startLine: 12, endLine: 12 }))
             .toBeNull();
     });
@@ -137,16 +137,16 @@ describe('extractLineSnippet', () => {
             .toBe('first old line\nsecond line\nleft-only line');
     });
 
-    it('skips rows that have zero <td> cells', () => {
-        // Defensive: `cells[cells.length - 1]?.textContent` returns undefined
-        // for a row with no cells, and the `if (content !== undefined)` check
-        // skips it. The row is otherwise indistinguishable from a missing one.
+    it('skips rows that lack a .diff-cell-content', () => {
+        // Defensive: `row.querySelector('.diff-cell-content')?.textContent`
+        // returns undefined when the row has no content cell, and the
+        // `if (content !== undefined)` check skips it.
         document.body.innerHTML = `
-            <table id="empty-row-root">
-                <tr data-line-old="1"><td>num</td><td>has cells</td></tr>
-                <tr data-line-old="2"></tr>
-                <tr data-line-old="3"><td>num</td><td>also has cells</td></tr>
-            </table>
+            <div id="empty-row-root">
+                <div class="diff-line" data-line-old="1"><div class="diff-cell-num">num</div><div class="diff-cell-content">has cells</div></div>
+                <div class="diff-line" data-line-old="2"></div>
+                <div class="diff-line" data-line-old="3"><div class="diff-cell-num">num</div><div class="diff-cell-content">also has cells</div></div>
+            </div>
         `;
         const emptyRoot = document.getElementById('empty-row-root');
         expect(extractLineSnippet({ root: emptyRoot, side: 'left', startLine: 1, endLine: 3 }))
@@ -155,10 +155,10 @@ describe('extractLineSnippet', () => {
 
     it('trimEnd strips trailing whitespace from the joined snippet only at the end', () => {
         document.body.innerHTML = `
-            <table id="ws-root">
-                <tr data-line-old="1"><td>num</td><td>has   interior   spaces</td></tr>
-                <tr data-line-old="2"><td>num</td><td>trailing on last line   </td></tr>
-            </table>
+            <div id="ws-root">
+                <div class="diff-line" data-line-old="1"><div class="diff-cell-num">num</div><div class="diff-cell-content">has   interior   spaces</div></div>
+                <div class="diff-line" data-line-old="2"><div class="diff-cell-num">num</div><div class="diff-cell-content">trailing on last line   </div></div>
+            </div>
         `;
         const wsRoot = document.getElementById('ws-root');
         const result = extractLineSnippet({ root: wsRoot, side: 'left', startLine: 1, endLine: 2 });

@@ -39,7 +39,7 @@ final readonly class DiffTarget
     public static function fromRefs(string $from, ?string $to): self
     {
         return $to === null
-            ? self::workingDirectory()
+            ? self::rangeToWorking($from)
             : new self(from: $from, to: $to);
     }
 

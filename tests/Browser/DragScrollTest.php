@@ -10,7 +10,7 @@ test('dragging toward viewport bottom auto-scrolls and extends selection', funct
     $scrollableFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("scrollable.txt"))');
 
     // Wait for diff to load
-    $scrollableFile->locator('td[data-testid="diff-line-number"]')->first()->waitFor();
+    $scrollableFile->locator('[data-testid="diff-line-number"]')->first()->waitFor();
 
     // Record initial scroll position
     $initialScroll = $page->page()->evaluate('window.scrollY');
@@ -18,7 +18,7 @@ test('dragging toward viewport bottom auto-scrolls and extends selection', funct
     // Mousedown on the first new-line number, then pointermove to bottom edge zone
     $page->script("
         const file = document.querySelector('.group:has([data-testid=\"file-header\"])');
-        const td = file.querySelector('td[data-testid=\"diff-line-number\"]:nth-child(2)');
+        const td = file.querySelector('[data-testid=\"diff-line-number\"].diff-cell-num-new');
         const rect = td.getBoundingClientRect();
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height / 2;
@@ -54,12 +54,12 @@ test('auto-scroll stops when cursor returns to safe zone', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
     $scrollableFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("scrollable.txt"))');
-    $scrollableFile->locator('td[data-testid="diff-line-number"]')->first()->waitFor();
+    $scrollableFile->locator('[data-testid="diff-line-number"]')->first()->waitFor();
 
     // Start drag and move to bottom edge
     $page->script("
         const file = document.querySelector('.group:has([data-testid=\"file-header\"])');
-        const td = file.querySelector('td[data-testid=\"diff-line-number\"]:nth-child(2)');
+        const td = file.querySelector('[data-testid=\"diff-line-number\"].diff-cell-num-new');
         const rect = td.getBoundingClientRect();
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height / 2;
@@ -104,12 +104,12 @@ test('buttons=0 on pointermove ends stuck drag', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
     $scrollableFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("scrollable.txt"))');
-    $scrollableFile->locator('td[data-testid="diff-line-number"]')->first()->waitFor();
+    $scrollableFile->locator('[data-testid="diff-line-number"]')->first()->waitFor();
 
     // Start drag
     $page->script("
         const file = document.querySelector('.group:has([data-testid=\"file-header\"])');
-        const td = file.querySelector('td[data-testid=\"diff-line-number\"]:nth-child(2)');
+        const td = file.querySelector('[data-testid=\"diff-line-number\"].diff-cell-num-new');
         const rect = td.getBoundingClientRect();
 
         td.dispatchEvent(new MouseEvent('mousedown', {

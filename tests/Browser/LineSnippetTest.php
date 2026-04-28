@@ -8,7 +8,7 @@ test('the original line snippet renders when a stored comment becomes unplaced',
     $wdPage = $this->visitAndLoad($this->projectUrl());
 
     $wdNewLine = $wdPage->page()
-        ->locator('tr:has(td:has-text("// Updated with WD change")) td[data-testid="diff-line-number"]:nth-child(2)')
+        ->locator('.diff-line:has(.diff-cell-content:has-text("// Updated with WD change")) .diff-cell-num-new')
         ->first();
     $wdNewLine->waitFor();
     $wdNewLine->click();

@@ -8,6 +8,7 @@ use App\Services\GitFileContentService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
+use Livewire\Blaze\Blaze;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,5 +29,7 @@ class AppServiceProvider extends ServiceProvider
 
         Blade::if('native', fn () => (bool) config('nativephp-internal.running'));
         Blade::if('browser', fn () => ! config('nativephp-internal.running'));
+
+        Blaze::optimize()->in(resource_path('views/components'));
     }
 }

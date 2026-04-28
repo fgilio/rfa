@@ -13,6 +13,7 @@
         Alpine.store('settings', {
             collapseAll: Alpine.$persist(false).as('rfa.collapseAll'),
             sidebarWidth: Alpine.$persist(288).as('rfa.sidebarWidth'),
+            diffViewMode: Alpine.$persist('unified').as('rfa.diffViewMode'),
         });
     }
 

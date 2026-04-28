@@ -5,6 +5,7 @@ use App\Actions\GetFileCopyContentAction;
 use App\Actions\LoadFileDiffAction;
 use App\DTOs\DiffTarget;
 use App\Support\DiffCacheKey;
+use App\View\DiffFileViewModel;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -162,8 +163,7 @@ new class extends Component {
         $visible = $this->getVisibleLineKeys();
 
         foreach ($inlineComments as $c) {
-            $key = ($c['side'] ?? 'right').':'.($c['endLine'] ?? $c['startLine'] ?? 0);
-            if (! isset($visible[$key])) {
+            if (! isset($visible[DiffFileViewModel::anchorKeyFor($c)])) {
                 $this->contextExpanded = true;
                 $this->expandContext();
 
@@ -242,120 +242,14 @@ new class extends Component {
     "
     class="group"
 >
-    {{-- File header --}}
-    <div data-testid="file-header"
-         @if($hasRemote) @contextmenu.prevent="$dispatch('open-remote-menu', {target: 'file', fileId, filePath, oldPath, status, clientX: $event.clientX, clientY: $event.clientY})" @endif
-         class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
+    <x-diff.file-header
+        :file="$file"
+        :diff-data="$diffData"
+        :has-remote="$hasRemote"
+        :diff-to="$diffTo"
+    />
 
-        {{-- Toggle zone: click anywhere here to expand/collapse --}}
-        <div data-testid="toggle-zone"
-             @click="toggleCollapse($event)"
-             class="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer">
-            <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'"
-                    class="text-gh-muted hover:text-gh-text transition-colors">
-                <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
-                <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
-            </button>
-
-            <span class="font-mono text-sm truncate">
-                @if($file['oldPath'])
-                    <span class="text-gh-muted">{{ $file['oldPath'] }} &rarr;</span>
-                @endif
-                {{ $file['path'] }}
-            </span>
-
-            @if($file['isSymlink'] ?? false)
-                <flux:icon icon="link" variant="outline" class="!size-3.5 text-gh-muted shrink-0" aria-hidden="true" />
-                <span class="font-mono text-xs text-gh-muted">&rarr; {{ $file['symlinkTarget'] }}</span>
-            @endif
-        </div>
-
-        {{-- Actions toolbar --}}
-        <div class="flex items-center gap-2 text-xs shrink-0 font-mono">
-            {{-- Secondary actions: ghost icons, brighten on hover --}}
-            <div class="flex items-center gap-0.5 opacity-30 group-hover:opacity-100 transition-opacity">
-                <flux:button
-                    tooltip="Copy file name"
-                    icon="square-2-stack"
-                    icon:variant="outline"
-                    variant="ghost"
-                    size="sm"
-                    @click="$dispatch('copy-to-clipboard', { text: filePath })"
-                />
-
-                @php
-                    $showContentCopy = !($file['isBinary'] ?? false)
-                        && !($file['isSymlink'] ?? false)
-                        && !($diffData['tooLarge'] ?? false);
-                    $isAdded = ($file['status'] ?? '') === 'added' || ($file['isUntracked'] ?? false);
-                    $isDeleted = ($file['status'] ?? '') === 'deleted';
-                @endphp
-                @if($showContentCopy)
-                    <flux:dropdown position="bottom" align="end">
-                        <flux:button icon="ellipsis-vertical" icon:variant="outline" variant="ghost" size="sm" aria-label="Copy content" />
-                        <flux:menu>
-                            <flux:menu.item icon="code-bracket" icon:variant="outline" @click="$wire.copyContent('diff')">
-                                Copy diff
-                            </flux:menu.item>
-                            <flux:menu.item icon="minus" icon:variant="outline" @click="$wire.copyContent('original')" :disabled="$isAdded">
-                                Copy original
-                            </flux:menu.item>
-                            <flux:menu.item icon="plus" icon:variant="outline" @click="$wire.copyContent('new')" :disabled="$isDeleted">
-                                Copy new
-                            </flux:menu.item>
-                        </flux:menu>
-                    </flux:dropdown>
-                @endif
-
-                @if($diffTo === null && ($file['status'] ?? '') !== 'commented')
-                    <flux:button
-                        tooltip="Discard changes"
-                        icon="arrow-uturn-left"
-                        icon:variant="outline"
-                        variant="ghost"
-                        size="sm"
-                        class="data-loading:pointer-events-none data-loading:opacity-50"
-                        wire:click="$dispatch('discard-file', { fileId: @js($file['id']) })"
-                    />
-                @endif
-            </div>
-
-            @if($file['additions'] > 0)
-                <span class="text-gh-green">+{{ $file['additions'] }}</span>
-            @endif
-            @if($file['deletions'] > 0)
-                <span class="text-gh-red">-{{ $file['deletions'] }}</span>
-            @endif
-
-            {{-- Comment indicator: always visible (primary action) --}}
-            <div class="flex items-center gap-0.5">
-                <flux:button
-                    x-ref="fileCommentBtn"
-                    tooltip="Add file comment"
-                    aria-label="Add file comment"
-                    icon="chat-bubble-left"
-                    icon:variant="outline"
-                    variant="ghost"
-                    size="sm"
-                    @click="openFileComment()"
-                />
-                <span
-                    x-show="$wire.fileComments.length"
-                    x-text="$wire.fileComments.length"
-                    class="text-[10px] font-mono text-gh-muted tabular-nums"
-                ></span>
-            </div>
-
-            <flux:tooltip content="Mark as reviewed">
-                <flux:checkbox x-model="reviewed" @change="onReviewedChange()" aria-label="Reviewed" class="cursor-pointer" />
-            </flux:tooltip>
-        </div>
-
-    </div>
-
-    {{-- File body --}}
     <div x-show="!collapsed" x-collapse.duration.150ms>
-        {{-- File-level comment form + saved comments --}}
         <div x-ref="fileCommentForm">
             <template x-if="showForm && formSide === 'file'">
                 <x-comment-form save="submitComment" placeholder="File comment..." border-class="border-b" />
@@ -369,16 +263,13 @@ new class extends Component {
             @endforeach
         </div>
         {{-- Unplaced inline comments: either the anchor-resolver marked them unplaced
-             (content hash mismatch) or the stored line no longer exists in the diff. --}}
+             (content hash mismatch) or the stored line no longer exists in the diff.
+             Skip during lazy-load — getVisibleLineKeys() is empty until $diffData
+             arrives, which would otherwise classify every comment as unplaced. --}}
         @php
-            $visibleLines = $this->getVisibleLineKeys();
-            $unplacedComments = collect($fileComments)->where('side', '!=', 'file')->filter(function ($c) use ($visibleLines) {
-                if (($c['anchorStatus'] ?? null) === 'unplaced') {
-                    return true;
-                }
-                $key = $c['side'] . ':' . ($c['endLine'] ?? $c['startLine'] ?? 0);
-                return !isset($visibleLines[$key]);
-            });
+            $unplacedComments = $diffData === null
+                ? collect()
+                : DiffFileViewModel::unplacedInlineComments($fileComments, $this->getVisibleLineKeys());
         @endphp
         @if($unplacedComments->isNotEmpty())
             @foreach($unplacedComments as $comment)
@@ -486,167 +377,48 @@ new class extends Component {
             </div>
         @else
             @php
-                $commentsByLine = collect($fileComments)
-                    ->where('side', '!=', 'file')
-                    ->where(fn ($c) => ($c['anchorStatus'] ?? 'placed') !== 'unplaced')
-                    ->groupBy(fn($c) => $c['side'] . ':' . $c['endLine']);
-                $hunks = $diffData['hunks'];
-                $lastHunk = end($hunks);
-                $lastHunkEnd = $lastHunk ? $lastHunk['newStart'] + $lastHunk['newCount'] - 1 : 0;
-                $newFileLineCount = $diffData['newFileLineCount'] ?? null;
-                $hasTrailingGap = $newFileLineCount !== null && $lastHunkEnd < $newFileLineCount;
-                $trailingHiddenCount = $hasTrailingGap ? $newFileLineCount - $lastHunkEnd : 0;
-                $hasGaps = count($hunks) > 1 || (count($hunks) === 1 && $hunks[0]['newStart'] > 1) || $hasTrailingGap;
+                $commentsByLine = DiffFileViewModel::commentsByLine($fileComments);
+                ['hunks' => $hunks, 'hasGaps' => $hasGaps, 'hasTrailingGap' => $hasTrailingGap, 'trailingHiddenCount' => $trailingHiddenCount]
+                    = DiffFileViewModel::gapSummary($diffData['hunks'], $diffData['newFileLineCount'] ?? null);
             @endphp
             @if($diffData['syntaxStyles'] ?? '')
                 {!! '<style>' . $diffData['syntaxStyles'] . '</style>' !!}
             @endif
-            <div class="overflow-x-auto">
-                <table class="w-full border-collapse font-mono text-xs leading-5" :class="isDragging ? 'select-none' : ''">
-                    @if($hasGaps)
-                        <tr class="bg-gh-hunk-bg">
-                            <td colspan="4" class="px-4 py-1 text-center">
-                                <button
-                                    wire:click="expandContext"
-                                    wire:loading.attr="disabled"
-                                    wire:target="expandContext"
-                                    class="text-gh-link text-xs hover:underline inline-flex items-center gap-1 disabled:opacity-50"
-                                >
-                                    <flux:icon wire:loading wire:target="expandContext" icon="arrow-path" variant="outline" class="animate-spin" />
-                                    Show full file
-                                </button>
-                            </td>
-                        </tr>
-                    @endif
+            <div
+                data-testid="diff-table"
+                :data-view-mode="$store.settings.diffViewMode"
+                class="diff-grid font-mono text-xs leading-5"
+                :class="isDragging ? 'select-none' : ''"
+            >
+                @if($hasGaps)
+                    <div class="diff-fullspan bg-gh-hunk-bg px-4 py-1 text-center">
+                        <button
+                            wire:click="expandContext"
+                            wire:loading.attr="disabled"
+                            wire:target="expandContext"
+                            class="text-gh-link text-xs hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                        >
+                            <flux:icon wire:loading wire:target="expandContext" icon="arrow-path" variant="outline" class="animate-spin" />
+                            Show full file
+                        </button>
+                    </div>
+                @endif
 
-                    @foreach($diffData['hunks'] as $hunkIndex => $hunk)
-                        {{-- Gap row with expand controls --}}
-                        @if($hunkIndex > 0 || $hunk['newStart'] > 1)
-                            <tr class="bg-gh-hunk-bg">
-                                <td colspan="4" class="py-1.5 text-center text-xs border-y border-dashed border-gh-border/20">
-                                    @if($hunkIndex > 0)
-                                        @php
-                                            $prevHunk = $hunks[$hunkIndex - 1];
-                                            $hiddenCount = $hunk['newStart'] - ($prevHunk['newStart'] + $prevHunk['newCount']);
-                                        @endphp
-                                        <x-tiered-expand-gap :hunk-index="$hunkIndex" :hidden-count="$hiddenCount" />
-                                    @else
-                                        @php $hiddenCount = $hunk['newStart'] - 1; @endphp
-                                        <x-tiered-expand-gap :hunk-index="0" :hidden-count="$hiddenCount" />
-                                    @endif
-                                </td>
-                            </tr>
-                        @elseif($hunk['header'] !== '')
-                            {{-- Hunk header only (no gap) --}}
-                            <tr class="bg-gh-hunk-bg">
-                                <td colspan="4" class="px-4 py-1 text-gh-muted text-xs">
-                                    @@ -{{ $hunk['oldStart'] }} +{{ $hunk['newStart'] }} @@
-                                    <span class="text-gh-muted/60">{{ $hunk['header'] }}</span>
-                                </td>
-                            </tr>
-                        @endif
+                @foreach($hunks as $hunkIndex => $hunk)
+                    <x-diff.hunk
+                        :hunk="$hunk"
+                        :hunk-index="$hunkIndex"
+                        :prev-hunk="$hunkIndex > 0 ? $hunks[$hunkIndex - 1] : null"
+                        :has-remote="$hasRemote"
+                        :comments-by-line="$commentsByLine"
+                    />
+                @endforeach
 
-                        @foreach($hunk['lines'] as $line)
-                            @php
-                                $lineNum = $line['newLineNum'] ?? $line['oldLineNum'];
-                                [$bgClass, $numBgClass, $prefix] = match($line['type']) {
-                                    'add' => ['bg-gh-add-bg', 'bg-gh-add-line', '+'],
-                                    'remove' => ['bg-gh-del-bg', 'bg-gh-del-line', '-'],
-                                    default => ['', '', ' '],
-                                };
-                                $lineSide = match($line['type']) {
-                                    'remove' => 'left',
-                                    'add' => 'right',
-                                    default => 'context',
-                                };
-                                $headingId = $line['headingId'] ?? null;
-                                $headingAncestors = $line['headingAncestors'] ?? [];
-                                $ancestorJs = $headingAncestors === [] ? null : json_encode($headingAncestors);
-                            @endphp
-                            <tr
-                                class="diff-line {{ $bgClass }}"
-                                :class="isLineInSelection({{ $lineNum ?? 'null' }}) ? 'line-selected' : ''"
-                                @mouseenter="onDragOver({{ $line['newLineNum'] ?? 'null' }}, {{ $line['oldLineNum'] ?? 'null' }})"
-                                @if($hasRemote && $lineNum !== null) @contextmenu.prevent="onLineContextmenu($event, {{ $lineNum }}, '{{ $lineSide === 'left' ? 'old' : 'new' }}')" @endif
-                                @if($line['newLineNum']) data-line-new="{{ $line['newLineNum'] }}" @endif
-                                @if($line['oldLineNum']) data-line-old="{{ $line['oldLineNum'] }}" @endif
-                                @if($ancestorJs) x-show="!isLineFolded({{ $ancestorJs }})" @endif
-                            >
-                                {{-- Old line number --}}
-                                <td data-testid="diff-line-number" class="diff-line-num w-[1px] px-2 text-right text-gh-muted/50 select-none cursor-pointer {{ $numBgClass }}"
-                                    @if($line['oldLineNum'])
-                                        @mousedown.prevent="handleLineMousedown({{ $line['oldLineNum'] }}, 'left', $event)"
-                                    @endif
-                                >
-                                    {{ $line['oldLineNum'] ?? '' }}
-                                </td>
-
-                                {{-- New line number --}}
-                                <td data-testid="diff-line-number" class="diff-line-num w-[1px] px-2 text-right text-gh-muted/50 select-none cursor-pointer {{ $numBgClass }}"
-                                    @if($line['newLineNum'])
-                                        @mousedown.prevent="handleLineMousedown({{ $line['newLineNum'] }}, 'right', $event)"
-                                    @endif
-                                >
-                                    {{ $line['newLineNum'] ?? '' }}
-                                </td>
-
-                                {{-- Prefix --}}
-                                <td class="w-[1px] px-1 text-center select-none {{ $line['type'] === 'add' ? 'text-gh-green' : ($line['type'] === 'remove' ? 'text-gh-red' : 'text-gh-muted/30') }}">
-                                    {{ $prefix }}
-                                </td>
-
-                                {{-- Content --}}
-                                <td class="px-2 whitespace-pre-wrap break-all">@if($headingId !== null)<button
-                                        type="button"
-                                        data-testid="heading-fold-toggle"
-                                        data-heading-id="{{ $headingId }}"
-                                        @click.stop="toggleHeadingFold({{ $headingId }})"
-                                        :aria-label="foldedHeadings[{{ $headingId }}] ? 'Expand section' : 'Collapse section'"
-                                        :aria-expanded="!foldedHeadings[{{ $headingId }}]"
-                                        class="inline-flex align-middle -my-0.5 mr-1 size-4 items-center justify-center text-gh-muted/60 hover:text-gh-text"
-                                    ><flux:icon icon="chevron-down" variant="outline" class="!size-3" x-show="!foldedHeadings[{{ $headingId }}]" /><flux:icon icon="chevron-right" variant="outline" class="!size-3" x-show="foldedHeadings[{{ $headingId }}]" x-cloak /></button>@endif{!! $line['highlightedContent'] ?? e($line['content']) !!}</td>
-                            </tr>
-
-                            {{-- Inline comment form (shows after the target line) --}}
-                            @if($lineNum !== null)
-                                <template x-if="showForm && formEndLine === {{ $lineNum }} && formSide !== 'file' && (@js($lineSide) === 'context' || formSide === @js($lineSide))">
-                                    <tr @if($ancestorJs) x-show="!isLineFolded({{ $ancestorJs }})" @endif>
-                                        <td colspan="4" class="p-0">
-                                            <x-comment-form save="submitComment" placeholder="Write a comment..." border-class="border-y" />
-                                        </td>
-                                    </tr>
-                                </template>
-                            @endif
-
-                            {{-- Show saved comments inline --}}
-                            @php
-                                $lineComments = collect();
-                                if ($lineSide === 'context') {
-                                    $lineComments = collect()
-                                        ->merge($commentsByLine["left:{$line['oldLineNum']}"] ?? collect())
-                                        ->merge($commentsByLine["right:{$line['newLineNum']}"] ?? collect());
-                                } elseif ($lineNum !== null) {
-                                    $lineComments = $commentsByLine["{$lineSide}:{$lineNum}"] ?? collect();
-                                }
-                            @endphp
-                            @foreach($lineComments as $comment)
-                                <tr x-data x-show="editingCommentId !== '{{ $comment['id'] }}'@if($ancestorJs) && !isLineFolded({{ $ancestorJs }})@endif">
-                                    <td colspan="4" class="p-0">
-                                        <x-comment-display :comment="$comment" border-class="border-y" />
-                                    </td>
-                                </tr>
-                            @endforeach
-                        @endforeach
-                    @endforeach
-
-                    @if($hasTrailingGap)
-                        <tr class="bg-gh-hunk-bg">
-                            <td colspan="4" class="py-1.5 text-center text-xs border-y border-dashed border-gh-border/20">
-                                <x-tiered-expand-gap :hunk-index="count($hunks)" :hidden-count="$trailingHiddenCount" />
-                            </td>
-                        </tr>
-                    @endif
-                </table>
+                @if($hasTrailingGap)
+                    <div class="diff-fullspan bg-gh-hunk-bg py-1.5 text-center text-xs border-y border-dashed border-gh-border/20">
+                        <x-tiered-expand-gap :hunk-index="count($hunks)" :hidden-count="$trailingHiddenCount" />
+                    </div>
+                @endif
             </div>
         @endif
 

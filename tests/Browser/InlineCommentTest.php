@@ -98,13 +98,13 @@ test('comments on left and right sides at same line render independently', funct
     $helloFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("hello.php"))');
 
     // Click left-side line number on a removed row (old line column)
-    $helloFile->locator('tr.bg-gh-del-bg > td[data-testid="diff-line-number"]:first-child')->first()->click();
+    $helloFile->locator('.diff-line[data-type="remove"] .diff-cell-num-old')->first()->click();
     $helloFile->getByPlaceholder('Write a comment', false)->first()->fill('Left side comment');
     $helloFile->getByRole('button', ['name' => 'Save'])->first()->click();
     $page->assertSee('Left side comment');
 
     // Click right-side line number on an added row (new line column)
-    $helloFile->locator('tr.bg-gh-add-bg > td[data-testid="diff-line-number"]:nth-child(2)')->first()->click();
+    $helloFile->locator('.diff-line[data-type="add"] .diff-cell-num-new')->first()->click();
     $helloFile->getByPlaceholder('Write a comment', false)->first()->fill('Right side comment');
     $helloFile->getByRole('button', ['name' => 'Save'])->first()->click();
 
@@ -119,7 +119,7 @@ test('clicking line on removal row opens exactly one comment form', function () 
     $helloFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("hello.php"))');
 
     // Click left-side line number on a removed row - line exists on both sides
-    $helloFile->locator('tr.bg-gh-del-bg > td[data-testid="diff-line-number"]:first-child')->first()->click();
+    $helloFile->locator('.diff-line[data-type="remove"] .diff-cell-num-old')->first()->click();
 
     // Only one comment form should render, not two
     expect($helloFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
@@ -130,7 +130,7 @@ test('dragging across line numbers selects a multi-line range', function () {
 
     // Target hello.php's right-side (new) line numbers for predictable numbering
     $helloFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("hello.php"))');
-    $lineNumbers = $helloFile->locator('td[data-testid="diff-line-number"]:nth-child(2)');
+    $lineNumbers = $helloFile->locator('.diff-cell-num-new');
 
     $first = $lineNumbers->first();
     $last = $lineNumbers->last();
