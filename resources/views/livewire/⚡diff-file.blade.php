@@ -263,9 +263,13 @@ new class extends Component {
             @endforeach
         </div>
         {{-- Unplaced inline comments: either the anchor-resolver marked them unplaced
-             (content hash mismatch) or the stored line no longer exists in the diff. --}}
+             (content hash mismatch) or the stored line no longer exists in the diff.
+             Skip during lazy-load — getVisibleLineKeys() is empty until $diffData
+             arrives, which would otherwise classify every comment as unplaced. --}}
         @php
-            $unplacedComments = DiffFileViewModel::unplacedInlineComments($fileComments, $this->getVisibleLineKeys());
+            $unplacedComments = $diffData === null
+                ? collect()
+                : DiffFileViewModel::unplacedInlineComments($fileComments, $this->getVisibleLineKeys());
         @endphp
         @if($unplacedComments->isNotEmpty())
             @foreach($unplacedComments as $comment)
