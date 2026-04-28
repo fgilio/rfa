@@ -165,7 +165,9 @@ class extends Component
         <div class="overflow-y-auto flex-1">
             @forelse($this->groupedComments as $filePath => $comments)
                 <div class="border-b border-gh-border/50">
-                    <div class="px-4 py-2 bg-gh-surface/40 font-mono text-xs text-gh-text truncate">{{ $filePath }}</div>
+                    <div class="px-4 py-2 bg-gh-surface/40 text-xs text-gh-text">
+                        <x-file-path :path="$filePath" />
+                    </div>
                     @foreach($comments as $c)
                         <div class="group px-4 py-2.5 border-t border-gh-border/30 text-xs">
                             <div class="flex items-center gap-2 text-[10px] font-mono text-gh-muted mb-1">

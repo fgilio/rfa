@@ -12,6 +12,26 @@
 - Use `tracking-brutal` (-0.04em) on headings and `tracking-brutal-tight` (-0.06em) for display sizes
 - Diff code areas stay dense: `font-mono text-xs leading-5`
 
+## Paths & identifiers
+
+A file path is two pieces of information stitched together: the **identifier** (basename — what the file is) and the **context** (directory — where it lives, used to disambiguate). When users scan a list, they're hunting for the identifier; the directory only matters when basenames collide. Render them with that hierarchy.
+
+### Rules
+
+- **Identifier-first hierarchy.** Basename gets `font-semibold` and full opacity; directory stays at `opacity-60`. Never render them at equal weight.
+- **Use `<x-file-path>`.** All path rendering goes through `resources/views/components/file-path.blade.php`. New ad-hoc `{{ $file['path'] }}` inside a `font-mono` span is a code smell — replace it.
+- **Preserve the path semantically.** Path order stays `directory/basename`. The DOM is one continuous text flow so selection and copy yield the real path. The full path lives in `title` (the component sets it by default; callers can override).
+- **Truncation never eats the basename.** The component lays out `inline-flex` with the directory as the only shrinkable item; when the row narrows, the directory ellipsizes and the basename stays whole. Don't wrap the component in a `truncate` class — let it shrink itself.
+- **Renames use `:old-path`.** Don't hand-roll the `→` arrow. The component renders `oldPath → newPath` with the old side fully muted and the new side following identifier-first emphasis.
+- **Annotations are dimmed, not bolded.** Symlink targets, last-modified hints, and similar metadata stay muted regardless of position. They're not part of the identifier.
+- **Reordered (basename-first) form is reserved for fuzzy pickers.** If/when a command-palette-style search lands, that's where `HasTaxonomies.php  ·  app/Domains/Metadata/Traits` belongs. Don't use it in lists where the path's left-to-right order encodes meaning (changed-files, comments grouping).
+- **Basename-only displays don't go through the component.** When you've intentionally extracted just the basename (e.g. trash list, where the row is too narrow for context), just render the string. The component is for path rendering, not single-token labels.
+- **Weight is additive to color, not a substitute for it.** Screen readers don't read weight; keep contrast WCAG AA on the muted directory text and provide `aria-label` / `title` with the full path on interactive containers.
+
+### Alpine-rendered paths
+
+When a path's text content is set client-side (e.g. `x-text` from a JS object), use the `pathDir(path)` / `pathBase(path)` helpers on the review-page Alpine root rather than re-running the split inline. The shape mirrors `<x-file-path>` so the visual hierarchy stays identical.
+
 ## Colors
 - Use `gh-*` color tokens from CSS variables
 - RGB-based tokens (bg, surface, border, text, muted, accent, green, red) support Tailwind opacity modifiers: `bg-gh-bg/50`

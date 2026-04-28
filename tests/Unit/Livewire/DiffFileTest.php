@@ -188,7 +188,7 @@ test('file header shows rename arrow when oldPath is set', function () {
     $html = mountDiffFile($file, loadDiff: false)->html();
 
     expect($html)->toContain('src/OldName.php')
-        ->and($html)->toContain('&rarr;')
+        ->and($html)->toContain('→')
         ->and($html)->toContain('src/NewName.php');
 });
 

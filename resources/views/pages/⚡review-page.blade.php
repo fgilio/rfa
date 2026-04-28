@@ -1080,6 +1080,16 @@ new #[Layout('layouts.app')] class extends Component
             if (this.hideReviewed && this.reviewedFiles[fileId]) return false;
             return true;
         },
+        pathDir(path) {
+            if (!path) return '';
+            const i = path.lastIndexOf('/');
+            return i === -1 ? '' : path.slice(0, i + 1);
+        },
+        pathBase(path) {
+            if (!path) return '';
+            const i = path.lastIndexOf('/');
+            return i === -1 ? path : path.slice(i + 1);
+        },
         scrollToFile(id) {
             this.activeFile = id;
             this.$dispatch('expand-file', { id });
@@ -1549,7 +1559,9 @@ new #[Layout('layouts.app')] class extends Component
                             >
                                 <button type="button" @click="scrollToFile(id)" class="flex items-center gap-2.5 min-w-0 flex-1">
                                     <span class="font-mono font-medium shrink-0" :class="filesById[id]?.badgeClass" x-text="filesById[id]?.badgeLabel"></span>
-                                    <span class="truncate font-mono line-through opacity-80" :title="filesById[id]?.path" x-text="filesById[id]?.path"></span>
+                                    <span class="font-mono line-through opacity-80 inline-flex items-baseline min-w-0 max-w-full" :title="filesById[id]?.path">
+                                        <span class="min-w-0 truncate opacity-60" x-text="pathDir(filesById[id]?.path)"></span><span class="shrink-0 font-semibold" x-text="pathBase(filesById[id]?.path)"></span>
+                                    </span>
                                 </button>
                                 <flux:tooltip content="Un-mark as reviewed">
                                     <button type="button"
@@ -1600,7 +1612,11 @@ new #[Layout('layouts.app')] class extends Component
                             @if($file['isSymlink'] ?? false)
                                 <flux:icon icon="link" variant="outline" class="!size-3 text-gh-muted shrink-0" aria-hidden="true" />
                             @endif
-                            <span class="truncate font-mono" title="{{ $file['path'] }}{{ ($file['isSymlink'] ?? false) ? ' -> ' . $file['symlinkTarget'] : '' }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}">{{ $file['path'] }}</span>
+                            <x-file-path
+                                :path="$file['path']"
+                                class="text-xs"
+                                title="{{ $file['path'] }}{{ ($file['isSymlink'] ?? false) ? ' -> ' . $file['symlinkTarget'] : '' }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}"
+                            />
                         </button>
                         <flux:tooltip>
                             <button type="button"
