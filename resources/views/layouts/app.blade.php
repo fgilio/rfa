@@ -108,20 +108,28 @@
             text-transform: uppercase;
         }
 
-        /* Outer 4-column grid; in split mode each .diff-line is a subgrid item
-           spanning cols 1/3 (remove), 3/5 (add), or 1/-1 (context). The outer
-           grid-auto-flow:dense pairs a remove (cols 1-2) with the next add
-           (cols 3-4) on the same row. */
+        /* Outer 4-column grid; each hunk is a subgrid wrapper that owns its own
+           grid-auto-flow:dense, so remove+add pairing in split mode is scoped
+           to within the hunk and can't cross hunk boundaries. */
         .diff-grid { display: grid; min-width: 0; }
         .diff-grid[data-view-mode="unified"] {
             grid-template-columns: max-content max-content max-content minmax(0, 1fr);
         }
         .diff-grid[data-view-mode="split"] {
             grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
-            grid-auto-flow: row dense;
         }
 
-        .diff-grid .diff-line { display: grid; grid-template-columns: subgrid; }
+        .diff-grid .diff-hunk {
+            display: grid;
+            grid-template-columns: subgrid;
+            grid-column: 1 / -1;
+        }
+        .diff-grid[data-view-mode="split"] .diff-hunk { grid-auto-flow: row dense; }
+
+        /* dense lets cells backfill earlier columns: in split-mode context
+           lines the DOM order is num-old(1), num-new(3), content(2),
+           mirror(4) — without dense, content lands on row 2. */
+        .diff-grid .diff-line { display: grid; grid-template-columns: subgrid; grid-auto-flow: row dense; }
         .diff-grid[data-view-mode="unified"] .diff-line { grid-column: 1 / -1; }
         .diff-grid[data-view-mode="split"] .diff-line[data-type="remove"]  { grid-column: 1 / 3; }
         .diff-grid[data-view-mode="split"] .diff-line[data-type="add"]     { grid-column: 3 / 5; }

@@ -13,6 +13,6 @@ final class DiffCacheKey
 
     public static function for(int|string $projectIdOrRepoPath, string $fileId, string $contextKey = self::WORKING_TREE_CONTEXT): string
     {
-        return 'rfa_diff_v7_'.hash('xxh128', $projectIdOrRepoPath.':'.$contextKey.':'.$fileId);
+        return 'rfa_diff_v8_'.hash('xxh128', $projectIdOrRepoPath.':'.$contextKey.':'.$fileId);
     }
 }

@@ -115,6 +115,29 @@ trait CreatesTestRepo
         $this->registerTestProject($this->testRepoPath);
     }
 
+    protected function setUpAsymmetricMultiHunkTestRepo(): void
+    {
+        $this->testRepoPath = $this->makeTempRepoPath();
+
+        $lines = array_map(fn ($i) => "line{$i}", range(1, 30));
+        File::put($this->testRepoPath.'/asymmetric.txt', implode("\n", $lines)."\n");
+
+        $this->initTestRepo($this->testRepoPath);
+        $this->commitTestRepo($this->testRepoPath, 'Initial commit');
+
+        $this->assertHeadExists();
+
+        // Hunk 1: pure add near the top. Hunk 2: pure remove near the bottom.
+        // Asymmetric on purpose — exposes split-view dense-flow leaks across
+        // hunks (an unpaired add in hunk 1 was getting paired with an unpaired
+        // remove in hunk 2 by `grid-auto-flow: dense`).
+        array_splice($lines, 1, 0, 'inserted');
+        array_splice($lines, count($lines) - 2, 1);
+        File::put($this->testRepoPath.'/asymmetric.txt', implode("\n", $lines)."\n");
+
+        $this->registerTestProject($this->testRepoPath);
+    }
+
     protected function setUpCommitHistoryRepo(): void
     {
         $this->testRepoPath = $this->makeTempRepoPath();

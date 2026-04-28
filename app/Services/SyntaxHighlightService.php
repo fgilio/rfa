@@ -162,7 +162,15 @@ class SyntaxHighlightService
             foreach ($tokenLines as $lineTokens) {
                 $html = '';
                 foreach ($lineTokens as $token) {
-                    $text = e($token->text);
+                    // Phiki emits a trailing "\n" token on every line as the
+                    // line separator. The cell uses white-space: pre-wrap,
+                    // which would render that newline as a visible second
+                    // line and double the row height — strip it.
+                    $tokenText = rtrim($token->text, "\n");
+                    if ($tokenText === '') {
+                        continue;
+                    }
+                    $text = e($tokenText);
                     $class = $this->matchScopesToClass($token->scopes);
                     $html .= $class !== '' ? '<span class="'.$class.'">'.$text.'</span>' : $text;
                 }
