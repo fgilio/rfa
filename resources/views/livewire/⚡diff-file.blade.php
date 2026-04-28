@@ -219,6 +219,7 @@ new class extends Component {
         fileId: @js($file['id']),
         filePath: @js($file['path']),
         oldPath: @js($file['oldPath'] ?? null),
+        status: @js(($file['isUntracked'] ?? false) ? 'added' : ($file['status'] ?? 'modified')),
         isReviewed: @js($isReviewed ?? false),
         singleFile: @js($singleFile ?? false),
     })"

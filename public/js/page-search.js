@@ -1,5 +1,13 @@
 // Alpine component for global find-in-page search (Cmd/Ctrl+F)
-(function () {
+(function (root, factory) {
+    const api = factory();
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
+    } else if (root) {
+        root.pageSearch = api;
+        api.autoInstall(root);
+    }
+})(typeof window !== 'undefined' ? window : null, function () {
     const MATCH_CLASS = 'rfa-search-match';
     const CURRENT_CLASS = 'rfa-search-match--current';
     const SKIP_SELECTOR = 'script,style,noscript,iframe,input,textarea,[data-search-ignore]';
@@ -8,8 +16,8 @@
         return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-    function init() {
-        Alpine.data('pageSearch', () => ({
+    function createPageSearch() {
+        return {
             open: false,
             query: '',
             currentMatch: 0,
@@ -100,6 +108,10 @@
             markMatches(query) {
                 const pattern = new RegExp(escapeRegex(query), 'gi');
                 const needle = query.toLowerCase();
+                // Sibling text nodes share a parent (very common in diff rows),
+                // so memoize the per-walk visibility answer to avoid re-walking
+                // the style chain for each one.
+                const visibility = new WeakMap();
                 const walker = document.createTreeWalker(
                     document.body,
                     NodeFilter.SHOW_TEXT,
@@ -116,12 +128,15 @@
                             // display:none, visibility:hidden, opacity:0) so
                             // the counter and next/prev navigation only target
                             // visible matches.
-                            if (!parent.checkVisibility({
-                                checkOpacity: true,
-                                checkVisibilityCSS: true,
-                            })) {
-                                return NodeFilter.FILTER_REJECT;
+                            let visible = visibility.get(parent);
+                            if (visible === undefined) {
+                                visible = parent.checkVisibility({
+                                    checkOpacity: true,
+                                    checkVisibilityCSS: true,
+                                });
+                                visibility.set(parent, visible);
                             }
+                            if (!visible) return NodeFilter.FILTER_REJECT;
                             // Substring check (not pattern.test) avoids
                             // mutating the shared regex's lastIndex.
                             return node.nodeValue.toLowerCase().includes(needle)
@@ -168,12 +183,23 @@
                 });
                 return matches;
             },
-        }));
+        };
     }
 
-    if (window.Alpine) {
-        init();
-    } else {
-        document.addEventListener('alpine:init', init);
+    function install(root) {
+        if (typeof root.Alpine === 'undefined' || root.__pageSearchAttached) return false;
+        root.__pageSearchAttached = true;
+        root.Alpine.data('pageSearch', createPageSearch);
+        return true;
     }
-})();
+
+    function autoInstall(root) {
+        if (root.Alpine) {
+            install(root);
+        } else {
+            root.document.addEventListener('alpine:init', () => install(root));
+        }
+    }
+
+    return { escapeRegex, createPageSearch, install, autoInstall };
+});

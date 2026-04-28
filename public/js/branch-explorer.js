@@ -1,7 +1,79 @@
 // Alpine component for livewire/⚡branch-explorer.blade.php
-(function () {
-    function init() {
-        Alpine.data('branchExplorer', ({ currentBranch, activeCommitHash, activeDiffFrom, projectSlug, branches }) => ({
+(function (root, factory) {
+    const api = factory();
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
+    } else if (root) {
+        root.branchExplorer = api;
+        api.autoInstall(root);
+    }
+})(typeof window !== 'undefined' ? window : null, function () {
+    /**
+     * @param {object} input
+     * @param {Array<{hash: string}>} input.commits  newest-first; index 0 = tip.
+     * @param {string[]} input.selectedHashes        subset of commits[].hash, any order.
+     * @param {boolean}  input.workingTreeSelected
+     * @param {string}   input.projectSlug
+     * @returns {{kind: 'noop'} | {kind: 'navigate', url: string} | {kind: 'alert', message: string}}
+     */
+    function decideSelection({ commits, selectedHashes, workingTreeSelected, projectSlug }) {
+        const hasAnySelection = workingTreeSelected || selectedHashes.length > 0;
+        if (!hasAnySelection) return { kind: 'noop' };
+
+        const indices = [...new Set(
+            selectedHashes
+                .map(h => commits.findIndex(c => c.hash === h))
+                .filter(i => i >= 0)
+        )].sort((a, b) => a - b);
+
+        // Working tree alone → plain working-tree view.
+        if (workingTreeSelected && indices.length === 0) {
+            return { kind: 'navigate', url: `/p/${projectSlug}` };
+        }
+
+        // All hashes were unknown to `commits` — treat as nothing real selected.
+        // Without this guard, the single-commit branch below dereferences
+        // `commits[undefined].hash` and throws.
+        if (indices.length === 0) return { kind: 'noop' };
+
+        // A non-contiguous commit pick (e.g. A and C without B) would silently pull B
+        // into the diff if we just used min/max. Reject it so users have to
+        // explicitly include every commit in their range.
+        if (indices[indices.length - 1] - indices[0] + 1 !== indices.length) {
+            return {
+                kind: 'alert',
+                message: 'Selection is not contiguous — pick every commit between the oldest and newest you want to review.',
+            };
+        }
+
+        // Commits are listed newest-first; lowest index = tip, highest = oldest.
+        // Working tree is conceptually at index -1 (one step newer than the tip).
+        // When WT is selected alongside commits, the commits must start at index 0.
+        if (workingTreeSelected && indices.length > 0 && indices[0] !== 0) {
+            return {
+                kind: 'alert',
+                message: 'Selection is not contiguous — working tree must be paired with the newest commits.',
+            };
+        }
+
+        if (workingTreeSelected) {
+            const oldest = commits[indices[indices.length - 1]];
+            const fromRef = encodeURIComponent(oldest.hash + '^');
+            return { kind: 'navigate', url: `/p/${projectSlug}/rw/${fromRef}` };
+        }
+
+        if (indices.length === 1) {
+            return { kind: 'navigate', url: `/p/${projectSlug}/c/${commits[indices[0]].hash}` };
+        }
+
+        const newest = commits[indices[0]];
+        const oldest = commits[indices[indices.length - 1]];
+        const baseRef = encodeURIComponent(oldest.hash + '^');
+        return { kind: 'navigate', url: `/p/${projectSlug}/${newest.hash}/${baseRef}` };
+    }
+
+    function createBranchExplorer({ currentBranch, activeCommitHash, activeDiffFrom, projectSlug, branches }) {
+        return {
             open: false,
             search: '',
             selectedIndex: 0,
@@ -261,59 +333,40 @@
             },
 
             applySelection() {
-                if (!this.hasAnySelection) return;
+                const result = decideSelection({
+                    commits: this.$wire.commits,
+                    selectedHashes: this.selectedHashes,
+                    workingTreeSelected: this.workingTreeSelected,
+                    projectSlug: this.projectSlug,
+                });
 
-                const indices = [...new Set(
-                    this.selectedHashes
-                        .map(h => this.$wire.commits.findIndex(c => c.hash === h))
-                        .filter(i => i >= 0)
-                )].sort((a, b) => a - b);
-
-                // Working tree alone → plain working-tree view.
-                if (this.workingTreeSelected && indices.length === 0) {
-                    Livewire.navigate(`/p/${this.projectSlug}`);
+                if (result.kind === 'noop') return;
+                if (result.kind === 'alert') {
+                    window.alert(result.message);
+                    return;
+                }
+                if (result.kind === 'navigate') {
+                    Livewire.navigate(result.url);
                     this.closePanel();
-                    return;
                 }
-
-                // A non-contiguous commit pick (e.g. A and C without B) would silently pull B
-                // into the diff if we just used min/max. Reject it so users have to
-                // explicitly include every commit in their range.
-                if (indices.length > 0 && indices[indices.length - 1] - indices[0] + 1 !== indices.length) {
-                    window.alert('Selection is not contiguous — pick every commit between the oldest and newest you want to review.');
-                    return;
-                }
-
-                // Commits are listed newest-first; lowest index = tip, highest = oldest.
-                // Working tree is conceptually at index -1 (one step newer than the tip).
-                // When WT is selected alongside commits, the commits must start at index 0.
-                if (this.workingTreeSelected && indices.length > 0 && indices[0] !== 0) {
-                    window.alert('Selection is not contiguous — working tree must be paired with the newest commits.');
-                    return;
-                }
-
-                if (this.workingTreeSelected) {
-                    const oldest = this.$wire.commits[indices[indices.length - 1]];
-                    const fromRef = encodeURIComponent(oldest.hash + '^');
-                    Livewire.navigate(`/p/${this.projectSlug}/rw/${fromRef}`);
-                    this.closePanel();
-                    return;
-                }
-
-                if (indices.length === 1) {
-                    Livewire.navigate(`/p/${this.projectSlug}/c/${this.$wire.commits[indices[0]].hash}`);
-                    this.closePanel();
-                    return;
-                }
-
-                const newest = this.$wire.commits[indices[0]];
-                const oldest = this.$wire.commits[indices[indices.length - 1]];
-                const baseRef = encodeURIComponent(oldest.hash + '^');
-                Livewire.navigate(`/p/${this.projectSlug}/${newest.hash}/${baseRef}`);
-                this.closePanel();
             },
-        }));
+        };
     }
 
-    window.Alpine ? init() : document.addEventListener('alpine:init', init);
-})();
+    function install(root) {
+        if (typeof root.Alpine === 'undefined' || root.__branchExplorerAttached) return false;
+        root.__branchExplorerAttached = true;
+        root.Alpine.data('branchExplorer', createBranchExplorer);
+        return true;
+    }
+
+    function autoInstall(root) {
+        if (root.Alpine) {
+            install(root);
+        } else {
+            root.document.addEventListener('alpine:init', () => install(root));
+        }
+    }
+
+    return { decideSelection, createBranchExplorer, install, autoInstall };
+});

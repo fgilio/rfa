@@ -1,6 +1,6 @@
-{{-- Parent Alpine scope contract: fileId, filePath, oldPath, reviewed, collapsed,
+{{-- Parent Alpine scope contract: fileId, filePath, oldPath, status, reviewed, collapsed,
      toggleCollapse(), openFileComment(), onReviewedChange(), $wire.fileComments,
-     $wire.copyContent(), $dispatch('show-remote-menu' | 'discard-file' | 'copy-to-clipboard') --}}
+     $wire.copyContent(), $dispatch('open-remote-menu' | 'discard-file' | 'copy-to-clipboard') --}}
 @props([
     'file',
     'diffData' => null,
@@ -17,7 +17,7 @@
 @endphp
 
 <div data-testid="file-header"
-     @if($hasRemote) @contextmenu.prevent="$dispatch('show-remote-menu', {target: 'file', fileId, filePath, oldPath, clientX: $event.clientX, clientY: $event.clientY})" @endif
+     @if($hasRemote) @contextmenu.prevent="$dispatch('open-remote-menu', {target: 'file', fileId, filePath, oldPath, status, clientX: $event.clientX, clientY: $event.clientY})" @endif
      class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
 
     <div data-testid="toggle-zone"

@@ -11,9 +11,13 @@ use App\Services\GitRemoteParser;
 use App\Services\RemoteUrlBuilderService;
 
 /**
- * Resolves a project slug + target into a GitHub / GitLab URL. Self-heals the
- * project's stored `remote_url` on first use for repos registered before we
- * captured it, or where `origin` was added after registration.
+ * Resolves a project slug + target into a GitHub / GitLab URL.
+ *
+ * Self-heals `remote_url` on first use for repos registered before we
+ * captured it. If the repo has no `origin`, we persist `''` as a sentinel
+ * so subsequent loads skip the shell-out — the trade-off is that adding
+ * `origin` later requires re-registering the project for the menu to
+ * light up again.
  */
 final readonly class BuildRemoteUrlAction
 {
@@ -31,8 +35,8 @@ final readonly class BuildRemoteUrlAction
             return null;
         }
 
-        $remoteUrl = $project->remote_url ?: $this->resolveAndPersistRemoteUrl($project);
-        if ($remoteUrl === null) {
+        $remoteUrl = $project->remote_url ?? $this->resolveAndPersistRemoteUrl($project);
+        if (empty($remoteUrl)) {
             return null;
         }
 
@@ -47,10 +51,7 @@ final readonly class BuildRemoteUrlAction
     private function resolveAndPersistRemoteUrl(Project $project): ?string
     {
         $remoteUrl = $this->git->getRemoteUrl($project->path);
-        if ($remoteUrl === null) {
-            return null;
-        }
-        $project->forceFill(['remote_url' => $remoteUrl])->save();
+        $project->forceFill(['remote_url' => $remoteUrl ?? ''])->save();
 
         return $remoteUrl;
     }

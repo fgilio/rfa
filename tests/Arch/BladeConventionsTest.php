@@ -91,3 +91,22 @@ test('no hardcoded dark class on html element', function () {
     }
     expect($violations)->toBeEmpty();
 });
+
+test('alpine event names do not collide with blade directives', function () {
+    // Blade greedily matches its built-in directives. `@show-remote-menu.window`
+    // compiles as a yieldSection() call followed by garbage HTML, silently
+    // dropping the listener. Forbid Alpine event names whose first hyphenated
+    // segment is a Blade directive that emits PHP regardless of args.
+    $riskyDirectives = ['show', 'stop', 'parent', 'csrf', 'verbatim', 'endverbatim', 'once', 'endonce', 'php', 'endphp'];
+    $pattern = '/(?:@|x-on:)('.implode('|', $riskyDirectives).')-[a-z]/i';
+    $violations = [];
+    foreach (bladeFiles() as $file) {
+        $content = file_get_contents($file);
+        if (preg_match_all($pattern, $content, $matches)) {
+            foreach ($matches[0] as $hit) {
+                $violations[] = basename($file).": {$hit}";
+            }
+        }
+    }
+    expect($violations)->toBeEmpty();
+});

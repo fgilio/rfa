@@ -127,6 +127,19 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        // Boost browser-log channel pinned to the project's storage so the
+        // renderer (which writes through NativePHP's relocated storage_path)
+        // and Boost's MCP `browser-logs` tool (which runs CLI artisan and
+        // reads the project's path) share one file. base_path() is unchanged
+        // by NativePHP. Pre-defining this overrides Boost's auto-registration
+        // (BoostServiceProvider::registerBrowserLogger).
+        'browser' => [
+            'driver' => 'single',
+            'path' => base_path('storage/logs/browser.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+        ],
+
     ],
 
 ];
