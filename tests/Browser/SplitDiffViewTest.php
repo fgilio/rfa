@@ -62,7 +62,10 @@ test('clicking a line number in split opens a comment form', function () {
     $page->page()->getByLabel('Switch to split view')->click();
     $page->page()->locator('[data-testid="diff-table"][data-view-mode="split"]')->first()->waitFor();
 
-    $page->page()->locator('[data-view-mode="split"] [data-testid="diff-line-number"]')->first()->click();
+    // Target the new-side gutter on a row that has a new line number — split
+    // CSS hides .diff-cell-num-new on remove rows, so first() with the
+    // unscoped selector could pick a hidden cell.
+    $page->page()->locator('[data-view-mode="split"] .diff-line[data-line-new] .diff-cell-num-new')->first()->click();
 
     $page->assertSee('Cancel');
 });
@@ -71,7 +74,7 @@ test('saving comment from split view shows it inline', function () {
     $page = $this->visitAndLoad($this->projectUrl());
     $page->page()->getByLabel('Switch to split view')->click();
 
-    $lineNum = $page->page()->locator('[data-view-mode="split"] [data-testid="diff-line-number"]')->first();
+    $lineNum = $page->page()->locator('[data-view-mode="split"] .diff-line[data-line-new] .diff-cell-num-new')->first();
     $lineNum->waitFor();
     $lineNum->click();
 
