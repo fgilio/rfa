@@ -168,8 +168,10 @@
 
         .diff-grid[data-view-mode="split"] .diff-cell-num-new { border-left: 1px solid rgb(var(--gh-border)); }
 
-        .diff-line:hover { background: var(--gh-hover-bg); }
-        .diff-line.line-selected { background: var(--gh-selected-bg); }
+        /* Cells paint their own bg on add/remove rows (bg-gh-add-bg etc.),
+           which would hide a row-level background. Apply on the cells. */
+        .diff-line:hover .diff-cell { background: var(--gh-hover-bg); }
+        .diff-line.line-selected .diff-cell { background: var(--gh-selected-bg); }
 
         .comment-indicator { position: relative; }
         .comment-indicator::before {
