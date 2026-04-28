@@ -51,7 +51,7 @@ test('file comment form renders before diff content', function () {
     $html = mountDiffFile($this->file)->html();
 
     $formPos = strpos($html, 'x-ref="fileCommentForm"');
-    $tablePos = strpos($html, '<table');
+    $tablePos = strpos($html, 'data-testid="diff-table"');
 
     expect($formPos)->not->toBeFalse()
         ->and($tablePos)->not->toBeFalse()
@@ -72,7 +72,7 @@ test('file-level saved comments render at top of file body', function () {
     $html = mountDiffFile($this->file, $comments)->html();
 
     $commentPos = strpos($html, 'This file needs a refactor');
-    $tablePos = strpos($html, '<table');
+    $tablePos = strpos($html, 'data-testid="diff-table"');
 
     expect($commentPos)->not->toBeFalse()
         ->and($tablePos)->not->toBeFalse()
@@ -265,7 +265,7 @@ test('collapse event handlers reset autoExpandedForComment', function () {
 test('added lines have data-line-new but not data-line-old', function () {
     $html = mountDiffFile($this->file)->html();
 
-    preg_match_all('/<tr[^>]*bg-gh-add-bg[^>]*>/', $html, $matches);
+    preg_match_all('/<div[^>]*class="diff-line"[^>]*data-type="add"[^>]*>/', $html, $matches);
     expect($matches[0])->not->toBeEmpty();
 
     foreach ($matches[0] as $row) {
@@ -277,7 +277,7 @@ test('added lines have data-line-new but not data-line-old', function () {
 test('removed lines have data-line-old but not data-line-new', function () {
     $html = mountDiffFile($this->file)->html();
 
-    preg_match_all('/<tr[^>]*bg-gh-del-bg[^>]*>/', $html, $matches);
+    preg_match_all('/<div[^>]*class="diff-line"[^>]*data-type="remove"[^>]*>/', $html, $matches);
     expect($matches[0])->not->toBeEmpty();
 
     foreach ($matches[0] as $row) {
@@ -289,7 +289,7 @@ test('removed lines have data-line-old but not data-line-new', function () {
 test('context lines have both data-line-new and data-line-old', function () {
     $html = mountDiffFile($this->file)->html();
 
-    preg_match_all('/<tr[^>]*class="diff-line\s*"[^>]*>/', $html, $matches);
+    preg_match_all('/<div[^>]*class="diff-line"[^>]*data-type="context"[^>]*>/', $html, $matches);
     expect($matches[0])->not->toBeEmpty();
 
     foreach ($matches[0] as $row) {

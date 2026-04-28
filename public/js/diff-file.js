@@ -261,10 +261,9 @@
                 const root = this.$el.closest(`[data-file-id="${this.fileId}"]`) ?? this.$el;
                 const lines = [];
                 for (let n = start; n <= end; n++) {
-                    const row = root.querySelector(`tr[${attr}="${n}"]`);
+                    const row = root.querySelector(`.diff-line[${attr}="${n}"]`);
                     if (!row) continue;
-                    const cells = row.querySelectorAll('td');
-                    const content = cells[cells.length - 1]?.textContent;
+                    const content = row.querySelector('.diff-cell-content')?.textContent;
                     if (content !== undefined) lines.push(content);
                 }
                 return lines.length ? lines.join('\n').trimEnd() : null;
@@ -341,12 +340,12 @@
             _updateSelectionFromPoint() {
                 const el = document.elementFromPoint(this._dragMouseX, this._dragMouseY);
                 if (!el) return;
-                const tr = el.closest('tr.diff-line');
-                if (!tr || !this.$el.contains(tr)) return;
+                const row = el.closest('.diff-line');
+                if (!row || !this.$el.contains(row)) return;
 
                 const lineNum = this.dragSide === 'left'
-                    ? (tr.dataset.lineOld ? parseInt(tr.dataset.lineOld) : null)
-                    : (tr.dataset.lineNew ? parseInt(tr.dataset.lineNew) : null);
+                    ? (row.dataset.lineOld ? parseInt(row.dataset.lineOld) : null)
+                    : (row.dataset.lineNew ? parseInt(row.dataset.lineNew) : null);
                 if (lineNum === null) return;
 
                 this.formLine = Math.min(this.dragStartLine, lineNum);

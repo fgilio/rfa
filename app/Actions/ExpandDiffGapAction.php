@@ -4,14 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
-use App\Services\DiffSplitPairerService;
-
 final readonly class ExpandDiffGapAction
 {
-    public function __construct(
-        private DiffSplitPairerService $diffSplitPairer,
-    ) {}
-
     /**
      * Expand a gap between diff hunks by inserting lines from the full-context diff.
      *
@@ -83,12 +77,11 @@ final readonly class ExpandDiffGapAction
         $gapSize = count($gapLines);
 
         if ($isTrailing) {
-            $modifiedIndex = count($hunks) - 1;
-            $hunks[$modifiedIndex]['lines'] = array_merge($hunks[$modifiedIndex]['lines'], $gapLines);
-            $hunks[$modifiedIndex]['oldCount'] += $gapSize;
-            $hunks[$modifiedIndex]['newCount'] += $gapSize;
+            $lastIndex = count($hunks) - 1;
+            $hunks[$lastIndex]['lines'] = array_merge($hunks[$lastIndex]['lines'], $gapLines);
+            $hunks[$lastIndex]['oldCount'] += $gapSize;
+            $hunks[$lastIndex]['newCount'] += $gapSize;
         } elseif ($hunkIndex === 0) {
-            $modifiedIndex = 0;
             $hunks[0]['lines'] = array_merge($gapLines, $hunks[0]['lines']);
             $hunks[0]['oldStart'] -= $gapSize;
             $hunks[0]['oldCount'] += $gapSize;
@@ -96,10 +89,10 @@ final readonly class ExpandDiffGapAction
             $hunks[0]['newCount'] += $gapSize;
         } elseif ($isPartial) {
             // Partial middle: append to prev hunk, leave current for remaining gap
-            $modifiedIndex = $hunkIndex - 1;
-            $hunks[$modifiedIndex]['lines'] = array_merge($hunks[$modifiedIndex]['lines'], $gapLines);
-            $hunks[$modifiedIndex]['oldCount'] += $gapSize;
-            $hunks[$modifiedIndex]['newCount'] += $gapSize;
+            $prevIndex = $hunkIndex - 1;
+            $hunks[$prevIndex]['lines'] = array_merge($hunks[$prevIndex]['lines'], $gapLines);
+            $hunks[$prevIndex]['oldCount'] += $gapSize;
+            $hunks[$prevIndex]['newCount'] += $gapSize;
         } else {
             // Full middle: merge prev + gap + current into one hunk
             $prev = $hunks[$hunkIndex - 1];
@@ -115,10 +108,7 @@ final readonly class ExpandDiffGapAction
             ];
 
             array_splice($hunks, $hunkIndex - 1, 2, [$merged]);
-            $modifiedIndex = $hunkIndex - 1;
         }
-
-        $hunks[$modifiedIndex]['splitRows'] = $this->diffSplitPairer->pair($hunks[$modifiedIndex]['lines']);
 
         return $hunks;
     }
