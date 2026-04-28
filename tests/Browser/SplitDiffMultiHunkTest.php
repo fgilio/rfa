@@ -45,6 +45,10 @@ test('split view context lines render at one line-height', function () {
         ).slice(0, 5).map(el => el.getBoundingClientRect().height)
     JS);
 
+    // Guard against the selector silently returning [] and the foreach
+    // passing vacuously — would mask a real regression.
+    expect($heights)->toHaveCount(5);
+
     foreach ($heights as $h) {
         expect($h)->toBeGreaterThan(15.0)->toBeLessThan(25.0);
     }
