@@ -60,10 +60,10 @@
                         <flux:menu.item icon="code-bracket" icon:variant="outline" @click="$wire.copyContent('diff')">
                             Copy diff
                         </flux:menu.item>
-                        <flux:menu.item icon="minus" icon:variant="outline" @click="$wire.copyContent('original')" :disabled="$isAdded">
+                        <flux:menu.item icon="minus" icon:variant="outline" @click="$wire.copyContent('original')" :disabled="@js($isAdded)">
                             Copy original
                         </flux:menu.item>
-                        <flux:menu.item icon="plus" icon:variant="outline" @click="$wire.copyContent('new')" :disabled="$isDeleted">
+                        <flux:menu.item icon="plus" icon:variant="outline" @click="$wire.copyContent('new')" :disabled="@js($isDeleted)">
                             Copy new
                         </flux:menu.item>
                     </flux:menu>
