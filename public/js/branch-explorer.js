@@ -48,7 +48,11 @@
 
         // Commits are listed newest-first; lowest index = tip, highest = oldest.
         // Working tree is conceptually at index -1 (one step newer than the tip).
-        // When WT is selected alongside commits, the commits must start at index 0.
+        // When WT is selected alongside commits, the commits must start at
+        // index 0. Normally the Alpine state machine auto-unticks WT before
+        // the user can press Apply on a violating selection (see
+        // `_enforceWorkingTreeTipAnchor`), so this branch is a backstop for
+        // anything that might bypass it (programmatic state, future code).
         if (workingTreeSelected && indices.length > 0 && indices[0] !== 0) {
             return {
                 kind: 'alert',
@@ -296,6 +300,7 @@
                     this.selectedHashes.push(hash);
                 }
                 this.lastSelectionIndex = idx;
+                this._enforceWorkingTreeTipAnchor();
             },
 
             toggleWorkingTreeSelection(event) {
@@ -319,6 +324,33 @@
                 this.selectedHashes = [];
                 this.workingTreeSelected = false;
                 this.lastSelectionIndex = -1;
+            },
+
+            /**
+             * Working tree extends the diff through HEAD's working state, so a
+             * selection that pairs WT with commits MUST include the tip —
+             * otherwise the user is asking for a diff that excludes HEAD's
+             * commit while still including its working tree, which has no
+             * coherent diff range. When the user's last action would leave
+             * that invariant violated (e.g. unticking the tip while WT is
+             * selected), auto-untick WT and explain via a toast. Quietly
+             * fixing the state after the action feels less hostile than
+             * blocking the action itself.
+             */
+            _enforceWorkingTreeTipAnchor() {
+                if (!this.workingTreeSelected) return;
+                if (this.selectedHashes.length === 0) return;
+                const tip = this.$wire.commits[0];
+                if (!tip) return;
+                if (this.selectedHashes.includes(tip.hash)) return;
+
+                this.workingTreeSelected = false;
+                if (typeof window !== 'undefined' && window.Flux?.toast) {
+                    window.Flux.toast({
+                        text: 'Working tree removed — it includes HEAD\'s commit, so the tip must stay selected.',
+                        variant: 'info',
+                    });
+                }
             },
 
             /**
@@ -372,6 +404,7 @@
                     const start = Math.min(idx, hovered);
                     const end = Math.max(idx, hovered);
                     this.selectedHashes = this.$wire.commits.slice(start, end + 1).map(c => c.hash);
+                    this._enforceWorkingTreeTipAnchor();
                 };
 
                 const endDrag = (swallowClick) => {

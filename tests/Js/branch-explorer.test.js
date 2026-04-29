@@ -1,7 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import branchExplorer from '../../public/js/branch-explorer.js';
 
-const { decideSelection, isSinceBaseExactly, install } = branchExplorer;
+const { decideSelection, isSinceBaseExactly, createBranchExplorer, install } = branchExplorer;
+
+/** Minimal factory wrapper for tests that exercise the Alpine state machine
+ *  directly. Provides a stub `$wire` that the production code reads from. */
+function makeAlpine({ commits = [], branchBase = null, currentBranch = 'main' } = {}) {
+    const a = createBranchExplorer({
+        currentBranch,
+        activeCommitHash: null,
+        activeDiffFrom: 'HEAD',
+        projectSlug: 'p',
+        branches: { local: [], remote: [] },
+    });
+    a.$wire = { commits, branchBase };
+    return a;
+}
+
+const noopEvent = () => ({ stopPropagation: () => {}, shiftKey: false });
 
 // Newest-first commit list. Index 0 = tip.
 const commits = [
@@ -211,6 +227,84 @@ describe('isSinceBaseExactly', () => {
             workingTreeSelected: true,
             hashesInRange: [],
         })).toBe(true);
+    });
+});
+
+describe('working-tree tip anchor', () => {
+    const commits = [
+        { hash: 'tip' }, // 0 = newest
+        { hash: 'mid' }, // 1
+        { hash: 'old' }, // 2 = oldest
+    ];
+
+    afterEach(() => {
+        delete window.Flux;
+    });
+
+    it('auto-unticks working tree when the tip commit is unticked', () => {
+        const a = makeAlpine({ commits });
+        a.workingTreeSelected = true;
+        a.selectedHashes = ['tip', 'mid', 'old'];
+
+        a.toggleSelection('tip', 0, noopEvent());
+
+        expect(a.selectedHashes).toEqual(['mid', 'old']);
+        expect(a.workingTreeSelected).toBe(false);
+    });
+
+    it('keeps working tree selected when a non-tip commit is unticked', () => {
+        const a = makeAlpine({ commits });
+        a.workingTreeSelected = true;
+        a.selectedHashes = ['tip', 'mid', 'old'];
+
+        a.toggleSelection('old', 2, noopEvent());
+
+        expect(a.selectedHashes).toEqual(['tip', 'mid']);
+        expect(a.workingTreeSelected).toBe(true);
+    });
+
+    it('does not affect a working-tree-only selection', () => {
+        const a = makeAlpine({ commits });
+        a.workingTreeSelected = true;
+        a.selectedHashes = [];
+
+        // Toggling a hash that wasn't selected just adds it; the invariant
+        // only matters when the resulting state would pair WT with non-tip
+        // commits. Adding the tip is always fine.
+        a.toggleSelection('tip', 0, noopEvent());
+
+        expect(a.selectedHashes).toEqual(['tip']);
+        expect(a.workingTreeSelected).toBe(true);
+    });
+
+    it('shows an explanatory toast when WT is auto-unticked', () => {
+        const toast = vi.fn();
+        window.Flux = { toast };
+
+        const a = makeAlpine({ commits });
+        a.workingTreeSelected = true;
+        a.selectedHashes = ['tip', 'mid'];
+
+        a.toggleSelection('tip', 0, noopEvent());
+
+        expect(toast).toHaveBeenCalledTimes(1);
+        expect(toast.mock.calls[0][0]).toMatchObject({ variant: 'info' });
+        expect(toast.mock.calls[0][0].text).toContain('Working tree removed');
+    });
+
+    it('does not toast when the invariant is already satisfied', () => {
+        const toast = vi.fn();
+        window.Flux = { toast };
+
+        const a = makeAlpine({ commits });
+        a.workingTreeSelected = true;
+        a.selectedHashes = ['tip'];
+
+        // Untick a commit that's not in the selection — adds it, doesn't violate.
+        a.toggleSelection('mid', 1, noopEvent());
+
+        expect(toast).not.toHaveBeenCalled();
+        expect(a.workingTreeSelected).toBe(true);
     });
 });
 
