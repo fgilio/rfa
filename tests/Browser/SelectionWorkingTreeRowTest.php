@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Project;
+
 test('branch-explorer panel shows a Working tree row at the top of the commit list', function () {
     $this->setUpCommitHistoryRepo();
 
@@ -14,6 +16,22 @@ test('branch-explorer panel shows a Working tree row at the top of the commit li
 
     $firstRow = $page->page()->locator('[data-testid="working-tree-row"], [data-testid="commit-row"]')->first();
     expect($firstRow->getAttribute('data-testid'))->toBe('working-tree-row');
+
+    $page->assertNoJavaScriptErrors();
+});
+
+test('branch-explorer commit rows keep their Alpine scope when remote menus are enabled', function () {
+    $this->setUpCommitHistoryRepo();
+
+    Project::where('slug', $this->testProjectSlug)
+        ->update(['remote_url' => 'git@github.com:acme/example.git']);
+
+    $page = $this->visit($this->projectUrl());
+
+    $page->page()->getByLabel('Open selection drawer')->click();
+    $page->page()->getByTestId('commit-row')->first()->waitFor();
+
+    $page->assertNoJavaScriptErrors();
 });
 
 test('Working tree row shows active state when viewing the working tree', function () {

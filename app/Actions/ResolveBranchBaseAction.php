@@ -21,14 +21,14 @@ final readonly class ResolveBranchBaseAction
      * Compute the diff range "since base branch" for the current HEAD.
      *
      * Returns one of five outcomes encoded as a {@see BranchBaseResult}:
-     *  - Ready          → base resolved, HEAD is ahead, range hashes returned
-     *  - UpToDate       → base resolved but HEAD has no commits ahead of it
-     *  - NotConfigured  → no base branch set on the project
-     *  - MissingRef     → base branch is configured but the ref isn't local
-     *  - OnBaseBranch   → current branch is the configured base
+     *  - Ready          - base resolved, HEAD is ahead, range hashes returned
+     *  - UpToDate       - base resolved but HEAD has no commits ahead of it
+     *  - NotConfigured  - no base branch set on the project
+     *  - MissingRef     - base branch is configured but the ref isn't local
+     *  - OnBaseBranch   - current branch is the configured base
      *
      * `currentBranch` is the working branch (typically the project's branch).
-     * Pass `null` (or empty string) for detached HEAD — the action treats it
+     * Pass `null` (or empty string) for detached HEAD - the action treats it
      * the same as "not on the base branch."
      */
     public function handle(string $repoPath, ?string $baseBranch, ?string $currentBranch): BranchBaseResult
@@ -52,7 +52,7 @@ final readonly class ResolveBranchBaseAction
         $mergeBase = $this->gitMetadataService->getMergeBase($repoPath, $base, 'HEAD');
 
         if ($mergeBase === null) {
-            // Unrelated histories — treat like a missing ref so the UI surfaces
+            // Unrelated histories - treat like a missing ref so the UI surfaces
             // an actionable state rather than silently doing nothing.
             return BranchBaseResult::missingRef($base);
         }

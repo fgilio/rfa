@@ -14,7 +14,7 @@ final readonly class IsSinceBaseViewAction
 
     /**
      * True when `$diffFrom` resolves to the same SHA as the merge-base of
-     * `$baseBranch` and HEAD — i.e., the current rangeToWorking view is
+     * `$baseBranch` and HEAD - i.e., the current rangeToWorking view is
      * exactly "since {base}". Used by the page to render the header label.
      */
     public function handle(string $repoPath, ?string $baseBranch, string $diffFrom): bool

@@ -1061,6 +1061,26 @@ new #[Layout('layouts.app')] class extends Component
         remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '', disabled: false, disabledReason: '' },
         showRemoteMenu($event) {
             const d = $event.detail;
+            const margin = 8;
+
+            if (d.target === 'direct') {
+                const menuW = 220;
+                const menuH = 80;
+                this.remoteMenu = {
+                    open: true,
+                    x: Math.min(d.clientX, window.innerWidth - menuW - margin),
+                    y: Math.min(d.clientY, window.innerHeight - menuH - margin),
+                    projectSlug: d.projectSlug || @js($projectSlug),
+                    type: d.type,
+                    params: d.params || {},
+                    label: d.label || 'on remote',
+                    disabled: false,
+                    disabledReason: '',
+                };
+
+                return;
+            }
+
             const projectBranch = @js($projectBranch);
             const diffFrom = @js($diffFrom);
             const diffTo = @js($diffTo);
@@ -1097,7 +1117,6 @@ new #[Layout('layouts.app')] class extends Component
             const disabledReason = disabled
                 ? (d.status === 'added' ? 'File not pushed to remote yet' : 'File was removed at this commit')
                 : '';
-            const margin = 8;
             const menuW = 220;
             const menuH = disabled ? 110 : 80;
             this.remoteMenu = {
@@ -1252,19 +1271,25 @@ new #[Layout('layouts.app')] class extends Component
 
         <header class="bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif class="inline-flex">
+                <div
+                    @if($hasRemote)
+                        @contextmenu.prevent="$dispatch('open-remote-menu', {
+                            target: 'direct',
+                            type: 'repo',
+                            params: {},
+                            label: 'repository',
+                            projectSlug: @js($projectSlug),
+                            clientX: $event.clientX,
+                            clientY: $event.clientY,
+                        })"
+                    @endif
+                    class="inline-flex"
+                >
                     @native
                         <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" />
                     @else
                         <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
                     @endnative
-                    @if($hasRemote)
-                        <x-remote-link-menu
-                            :project-slug="$projectSlug"
-                            type="repo"
-                            label="repository"
-                        />
-                    @endif
                 </div>
                 @php
                     $shortFrom = $diffFrom === 'HEAD' ? 'HEAD' : substr($diffFrom, 0, 7);
@@ -1285,6 +1310,7 @@ new #[Layout('layouts.app')] class extends Component
                 @if($projectBranch)
                     <x-header-separator />
                     <livewire:branch-explorer
+                        :key="'branch-explorer-'.$projectId.'-'.md5($projectBranch.'|'.$defaultBaseBranch)"
                         :repo-path="$repoPath"
                         :current-branch="$projectBranch"
                         :project-slug="$projectSlug"
@@ -1435,7 +1461,7 @@ new #[Layout('layouts.app')] class extends Component
                                     id="default-base-branch-input"
                                     data-testid="default-base-branch-input"
                                     wire:model.live.debounce.400ms="defaultBaseBranch"
-                                    placeholder="dev, master, main…"
+                                    placeholder="dev, master, main..."
                                     size="sm"
                                     variant="filled"
                                     class="!font-mono text-xs"

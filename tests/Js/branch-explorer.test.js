@@ -143,6 +143,40 @@ describe('decideSelection — working tree + commits', () => {
         expect(result.message).toContain('pick every commit');
         expect(result.message).not.toContain('paired with the newest commits');
     });
+
+    it('uses the resolved merge-base for an exact since-base selection', () => {
+        expect(decideSelection({
+            commits,
+            selectedHashes: ['aaa1', 'bbb2', 'ccc3'],
+            workingTreeSelected: true,
+            projectSlug: slug,
+            sinceBase: {
+                state: 'ready',
+                baseSha: '1234567890abcdef1234567890abcdef12345678',
+                hashesInRange: ['aaa1', 'bbb2', 'ccc3'],
+            },
+        })).toEqual({
+            kind: 'navigate',
+            url: '/p/myproj/rw/1234567890abcdef1234567890abcdef12345678',
+        });
+    });
+
+    it('falls back to the trimmed range when since-base selection is edited', () => {
+        expect(decideSelection({
+            commits,
+            selectedHashes: ['aaa1', 'bbb2'],
+            workingTreeSelected: true,
+            projectSlug: slug,
+            sinceBase: {
+                state: 'ready',
+                baseSha: '1234567890abcdef1234567890abcdef12345678',
+                hashesInRange: ['aaa1', 'bbb2', 'ccc3'],
+            },
+        })).toEqual({
+            kind: 'navigate',
+            url: '/p/myproj/rw/bbb2%5E',
+        });
+    });
 });
 
 describe('decideSelection — input cleaning', () => {
