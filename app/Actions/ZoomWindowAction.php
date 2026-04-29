@@ -32,14 +32,20 @@ final readonly class ZoomWindowAction
 
     public function handle(string $direction): float
     {
+        $current = $this->current();
+
         $next = match ($direction) {
-            'in' => $this->current() + self::STEP,
-            'out' => $this->current() - self::STEP,
+            'in' => $current + self::STEP,
+            'out' => $current - self::STEP,
             'reset' => self::DEFAULT,
             default => throw new InvalidArgumentException("Unknown zoom direction: {$direction}"),
         };
 
         $clamped = max(self::MIN, min(self::MAX, round($next, 2)));
+
+        if ($clamped === $current) {
+            return $clamped;
+        }
 
         Cache::put(self::CACHE_KEY, $clamped, now()->addDays(30));
         Window::get('main')->zoomFactor($clamped);

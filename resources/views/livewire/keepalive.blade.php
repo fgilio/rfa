@@ -14,9 +14,7 @@ new class extends Component
     #[On('rfa-zoom')]
     public function zoom(string $direction, ZoomWindowAction $action): void
     {
-        if (in_array($direction, ['in', 'out', 'reset'], true)) {
-            $action->handle($direction);
-        }
+        $action->handle($direction);
     }
 
     /**

@@ -23,11 +23,11 @@ beforeEach(function () {
     $this->action = app(ZoomWindowAction::class);
 });
 
-test('current returns 1.0 when no cached factor', function () {
+test('returns 1.0 as the current factor when no cached value is set', function () {
     expect($this->action->current())->toBe(1.0);
 });
 
-test('handle("in") bumps the factor by one step and persists it', function () {
+test('zooming in bumps the factor by one step and persists it', function () {
     $this->window->shouldReceive('zoomFactor')->once()->with(1.1);
 
     $next = $this->action->handle('in');
@@ -36,7 +36,7 @@ test('handle("in") bumps the factor by one step and persists it', function () {
         ->and(Cache::get(ZoomWindowAction::CACHE_KEY))->toBe(1.1);
 });
 
-test('handle("out") drops the factor by one step and persists it', function () {
+test('zooming out drops the factor by one step and persists it', function () {
     $this->window->shouldReceive('zoomFactor')->once()->with(0.9);
 
     $next = $this->action->handle('out');
@@ -45,7 +45,7 @@ test('handle("out") drops the factor by one step and persists it', function () {
         ->and(Cache::get(ZoomWindowAction::CACHE_KEY))->toBe(0.9);
 });
 
-test('handle("reset") restores the default factor regardless of current value', function () {
+test('resetting restores the default factor regardless of current value', function () {
     Cache::put(ZoomWindowAction::CACHE_KEY, 2.4, now()->addDay());
     $this->window->shouldReceive('zoomFactor')->once()->with(1.0);
 
@@ -53,20 +53,26 @@ test('handle("reset") restores the default factor regardless of current value', 
         ->and(Cache::get(ZoomWindowAction::CACHE_KEY))->toBe(1.0);
 });
 
-test('handle("out") clamps to MIN floor', function () {
+test('zooming out at MIN clamps and skips the redundant Electron roundtrip', function () {
     Cache::put(ZoomWindowAction::CACHE_KEY, ZoomWindowAction::MIN, now()->addDay());
-    $this->window->shouldReceive('zoomFactor')->once()->with(ZoomWindowAction::MIN);
+    $this->window->shouldNotReceive('zoomFactor');
 
     expect($this->action->handle('out'))->toBe(ZoomWindowAction::MIN)
         ->and(Cache::get(ZoomWindowAction::CACHE_KEY))->toBe(ZoomWindowAction::MIN);
 });
 
-test('handle("in") clamps to MAX ceiling', function () {
+test('zooming in at MAX clamps and skips the redundant Electron roundtrip', function () {
     Cache::put(ZoomWindowAction::CACHE_KEY, ZoomWindowAction::MAX, now()->addDay());
-    $this->window->shouldReceive('zoomFactor')->once()->with(ZoomWindowAction::MAX);
+    $this->window->shouldNotReceive('zoomFactor');
 
     expect($this->action->handle('in'))->toBe(ZoomWindowAction::MAX)
         ->and(Cache::get(ZoomWindowAction::CACHE_KEY))->toBe(ZoomWindowAction::MAX);
+});
+
+test('resetting from the default factor is a no-op', function () {
+    $this->window->shouldNotReceive('zoomFactor');
+
+    expect($this->action->handle('reset'))->toBe(1.0);
 });
 
 test('rounds floating-point drift so cache stays on a clean grid', function () {

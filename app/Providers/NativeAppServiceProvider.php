@@ -135,7 +135,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->minWidth(800)
             ->minHeight(600)
             ->backgroundColor('#0d1117')
-            ->zoomFactor((float) Cache::get(ZoomWindowAction::CACHE_KEY, ZoomWindowAction::DEFAULT))
+            ->zoomFactor(app(ZoomWindowAction::class)->current())
             ->url(app(ResolveStartupRouteAction::class)->handle())
             ->rememberState();
     }
