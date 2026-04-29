@@ -11,6 +11,7 @@ use App\Actions\ExportReviewAction;
 use App\Actions\GetCurrentHeadAction;
 use App\Actions\GetFileListAction;
 use App\Actions\GroupReviewFilesAction;
+use App\Actions\IsSinceBaseViewAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
@@ -97,11 +98,17 @@ new #[Layout('layouts.app')] class extends Component
 
     public ?string $globalGitignorePath = null;
 
+    public string $defaultBaseBranch = '';
+
     #[Locked]
     public string $diffFrom = 'HEAD';
 
     #[Locked]
     public ?string $diffTo = null;
+
+    /** True when the active rangeToWorking diff equals `default_base_branch..HEAD..working`. */
+    #[Locked]
+    public bool $isSinceBaseView = false;
 
     /** @var array{shortHash: string, message: string, author: string, prevHash: ?string, nextHash: ?string}|null */
     #[Locked]
@@ -153,6 +160,7 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->respectGlobalGitignore = $project['respect_global_gitignore'] ?? true;
         $this->globalGitignorePath = $project['global_gitignore_path'] ?: null;
+        $this->defaultBaseBranch = (string) ($project['default_base_branch'] ?? '');
 
         // Commit mode: resolve hash to full SHA
         if ($hash !== null) {
@@ -188,6 +196,8 @@ new #[Layout('layouts.app')] class extends Component
             $this->globalGitignorePath = app(BackfillGlobalGitignoreAction::class)
                 ->handle($this->projectId, $this->repoPath);
         }
+
+        $this->isSinceBaseView = $this->detectSinceBaseView();
 
         $this->rehydrateForTarget();
         $this->checkHeadDivergence();
@@ -226,6 +236,21 @@ new #[Layout('layouts.app')] class extends Component
             : DiffTarget::rangeToWorking($this->diffFrom);
     }
 
+    /**
+     * True when the current rangeToWorking view is exactly `base..working` for
+     * the project's configured base branch. Drives the "Since {base}" header
+     * label so the user can tell at a glance which view they're in.
+     */
+    private function detectSinceBaseView(): bool
+    {
+        if ($this->diffTo !== null || $this->defaultBaseBranch === '' || $this->diffFrom === 'HEAD') {
+            return false;
+        }
+
+        return app(IsSinceBaseViewAction::class)
+            ->handle($this->repoPath, $this->defaultBaseBranch, $this->diffFrom);
+    }
+
     private function loadCommitInfo(): void
     {
         if ($this->diffTo === null) {
@@ -254,6 +279,18 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $this->groupFiles();
+    }
+
+    public function updatedDefaultBaseBranch(): void
+    {
+        $value = trim($this->defaultBaseBranch);
+        $this->defaultBaseBranch = $value;
+
+        app(UpdateProjectSettingAction::class)->handle($this->projectId, [
+            'default_base_branch' => $value === '' ? null : $value,
+        ]);
+
+        $this->isSinceBaseView = $this->detectSinceBaseView();
     }
 
     public function updatedRespectGlobalGitignore(): void
@@ -1235,6 +1272,9 @@ new #[Layout('layouts.app')] class extends Component
                     if ($diffTo === null && $diffFrom === 'HEAD') {
                         $selectionLabel = 'Working tree';
                         $selectionTitle = 'Working tree changes';
+                    } elseif ($isSinceBaseView) {
+                        $selectionLabel = 'Since '.$defaultBaseBranch;
+                        $selectionTitle = 'All changes since '.$defaultBaseBranch.' (commits + uncommitted)';
                     } elseif ($diffTo === null) {
                         $selectionLabel = 'WT · '.$shortFrom;
                         $selectionTitle = 'Working tree + commits through '.$diffFrom;
@@ -1257,6 +1297,7 @@ new #[Layout('layouts.app')] class extends Component
                         :has-remote="$hasRemote"
                         :selection-label="$selectionLabel"
                         :selection-title="$selectionTitle"
+                        :default-base-branch="$defaultBaseBranch"
                     />
                 @endif
                 <livewire:comments-drawer :repo-path="$repoPath" :project-id="$projectId ?: null" />
@@ -1389,6 +1430,24 @@ new #[Layout('layouts.app')] class extends Component
                             <flux:menu.item keep-open>
                                 <flux:checkbox wire:model.live="respectGlobalGitignore" label="Global .gitignore" class="text-xs whitespace-nowrap" />
                             </flux:menu.item>
+                            <flux:menu.separator />
+                            <div class="px-3 py-2 w-56 space-y-1.5" wire:ignore.self>
+                                <label for="default-base-branch-input" class="block text-[10px] font-display font-semibold uppercase tracking-brutal text-gh-muted">
+                                    Base branch
+                                </label>
+                                <flux:input
+                                    id="default-base-branch-input"
+                                    data-testid="default-base-branch-input"
+                                    wire:model.live.debounce.400ms="defaultBaseBranch"
+                                    placeholder="dev, master, main…"
+                                    size="sm"
+                                    variant="filled"
+                                    class="!font-mono text-xs"
+                                />
+                                <p class="text-[10px] font-mono text-gh-muted/80 leading-snug">
+                                    Used by the "Since {base}" shortcut in the branch picker.
+                                </p>
+                            </div>
                         </flux:menu>
                     </flux:dropdown>
                 @endif
