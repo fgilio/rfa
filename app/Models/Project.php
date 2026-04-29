@@ -27,6 +27,7 @@ class Project extends Model
         'remote_url',
         'global_gitignore_path',
         'respect_global_gitignore',
+        'default_base_branch',
     ];
 
     /** @return HasMany<ReviewSession, $this> */
