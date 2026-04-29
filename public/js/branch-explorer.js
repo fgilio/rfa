@@ -72,6 +72,22 @@
         return { kind: 'navigate', url: `/p/${projectSlug}/${newest.hash}/${baseRef}` };
     }
 
+    /**
+     * Returns true when the current selection state is exactly "everything in base..HEAD
+     * plus working tree" — i.e., the user clicked the "Since {base}" row and hasn't trimmed.
+     *
+     * @param {object} input
+     * @param {string[]} input.selectedHashes
+     * @param {boolean}  input.workingTreeSelected
+     * @param {string[]} input.hashesInRange
+     */
+    function isSinceBaseExactly({ selectedHashes, workingTreeSelected, hashesInRange }) {
+        if (!workingTreeSelected) return false;
+        if (selectedHashes.length !== hashesInRange.length) return false;
+        const set = new Set(hashesInRange);
+        return selectedHashes.every(h => set.has(h));
+    }
+
     function createBranchExplorer({ currentBranch, activeCommitHash, activeDiffFrom, projectSlug, branches }) {
         return {
             open: false,
@@ -93,6 +109,30 @@
 
             get hasAnySelection() {
                 return this.workingTreeSelected || this.selectedHashes.length > 0;
+            },
+
+            /**
+             * Showing the "Since {base}" row only makes sense for the project's
+             * current branch — the configured base is HEAD-relative, not relative
+             * to whichever branch the picker happens to be displaying. The
+             * `on_base_branch` state is also hidden because comparing a branch
+             * to itself is nonsense.
+             */
+            get sinceBaseRowVisible() {
+                if (this.selectedBranch !== currentBranch) return false;
+                const base = this.$wire.branchBase;
+                if (!base) return false;
+                return base.state !== 'on_base_branch';
+            },
+
+            get sinceBaseSelected() {
+                const base = this.$wire.branchBase;
+                if (!base || base.state !== 'ready') return false;
+                return isSinceBaseExactly({
+                    selectedHashes: this.selectedHashes,
+                    workingTreeSelected: this.workingTreeSelected,
+                    hashesInRange: base.hashesInRange,
+                });
             },
 
             get selectionBadge() {
@@ -128,7 +168,13 @@
                 this.selectedIndex = 0;
                 this.clearSelection();
                 Alpine.store('overlays').open('branch-explorer');
-                await this.$wire.loadBranches();
+                // Resolve base info before loading commits so the commit-load
+                // can extend its window to cover all base..HEAD hashes when the
+                // configured base is more than `pageSize` commits behind.
+                await Promise.all([
+                    this.$wire.loadBranches(),
+                    this.$wire.loadBranchBase(),
+                ]);
                 this.allBranches = this.$wire.branches;
                 const currentIdx = this.allFiltered.findIndex(b => b.name === this.selectedBranch);
                 if (currentIdx >= 0) this.selectedIndex = currentIdx;
@@ -275,6 +321,29 @@
                 this.lastSelectionIndex = -1;
             },
 
+            /**
+             * Click handler for the "Since {base}" row. Fills the multi-select
+             * with every commit in `base..HEAD` plus working tree, so the user
+             * sees scope visually and can trim before pressing Apply. Toggles
+             * off when invoked while the exact since-base shape is already
+             * selected.
+             */
+            selectSinceBase() {
+                const base = this.$wire.branchBase;
+                if (!base || base.state !== 'ready') return;
+
+                if (this.sinceBaseSelected) {
+                    this.clearSelection();
+                    return;
+                }
+
+                this.selectedHashes = [...base.hashesInRange];
+                this.workingTreeSelected = true;
+                // Reset shift-click anchor so a subsequent shift-click on a
+                // commit doesn't extend from a stale index.
+                this.lastSelectionIndex = -1;
+            },
+
             // Press-and-hold on a commit's checkbox, then drag across rows to extend
             // the selection from the anchor. Mirrors the diff-file line-range gesture
             // so the app has one "mouse path selects a range" pattern, not two.
@@ -368,5 +437,5 @@
         }
     }
 
-    return { decideSelection, createBranchExplorer, install, autoInstall };
+    return { decideSelection, isSinceBaseExactly, createBranchExplorer, install, autoInstall };
 });

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import branchExplorer from '../../public/js/branch-explorer.js';
 
-const { decideSelection, install } = branchExplorer;
+const { decideSelection, isSinceBaseExactly, install } = branchExplorer;
 
 // Newest-first commit list. Index 0 = tip.
 const commits = [
@@ -163,6 +163,54 @@ describe('decideSelection — input cleaning', () => {
         // Without this guard, the function dereferences `commits[undefined].hash`
         // in the single-commit branch and throws.
         expect(decide({ selectedHashes })).toEqual({ kind: 'noop' });
+    });
+});
+
+describe('isSinceBaseExactly', () => {
+    const range = ['aaa1', 'bbb2', 'ccc3'];
+
+    it('returns true when WT + every range hash is selected (any order)', () => {
+        expect(isSinceBaseExactly({
+            selectedHashes: ['ccc3', 'aaa1', 'bbb2'],
+            workingTreeSelected: true,
+            hashesInRange: range,
+        })).toBe(true);
+    });
+
+    it('returns false when working tree is not selected', () => {
+        expect(isSinceBaseExactly({
+            selectedHashes: ['aaa1', 'bbb2', 'ccc3'],
+            workingTreeSelected: false,
+            hashesInRange: range,
+        })).toBe(false);
+    });
+
+    it('returns false when selection is missing a hash from the range', () => {
+        expect(isSinceBaseExactly({
+            selectedHashes: ['aaa1', 'bbb2'],
+            workingTreeSelected: true,
+            hashesInRange: range,
+        })).toBe(false);
+    });
+
+    it('returns false when selection has an extra hash beyond the range', () => {
+        expect(isSinceBaseExactly({
+            selectedHashes: ['aaa1', 'bbb2', 'ccc3', 'extra'],
+            workingTreeSelected: true,
+            hashesInRange: range,
+        })).toBe(false);
+    });
+
+    it('returns true for the empty range when only WT is selected', () => {
+        // The picker only renders the "Since {base}" row in the Ready state,
+        // which guarantees a non-empty range — but the helper must still handle
+        // the edge case sensibly so a future caller doesn't get a false positive
+        // from an unintended state.
+        expect(isSinceBaseExactly({
+            selectedHashes: [],
+            workingTreeSelected: true,
+            hashesInRange: [],
+        })).toBe(true);
     });
 });
 
