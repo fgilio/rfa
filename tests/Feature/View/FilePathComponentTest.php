@@ -86,3 +86,13 @@ test('directory span allows shrinking so the basename never gets clipped', funct
         ->toContain('truncate')
         ->toContain('shrink-0');
 });
+
+test('root-level basename allows truncation so it cannot bleed over neighboring icons', function () {
+    $html = Blade::render('<x-file-path path="20260428-migrate-cursor-rules-to-claude-code.md" />');
+
+    expect($html)
+        ->toContain('20260428-migrate-cursor-rules-to-claude-code.md')
+        ->toContain('min-w-0')
+        ->toContain('truncate')
+        ->not->toContain('shrink-0');
+});
