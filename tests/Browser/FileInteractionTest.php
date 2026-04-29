@@ -280,9 +280,11 @@ test('copy full paths prepends repo path to each entry', function () {
 
     $result = $page->script('window.__copiedText');
     expect($result)->not->toBeNull();
-    foreach (explode("\n", $result) as $line) {
-        expect($line)->toStartWith($this->testRepoPath.'/');
-    }
+
+    $expectedRepoPath = realpath($this->testRepoPath) ?: $this->testRepoPath;
+
+    collect(explode("\n", $result))
+        ->each(fn (string $line) => expect($line)->toStartWith($expectedRepoPath.'/'));
 });
 
 test('copy menu hides when filter excludes all files', function () {
@@ -292,4 +294,7 @@ test('copy menu hides when filter excludes all files', function () {
 
     $page->page()->getByTestId('sidebar-copy-paths')->waitFor(['state' => 'hidden']);
     $page->page()->getByTestId('status-strip-copy-paths')->waitFor(['state' => 'hidden']);
+
+    expect($page->page()->getByTestId('sidebar-copy-paths')->isHidden())->toBeTrue();
+    expect($page->page()->getByTestId('status-strip-copy-paths')->isHidden())->toBeTrue();
 });
