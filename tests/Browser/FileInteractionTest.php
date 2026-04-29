@@ -231,3 +231,65 @@ test('clicking delete x removes a comment', function () {
 
     $page->assertDontSee('Delete me');
 });
+
+test('sidebar copy file names dispatches newline-joined basenames', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    $page->script("
+        window.__copiedText = null;
+        window.addEventListener('copy-to-clipboard', e => window.__copiedText = e.detail.text);
+    ");
+
+    $page->page()->getByTestId('sidebar-copy-paths-trigger')->click();
+    $page->page()->getByRole('menuitem', ['name' => 'Copy file names'])->first()->click();
+
+    $result = $page->script('window.__copiedText');
+    expect($result)->not->toBeNull();
+    $lines = explode("\n", $result);
+    expect($lines)->toContain('hello.php')->toContain('utils.php')->toContain('config.php');
+    expect(count($lines))->toBe(3);
+});
+
+test('status strip copy relative paths dispatches relative paths', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    $page->script("
+        window.__copiedText = null;
+        window.addEventListener('copy-to-clipboard', e => window.__copiedText = e.detail.text);
+    ");
+
+    $page->page()->getByTestId('status-strip-copy-paths-trigger')->click();
+    $page->page()->getByRole('menuitem', ['name' => 'Copy relative paths'])->first()->click();
+
+    $result = $page->script('window.__copiedText');
+    expect($result)->not->toBeNull();
+    $lines = explode("\n", $result);
+    expect($lines)->toContain('hello.php')->toContain('utils.php')->toContain('config.php');
+});
+
+test('copy full paths prepends repo path to each entry', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    $page->script("
+        window.__copiedText = null;
+        window.addEventListener('copy-to-clipboard', e => window.__copiedText = e.detail.text);
+    ");
+
+    $page->page()->getByTestId('sidebar-copy-paths-trigger')->click();
+    $page->page()->getByRole('menuitem', ['name' => 'Copy full paths'])->first()->click();
+
+    $result = $page->script('window.__copiedText');
+    expect($result)->not->toBeNull();
+    foreach (explode("\n", $result) as $line) {
+        expect($line)->toStartWith($this->testRepoPath.'/');
+    }
+});
+
+test('copy menu hides when filter excludes all files', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $page->page()->getByPlaceholder('Filter files...')->fill('zzz-no-such-file');
+
+    $page->page()->getByTestId('sidebar-copy-paths')->waitFor(['state' => 'hidden']);
+    $page->page()->getByTestId('status-strip-copy-paths')->waitFor(['state' => 'hidden']);
+});

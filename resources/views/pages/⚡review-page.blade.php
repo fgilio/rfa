@@ -1090,6 +1090,31 @@ new #[Layout('layouts.app')] class extends Component
             const i = path.lastIndexOf('/');
             return i === -1 ? path : path.slice(i + 1);
         },
+        repoPath: @js($repoPath),
+        get visibleFileCount() {
+            return this.sourceFileEntries.filter(f => this.fileMatchesFilter(f.path, f.id)).length;
+        },
+        buildFullPath(path) {
+            const repo = this.repoPath || '';
+            if (!repo) return path;
+            return repo.replace(/\/+$/, '') + '/' + path;
+        },
+        copyVisibleFilePaths(kind) {
+            const files = this.sourceFileEntries.filter(f => this.fileMatchesFilter(f.path, f.id));
+            if (files.length === 0) return;
+            const lines = files.map(f => {
+                if (kind === 'name') return this.pathBase(f.path);
+                if (kind === 'full') return this.buildFullPath(f.path);
+                return f.path;
+            });
+            const labelMap = { name: 'file name', relative: 'relative path', full: 'full path' };
+            const label = labelMap[kind] || 'path';
+            const noun = files.length === 1 ? label : label + 's';
+            this.$dispatch('copy-to-clipboard', {
+                text: lines.join('\n'),
+                toast: `Copied ${files.length} ${noun}`,
+            });
+        },
         scrollToFile(id) {
             this.activeFile = id;
             this.$dispatch('expand-file', { id });
@@ -1411,11 +1436,38 @@ new #[Layout('layouts.app')] class extends Component
                 <span class="px-1.5 py-px rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
             @endif
 
-            <div x-show="reviewedCount > 0" x-cloak class="ml-auto flex items-center gap-2">
-                <span data-testid="reviewed-counter" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
-                <div class="w-24 h-0.5 bg-gh-border/50 rounded-full overflow-hidden">
-                    <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
+            <div class="ml-auto flex items-center gap-2">
+                <div x-show="reviewedCount > 0" x-cloak class="flex items-center gap-2">
+                    <span data-testid="reviewed-counter" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
+                    <div class="w-24 h-0.5 bg-gh-border/50 rounded-full overflow-hidden">
+                        <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
+                    </div>
                 </div>
+                @if(count($sourceFiles) > 0)
+                    <div data-testid="status-strip-copy-paths" x-show="visibleFileCount > 0">
+                        <flux:dropdown position="bottom" align="end">
+                            <flux:tooltip>
+                                <flux:button variant="ghost" size="xs" icon="square-2-stack" icon:variant="outline"
+                                    aria-label="Copy file paths"
+                                    data-testid="status-strip-copy-paths-trigger" />
+                                <flux:tooltip.content>
+                                    <span x-text="`Copy paths for ${visibleFileCount} ${visibleFileCount === 1 ? 'file' : 'files'}`"></span>
+                                </flux:tooltip.content>
+                            </flux:tooltip>
+                            <flux:menu>
+                                <flux:menu.item icon="document" icon:variant="outline" @click="copyVisibleFilePaths('name')">
+                                    Copy file names
+                                </flux:menu.item>
+                                <flux:menu.item icon="document-duplicate" icon:variant="outline" @click="copyVisibleFilePaths('relative')">
+                                    Copy relative paths
+                                </flux:menu.item>
+                                <flux:menu.item icon="link" icon:variant="outline" @click="copyVisibleFilePaths('full')">
+                                    Copy full paths
+                                </flux:menu.item>
+                            </flux:menu>
+                        </flux:dropdown>
+                    </div>
+                @endif
             </div>
         </div>
     </div>
@@ -1527,7 +1579,34 @@ new #[Layout('layouts.app')] class extends Component
                     <div class="border-b border-gh-border my-3"></div>
                 @endif
 
-                <span class="section-label text-gh-muted mb-3 block">Files</span>
+                <div class="flex items-center justify-between mb-3">
+                    <span class="section-label text-gh-muted">Files</span>
+                    @if(count($sourceFiles) > 0)
+                        <div data-testid="sidebar-copy-paths" x-show="visibleFileCount > 0">
+                            <flux:dropdown position="bottom" align="end">
+                                <flux:tooltip>
+                                    <flux:button variant="ghost" size="xs" icon="square-2-stack" icon:variant="outline"
+                                        aria-label="Copy file paths"
+                                        data-testid="sidebar-copy-paths-trigger" />
+                                    <flux:tooltip.content>
+                                        <span x-text="`Copy paths for ${visibleFileCount} ${visibleFileCount === 1 ? 'file' : 'files'}`"></span>
+                                    </flux:tooltip.content>
+                                </flux:tooltip>
+                                <flux:menu>
+                                    <flux:menu.item icon="document" icon:variant="outline" @click="copyVisibleFilePaths('name')">
+                                        Copy file names
+                                    </flux:menu.item>
+                                    <flux:menu.item icon="document-duplicate" icon:variant="outline" @click="copyVisibleFilePaths('relative')">
+                                        Copy relative paths
+                                    </flux:menu.item>
+                                    <flux:menu.item icon="link" icon:variant="outline" @click="copyVisibleFilePaths('full')">
+                                        Copy full paths
+                                    </flux:menu.item>
+                                </flux:menu>
+                            </flux:dropdown>
+                        </div>
+                    @endif
+                </div>
                 <flux:input
                     x-model.debounce.150ms="fileFilter"
                     placeholder="Filter files..."
