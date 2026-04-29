@@ -21,8 +21,6 @@ Route::livewire('/p/{slug}/rw/{rangeFromWorking}', 'pages::review-page')
     ->name('review-page.range-to-working');
 Route::livewire('/p/{slug}/{ref?}/{baseRef?}', 'pages::review-page')->name('review-page');
 
-Route::livewire('/file-path-lab', 'pages::file-path-lab')->name('file-path-lab');
-
 Route::get('/api/status/{project}', function (Project $project) {
     $globalGitignorePath = $project->respect_global_gitignore ? $project->global_gitignore_path : null;
 

@@ -1560,7 +1560,7 @@ new #[Layout('layouts.app')] class extends Component
                                 <button type="button" @click="scrollToFile(id)" class="flex items-center gap-2.5 min-w-0 flex-1">
                                     <span class="font-mono font-medium shrink-0" :class="filesById[id]?.badgeClass" x-text="filesById[id]?.badgeLabel"></span>
                                     <span class="font-mono line-through opacity-80 inline-flex items-baseline min-w-0 max-w-full" :title="filesById[id]?.path">
-                                        <span class="min-w-0 truncate opacity-60" x-text="pathDir(filesById[id]?.path)"></span><span class="shrink-0 font-semibold" x-text="pathBase(filesById[id]?.path)"></span>
+                                        <span class="min-w-0 truncate text-gh-muted/70" x-text="pathDir(filesById[id]?.path)"></span><span class="shrink-0 text-gh-text" x-text="pathBase(filesById[id]?.path)"></span>
                                     </span>
                                 </button>
                                 <flux:tooltip content="Un-mark as reviewed">

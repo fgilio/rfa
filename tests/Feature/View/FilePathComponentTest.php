@@ -11,8 +11,8 @@ test('emphasizes the basename and dims the directory', function () {
     expect($html)
         ->toContain('app/Domains/Metadata/Traits/')
         ->toContain('HasTaxonomies.php')
-        ->toContain('opacity-60')
-        ->toContain('font-semibold');
+        ->toContain('text-gh-muted/70')
+        ->toContain('text-gh-text');
 });
 
 test('renders the full path in the title attribute by default', function () {
@@ -34,7 +34,7 @@ test('renders a single-token path entirely as basename', function () {
 
     expect($html)
         ->toContain('README.md')
-        ->toContain('font-semibold');
+        ->toContain('text-gh-text');
 });
 
 test('renders rename with old path muted on the left', function () {
@@ -44,7 +44,7 @@ test('renders rename with old path muted on the left', function () {
         ->toContain('src/Old.php')
         ->toContain('src/New.php')
         ->toContain('→')
-        ->toContain('opacity-50');
+        ->toContain('text-gh-muted/50');
 });
 
 test('rename title shows old → new', function () {

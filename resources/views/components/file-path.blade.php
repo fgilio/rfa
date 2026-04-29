@@ -34,7 +34,7 @@
 
 <span {{ $attributes->merge(['class' => 'font-mono inline-flex items-baseline min-w-0 max-w-full', 'title' => $defaultTitle]) }}>
     @if($hasOldPath)
-        <span class="min-w-0 truncate opacity-50">{{ $oldPath }}</span><span class="shrink-0 opacity-50">&nbsp;→&nbsp;</span>
+        <span class="min-w-0 truncate text-gh-muted/50">{{ $oldPath }}</span><span class="shrink-0 text-gh-muted/50">&nbsp;→&nbsp;</span>
     @endif
-    <span class="min-w-0 truncate opacity-60">{{ $dir }}</span><span class="shrink-0 font-semibold">{{ $base }}</span>
+    <span class="min-w-0 truncate text-gh-muted/70">{{ $dir }}</span><span class="shrink-0 text-gh-text">{{ $base }}</span>
 </span>

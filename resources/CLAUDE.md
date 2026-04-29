@@ -18,15 +18,16 @@ A file path is two pieces of information stitched together: the **identifier** (
 
 ### Rules
 
-- **Identifier-first hierarchy.** Basename gets `font-semibold` and full opacity; directory stays at `opacity-60`. Never render them at equal weight.
+- **Identifier-first hierarchy via color, not weight.** Directory renders in `text-gh-muted/70`; basename renders in `text-gh-text` (full color, default weight). No `font-semibold` or `font-medium` — weight stays consistent across the line so the rhythm of a long list doesn't read as ink-heavy.
+- **Use real muted color, not opacity.** The directory is `text-gh-muted/70`, not `opacity-60`. Opacity multiplies against whatever the parent text color already is, which compounds to illegibility inside already-muted parents. Real colors stay legible regardless of context.
 - **Use `<x-file-path>`.** All path rendering goes through `resources/views/components/file-path.blade.php`. New ad-hoc `{{ $file['path'] }}` inside a `font-mono` span is a code smell — replace it.
 - **Preserve the path semantically.** Path order stays `directory/basename`. The DOM is one continuous text flow so selection and copy yield the real path. The full path lives in `title` (the component sets it by default; callers can override).
 - **Truncation never eats the basename.** The component lays out `inline-flex` with the directory as the only shrinkable item; when the row narrows, the directory ellipsizes and the basename stays whole. Don't wrap the component in a `truncate` class — let it shrink itself.
-- **Renames use `:old-path`.** Don't hand-roll the `→` arrow. The component renders `oldPath → newPath` with the old side fully muted and the new side following identifier-first emphasis.
-- **Annotations are dimmed, not bolded.** Symlink targets, last-modified hints, and similar metadata stay muted regardless of position. They're not part of the identifier.
+- **Renames use `:old-path`.** Don't hand-roll the `→` arrow. The component renders `oldPath → newPath` with the old side at `text-gh-muted/50` (more faded than the regular directory) and the new side following identifier-first emphasis.
+- **Annotations stay muted.** Symlink targets, last-modified hints, and similar metadata render at the same muted level regardless of position. They're not part of the identifier.
 - **Reordered (basename-first) form is reserved for fuzzy pickers.** If/when a command-palette-style search lands, that's where `HasTaxonomies.php  ·  app/Domains/Metadata/Traits` belongs. Don't use it in lists where the path's left-to-right order encodes meaning (changed-files, comments grouping).
 - **Basename-only displays don't go through the component.** When you've intentionally extracted just the basename (e.g. trash list, where the row is too narrow for context), just render the string. The component is for path rendering, not single-token labels.
-- **Weight is additive to color, not a substitute for it.** Screen readers don't read weight; keep contrast WCAG AA on the muted directory text and provide `aria-label` / `title` with the full path on interactive containers.
+- **Provide `aria-label` / `title` with the full path on interactive containers.** Screen readers need the literal path; color contrast alone isn't reachable.
 
 ### Alpine-rendered paths
 
