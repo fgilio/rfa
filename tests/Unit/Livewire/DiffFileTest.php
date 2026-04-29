@@ -23,7 +23,7 @@ beforeEach(function () {
     // Mock LoadFileDiffAction so it never touches git
     app()->bind(LoadFileDiffAction::class, fn () => new class
     {
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null): array
         {
             return DiffFixtureFactory::diffData(path: $path);
         }
@@ -307,7 +307,7 @@ function mountMultiHunkDiffFile(array $diffData, array $file): Testable
     {
         public function __construct(private array $diffData) {}
 
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null): array
         {
             return $this->diffData;
         }

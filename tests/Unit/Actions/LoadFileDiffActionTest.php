@@ -76,6 +76,48 @@ test('handles untracked file', function () {
         ->and($result['path'])->toBe('newfile.txt');
 });
 
+test('renamed file passes oldPath so rename detection finds the source', function () {
+    // Seed a file with enough lines that git's similarity threshold (50%) passes
+    // after a small edit. Without rename detection, the diff would be reported
+    // as an unrelated add+delete pair.
+    $original = implode("\n", array_map(fn ($i) => "line {$i}", range(1, 20)))."\n";
+    File::put($this->tmpDir.'/old.txt', $original);
+    $this->commitTestRepo($this->tmpDir, 'add old.txt');
+
+    // Rename + small modification (drop one line) — staying well above 50% similarity.
+    $this->runTestRepoCommand($this->tmpDir, ['git mv old.txt new.txt']);
+    $modified = implode("\n", array_map(fn ($i) => "line {$i}", range(1, 19)))."\n";
+    File::put($this->tmpDir.'/new.txt', $modified);
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService, new CsvAlignerService, new MarkdownRegionService);
+    $result = $action->handle($this->tmpDir, 'new.txt', oldPath: 'old.txt');
+
+    expect($result['status'])->toBe('renamed')
+        ->and($result['oldPath'])->toBe('old.txt')
+        ->and($result['additions'])->toBe(0)
+        ->and($result['deletions'])->toBe(1);
+});
+
+test('without oldPath the rename diff degrades to all additions', function () {
+    // Same setup as above; this guards against a regression where the caller
+    // forgets to pass oldPath and git silently treats the new path as unrelated.
+    $original = implode("\n", array_map(fn ($i) => "line {$i}", range(1, 20)))."\n";
+    File::put($this->tmpDir.'/old.txt', $original);
+    $this->commitTestRepo($this->tmpDir, 'add old.txt for solo lookup');
+
+    $this->runTestRepoCommand($this->tmpDir, ['git mv old.txt new.txt']);
+    $modified = implode("\n", array_map(fn ($i) => "line {$i}", range(1, 19)))."\n";
+    File::put($this->tmpDir.'/new.txt', $modified);
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService, new CsvAlignerService, new MarkdownRegionService);
+    $result = $action->handle($this->tmpDir, 'new.txt');
+
+    expect($result['status'])->toBe('added')
+        ->and($result['oldPath'])->toBeNull()
+        ->and($result['additions'])->toBe(19)
+        ->and($result['deletions'])->toBe(0);
+});
+
 // -- syntax highlighting --
 
 test('adds highlightedContent for known file types', function () {

@@ -19,7 +19,7 @@ final readonly class GetFileCopyContentAction
     public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null): ?string
     {
         return match ($kind) {
-            'diff' => $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, target: $target),
+            'diff' => $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, target: $target, oldPath: $oldPath),
             'original' => $this->gitMetadataService->getFileContent($repoPath, $oldPath ?? $path, $target->from()),
             'new' => $this->gitMetadataService->getFileContent($repoPath, $path, $target->to() ?? GitRef::Working->value),
             default => null,

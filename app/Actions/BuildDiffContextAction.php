@@ -42,7 +42,7 @@ final readonly class BuildDiffContextAction
                 $cached = Cache::get(DiffCacheKey::for($repoPath, $fileId));
                 $loaded[$fileId] = DiffCacheKey::isCurrentShape($cached)
                     ? $cached
-                    : $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false);
+                    : $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false, oldPath: $file['oldPath'] ?? null);
             }
 
             $diffData = $loaded[$fileId];

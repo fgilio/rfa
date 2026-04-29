@@ -254,7 +254,7 @@ class GitDiffService
         return File::isFile($fullPath) ? hash_file('xxh128', $fullPath) : '';
     }
 
-    public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3, ?DiffTarget $target = null): ?string
+    public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null): ?string
     {
         $target ??= DiffTarget::workingDirectory();
         $maxBytes ??= config('rfa.diff_max_bytes', 512_000);
@@ -265,10 +265,14 @@ class GitDiffService
 
         $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
 
+        // Rename-detection only fires when both sides of the rename are within
+        // the pathspec; pass the old path alongside so git can pair them.
+        $renamePaths = $oldPath !== null && $oldPath !== $path ? [$oldPath] : [];
+
         $raw = $this->git->run($repoPath, [
             ...$target->toDiffArgs(),
             '--no-color', '--no-ext-diff', "--unified={$contextLines}", '--text', '--find-renames',
-            '--', $path, ...$excludes,
+            '--', $path, ...$renamePaths, ...$excludes,
         ]);
 
         if (strlen($raw) > $maxBytes) {

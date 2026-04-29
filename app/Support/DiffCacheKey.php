@@ -31,6 +31,7 @@ final class DiffCacheKey
             && array_key_exists('newFileLineCount', $cached)
             && array_key_exists('headingsAnnotated', $cached)
             && array_key_exists('gridLayout', $cached)
-            && array_key_exists('lineTypesAreEnum', $cached);
+            && array_key_exists('lineTypesAreEnum', $cached)
+            && array_key_exists('renameAware', $cached);
     }
 }

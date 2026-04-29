@@ -72,6 +72,7 @@ new class extends Component {
             $this->file['isUntracked'] ?? false,
             cacheKey: $this->diffCacheKey(),
             target: $this->buildDiffTarget(),
+            oldPath: $this->file['oldPath'] ?? null,
         );
 
         $this->ensureCommentedLinesVisible();
@@ -105,6 +106,7 @@ new class extends Component {
             cacheKey: $cacheKey,
             contextLines: 99999,
             target: $this->buildDiffTarget(),
+            oldPath: $this->file['oldPath'] ?? null,
         );
     }
 
@@ -121,6 +123,7 @@ new class extends Component {
             cacheKey: $this->diffCacheKey(':full-context'),
             contextLines: 99999,
             target: $this->buildDiffTarget(),
+            oldPath: $this->file['oldPath'] ?? null,
         );
 
         if (empty($fullDiff['hunks'])) {

@@ -19,7 +19,7 @@ test('diff kind delegates to GitDiffService::getFileDiff with the target', funct
 
     $diff = Mockery::mock(GitDiffService::class);
     $diff->shouldReceive('getFileDiff')
-        ->with('/tmp/repo', 'src/foo.php', true, null, 3, Mockery::on(fn ($t) => $t === $target))
+        ->with('/tmp/repo', 'src/foo.php', true, null, 3, Mockery::on(fn ($t) => $t === $target), null)
         ->once()
         ->andReturn('diff body');
 

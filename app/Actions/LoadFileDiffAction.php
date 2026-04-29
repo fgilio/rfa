@@ -29,13 +29,13 @@ final readonly class LoadFileDiffAction
     ) {}
 
     /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool, syntaxStyles: string} */
-    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null): array
+    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null): array
     {
         $target ??= DiffTarget::workingDirectory();
 
-        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target): array {
+        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target, $oldPath): array {
             try {
-                $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, contextLines: $contextLines, target: $target);
+                $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, contextLines: $contextLines, target: $target, oldPath: $oldPath);
             } catch (GitCommandException $e) {
                 Log::warning('Git diff failed', ['path' => $path, 'stderr' => $e->stderr]);
 
@@ -90,6 +90,7 @@ final readonly class LoadFileDiffAction
                 'headingsAnnotated' => true,
                 'gridLayout' => true,
                 'lineTypesAreEnum' => true,
+                'renameAware' => true,
             ];
         };
 
