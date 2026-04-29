@@ -10,6 +10,7 @@
     <script src="/js/settings-store.js"></script>
     <script src="/js/overlays-store.js"></script>
     <script src="/js/keymap-store.js"></script>
+    <script src="/js/zoom-shortcuts.js"></script>
     <script src="/js/page-search.js"></script>
     <script src="/js/session-recovery.js"></script>
     <script src="/js/smart-poll.js"></script>

@@ -6,10 +6,10 @@ namespace App\Providers;
 
 use App\Actions\OpenProjectFromPathAction;
 use App\Actions\ResolveStartupRouteAction;
+use App\Actions\ZoomWindowAction;
 use App\Console\Benchmark\BenchmarkIsolation;
 use App\Listeners\HandleDeepLink;
 use App\Listeners\HandleMenuItemClicked;
-use App\Support\ZoomRoleMenuItem;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
@@ -135,6 +135,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->minWidth(800)
             ->minHeight(600)
             ->backgroundColor('#0d1117')
+            ->zoomFactor((float) Cache::get(ZoomWindowAction::CACHE_KEY, ZoomWindowAction::DEFAULT))
             ->url(app(ResolveStartupRouteAction::class)->handle())
             ->rememberState();
     }
@@ -166,19 +167,26 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                     ->icon(resource_path('icons/scan-folderTemplate.png')),
             )->label('File'),
             Menu::edit(),
-            // Custom View submenu that intentionally omits `reload`. The
-            // viewMenu role would otherwise bind ⌘R to Electron's built-in
-            // reload accelerator — NativePHP's menu helper strips custom
-            // accelerators from role items, so the binding can't be retargeted
-            // and the keydown never reaches the renderer. Keeping the View
-            // menu lean here lets the ⌘R registration in the review page's
-            // keymap store fire as intended. The zoom role items are added
-            // explicitly because NativePHP's RolesEnum doesn't expose them,
-            // and dropping viewMenu also drops their default ⌘+/⌘-/⌘0 bindings.
+            // Custom View submenu that intentionally omits `reload` and uses
+            // plain id'd labels (no role, no accelerator) for the zoom items:
+            //
+            //   - viewMenu would bind ⌘R to Electron's built-in reload, and
+            //     NativePHP's menu helper strips custom accelerators from role
+            //     items so the binding can't be retargeted (⌘R is owned by the
+            //     review page's keymap store).
+            //   - The zoom roles' `webContentsMethod` is registered as a macOS
+            //     menu accelerator on Electron 38, but the keystroke fails to
+            //     fire it — only mouse clicks do (electron/electron#19559,
+            //     #15496). Setting an explicit `accelerator` doesn't help; the
+            //     keystroke is still consumed and silently dropped. Stripping
+            //     both `role` and `accelerator` lets the keystroke fall through
+            //     to the renderer keymap, which dispatches `rfa-zoom` to the
+            //     keepalive component (see resources/views/livewire/keepalive
+            //     and public/js/zoom-shortcuts.js).
             Menu::make(
-                new ZoomRoleMenuItem('resetZoom', 'Actual Size'),
-                new ZoomRoleMenuItem('zoomIn', 'Zoom In'),
-                new ZoomRoleMenuItem('zoomOut', 'Zoom Out'),
+                Menu::label('Actual Size')->id('reset-zoom'),
+                Menu::label('Zoom In')->id('zoom-in'),
+                Menu::label('Zoom Out')->id('zoom-out'),
                 Menu::separator(),
                 Menu::fullscreen(),
                 Menu::separator(),
