@@ -6,10 +6,14 @@ namespace App\Providers;
 
 use App\Actions\OpenProjectFromPathAction;
 use App\Actions\ResolveStartupRouteAction;
+use App\Actions\ZoomWindowAction;
 use App\Console\Benchmark\BenchmarkIsolation;
+use App\Events\ZoomShortcutPressed;
 use App\Listeners\HandleDeepLink;
 use App\Listeners\HandleMenuItemClicked;
-use App\Support\ZoomRoleMenuItem;
+use App\Listeners\HandleZoomShortcutPressed;
+use App\Listeners\RegisterZoomGlobalShortcuts;
+use App\Listeners\UnregisterZoomGlobalShortcuts;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
@@ -24,7 +28,9 @@ use Native\Desktop\Events\AutoUpdater\UpdateAvailable;
 use Native\Desktop\Events\AutoUpdater\UpdateDownloaded;
 use Native\Desktop\Events\AutoUpdater\UpdateNotAvailable;
 use Native\Desktop\Events\Menu\MenuItemClicked;
+use Native\Desktop\Events\Windows\WindowBlurred;
 use Native\Desktop\Events\Windows\WindowClosed;
+use Native\Desktop\Events\Windows\WindowFocused;
 use Native\Desktop\Facades\App;
 use Native\Desktop\Facades\Menu;
 use Native\Desktop\Facades\Window;
@@ -41,14 +47,22 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         $this->ensureNativeDevelopmentDatabaseIsMigrated();
         $this->clearCompiledViewsForDev();
 
+        $this->registerNativeEventListeners();
         $this->createMenu();
         $this->createWindow();
         $this->processInbox();
+    }
 
+    private function registerNativeEventListeners(): void
+    {
         Event::listen(MenuItemClicked::class, HandleMenuItemClicked::class);
         Event::listen(OpenedFromURL::class, HandleDeepLink::class);
+        Event::listen(WindowFocused::class, RegisterZoomGlobalShortcuts::class);
+        Event::listen(WindowBlurred::class, UnregisterZoomGlobalShortcuts::class);
+        Event::listen(ZoomShortcutPressed::class, HandleZoomShortcutPressed::class);
         Event::listen(WindowClosed::class, function (WindowClosed $event) {
             if ($event->id === 'main') {
+                UnregisterZoomGlobalShortcuts::unregister();
                 App::quit();
             }
         });
@@ -135,6 +149,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->minWidth(800)
             ->minHeight(600)
             ->backgroundColor('#0d1117')
+            ->zoomFactor(app(ZoomWindowAction::class)->current())
             ->url(app(ResolveStartupRouteAction::class)->handle())
             ->rememberState();
     }
@@ -166,19 +181,22 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                     ->icon(resource_path('icons/scan-folderTemplate.png')),
             )->label('File'),
             Menu::edit(),
-            // Custom View submenu that intentionally omits `reload`. The
-            // viewMenu role would otherwise bind ⌘R to Electron's built-in
-            // reload accelerator — NativePHP's menu helper strips custom
-            // accelerators from role items, so the binding can't be retargeted
-            // and the keydown never reaches the renderer. Keeping the View
-            // menu lean here lets the ⌘R registration in the review page's
-            // keymap store fire as intended. The zoom role items are added
-            // explicitly because NativePHP's RolesEnum doesn't expose them,
-            // and dropping viewMenu also drops their default ⌘+/⌘-/⌘0 bindings.
+            // Custom View submenu that intentionally omits `reload` and uses
+            // plain id'd labels (no role, no accelerator) for the zoom items:
+            //
+            //   - viewMenu would bind ⌘R to Electron's built-in reload, and
+            //     NativePHP's menu helper strips custom accelerators from role
+            //     items so the binding can't be retargeted (⌘R is owned by the
+            //     review page's keymap store).
+            //   - The zoom roles' `webContentsMethod` is registered as a macOS
+            //     menu accelerator on Electron 38, but the keystroke fails to
+            //     fire it - only mouse clicks do (electron/electron#19559,
+            //     #15496). Setting explicit menu accelerators doesn't help.
+            //     Keyboard zoom is owned by focus-scoped global shortcuts.
             Menu::make(
-                new ZoomRoleMenuItem('resetZoom', 'Actual Size'),
-                new ZoomRoleMenuItem('zoomIn', 'Zoom In'),
-                new ZoomRoleMenuItem('zoomOut', 'Zoom Out'),
+                Menu::label('Actual Size')->id('reset-zoom'),
+                Menu::label('Zoom In')->id('zoom-in'),
+                Menu::label('Zoom Out')->id('zoom-out'),
                 Menu::separator(),
                 Menu::fullscreen(),
                 Menu::separator(),
