@@ -32,15 +32,25 @@
     /**
      * Idempotent: keymap-store's `register` overwrites by combo, so calling
      * this on every `livewire:navigated` is safe.
+     *
+     * `allowInEditable` keeps zoom working while typing in comment inputs —
+     * there is no menu-level fallback now that the View-menu items don't
+     * carry an accelerator.
+     *
+     * Both `⌘=` and `⌘⇧+` map to zoom-in: on US layouts the canonical
+     * "Cmd plus" is shift+= which produces `key='+'`, so without the
+     * shifted variant Chrome's familiar combo would silently miss.
      * @param {Window & { Alpine?: any }} root
      */
     function register(root) {
         const keymap = root.Alpine?.store?.('keymap');
         if (!keymap) return false;
 
-        keymap.register('⌘=', dispatch(root, 'in'));
-        keymap.register('⌘-', dispatch(root, 'out'));
-        keymap.register('⌘0', dispatch(root, 'reset'));
+        const opts = { allowInEditable: true };
+        keymap.register('⌘=', dispatch(root, 'in'), opts);
+        keymap.register('⌘⇧+', dispatch(root, 'in'), opts);
+        keymap.register('⌘-', dispatch(root, 'out'), opts);
+        keymap.register('⌘0', dispatch(root, 'reset'), opts);
         return true;
     }
 
