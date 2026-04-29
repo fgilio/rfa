@@ -8,8 +8,12 @@ use App\Actions\OpenProjectFromPathAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\ZoomWindowAction;
 use App\Console\Benchmark\BenchmarkIsolation;
+use App\Events\ZoomShortcutPressed;
 use App\Listeners\HandleDeepLink;
 use App\Listeners\HandleMenuItemClicked;
+use App\Listeners\HandleZoomShortcutPressed;
+use App\Listeners\RegisterZoomGlobalShortcuts;
+use App\Listeners\UnregisterZoomGlobalShortcuts;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
@@ -24,7 +28,9 @@ use Native\Desktop\Events\AutoUpdater\UpdateAvailable;
 use Native\Desktop\Events\AutoUpdater\UpdateDownloaded;
 use Native\Desktop\Events\AutoUpdater\UpdateNotAvailable;
 use Native\Desktop\Events\Menu\MenuItemClicked;
+use Native\Desktop\Events\Windows\WindowBlurred;
 use Native\Desktop\Events\Windows\WindowClosed;
+use Native\Desktop\Events\Windows\WindowFocused;
 use Native\Desktop\Facades\App;
 use Native\Desktop\Facades\Menu;
 use Native\Desktop\Facades\Window;
@@ -41,14 +47,22 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         $this->ensureNativeDevelopmentDatabaseIsMigrated();
         $this->clearCompiledViewsForDev();
 
+        $this->registerNativeEventListeners();
         $this->createMenu();
         $this->createWindow();
         $this->processInbox();
+    }
 
+    private function registerNativeEventListeners(): void
+    {
         Event::listen(MenuItemClicked::class, HandleMenuItemClicked::class);
         Event::listen(OpenedFromURL::class, HandleDeepLink::class);
+        Event::listen(WindowFocused::class, RegisterZoomGlobalShortcuts::class);
+        Event::listen(WindowBlurred::class, UnregisterZoomGlobalShortcuts::class);
+        Event::listen(ZoomShortcutPressed::class, HandleZoomShortcutPressed::class);
         Event::listen(WindowClosed::class, function (WindowClosed $event) {
             if ($event->id === 'main') {
+                UnregisterZoomGlobalShortcuts::unregister();
                 App::quit();
             }
         });
@@ -176,13 +190,9 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             //     review page's keymap store).
             //   - The zoom roles' `webContentsMethod` is registered as a macOS
             //     menu accelerator on Electron 38, but the keystroke fails to
-            //     fire it — only mouse clicks do (electron/electron#19559,
-            //     #15496). Setting an explicit `accelerator` doesn't help; the
-            //     keystroke is still consumed and silently dropped. Stripping
-            //     both `role` and `accelerator` lets the keystroke fall through
-            //     to the renderer keymap, which dispatches `rfa-zoom` to the
-            //     keepalive component (see resources/views/livewire/keepalive
-            //     and public/js/zoom-shortcuts.js).
+            //     fire it - only mouse clicks do (electron/electron#19559,
+            //     #15496). Setting explicit menu accelerators doesn't help.
+            //     Keyboard zoom is owned by focus-scoped global shortcuts.
             Menu::make(
                 Menu::label('Actual Size')->id('reset-zoom'),
                 Menu::label('Zoom In')->id('zoom-in'),

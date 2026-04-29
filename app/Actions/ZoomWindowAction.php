@@ -14,9 +14,8 @@ use Native\Desktop\Facades\Window;
  * Electron 38's role-based zoom accelerators (`zoomIn`/`zoomOut`/`resetZoom`)
  * register on macOS but the keystroke fails to fire `webContentsMethod`,
  * leaving ⌘- silently dead. This action is the single point of truth for
- * zoom adjustments — both the View-menu click handler and the renderer
- * keymap route through it, so the menu accelerator system is bypassed
- * entirely.
+ * zoom adjustments - the View-menu click handler and focus-scoped global
+ * shortcuts route through it.
  */
 final readonly class ZoomWindowAction
 {
