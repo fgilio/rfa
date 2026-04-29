@@ -1612,10 +1612,19 @@ new #[Layout('layouts.app')] class extends Component
                             @if($file['isSymlink'] ?? false)
                                 <flux:icon icon="link" variant="outline" class="!size-3 text-gh-muted shrink-0" aria-hidden="true" />
                             @endif
+                            @php
+                                // Build the tooltip in PHP: a literal `"` inside a Blade `{{ }}` interpolation
+                                // (e.g. `"\nModified "`) confuses the component attribute parser, which closes
+                                // the surrounding HTML attribute at that `"` and shreds the rest into bogus
+                                // boolean attributes.
+                                $fileTitle = $file['path']
+                                    .(($file['isSymlink'] ?? false) ? ' -> '.$file['symlinkTarget'] : '')
+                                    .(($file['lastModified'] ?? null) ? "\nModified ".$file['lastModified'] : '');
+                            @endphp
                             <x-file-path
                                 :path="$file['path']"
                                 class="text-xs"
-                                title="{{ $file['path'] }}{{ ($file['isSymlink'] ?? false) ? ' -> ' . $file['symlinkTarget'] : '' }}{{ ($file['lastModified'] ?? null) ? "\nModified " . $file['lastModified'] : '' }}"
+                                :title="$fileTitle"
                             />
                         </button>
                         <flux:tooltip>
