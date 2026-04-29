@@ -1,7 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import branchExplorer from '../../public/js/branch-explorer.js';
 
-const { decideSelection, install } = branchExplorer;
+const { decideSelection, isSinceBaseExactly, createBranchExplorer, install } = branchExplorer;
+
+/** Minimal factory wrapper for tests that exercise the Alpine state machine
+ *  directly. Provides a stub `$wire` that the production code reads from. */
+function makeAlpine({ commits = [], branchBase = null, currentBranch = 'main' } = {}) {
+    const a = createBranchExplorer({
+        currentBranch,
+        activeCommitHash: null,
+        activeDiffFrom: 'HEAD',
+        projectSlug: 'p',
+        branches: { local: [], remote: [] },
+    });
+    a.$wire = { commits, branchBase };
+    return a;
+}
+
+const noopEvent = () => ({ stopPropagation: () => {}, shiftKey: false });
 
 // Newest-first commit list. Index 0 = tip.
 const commits = [
@@ -127,6 +143,40 @@ describe('decideSelection — working tree + commits', () => {
         expect(result.message).toContain('pick every commit');
         expect(result.message).not.toContain('paired with the newest commits');
     });
+
+    it('uses the resolved merge-base for an exact since-base selection', () => {
+        expect(decideSelection({
+            commits,
+            selectedHashes: ['aaa1', 'bbb2', 'ccc3'],
+            workingTreeSelected: true,
+            projectSlug: slug,
+            sinceBase: {
+                state: 'ready',
+                baseSha: '1234567890abcdef1234567890abcdef12345678',
+                hashesInRange: ['aaa1', 'bbb2', 'ccc3'],
+            },
+        })).toEqual({
+            kind: 'navigate',
+            url: '/p/myproj/rw/1234567890abcdef1234567890abcdef12345678',
+        });
+    });
+
+    it('falls back to the trimmed range when since-base selection is edited', () => {
+        expect(decideSelection({
+            commits,
+            selectedHashes: ['aaa1', 'bbb2'],
+            workingTreeSelected: true,
+            projectSlug: slug,
+            sinceBase: {
+                state: 'ready',
+                baseSha: '1234567890abcdef1234567890abcdef12345678',
+                hashesInRange: ['aaa1', 'bbb2', 'ccc3'],
+            },
+        })).toEqual({
+            kind: 'navigate',
+            url: '/p/myproj/rw/bbb2%5E',
+        });
+    });
 });
 
 describe('decideSelection — input cleaning', () => {
@@ -163,6 +213,132 @@ describe('decideSelection — input cleaning', () => {
         // Without this guard, the function dereferences `commits[undefined].hash`
         // in the single-commit branch and throws.
         expect(decide({ selectedHashes })).toEqual({ kind: 'noop' });
+    });
+});
+
+describe('isSinceBaseExactly', () => {
+    const range = ['aaa1', 'bbb2', 'ccc3'];
+
+    it('returns true when WT + every range hash is selected (any order)', () => {
+        expect(isSinceBaseExactly({
+            selectedHashes: ['ccc3', 'aaa1', 'bbb2'],
+            workingTreeSelected: true,
+            hashesInRange: range,
+        })).toBe(true);
+    });
+
+    it('returns false when working tree is not selected', () => {
+        expect(isSinceBaseExactly({
+            selectedHashes: ['aaa1', 'bbb2', 'ccc3'],
+            workingTreeSelected: false,
+            hashesInRange: range,
+        })).toBe(false);
+    });
+
+    it('returns false when selection is missing a hash from the range', () => {
+        expect(isSinceBaseExactly({
+            selectedHashes: ['aaa1', 'bbb2'],
+            workingTreeSelected: true,
+            hashesInRange: range,
+        })).toBe(false);
+    });
+
+    it('returns false when selection has an extra hash beyond the range', () => {
+        expect(isSinceBaseExactly({
+            selectedHashes: ['aaa1', 'bbb2', 'ccc3', 'extra'],
+            workingTreeSelected: true,
+            hashesInRange: range,
+        })).toBe(false);
+    });
+
+    it('returns true for the empty range when only WT is selected', () => {
+        // The picker only renders the "Since {base}" row in the Ready state,
+        // which guarantees a non-empty range — but the helper must still handle
+        // the edge case sensibly so a future caller doesn't get a false positive
+        // from an unintended state.
+        expect(isSinceBaseExactly({
+            selectedHashes: [],
+            workingTreeSelected: true,
+            hashesInRange: [],
+        })).toBe(true);
+    });
+});
+
+describe('working-tree tip anchor', () => {
+    const commits = [
+        { hash: 'tip' }, // 0 = newest
+        { hash: 'mid' }, // 1
+        { hash: 'old' }, // 2 = oldest
+    ];
+
+    afterEach(() => {
+        delete window.Flux;
+    });
+
+    it('auto-unticks working tree when the tip commit is unticked', () => {
+        const a = makeAlpine({ commits });
+        a.workingTreeSelected = true;
+        a.selectedHashes = ['tip', 'mid', 'old'];
+
+        a.toggleSelection('tip', 0, noopEvent());
+
+        expect(a.selectedHashes).toEqual(['mid', 'old']);
+        expect(a.workingTreeSelected).toBe(false);
+    });
+
+    it('keeps working tree selected when a non-tip commit is unticked', () => {
+        const a = makeAlpine({ commits });
+        a.workingTreeSelected = true;
+        a.selectedHashes = ['tip', 'mid', 'old'];
+
+        a.toggleSelection('old', 2, noopEvent());
+
+        expect(a.selectedHashes).toEqual(['tip', 'mid']);
+        expect(a.workingTreeSelected).toBe(true);
+    });
+
+    it('does not affect a working-tree-only selection', () => {
+        const a = makeAlpine({ commits });
+        a.workingTreeSelected = true;
+        a.selectedHashes = [];
+
+        // Toggling a hash that wasn't selected just adds it; the invariant
+        // only matters when the resulting state would pair WT with non-tip
+        // commits. Adding the tip is always fine.
+        a.toggleSelection('tip', 0, noopEvent());
+
+        expect(a.selectedHashes).toEqual(['tip']);
+        expect(a.workingTreeSelected).toBe(true);
+    });
+
+    it('shows an explanatory toast when WT is auto-unticked', () => {
+        const toast = vi.fn();
+        window.Flux = { toast };
+
+        const a = makeAlpine({ commits });
+        a.workingTreeSelected = true;
+        a.selectedHashes = ['tip', 'mid'];
+
+        a.toggleSelection('tip', 0, noopEvent());
+
+        expect(toast).toHaveBeenCalledTimes(1);
+        expect(toast.mock.calls[0][0]).toMatchObject({ variant: 'info' });
+        expect(toast.mock.calls[0][0].text).toContain('Working tree removed');
+    });
+
+    it('does not toast when the invariant is already satisfied', () => {
+        const toast = vi.fn();
+        window.Flux = { toast };
+
+        const a = makeAlpine({ commits });
+        a.workingTreeSelected = true;
+        a.selectedHashes = ['tip'];
+
+        // Untick a commit that's not in the selection — adds it, doesn't violate.
+        a.toggleSelection('mid', 1, noopEvent());
+
+        expect(toast).not.toHaveBeenCalled();
+        expect(a.workingTreeSelected).toBe(true);
     });
 });
 

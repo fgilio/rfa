@@ -2,13 +2,12 @@
 
 use App\Actions\GetBranchListAction;
 use App\Actions\GetCommitHistoryAction;
-use App\Concerns\InteractsWithRemoteLinks;
+use App\Actions\ResolveBranchBaseAction;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\Renderless;
 use Livewire\Component;
 
 new class extends Component {
-    use InteractsWithRemoteLinks;
-
     #[Locked]
     public string $repoPath = '';
 
@@ -34,29 +33,65 @@ new class extends Component {
     #[Locked]
     public string $selectionTitle = 'Working tree changes';
 
+    /** Configured project base branch (e.g. 'dev'). Empty means the user hasn't set one yet. */
+    #[Locked]
+    public string $defaultBaseBranch = '';
+
     /** @var array{local: list<array<string, mixed>>, remote: list<array<string, mixed>>, current: string} */
     public array $branches = ['local' => [], 'remote' => [], 'current' => ''];
 
     /** @var list<array<string, mixed>> */
     public array $commits = [];
 
+    /**
+     * Result of {@see ResolveBranchBaseAction} for the project's current branch.
+     * Surfaced so the picker can render the "Since {base}" row and pre-fill
+     * checkboxes when clicked.
+     *
+     * @var array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int}|null
+     */
+    public ?array $branchBase = null;
+
     public bool $hasMore = false;
 
     private int $pageSize = 50;
 
+    #[Renderless]
     public function loadBranches(): void
     {
         $this->branches = app(GetBranchListAction::class)->handle($this->repoPath);
     }
 
-    public function loadCommits(string $branch): void
+    #[Renderless]
+    public function loadBranchBase(): void
     {
-        $commits = app(GetCommitHistoryAction::class)->handle($this->repoPath, $this->pageSize, 0, $branch);
+        $result = app(ResolveBranchBaseAction::class)->handle(
+            $this->repoPath,
+            $this->defaultBaseBranch !== '' ? $this->defaultBaseBranch : null,
+            $this->currentBranch !== '' ? $this->currentBranch : null,
+        );
 
-        $this->commits = $commits;
-        $this->hasMore = count($commits) >= $this->pageSize;
+        $this->branchBase = $result->toArray();
     }
 
+    /**
+     * Load commits for the displayed branch. When the picker is showing the
+     * project's current branch and the configured base is more than `pageSize`
+     * commits behind, the limit is bumped so every commit in `base..HEAD`
+     * is loaded - otherwise the auto-select on the "Since {base}" row would
+     * tick checkboxes that aren't rendered.
+     */
+    #[Renderless]
+    public function loadCommits(string $branch): void
+    {
+        $limit = $this->effectiveCommitLimit($branch);
+        $commits = app(GetCommitHistoryAction::class)->handle($this->repoPath, $limit, 0, $branch);
+
+        $this->commits = $commits;
+        $this->hasMore = count($commits) >= $limit;
+    }
+
+    #[Renderless]
     public function loadMore(string $branch): void
     {
         $offset = count($this->commits);
@@ -64,6 +99,15 @@ new class extends Component {
 
         $this->commits = array_merge($this->commits, $more);
         $this->hasMore = count($more) >= $this->pageSize;
+    }
+
+    private function effectiveCommitLimit(string $branch): int
+    {
+        if ($branch !== $this->currentBranch || $this->branchBase === null) {
+            return $this->pageSize;
+        }
+
+        return max($this->pageSize, $this->branchBase['commitCount']);
     }
 };
 
@@ -84,10 +128,11 @@ new class extends Component {
     x-init="$store.keymap.register('⌘B', () => open ? closePanel() : openPanel())"
     @keydown.window="handleKeydown($event)"
     @open-selection-drawer.window="openPanel()"
+    @if($hasRemote) @contextmenu="handleRemoteContextMenu($event)" @endif
     x-effect="if (open && !$store.overlays.is('branch-explorer')) closePanel()"
 >
     <div class="inline-flex items-stretch rounded-md border border-gh-border/70 bg-gh-surface/30 hover:border-gh-text/30 transition-colors">
-        <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif class="inline-flex">
+        <div @if($hasRemote) @contextmenu.prevent="openRemoteContext($event, 'branch', { name: currentBranch }, 'branch ' + currentBranch)" @endif class="inline-flex">
             <flux:tooltip content="Switch branch · ⌘B">
                 <button
                     type="button"
@@ -101,19 +146,11 @@ new class extends Component {
                     <span class="tracking-tight">{{ $currentBranch }}</span>
                 </button>
             </flux:tooltip>
-            @if($hasRemote)
-                <x-remote-link-menu
-                    :project-slug="$projectSlug"
-                    type="branch"
-                    :params="['name' => $currentBranch]"
-                    label="branch"
-                />
-            @endif
         </div>
 
         <span class="w-px self-stretch bg-gh-border/70" aria-hidden="true"></span>
 
-        <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif class="inline-flex">
+        <div @if($hasRemote) @contextmenu.prevent="openSelectionRemoteContext($event)" @endif class="inline-flex">
             <flux:tooltip content="{{ $selectionTitle }} · ⌘B">
                 <button
                     type="button"
@@ -128,23 +165,6 @@ new class extends Component {
                     <x-chevron-icon variant="mono" />
                 </button>
             </flux:tooltip>
-            @if($hasRemote)
-                @if($activeCommitHash !== null)
-                    <x-remote-link-menu
-                        :project-slug="$projectSlug"
-                        type="commit"
-                        :params="['sha' => $activeCommitHash]"
-                        label="commit"
-                    />
-                @else
-                    <x-remote-link-menu
-                        :project-slug="$projectSlug"
-                        type="branch"
-                        :params="['name' => $currentBranch]"
-                        label="branch"
-                    />
-                @endif
-            @endif
         </div>
     </div>
 
@@ -176,7 +196,14 @@ new class extends Component {
                                     <span class="section-label text-gh-muted">Local</span>
                                 </div>
                                 <template x-for="(branch, i) in filteredLocal" :key="branch.name">
-                                    <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif>
+                                    <div
+                                        @if($hasRemote)
+                                            data-remote-context
+                                            data-remote-type="branch"
+                                            :data-remote-params="JSON.stringify({ name: branch.name })"
+                                            :data-remote-label="'branch ' + branch.name"
+                                        @endif
+                                    >
                                         <button
                                             @click="selectBranchAt(i)"
                                             class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors cursor-pointer"
@@ -187,14 +214,6 @@ new class extends Component {
                                             <span class="shrink-0 w-3" x-show="!branch.isCurrent"></span>
                                             <span class="truncate" x-text="branch.name"></span>
                                         </button>
-                                        @if($hasRemote)
-                                            <x-remote-link-menu
-                                                :project-slug="$projectSlug"
-                                                type-js="'branch'"
-                                                params-js="{ name: branch.name }"
-                                                label-js="'branch ' + branch.name"
-                                            />
-                                        @endif
                                     </div>
                                 </template>
                             </div>
@@ -207,7 +226,14 @@ new class extends Component {
                                     <span class="section-label text-gh-muted">Remote</span>
                                 </div>
                                 <template x-for="(branch, j) in filteredRemote" :key="branch.name">
-                                    <div @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif>
+                                    <div
+                                        @if($hasRemote)
+                                            data-remote-context
+                                            data-remote-type="branch"
+                                            :data-remote-params="JSON.stringify({ name: branch.remote && branch.name.startsWith(branch.remote + '/') ? branch.name.slice(branch.remote.length + 1) : branch.name })"
+                                            :data-remote-label="'branch ' + branch.name"
+                                        @endif
+                                    >
                                         <button
                                             @click="selectBranchAt(filteredLocal.length + j)"
                                             class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors cursor-pointer"
@@ -217,14 +243,6 @@ new class extends Component {
                                             <span class="shrink-0 w-3"></span>
                                             <span class="truncate" x-text="branch.name"></span>
                                         </button>
-                                        @if($hasRemote)
-                                            <x-remote-link-menu
-                                                :project-slug="$projectSlug"
-                                                type-js="'branch'"
-                                                params-js="{ name: branch.remote && branch.name.startsWith(branch.remote + '/') ? branch.name.slice(branch.remote.length + 1) : branch.name }"
-                                                label-js="'branch ' + branch.name"
-                                            />
-                                        @endif
                                     </div>
                                 </template>
                             </div>
@@ -285,6 +303,95 @@ new class extends Component {
 
                     {{-- Commits list --}}
                     <div class="overflow-y-auto flex-1">
+                        {{-- "Since {base}" shortcut: a single click fills the
+                             multi-select with every commit in base..HEAD plus
+                             working tree, so the user can trim before applying. --}}
+                        <template x-if="sinceBaseRowVisible">
+                            <div data-testid="since-base-row">
+                                {{-- Ready: clickable shortcut --}}
+                                <template x-if="$wire.branchBase.state === 'ready'">
+                                    <div
+                                        class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
+                                        @click="selectSinceBase()"
+                                        :class="{ 'bg-gh-link/5 border-l-2 border-l-gh-link': sinceBaseSelected }"
+                                        :aria-pressed="sinceBaseSelected"
+                                    >
+                                        <div class="flex items-start gap-2">
+                                            <span
+                                                class="mt-0.5 size-4 shrink-0 grid place-items-center rounded border transition-colors"
+                                                :class="sinceBaseSelected
+                                                    ? 'border-gh-link bg-gh-link/20 text-gh-link'
+                                                    : 'border-gh-border opacity-0 group-hover:opacity-100'"
+                                                aria-hidden="true"
+                                            >
+                                                <template x-if="sinceBaseSelected">
+                                                    <flux:icon icon="check" variant="outline" class="!size-3" />
+                                                </template>
+                                            </span>
+                                            <div class="min-w-0 flex-1">
+                                                <div class="text-xs text-gh-text truncate font-medium tracking-tight">
+                                                    Since <span class="font-mono" x-text="$wire.branchBase.baseBranch"></span>
+                                                </div>
+                                                <span
+                                                    class="block mt-0.5 text-[10px] font-mono text-gh-muted"
+                                                    x-text="$wire.branchBase.commitCount + ' commit' + ($wire.branchBase.commitCount === 1 ? '' : 's') + ' + uncommitted changes'"
+                                                ></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                {{-- Up to date with base: dimmed, not actionable --}}
+                                <template x-if="$wire.branchBase.state === 'up_to_date'">
+                                    <div class="px-4 py-2.5 border-b border-gh-border/50">
+                                        <div class="flex items-start gap-2 opacity-60">
+                                            <span class="mt-0.5 size-4 shrink-0" aria-hidden="true"></span>
+                                            <div class="min-w-0 flex-1">
+                                                <div class="text-xs text-gh-text truncate tracking-tight">
+                                                    Up to date with <span class="font-mono" x-text="$wire.branchBase.baseBranch"></span>
+                                                </div>
+                                                <span class="block mt-0.5 text-[10px] font-mono text-gh-muted">no commits ahead</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                {{-- Missing ref: actionable hint --}}
+                                <template x-if="$wire.branchBase.state === 'missing_ref'">
+                                    <div class="px-4 py-2.5 border-b border-gh-border/50">
+                                        <div class="flex items-start gap-2">
+                                            <span class="mt-0.5 size-4 shrink-0 text-gh-muted" aria-hidden="true">
+                                                <flux:icon icon="exclamation-triangle" variant="outline" class="!size-3.5" />
+                                            </span>
+                                            <div class="min-w-0 flex-1">
+                                                <div class="text-xs text-gh-text truncate tracking-tight">
+                                                    Run <span class="font-mono">git fetch</span> to compare with <span class="font-mono" x-text="$wire.branchBase.baseBranch"></span>
+                                                </div>
+                                                <span class="block mt-0.5 text-[10px] font-mono text-gh-muted">base ref not found locally</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                {{-- Not configured: nudge to settings --}}
+                                <template x-if="$wire.branchBase.state === 'not_configured'">
+                                    <div class="px-4 py-2.5 border-b border-gh-border/50">
+                                        <div class="flex items-start gap-2 opacity-80">
+                                            <span class="mt-0.5 size-4 shrink-0 text-gh-muted" aria-hidden="true">
+                                                <flux:icon icon="cog-6-tooth" variant="outline" class="!size-3.5" />
+                                            </span>
+                                            <div class="min-w-0 flex-1">
+                                                <div class="text-xs text-gh-text truncate tracking-tight">Pick a base branch to compare against</div>
+                                                <span class="block mt-0.5 text-[10px] font-mono text-gh-muted">set it from the project settings menu</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                {{-- on_base_branch: hidden entirely (comparing X..X is nonsense) --}}
+                            </div>
+                        </template>
+
                         <div
                             data-testid="working-tree-row"
                             class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
@@ -329,7 +436,12 @@ new class extends Component {
                                 data-testid="commit-row"
                                 :data-commit-hash="commit.hash"
                                 :data-commit-idx="commitIdx"
-                                @if($hasRemote) x-data="contextMenu()" @contextmenu.prevent="openCtx($event)" @endif
+                                @if($hasRemote)
+                                    data-remote-context
+                                    data-remote-type="commit"
+                                    :data-remote-params="JSON.stringify({ sha: commit.hash })"
+                                    :data-remote-label="'commit ' + commit.shortHash"
+                                @endif
                                 class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
                                 @click="viewCommit(commit.hash)"
                                 :class="{
@@ -371,14 +483,6 @@ new class extends Component {
                                         ></button>
                                     </div>
                                 </div>
-                                @if($hasRemote)
-                                    <x-remote-link-menu
-                                        :project-slug="$projectSlug"
-                                        type-js="'commit'"
-                                        params-js="{ sha: commit.hash }"
-                                        label-js="'commit ' + commit.shortHash"
-                                    />
-                                @endif
                             </div>
                         </template>
 

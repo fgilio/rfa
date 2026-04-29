@@ -205,6 +205,27 @@ class GitMetadataService
         return $line !== '' && ! str_contains($line, ' ');
     }
 
+    /**
+     * Compute the best common ancestor (merge-base) of two refs. Returns null
+     * when either ref is unknown or the histories don't intersect (orphan
+     * branches).
+     */
+    public function getMergeBase(string $repoPath, string $a, string $b): ?string
+    {
+        if ($this->looksLikeFlag($a) || $this->looksLikeFlag($b)) {
+            return null;
+        }
+
+        try {
+            $output = trim($this->git->run($repoPath, ['merge-base', $a, $b]));
+
+            return $output !== '' ? $output : null;
+        } catch (GitCommandException) {
+            // Unrelated histories or missing ref — both are non-fatal here.
+            return null;
+        }
+    }
+
     public function getChildCommit(string $repoPath, string $hash): ?string
     {
         try {

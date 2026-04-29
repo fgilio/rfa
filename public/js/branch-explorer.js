@@ -14,11 +14,20 @@
      * @param {string[]} input.selectedHashes        subset of commits[].hash, any order.
      * @param {boolean}  input.workingTreeSelected
      * @param {string}   input.projectSlug
+     * @param {{state: string, baseSha: string|null, hashesInRange: string[]}|null} [input.sinceBase]
      * @returns {{kind: 'noop'} | {kind: 'navigate', url: string} | {kind: 'alert', message: string}}
      */
-    function decideSelection({ commits, selectedHashes, workingTreeSelected, projectSlug }) {
+    function decideSelection({ commits, selectedHashes, workingTreeSelected, projectSlug, sinceBase = null }) {
         const hasAnySelection = workingTreeSelected || selectedHashes.length > 0;
         if (!hasAnySelection) return { kind: 'noop' };
+
+        if (
+            sinceBase?.state === 'ready'
+            && sinceBase.baseSha
+            && isSinceBaseExactly({ selectedHashes, workingTreeSelected, hashesInRange: sinceBase.hashesInRange })
+        ) {
+            return { kind: 'navigate', url: `/p/${projectSlug}/rw/${encodeURIComponent(sinceBase.baseSha)}` };
+        }
 
         const indices = [...new Set(
             selectedHashes
@@ -26,12 +35,12 @@
                 .filter(i => i >= 0)
         )].sort((a, b) => a - b);
 
-        // Working tree alone → plain working-tree view.
+        // Working tree alone - plain working-tree view.
         if (workingTreeSelected && indices.length === 0) {
             return { kind: 'navigate', url: `/p/${projectSlug}` };
         }
 
-        // All hashes were unknown to `commits` — treat as nothing real selected.
+        // All hashes were unknown to `commits` - treat as nothing real selected.
         // Without this guard, the single-commit branch below dereferences
         // `commits[undefined].hash` and throws.
         if (indices.length === 0) return { kind: 'noop' };
@@ -42,17 +51,17 @@
         if (indices[indices.length - 1] - indices[0] + 1 !== indices.length) {
             return {
                 kind: 'alert',
-                message: 'Selection is not contiguous — pick every commit between the oldest and newest you want to review.',
+                message: 'Selection is not contiguous - pick every commit between the oldest and newest you want to review.',
             };
         }
 
-        // Commits are listed newest-first; lowest index = tip, highest = oldest.
-        // Working tree is conceptually at index -1 (one step newer than the tip).
-        // When WT is selected alongside commits, the commits must start at index 0.
-        if (workingTreeSelected && indices.length > 0 && indices[0] !== 0) {
+        // Backstop for the tip-anchor invariant. Normally the Alpine state
+        // machine auto-unticks WT (see `_enforceWorkingTreeTipAnchor`); this
+        // catches any bypass (programmatic state, future code).
+        if (violatesTipAnchor({ selectedHashes, workingTreeSelected, commits })) {
             return {
                 kind: 'alert',
-                message: 'Selection is not contiguous — working tree must be paired with the newest commits.',
+                message: 'Selection is not contiguous - working tree must be paired with the newest commits.',
             };
         }
 
@@ -72,11 +81,48 @@
         return { kind: 'navigate', url: `/p/${projectSlug}/${newest.hash}/${baseRef}` };
     }
 
+    /**
+     * Returns true when the current selection state is exactly "everything in base..HEAD
+     * plus working tree" - i.e., the user clicked the "Since {base}" row and hasn't trimmed.
+     *
+     * @param {object} input
+     * @param {string[]} input.selectedHashes
+     * @param {boolean}  input.workingTreeSelected
+     * @param {string[]} input.hashesInRange
+     */
+    function isSinceBaseExactly({ selectedHashes, workingTreeSelected, hashesInRange }) {
+        if (!workingTreeSelected) return false;
+        if (selectedHashes.length !== hashesInRange.length) return false;
+        const set = new Set(hashesInRange);
+        return selectedHashes.every(h => set.has(h));
+    }
+
+    /**
+     * Working tree extends a diff through HEAD's working state, so a selection
+     * that pairs WT with commits MUST include the tip - otherwise the user is
+     * asking for a diff that excludes HEAD's commit while still including its
+     * working tree, which has no coherent diff range. Used as both a guard
+     * (in the picker's auto-untick) and a backstop (in `decideSelection`).
+     *
+     * @param {object} input
+     * @param {string[]} input.selectedHashes
+     * @param {boolean}  input.workingTreeSelected
+     * @param {Array<{hash: string}>} input.commits  newest-first; index 0 = tip.
+     */
+    function violatesTipAnchor({ selectedHashes, workingTreeSelected, commits }) {
+        if (!workingTreeSelected) return false;
+        if (selectedHashes.length === 0) return false;
+        const tip = commits[0];
+        if (!tip) return false;
+        return !selectedHashes.includes(tip.hash);
+    }
+
     function createBranchExplorer({ currentBranch, activeCommitHash, activeDiffFrom, projectSlug, branches }) {
         return {
             open: false,
             search: '',
             selectedIndex: 0,
+            currentBranch,
             selectedBranch: currentBranch,
             allBranches: branches,
             activeCommitHash,
@@ -93,6 +139,30 @@
 
             get hasAnySelection() {
                 return this.workingTreeSelected || this.selectedHashes.length > 0;
+            },
+
+            /**
+             * Showing the "Since {base}" row only makes sense for the project's
+             * current branch - the configured base is HEAD-relative, not relative
+             * to whichever branch the picker happens to be displaying. The
+             * `on_base_branch` state is also hidden because comparing a branch
+             * to itself is nonsense.
+             */
+            get sinceBaseRowVisible() {
+                if (this.selectedBranch !== currentBranch) return false;
+                const base = this.$wire.branchBase;
+                if (!base) return false;
+                return base.state !== 'on_base_branch';
+            },
+
+            get sinceBaseSelected() {
+                const base = this.$wire.branchBase;
+                if (!base || base.state !== 'ready') return false;
+                return isSinceBaseExactly({
+                    selectedHashes: this.selectedHashes,
+                    workingTreeSelected: this.workingTreeSelected,
+                    hashesInRange: base.hashesInRange,
+                });
             },
 
             get selectionBadge() {
@@ -128,7 +198,13 @@
                 this.selectedIndex = 0;
                 this.clearSelection();
                 Alpine.store('overlays').open('branch-explorer');
-                await this.$wire.loadBranches();
+                // Resolve base info before loading commits so the commit-load
+                // can extend its window to cover all base..HEAD hashes when the
+                // configured base is more than `pageSize` commits behind.
+                await Promise.all([
+                    this.$wire.loadBranches(),
+                    this.$wire.loadBranchBase(),
+                ]);
                 this.allBranches = this.$wire.branches;
                 const currentIdx = this.allFiltered.findIndex(b => b.name === this.selectedBranch);
                 if (currentIdx >= 0) this.selectedIndex = currentIdx;
@@ -146,7 +222,7 @@
                 const branch = this.allFiltered[this.selectedIndex];
                 if (!branch) return;
                 if (branch.name === this.selectedBranch && this.$wire.commits.length > 0) return;
-                // Selected branch is actually changing — stale hashes no longer apply.
+                // Selected branch is actually changing - stale hashes no longer apply.
                 const branchChanged = this.selectedBranch !== branch.name;
                 this.selectedBranch = branch.name;
                 const id = ++this._loadId;
@@ -218,6 +294,47 @@
                 navigator.clipboard.writeText(hash).catch(() => {});
             },
 
+            openRemoteContext(event, type, params, label) {
+                this.$dispatch('open-remote-menu', {
+                    target: 'direct',
+                    type,
+                    params,
+                    label,
+                    projectSlug: this.projectSlug,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                });
+            },
+
+            handleRemoteContextMenu(event) {
+                const trigger = event.target.closest('[data-remote-context]');
+
+                if (!trigger) return;
+
+                const type = trigger.dataset.remoteType;
+
+                if (!type) return;
+
+                let params = {};
+                try {
+                    params = JSON.parse(trigger.dataset.remoteParams || '{}');
+                } catch {
+                    params = {};
+                }
+
+                event.preventDefault();
+                this.openRemoteContext(event, type, params, trigger.dataset.remoteLabel || 'on remote');
+            },
+
+            openSelectionRemoteContext(event) {
+                if (this.activeCommitHash) {
+                    this.openRemoteContext(event, 'commit', { sha: this.activeCommitHash }, `commit ${this.activeCommitHash.slice(0, 7)}`);
+                    return;
+                }
+
+                this.openRemoteContext(event, 'branch', { name: this.currentBranch }, `branch ${this.currentBranch}`);
+            },
+
             viewCommit(hash) {
                 Livewire.navigate(`/p/${this.projectSlug}/c/${hash}`);
             },
@@ -250,6 +367,7 @@
                     this.selectedHashes.push(hash);
                 }
                 this.lastSelectionIndex = idx;
+                this._enforceWorkingTreeTipAnchor();
             },
 
             toggleWorkingTreeSelection(event) {
@@ -275,6 +393,51 @@
                 this.lastSelectionIndex = -1;
             },
 
+            /**
+             * Auto-fix the tip-anchor invariant after the user's last action,
+             * so e.g. unticking the tip while WT is selected silently unticks
+             * WT (with a toast) instead of blocking on Apply. Quietly fixing
+             * the state feels less hostile than rejecting the action.
+             */
+            _enforceWorkingTreeTipAnchor() {
+                if (!violatesTipAnchor({
+                    selectedHashes: this.selectedHashes,
+                    workingTreeSelected: this.workingTreeSelected,
+                    commits: this.$wire.commits,
+                })) return;
+
+                this.workingTreeSelected = false;
+                if (typeof window !== 'undefined' && window.Flux?.toast) {
+                    window.Flux.toast({
+                        text: 'Working tree removed - it includes HEAD\'s commit, so the tip must stay selected.',
+                        variant: 'info',
+                    });
+                }
+            },
+
+            /**
+             * Click handler for the "Since {base}" row. Fills the multi-select
+             * with every commit in `base..HEAD` plus working tree, so the user
+             * sees scope visually and can trim before pressing Apply. Toggles
+             * off when invoked while the exact since-base shape is already
+             * selected.
+             */
+            selectSinceBase() {
+                const base = this.$wire.branchBase;
+                if (!base || base.state !== 'ready') return;
+
+                if (this.sinceBaseSelected) {
+                    this.clearSelection();
+                    return;
+                }
+
+                this.selectedHashes = [...base.hashesInRange];
+                this.workingTreeSelected = true;
+                // Reset shift-click anchor so a subsequent shift-click on a
+                // commit doesn't extend from a stale index.
+                this.lastSelectionIndex = -1;
+            },
+
             // Press-and-hold on a commit's checkbox, then drag across rows to extend
             // the selection from the anchor. Mirrors the diff-file line-range gesture
             // so the app has one "mouse path selects a range" pattern, not two.
@@ -288,7 +451,7 @@
                 const onPointerOver = (e) => {
                     if (!active) return;
                     if (e.buttons === 0) {
-                        // Mouse released outside the window — recover on first re-entry.
+                        // Mouse released outside the window - recover on first re-entry.
                         // Release wasn't in-window, so there's no trailing click to swallow.
                         endDrag(false);
                         return;
@@ -303,6 +466,7 @@
                     const start = Math.min(idx, hovered);
                     const end = Math.max(idx, hovered);
                     this.selectedHashes = this.$wire.commits.slice(start, end + 1).map(c => c.hash);
+                    this._enforceWorkingTreeTipAnchor();
                 };
 
                 const endDrag = (swallowClick) => {
@@ -338,6 +502,7 @@
                     selectedHashes: this.selectedHashes,
                     workingTreeSelected: this.workingTreeSelected,
                     projectSlug: this.projectSlug,
+                    sinceBase: this.$wire.branchBase,
                 });
 
                 if (result.kind === 'noop') return;
@@ -368,5 +533,5 @@
         }
     }
 
-    return { decideSelection, createBranchExplorer, install, autoInstall };
+    return { decideSelection, isSinceBaseExactly, violatesTipAnchor, createBranchExplorer, install, autoInstall };
 });
