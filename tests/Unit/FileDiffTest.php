@@ -3,6 +3,7 @@
 use App\DTOs\DiffLine;
 use App\DTOs\FileDiff;
 use App\DTOs\Hunk;
+use App\Enums\LineType;
 use Faker\Factory as Faker;
 
 beforeEach(function () {
@@ -12,8 +13,8 @@ beforeEach(function () {
 
 test('toArray returns all expected keys', function () {
     $lines = [
-        new DiffLine('context', $this->faker->sentence(), 1, 1),
-        new DiffLine('add', $this->faker->sentence(), null, 2),
+        new DiffLine(LineType::Context, $this->faker->sentence(), 1, 1),
+        new DiffLine(LineType::Add, $this->faker->sentence(), null, 2),
     ];
 
     $hunk = new Hunk('fn()', 1, 1, 1, 2, $lines);
@@ -55,7 +56,7 @@ test('toArray handles empty hunks', function () {
 
 test('withHunks returns new instance with replaced hunks', function () {
     $original = new FileDiff('f.php', 'modified', null, [], 1, 0);
-    $newHunks = [new Hunk('fn()', 1, 1, 1, 1, [new DiffLine('add', 'new', null, 1)])];
+    $newHunks = [new Hunk('fn()', 1, 1, 1, 1, [new DiffLine(LineType::Add, 'new', null, 1)])];
 
     $updated = $original->withHunks($newHunks);
 

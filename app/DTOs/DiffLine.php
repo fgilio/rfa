@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use App\Enums\LineType;
+
 class DiffLine
 {
     /**
      * @param  int[]  $headingAncestors
      */
     public function __construct(
-        public readonly string $type, // 'context', 'add', 'remove'
+        public readonly LineType $type,
         public readonly string $content,
         public readonly ?int $oldLineNum,
         public readonly ?int $newLineNum,

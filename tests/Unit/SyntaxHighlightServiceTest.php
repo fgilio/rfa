@@ -2,6 +2,7 @@
 
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
+use App\Enums\LineType;
 use App\Services\SyntaxHighlightService;
 
 beforeEach(function () {
@@ -11,9 +12,9 @@ beforeEach(function () {
 test('highlights PHP hunks', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine('context', '<?php', 1, 1),
-            new DiffLine('remove', 'echo "old";', 2, null),
-            new DiffLine('add', 'echo "new";', null, 2),
+            new DiffLine(LineType::Context, '<?php', 1, 1),
+            new DiffLine(LineType::Remove, 'echo "old";', 2, null),
+            new DiffLine(LineType::Add, 'echo "new";', null, 2),
         ]),
     ];
 
@@ -29,7 +30,7 @@ test('highlights PHP hunks', function () {
 test('returns unmodified hunks for unknown grammar', function () {
     $hunks = [
         new Hunk('', 1, 0, 1, 1, [
-            new DiffLine('add', 'hello', null, 1),
+            new DiffLine(LineType::Add, 'hello', null, 1),
         ]),
     ];
 
@@ -48,7 +49,7 @@ test('handles empty hunks', function () {
 test('context lines get new-side highlighting', function () {
     $hunks = [
         new Hunk('', 1, 1, 1, 1, [
-            new DiffLine('context', '$x = 1;', 1, 1),
+            new DiffLine(LineType::Context, '$x = 1;', 1, 1),
         ]),
     ];
 
@@ -61,7 +62,7 @@ test('context lines get new-side highlighting', function () {
 test('removed lines get old-side highlighting', function () {
     $hunks = [
         new Hunk('', 1, 1, 1, 0, [
-            new DiffLine('remove', '$old = true;', 1, null),
+            new DiffLine(LineType::Remove, '$old = true;', 1, null),
         ]),
     ];
 
@@ -74,7 +75,7 @@ test('removed lines get old-side highlighting', function () {
 test('preserves original content field', function () {
     $hunks = [
         new Hunk('', 1, 0, 1, 1, [
-            new DiffLine('add', 'echo "hello";', null, 1),
+            new DiffLine(LineType::Add, 'echo "hello";', null, 1),
         ]),
     ];
 
@@ -86,11 +87,11 @@ test('preserves original content field', function () {
 test('highlights mixed add/remove/context hunk with asymmetric sides', function () {
     $hunks = [
         new Hunk('@@ -1,4 +1,3 @@', 1, 4, 1, 3, [
-            new DiffLine('context', '<?php', 1, 1),
-            new DiffLine('remove', '$a = 1;', 2, null),
-            new DiffLine('remove', '$b = 2;', 3, null),
-            new DiffLine('add', '$c = 3;', null, 2),
-            new DiffLine('context', 'return true;', 4, 3),
+            new DiffLine(LineType::Context, '<?php', 1, 1),
+            new DiffLine(LineType::Remove, '$a = 1;', 2, null),
+            new DiffLine(LineType::Remove, '$b = 2;', 3, null),
+            new DiffLine(LineType::Add, '$c = 3;', null, 2),
+            new DiffLine(LineType::Context, 'return true;', 4, 3),
         ]),
     ];
 
@@ -107,9 +108,9 @@ test('highlights mixed add/remove/context hunk with asymmetric sides', function 
 test('handles hunk with only context lines', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine('context', '<?php', 1, 1),
-            new DiffLine('context', '', 2, 2),
-            new DiffLine('context', 'return true;', 3, 3),
+            new DiffLine(LineType::Context, '<?php', 1, 1),
+            new DiffLine(LineType::Context, '', 2, 2),
+            new DiffLine(LineType::Context, 'return true;', 3, 3),
         ]),
     ];
 
@@ -129,16 +130,16 @@ test('multi-hunk diff highlights all hunks independently', function () {
     // from distant hunks would break the tokenizer's grammar state
     $hunks = [
         new Hunk('@@ -5,3 +5,6 @@', 5, 3, 5, 6, [
-            new DiffLine('context', 'use Illuminate\Support\Str;', 5, 5),
-            new DiffLine('add', '// A comment block', null, 6),
-            new DiffLine('add', '// that spans lines', null, 7),
-            new DiffLine('context', '', 6, 8),
-            new DiffLine('context', 'class Example {', 7, 9),
+            new DiffLine(LineType::Context, 'use Illuminate\Support\Str;', 5, 5),
+            new DiffLine(LineType::Add, '// A comment block', null, 6),
+            new DiffLine(LineType::Add, '// that spans lines', null, 7),
+            new DiffLine(LineType::Context, '', 6, 8),
+            new DiffLine(LineType::Context, 'class Example {', 7, 9),
         ]),
         new Hunk('@@ -20,3 +23,3 @@', 20, 3, 23, 3, [
-            new DiffLine('context', '    public function run(): void {', 20, 23),
-            new DiffLine('remove', '        $old = true;', 21, null),
-            new DiffLine('add', '        foreach ($items as $i) {', null, 24),
+            new DiffLine(LineType::Context, '    public function run(): void {', 20, 23),
+            new DiffLine(LineType::Remove, '        $old = true;', 21, null),
+            new DiffLine(LineType::Add, '        foreach ($items as $i) {', null, 24),
         ]),
     ];
 
@@ -166,7 +167,7 @@ test('multi-hunk diff highlights all hunks independently', function () {
 test('style map has entries with different light and dark colors', function () {
     $hunks = [
         new Hunk('', 1, 0, 1, 1, [
-            new DiffLine('add', 'echo "hello";', null, 1),
+            new DiffLine(LineType::Add, 'echo "hello";', null, 1),
         ]),
     ];
 
@@ -182,7 +183,7 @@ test('style map has entries with different light and dark colors', function () {
 test('getStyleMap returns expected structure', function () {
     $hunks = [
         new Hunk('', 1, 0, 1, 1, [
-            new DiffLine('add', 'echo "hello";', null, 1),
+            new DiffLine(LineType::Add, 'echo "hello";', null, 1),
         ]),
     ];
 
@@ -200,9 +201,9 @@ test('getStyleMap returns expected structure', function () {
 test('output uses class not style attribute', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine('context', '<?php', 1, 1),
-            new DiffLine('remove', 'echo "old";', 2, null),
-            new DiffLine('add', 'echo "new";', null, 2),
+            new DiffLine(LineType::Context, '<?php', 1, 1),
+            new DiffLine(LineType::Remove, 'echo "old";', 2, null),
+            new DiffLine(LineType::Add, 'echo "new";', null, 2),
         ]),
     ];
 
@@ -219,7 +220,7 @@ test('output uses class not style attribute', function () {
 test('no background-color in style map values', function () {
     $hunks = [
         new Hunk('', 1, 0, 1, 1, [
-            new DiffLine('add', 'echo "hello";', null, 1),
+            new DiffLine(LineType::Add, 'echo "hello";', null, 1),
         ]),
     ];
 
@@ -235,9 +236,9 @@ test('no background-color in style map values', function () {
 test('all class names in highlighted HTML have matching style map entries', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine('context', '<?php', 1, 1),
-            new DiffLine('remove', 'echo "old";', 2, null),
-            new DiffLine('add', 'echo "new";', null, 2),
+            new DiffLine(LineType::Context, '<?php', 1, 1),
+            new DiffLine(LineType::Remove, 'echo "old";', 2, null),
+            new DiffLine(LineType::Add, 'echo "new";', null, 2),
         ]),
     ];
 
@@ -264,7 +265,7 @@ test('all class names in highlighted HTML have matching style map entries', func
 test('returns Hunk DTOs not arrays', function () {
     $hunks = [
         new Hunk('', 1, 1, 1, 1, [
-            new DiffLine('add', '$x = 1;', null, 1),
+            new DiffLine(LineType::Add, '$x = 1;', null, 1),
         ]),
     ];
 

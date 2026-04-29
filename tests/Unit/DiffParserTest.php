@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\LineType;
 use App\Services\DiffParser;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -21,7 +22,7 @@ test('parses simple modification', function () {
     expect($files[0]->hunks)->toHaveCount(1);
 
     $lines = $files[0]->hunks[0]->lines;
-    expect($lines[0]->type)->toBe('context');
+    expect($lines[0]->type)->toBe(LineType::Context);
     expect($lines[0]->content)->toBe('<?php');
     expect($lines[0]->oldLineNum)->toBe(1);
     expect($lines[0]->newLineNum)->toBe(1);

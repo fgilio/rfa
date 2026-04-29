@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Benchmark;
 
 use App\DTOs\FileListEntry;
+use App\Enums\LineType;
 
 /**
  * @phpstan-type FileEntryData array{
@@ -20,7 +21,7 @@ use App\DTOs\FileListEntry;
  *     lastModified: ?string
  * }
  * @phpstan-type DiffLineData array{
- *     type: string,
+ *     type: LineType,
  *     content: string,
  *     oldLineNum: ?int,
  *     newLineNum: ?int,
@@ -141,7 +142,7 @@ final class DiffFixtureFactory
 
                 if ($mod === 0) {
                     $lines[] = [
-                        'type' => 'remove',
+                        'type' => LineType::Remove,
                         'content' => "    \$old_var_{$hunkIndex}_{$lineIndex} = getValue();",
                         'oldLineNum' => $currentOldLine++,
                         'newLineNum' => null,
@@ -154,7 +155,7 @@ final class DiffFixtureFactory
 
                 if ($mod === 1) {
                     $lines[] = [
-                        'type' => 'add',
+                        'type' => LineType::Add,
                         'content' => "    \$new_var_{$hunkIndex}_{$lineIndex} = getUpdatedValue();",
                         'oldLineNum' => null,
                         'newLineNum' => $currentNewLine++,
@@ -166,7 +167,7 @@ final class DiffFixtureFactory
                 }
 
                 $lines[] = [
-                    'type' => 'context',
+                    'type' => LineType::Context,
                     'content' => "    // context line {$hunkIndex}:{$lineIndex}",
                     'oldLineNum' => $currentOldLine++,
                     'newLineNum' => $currentNewLine++,
@@ -202,6 +203,7 @@ final class DiffFixtureFactory
             'isBinary' => false,
             'tooLarge' => false,
             'syntaxStyles' => '.hl-variable{color:#e36209;}.dark .hl-variable{color:#ffab70;}.hl-comment{color:#6a737d;}.dark .hl-comment{color:#6a737d;}',
+            'lineTypesAreEnum' => true,
         ];
     }
 

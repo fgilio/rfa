@@ -88,6 +88,7 @@ final readonly class LoadFileDiffAction
                 'newFileLineCount' => $newFileLineCount,
                 'headingsAnnotated' => true,
                 'gridLayout' => true,
+                'lineTypesAreEnum' => true,
             ];
         };
 
@@ -100,6 +101,7 @@ final readonly class LoadFileDiffAction
                 && array_key_exists('newFileLineCount', $cached)
                 && array_key_exists('headingsAnnotated', $cached)
                 && array_key_exists('gridLayout', $cached)
+                && array_key_exists('lineTypesAreEnum', $cached)
             ) {
                 return $cached;
             }

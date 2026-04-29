@@ -2,13 +2,14 @@
 
 use App\Actions\ExpandDiffGapAction;
 use App\Console\Benchmark\DiffFixtureFactory;
+use App\Enums\LineType;
 
 function buildFullContextLines(int $totalLines): array
 {
     $lines = [];
     for ($i = 1; $i <= $totalLines; $i++) {
         $lines[] = [
-            'type' => 'context',
+            'type' => LineType::Context,
             'content' => "    // line {$i}",
             'oldLineNum' => $i,
             'newLineNum' => $i,

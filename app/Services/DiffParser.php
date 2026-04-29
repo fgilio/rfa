@@ -7,6 +7,7 @@ namespace App\Services;
 use App\DTOs\DiffLine;
 use App\DTOs\FileDiff;
 use App\DTOs\Hunk;
+use App\Enums\LineType;
 
 class DiffParser
 {
@@ -123,10 +124,10 @@ class DiffParser
                     if ($hunk !== null) {
                         $hunks[] = $hunk;
                         foreach ($hunk->lines as $dl) {
-                            if ($dl->type === 'add') {
+                            if ($dl->type === LineType::Add) {
                                 $additions++;
                             }
-                            if ($dl->type === 'remove') {
+                            if ($dl->type === LineType::Remove) {
                                 $deletions++;
                             }
                         }
@@ -145,10 +146,10 @@ class DiffParser
             if ($hunk !== null) {
                 $hunks[] = $hunk;
                 foreach ($hunk->lines as $dl) {
-                    if ($dl->type === 'add') {
+                    if ($dl->type === LineType::Add) {
                         $additions++;
                     }
-                    if ($dl->type === 'remove') {
+                    if ($dl->type === LineType::Remove) {
                         $deletions++;
                     }
                 }
@@ -159,11 +160,11 @@ class DiffParser
         $symlinkTarget = null;
         if ($isSymlink && ! empty($hunks)) {
             foreach ($hunks[0]->lines as $dl) {
-                if ($dl->type === 'add') {
+                if ($dl->type === LineType::Add) {
                     $symlinkTarget = $dl->content;
                     break;
                 }
-                if ($dl->type === 'remove' && $symlinkTarget === null) {
+                if ($dl->type === LineType::Remove && $symlinkTarget === null) {
                     $symlinkTarget = $dl->content;
                 }
             }
@@ -205,7 +206,7 @@ class DiffParser
 
             if ($raw === '') {
                 // Empty context line (trailing newlines in diff)
-                $diffLines[] = new DiffLine('context', '', $oldLine, $newLine);
+                $diffLines[] = new DiffLine(LineType::Context, '', $oldLine, $newLine);
                 $oldLine++;
                 $newLine++;
 
@@ -217,15 +218,15 @@ class DiffParser
 
             match ($prefix) {
                 '+' => (function () use (&$diffLines, $content, &$newLine) {
-                    $diffLines[] = new DiffLine('add', $content, null, $newLine);
+                    $diffLines[] = new DiffLine(LineType::Add, $content, null, $newLine);
                     $newLine++;
                 })(),
                 '-' => (function () use (&$diffLines, $content, &$oldLine) {
-                    $diffLines[] = new DiffLine('remove', $content, $oldLine, null);
+                    $diffLines[] = new DiffLine(LineType::Remove, $content, $oldLine, null);
                     $oldLine++;
                 })(),
                 default => (function () use (&$diffLines, $content, &$oldLine, &$newLine) {
-                    $diffLines[] = new DiffLine('context', $content, $oldLine, $newLine);
+                    $diffLines[] = new DiffLine(LineType::Context, $content, $oldLine, $newLine);
                     $oldLine++;
                     $newLine++;
                 })(),

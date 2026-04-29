@@ -2,6 +2,7 @@
 
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
+use App\Enums\LineType;
 use App\Services\MarkdownRegionService;
 
 beforeEach(function () {
@@ -15,11 +16,12 @@ function mdHunk(array $lines, int $startNewLine = 1, int $startOldLine = 1): Hun
     $oldLine = $startOldLine;
     foreach ($lines as $spec) {
         [$type, $content] = $spec;
+        $lineType = LineType::from($type);
         $diffLines[] = new DiffLine(
-            type: $type,
+            type: $lineType,
             content: $content,
-            oldLineNum: $type === 'add' ? null : $oldLine++,
-            newLineNum: $type === 'remove' ? null : $newLine++,
+            oldLineNum: $lineType === LineType::Add ? null : $oldLine++,
+            newLineNum: $lineType === LineType::Remove ? null : $newLine++,
         );
     }
 
@@ -271,7 +273,7 @@ test('heading ids are stable across recomputes (driven by new line number)', fun
 
 test('preserves existing line fields when annotating', function () {
     $line = new DiffLine(
-        type: 'context',
+        type: LineType::Context,
         content: '# Title',
         oldLineNum: 3,
         newLineNum: 3,

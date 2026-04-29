@@ -2,6 +2,7 @@
 
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
+use App\Enums\LineType;
 use Faker\Factory as Faker;
 
 beforeEach(function () {
@@ -15,9 +16,9 @@ test('toArray serializes header, starts, counts, and lines', function () {
     $newStart = $this->faker->numberBetween(1, 100);
 
     $lines = [
-        new DiffLine('context', $this->faker->sentence(), $oldStart, $newStart),
-        new DiffLine('remove', $this->faker->sentence(), $oldStart + 1, null),
-        new DiffLine('add', $this->faker->sentence(), null, $newStart + 1),
+        new DiffLine(LineType::Context, $this->faker->sentence(), $oldStart, $newStart),
+        new DiffLine(LineType::Remove, $this->faker->sentence(), $oldStart + 1, null),
+        new DiffLine(LineType::Add, $this->faker->sentence(), null, $newStart + 1),
     ];
 
     $hunk = new Hunk($header, $oldStart, 2, $newStart, 2, $lines);
@@ -31,8 +32,8 @@ test('toArray serializes header, starts, counts, and lines', function () {
     expect($array['newCount'])->toBe(2);
     expect($array['lines'])->toHaveCount(3);
     expect($array['lines'][0])->toBe($lines[0]->toArray());
-    expect($array['lines'][1]['type'])->toBe('remove');
-    expect($array['lines'][2]['type'])->toBe('add');
+    expect($array['lines'][1]['type'])->toBe(LineType::Remove);
+    expect($array['lines'][2]['type'])->toBe(LineType::Add);
 });
 
 test('toArray handles empty lines', function () {

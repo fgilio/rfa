@@ -2,6 +2,7 @@
 
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
+use App\Enums\LineType;
 use App\Services\CsvAlignerService;
 
 beforeEach(function () {
@@ -11,7 +12,7 @@ beforeEach(function () {
 test('returns hunks unchanged for non-csv files', function () {
     $hunks = [
         new Hunk('', 1, 1, 1, 1, [
-            new DiffLine('context', 'a,b,c', 1, 1),
+            new DiffLine(LineType::Context, 'a,b,c', 1, 1),
         ]),
     ];
 
@@ -23,9 +24,9 @@ test('returns hunks unchanged for non-csv files', function () {
 test('aligns simple csv columns', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine('context', 'name,age,city', 1, 1),
-            new DiffLine('context', 'Alice,30,NYC', 2, 2),
-            new DiffLine('context', 'Bob,25,Los Angeles', 3, 3),
+            new DiffLine(LineType::Context, 'name,age,city', 1, 1),
+            new DiffLine(LineType::Context, 'Alice,30,NYC', 2, 2),
+            new DiffLine(LineType::Context, 'Bob,25,Los Angeles', 3, 3),
         ]),
     ];
 
@@ -39,9 +40,9 @@ test('aligns simple csv columns', function () {
 test('handles mixed diff types in group', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine('context', 'col,value', 1, 1),
-            new DiffLine('remove', 'short,x', 2, null),
-            new DiffLine('add', 'a much longer cell,updated', null, 2),
+            new DiffLine(LineType::Context, 'col,value', 1, 1),
+            new DiffLine(LineType::Remove, 'short,x', 2, null),
+            new DiffLine(LineType::Add, 'a much longer cell,updated', null, 2),
         ]),
     ];
 
@@ -50,16 +51,16 @@ test('handles mixed diff types in group', function () {
     $lines = $result[0]->lines;
     expect($lines[0]->content)->toBe('col               ,value');
     expect($lines[1]->content)->toBe('short             ,x');
-    expect($lines[1]->type)->toBe('remove');
+    expect($lines[1]->type)->toBe(LineType::Remove);
     expect($lines[2]->content)->toBe('a much longer cell,updated');
-    expect($lines[2]->type)->toBe('add');
+    expect($lines[2]->type)->toBe(LineType::Add);
 });
 
 test('does not pad the last column', function () {
     $hunks = [
         new Hunk('', 1, 2, 1, 2, [
-            new DiffLine('context', 'a,b', 1, 1),
-            new DiffLine('context', 'longer,c', 2, 2),
+            new DiffLine(LineType::Context, 'a,b', 1, 1),
+            new DiffLine(LineType::Context, 'longer,c', 2, 2),
         ]),
     ];
 
@@ -72,8 +73,8 @@ test('does not pad the last column', function () {
 test('preserves quoted fields containing commas', function () {
     $hunks = [
         new Hunk('', 1, 2, 1, 2, [
-            new DiffLine('context', '"Smith, John",30,NYC', 1, 1),
-            new DiffLine('context', 'Alice,25,LA', 2, 2),
+            new DiffLine(LineType::Context, '"Smith, John",30,NYC', 1, 1),
+            new DiffLine(LineType::Context, 'Alice,25,LA', 2, 2),
         ]),
     ];
 
@@ -86,8 +87,8 @@ test('preserves quoted fields containing commas', function () {
 test('preserves escaped double quotes inside quoted fields', function () {
     $hunks = [
         new Hunk('', 1, 2, 1, 2, [
-            new DiffLine('context', '"he said ""hi""",x', 1, 1),
-            new DiffLine('context', 'short,y', 2, 2),
+            new DiffLine(LineType::Context, '"he said ""hi""",x', 1, 1),
+            new DiffLine(LineType::Context, 'short,y', 2, 2),
         ]),
     ];
 
@@ -100,8 +101,8 @@ test('preserves escaped double quotes inside quoted fields', function () {
 test('skips alignment when a line has an unterminated quote', function () {
     $hunks = [
         new Hunk('', 1, 2, 1, 2, [
-            new DiffLine('context', '"starts here', 1, 1),
-            new DiffLine('context', 'continues",x', 2, 2),
+            new DiffLine(LineType::Context, '"starts here', 1, 1),
+            new DiffLine(LineType::Context, 'continues",x', 2, 2),
         ]),
     ];
 
@@ -113,8 +114,8 @@ test('skips alignment when a line has an unterminated quote', function () {
 test('skips alignment for single-column csv', function () {
     $hunks = [
         new Hunk('', 1, 2, 1, 2, [
-            new DiffLine('context', 'apple', 1, 1),
-            new DiffLine('context', 'banana', 2, 2),
+            new DiffLine(LineType::Context, 'apple', 1, 1),
+            new DiffLine(LineType::Context, 'banana', 2, 2),
         ]),
     ];
 
@@ -126,8 +127,8 @@ test('skips alignment for single-column csv', function () {
 test('handles rows with different column counts', function () {
     $hunks = [
         new Hunk('', 1, 2, 1, 2, [
-            new DiffLine('context', 'a,b,c', 1, 1),
-            new DiffLine('add', 'x,y', null, 2),
+            new DiffLine(LineType::Context, 'a,b,c', 1, 1),
+            new DiffLine(LineType::Add, 'x,y', null, 2),
         ]),
     ];
 
@@ -141,11 +142,11 @@ test('handles rows with different column counts', function () {
 test('handles multiple groups separated by blank lines', function () {
     $hunks = [
         new Hunk('', 1, 5, 1, 5, [
-            new DiffLine('context', 'a,b', 1, 1),
-            new DiffLine('context', 'longer,x', 2, 2),
-            new DiffLine('context', '', 3, 3),
-            new DiffLine('context', 'c,d', 4, 4),
-            new DiffLine('context', 'y,much longer', 5, 5),
+            new DiffLine(LineType::Context, 'a,b', 1, 1),
+            new DiffLine(LineType::Context, 'longer,x', 2, 2),
+            new DiffLine(LineType::Context, '', 3, 3),
+            new DiffLine(LineType::Context, 'c,d', 4, 4),
+            new DiffLine(LineType::Context, 'y,much longer', 5, 5),
         ]),
     ];
 
@@ -167,8 +168,8 @@ test('handles empty hunks', function () {
 test('preserves line numbers and types', function () {
     $hunks = [
         new Hunk('', 10, 2, 10, 2, [
-            new DiffLine('context', 'a,b', 10, 10),
-            new DiffLine('add', 'longer,x', null, 11),
+            new DiffLine(LineType::Context, 'a,b', 10, 10),
+            new DiffLine(LineType::Add, 'longer,x', null, 11),
         ]),
     ];
 
@@ -176,7 +177,7 @@ test('preserves line numbers and types', function () {
 
     expect($result[0]->lines[0]->oldLineNum)->toBe(10)
         ->and($result[0]->lines[0]->newLineNum)->toBe(10)
-        ->and($result[0]->lines[1]->type)->toBe('add')
+        ->and($result[0]->lines[1]->type)->toBe(LineType::Add)
         ->and($result[0]->lines[1]->oldLineNum)->toBeNull()
         ->and($result[0]->lines[1]->newLineNum)->toBe(11);
 });
@@ -184,8 +185,8 @@ test('preserves line numbers and types', function () {
 test('returns hunks unchanged when all columns already aligned', function () {
     $hunks = [
         new Hunk('', 1, 2, 1, 2, [
-            new DiffLine('context', 'aaa,bbb', 1, 1),
-            new DiffLine('context', 'xxx,yyy', 2, 2),
+            new DiffLine(LineType::Context, 'aaa,bbb', 1, 1),
+            new DiffLine(LineType::Context, 'xxx,yyy', 2, 2),
         ]),
     ];
 
@@ -197,8 +198,8 @@ test('returns hunks unchanged when all columns already aligned', function () {
 test('handles multi-byte characters using display width', function () {
     $hunks = [
         new Hunk('', 1, 2, 1, 2, [
-            new DiffLine('context', 'name,city', 1, 1),
-            new DiffLine('context', '日本,Tokyo', 2, 2),
+            new DiffLine(LineType::Context, 'name,city', 1, 1),
+            new DiffLine(LineType::Context, '日本,Tokyo', 2, 2),
         ]),
     ];
 

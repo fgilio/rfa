@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Enums\DiffSide;
+use App\Enums\LineType;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 
@@ -39,12 +40,14 @@ final readonly class BuildDiffContextAction
 
             if (! array_key_exists($fileId, $loaded)) {
                 $cacheKey = DiffCacheKey::for($repoPath, $fileId);
-                $loaded[$fileId] = Cache::get($cacheKey)
-                    ?? $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false);
+                $cached = Cache::get($cacheKey);
+                $loaded[$fileId] = is_array($cached) && ($cached['lineTypesAreEnum'] ?? false)
+                    ? $cached
+                    : $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false);
             }
 
             $diffData = $loaded[$fileId];
-            if (! $diffData || ($diffData['tooLarge'] ?? false) || array_key_exists('error', $diffData)) {
+            if (($diffData['tooLarge'] ?? false) || array_key_exists('error', $diffData)) {
                 continue;
             }
 
@@ -60,8 +63,8 @@ final readonly class BuildDiffContextAction
                     }
                     if ($lineNum >= $comment['startLine'] && $lineNum <= ($comment['endLine'] ?? $comment['startLine'])) {
                         $prefix = match ($line['type']) {
-                            'add' => '+',
-                            'remove' => '-',
+                            LineType::Add => '+',
+                            LineType::Remove => '-',
                             default => ' ',
                         };
                         $lines[] = $prefix.$line['content'];
