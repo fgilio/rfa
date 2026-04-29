@@ -29,12 +29,11 @@
             <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
         </button>
 
-        <span class="font-mono text-sm truncate">
-            @if($file['oldPath'])
-                <span class="text-gh-muted">{{ $file['oldPath'] }} &rarr;</span>
-            @endif
-            {{ $file['path'] }}
-        </span>
+        <x-file-path
+            :path="$file['path']"
+            :old-path="$file['oldPath'] ?? null"
+            class="text-sm"
+        />
 
         @if($file['isSymlink'] ?? false)
             <flux:icon icon="link" variant="outline" class="!size-3.5 text-gh-muted shrink-0" aria-hidden="true" />

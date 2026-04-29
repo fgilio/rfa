@@ -134,7 +134,9 @@
                         />
                     </div>
                 </div>
-                <p class="mt-1 font-mono text-[11px] text-gh-muted/70 truncate pl-6">{{ $project['path'] }}</p>
+                <p class="mt-1 text-[11px] text-gh-muted/70 pl-6">
+                    <x-file-path :path="$project['path']" />
+                </p>
                 <x-remote-link-menu
                     :project-slug="$project['slug']"
                     type="repo"

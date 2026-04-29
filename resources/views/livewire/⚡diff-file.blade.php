@@ -249,6 +249,7 @@ new class extends Component {
         :diff-to="$diffTo"
     />
 
+    {{-- File body --}}
     <div x-show="!collapsed" x-collapse.duration.150ms>
         <div x-ref="fileCommentForm">
             <template x-if="showForm && formSide === 'file'">
