@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
+use App\Enums\LineType;
 use App\Support\GrammarMap;
 use Illuminate\Support\Facades\Log;
 use Phiki\Grammar\Grammar;
@@ -91,10 +92,10 @@ class SyntaxHighlightService
         $newIndices = [];
 
         foreach ($lines as $i => $line) {
-            if ($line->type === 'remove') {
+            if ($line->type === LineType::Remove) {
                 $oldIndices[] = $i;
                 $oldCode[] = $line->content;
-            } elseif ($line->type === 'add') {
+            } elseif ($line->type === LineType::Add) {
                 $newIndices[] = $i;
                 $newCode[] = $line->content;
             } else {
@@ -111,7 +112,7 @@ class SyntaxHighlightService
         $highlighted = [];
 
         foreach ($oldIndices as $pos => $lineIndex) {
-            if (isset($oldHighlighted[$pos]) && $lines[$lineIndex]->type === 'remove') {
+            if (isset($oldHighlighted[$pos]) && $lines[$lineIndex]->type === LineType::Remove) {
                 $highlighted[$lineIndex] = $oldHighlighted[$pos];
             }
         }

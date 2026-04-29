@@ -13,6 +13,7 @@ use App\Services\GitDiffService;
 use App\Services\MarkdownRegionService;
 use App\Services\MarkdownTableAlignerService;
 use App\Services\SyntaxHighlightService;
+use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -88,19 +89,13 @@ final readonly class LoadFileDiffAction
                 'newFileLineCount' => $newFileLineCount,
                 'headingsAnnotated' => true,
                 'gridLayout' => true,
+                'lineTypesAreEnum' => true,
             ];
         };
 
         if ($cacheKey) {
             $cached = Cache::get($cacheKey);
-            if ($cached !== null
-                && array_key_exists('syntaxStyles', $cached)
-                && array_key_exists('isSymlink', $cached)
-                && array_key_exists('tableAligned', $cached)
-                && array_key_exists('newFileLineCount', $cached)
-                && array_key_exists('headingsAnnotated', $cached)
-                && array_key_exists('gridLayout', $cached)
-            ) {
+            if (DiffCacheKey::isCurrentShape($cached)) {
                 return $cached;
             }
             $result = $compute();

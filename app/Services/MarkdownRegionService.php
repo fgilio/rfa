@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
+use App\Enums\LineType;
 use App\Support\MarkdownPath;
 
 class MarkdownRegionService
@@ -38,7 +39,7 @@ class MarkdownRegionService
         foreach ($hunks as $hunk) {
             $newLines = [];
             foreach ($hunk->lines as $line) {
-                $isNewSide = $line->type !== 'remove';
+                $isNewSide = $line->type !== LineType::Remove;
                 $fence = $isNewSide ? $this->fenceMarker($line->content) : null;
 
                 if ($fence !== null) {

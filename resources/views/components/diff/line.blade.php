@@ -8,18 +8,20 @@
 ])
 
 @php
+    use App\Enums\LineType;
+
     $type = $line['type'];
     $oldNum = $line['oldLineNum'] ?? null;
     $newNum = $line['newLineNum'] ?? null;
     $lineNum = $newNum ?? $oldNum;
     [$bgClass, $oldNumBgClass, $newNumBgClass, $prefix, $prefixColor] = match($type) {
-        'add' => ['bg-gh-add-bg', '', 'bg-gh-add-line', '+', 'text-gh-green'],
-        'remove' => ['bg-gh-del-bg', 'bg-gh-del-line', '', '-', 'text-gh-red'],
+        LineType::Add => ['bg-gh-add-bg', '', 'bg-gh-add-line', '+', 'text-gh-green'],
+        LineType::Remove => ['bg-gh-del-bg', 'bg-gh-del-line', '', '-', 'text-gh-red'],
         default => ['', '', '', ' ', 'text-gh-muted/30'],
     };
     $lineSide = match($type) {
-        'remove' => 'left',
-        'add' => 'right',
+        LineType::Remove => 'left',
+        LineType::Add => 'right',
         default => 'context',
     };
     $headingId = $line['headingId'] ?? null;
@@ -27,8 +29,8 @@
     $ancestorJs = $headingAncestors === [] ? null : json_encode($headingAncestors);
 
     $lineComments = match($type) {
-        'remove' => $commentsByLine["left:{$oldNum}"] ?? [],
-        'add' => $commentsByLine["right:{$newNum}"] ?? [],
+        LineType::Remove => $commentsByLine["left:{$oldNum}"] ?? [],
+        LineType::Add => $commentsByLine["right:{$newNum}"] ?? [],
         default => [
             ...($commentsByLine["left:{$oldNum}"] ?? []),
             ...($commentsByLine["right:{$newNum}"] ?? []),
@@ -38,7 +40,7 @@
 
 <div
     class="diff-line"
-    data-type="{{ $type }}"
+    data-type="{{ $type->value }}"
     :class="isLineSideInSelection({{ $lineNum ?? 'null' }}, @js($lineSide)) ? 'line-selected' : ''"
     @mouseenter="onDragOver({{ $newNum ?? 'null' }}, {{ $oldNum ?? 'null' }})"
     @if($hasRemote && $lineNum !== null) @contextmenu.prevent="onLineContextmenu($event, {{ $lineNum }}, '{{ $lineSide === 'left' ? 'old' : 'new' }}')" @endif
@@ -66,7 +68,7 @@
             class="inline-flex align-middle -my-0.5 mr-1 size-4 items-center justify-center text-gh-muted/60 hover:text-gh-text"
         ><flux:icon icon="chevron-down" variant="outline" class="!size-3" x-show="!foldedHeadings[{{ $headingId }}]" /><flux:icon icon="chevron-right" variant="outline" class="!size-3" x-show="foldedHeadings[{{ $headingId }}]" x-cloak /></button>@endif{!! $line['highlightedContent'] ?? e($line['content']) !!}</div>
 
-    @if($type === 'context')
+    @if($type === LineType::Context)
         {{-- Mirror cell: shown only in split mode (CSS hides in unified). --}}
         <div class="diff-cell diff-cell-content diff-cell-content-mirror {{ $bgClass }}" aria-hidden="true">{!! $line['highlightedContent'] ?? e($line['content']) !!}</div>
     @endif

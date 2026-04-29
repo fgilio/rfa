@@ -3,6 +3,7 @@
 use App\Actions\LoadFileDiffAction;
 use App\Console\Benchmark\DiffFixtureFactory;
 use App\DTOs\DiffTarget;
+use App\Enums\LineType;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Features\SupportTesting\Testable;
@@ -330,7 +331,7 @@ function buildContextHunk(int $startLine, int $lineCount = 3): array
     for ($i = 0; $i < $lineCount; $i++) {
         $lineNum = $startLine + $i;
         $lines[] = [
-            'type' => 'context',
+            'type' => LineType::Context,
             'content' => "// line {$lineNum}",
             'oldLineNum' => $lineNum,
             'newLineNum' => $lineNum,

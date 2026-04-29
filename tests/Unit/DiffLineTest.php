@@ -1,6 +1,7 @@
 <?php
 
 use App\DTOs\DiffLine;
+use App\Enums\LineType;
 use Faker\Factory as Faker;
 
 beforeEach(function () {
@@ -9,7 +10,7 @@ beforeEach(function () {
 });
 
 test('toArray returns all properties', function () {
-    $type = $this->faker->randomElement(['context', 'add', 'remove']);
+    $type = $this->faker->randomElement(LineType::cases());
     $content = $this->faker->sentence();
     $oldLineNum = $this->faker->numberBetween(1, 500);
     $newLineNum = $this->faker->numberBetween(1, 500);
@@ -25,7 +26,7 @@ test('toArray returns all properties', function () {
 });
 
 test('toArray handles null line numbers', function () {
-    $line = new DiffLine('add', $this->faker->sentence(), null, $this->faker->numberBetween(1, 100));
+    $line = new DiffLine(LineType::Add, $this->faker->sentence(), null, $this->faker->numberBetween(1, 100));
 
     $array = $line->toArray();
 
@@ -36,7 +37,7 @@ test('toArray handles null line numbers', function () {
 test('toArray includes highlightedContent when set', function () {
     $highlighted = '<span style="color:#000">code</span>';
 
-    $line = new DiffLine('add', 'code', null, 1, $highlighted);
+    $line = new DiffLine(LineType::Add, 'code', null, 1, $highlighted);
 
     $array = $line->toArray();
 
@@ -45,7 +46,7 @@ test('toArray includes highlightedContent when set', function () {
 });
 
 test('toArray omits highlightedContent when null', function () {
-    $line = new DiffLine('context', 'code', 1, 1);
+    $line = new DiffLine(LineType::Context, 'code', 1, 1);
 
     expect($line->toArray())->not->toHaveKey('highlightedContent');
 });

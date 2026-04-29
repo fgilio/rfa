@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Enums\LineType;
+
 final readonly class ExpandDiffGapAction
 {
     /**
@@ -11,7 +13,7 @@ final readonly class ExpandDiffGapAction
      *
      * @param  list<array{header: string, oldStart: int, oldCount: int, newStart: int, newCount: int, lines: list<array>}>  $hunks
      * @param  int  $hunkIndex  0 = leading gap, count($hunks) = trailing gap (sentinel, not an actual index), else middle gap before hunks[$hunkIndex]
-     * @param  list<array{type: string, newLineNum: ?int, oldLineNum: ?int, content: string, highlightedContent: string}>  $fullDiffLines  All lines from the full-context diff's single hunk
+     * @param  list<array{type: LineType, newLineNum: ?int, oldLineNum: ?int, content: string, highlightedContent: string}>  $fullDiffLines  All lines from the full-context diff's single hunk
      * @param  ?int  $lineCount  Lines to expand (null = full gap)
      * @param  ?int  $newFileLineCount  Total lines in new file (needed for trailing gap boundary)
      * @return list<array> Modified hunks
@@ -66,7 +68,7 @@ final readonly class ExpandDiffGapAction
             ->filter(fn (array $line): bool => ($line['newLineNum'] ?? null) !== null
                 && $line['newLineNum'] >= $gapNewStart
                 && $line['newLineNum'] <= $gapNewEnd
-                && $line['type'] === 'context')
+                && $line['type'] === LineType::Context)
             ->values()
             ->all();
 

@@ -2,6 +2,7 @@
 
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
+use App\Enums\LineType;
 use App\Services\MarkdownTableAlignerService;
 
 beforeEach(function () {
@@ -11,7 +12,7 @@ beforeEach(function () {
 test('returns hunks unchanged for non-markdown files', function () {
     $hunks = [
         new Hunk('', 1, 1, 1, 1, [
-            new DiffLine('context', '| col1 | col2 |', 1, 1),
+            new DiffLine(LineType::Context, '| col1 | col2 |', 1, 1),
         ]),
     ];
 
@@ -23,7 +24,7 @@ test('returns hunks unchanged for non-markdown files', function () {
 test('returns hunks unchanged when no tables present', function () {
     $hunks = [
         new Hunk('', 1, 1, 1, 1, [
-            new DiffLine('context', 'just some text', 1, 1),
+            new DiffLine(LineType::Context, 'just some text', 1, 1),
         ]),
     ];
 
@@ -35,10 +36,10 @@ test('returns hunks unchanged when no tables present', function () {
 test('aligns simple table columns', function () {
     $hunks = [
         new Hunk('', 1, 4, 1, 4, [
-            new DiffLine('context', '| Name | Description | Notes |', 1, 1),
-            new DiffLine('context', '|---|---|---|', 2, 2),
-            new DiffLine('context', '| a | A longer description | n |', 3, 3),
-            new DiffLine('context', '| longer name | b | some notes here |', 4, 4),
+            new DiffLine(LineType::Context, '| Name | Description | Notes |', 1, 1),
+            new DiffLine(LineType::Context, '|---|---|---|', 2, 2),
+            new DiffLine(LineType::Context, '| a | A longer description | n |', 3, 3),
+            new DiffLine(LineType::Context, '| longer name | b | some notes here |', 4, 4),
         ]),
     ];
 
@@ -54,10 +55,10 @@ test('aligns simple table columns', function () {
 test('handles mixed diff types in table group', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine('context', '| Col | Value |', 1, 1),
-            new DiffLine('context', '|---|---|', 2, 2),
-            new DiffLine('remove', '| short | x |', 3, null),
-            new DiffLine('add', '| a much longer cell | updated |', null, 3),
+            new DiffLine(LineType::Context, '| Col | Value |', 1, 1),
+            new DiffLine(LineType::Context, '|---|---|', 2, 2),
+            new DiffLine(LineType::Remove, '| short | x |', 3, null),
+            new DiffLine(LineType::Add, '| a much longer cell | updated |', null, 3),
         ]),
     ];
 
@@ -67,17 +68,17 @@ test('handles mixed diff types in table group', function () {
     // All lines aligned to the widest content across all types
     expect($lines[0]->content)->toBe('| Col                | Value   |');
     expect($lines[2]->content)->toBe('| short              | x       |');
-    expect($lines[2]->type)->toBe('remove');
+    expect($lines[2]->type)->toBe(LineType::Remove);
     expect($lines[3]->content)->toBe('| a much longer cell | updated |');
-    expect($lines[3]->type)->toBe('add');
+    expect($lines[3]->type)->toBe(LineType::Add);
 });
 
 test('extends separator row dashes to match column width', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine('context', '| Header One | H2 |', 1, 1),
-            new DiffLine('context', '|---|---|', 2, 2),
-            new DiffLine('context', '| data | d |', 3, 3),
+            new DiffLine(LineType::Context, '| Header One | H2 |', 1, 1),
+            new DiffLine(LineType::Context, '|---|---|', 2, 2),
+            new DiffLine(LineType::Context, '| data | d |', 3, 3),
         ]),
     ];
 
@@ -89,9 +90,9 @@ test('extends separator row dashes to match column width', function () {
 test('preserves separator alignment markers', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine('context', '| Left Longer | Center Longer | Right Longer |', 1, 1),
-            new DiffLine('context', '|:---|:---:|---:|', 2, 2),
-            new DiffLine('context', '| data | data | data |', 3, 3),
+            new DiffLine(LineType::Context, '| Left Longer | Center Longer | Right Longer |', 1, 1),
+            new DiffLine(LineType::Context, '|:---|:---:|---:|', 2, 2),
+            new DiffLine(LineType::Context, '| data | data | data |', 3, 3),
         ]),
     ];
 
@@ -109,8 +110,8 @@ test('preserves separator alignment markers', function () {
 test('handles tables with different column counts', function () {
     $hunks = [
         new Hunk('', 1, 2, 1, 2, [
-            new DiffLine('context', '| a | b | c |', 1, 1),
-            new DiffLine('add', '| x | y |', null, 2),
+            new DiffLine(LineType::Context, '| a | b | c |', 1, 1),
+            new DiffLine(LineType::Add, '| x | y |', null, 2),
         ]),
     ];
 
@@ -125,9 +126,9 @@ test('handles tables with different column counts', function () {
 test('preserves indented tables', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine('context', '    | Col | Value |', 1, 1),
-            new DiffLine('context', '    |---|---|', 2, 2),
-            new DiffLine('context', '    | longer | x |', 3, 3),
+            new DiffLine(LineType::Context, '    | Col | Value |', 1, 1),
+            new DiffLine(LineType::Context, '    |---|---|', 2, 2),
+            new DiffLine(LineType::Context, '    | longer | x |', 3, 3),
         ]),
     ];
 
@@ -143,8 +144,8 @@ test('preserves indented tables', function () {
 test('does not align non-table pipe lines', function () {
     $hunks = [
         new Hunk('', 1, 2, 1, 2, [
-            new DiffLine('context', 'echo foo | grep bar', 1, 1),
-            new DiffLine('context', 'cat file | wc -l', 2, 2),
+            new DiffLine(LineType::Context, 'echo foo | grep bar', 1, 1),
+            new DiffLine(LineType::Context, 'cat file | wc -l', 2, 2),
         ]),
     ];
 
@@ -156,13 +157,13 @@ test('does not align non-table pipe lines', function () {
 test('handles multiple table groups in one hunk', function () {
     $hunks = [
         new Hunk('', 1, 7, 1, 7, [
-            new DiffLine('context', '| a | b |', 1, 1),
-            new DiffLine('context', '|---|---|', 2, 2),
-            new DiffLine('context', '| longer | x |', 3, 3),
-            new DiffLine('context', '', 4, 4),
-            new DiffLine('context', '| c | d |', 5, 5),
-            new DiffLine('context', '|---|---|', 6, 6),
-            new DiffLine('context', '| y | much longer |', 7, 7),
+            new DiffLine(LineType::Context, '| a | b |', 1, 1),
+            new DiffLine(LineType::Context, '|---|---|', 2, 2),
+            new DiffLine(LineType::Context, '| longer | x |', 3, 3),
+            new DiffLine(LineType::Context, '', 4, 4),
+            new DiffLine(LineType::Context, '| c | d |', 5, 5),
+            new DiffLine(LineType::Context, '|---|---|', 6, 6),
+            new DiffLine(LineType::Context, '| y | much longer |', 7, 7),
         ]),
     ];
 
@@ -186,9 +187,9 @@ test('handles empty hunks', function () {
 test('processes mdx files', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine('context', '| Short | Value |', 1, 1),
-            new DiffLine('context', '|---|---|', 2, 2),
-            new DiffLine('context', '| a longer name | x |', 3, 3),
+            new DiffLine(LineType::Context, '| Short | Value |', 1, 1),
+            new DiffLine(LineType::Context, '|---|---|', 2, 2),
+            new DiffLine(LineType::Context, '| a longer name | x |', 3, 3),
         ]),
     ];
 
@@ -201,9 +202,9 @@ test('processes mdx files', function () {
 test('preserves line numbers and types', function () {
     $hunks = [
         new Hunk('', 10, 3, 10, 3, [
-            new DiffLine('context', '| a | b |', 10, 10),
-            new DiffLine('context', '|---|---|', 11, 11),
-            new DiffLine('add', '| longer | x |', null, 12),
+            new DiffLine(LineType::Context, '| a | b |', 10, 10),
+            new DiffLine(LineType::Context, '|---|---|', 11, 11),
+            new DiffLine(LineType::Add, '| longer | x |', null, 12),
         ]),
     ];
 
@@ -211,7 +212,7 @@ test('preserves line numbers and types', function () {
 
     expect($result[0]->lines[0]->oldLineNum)->toBe(10)
         ->and($result[0]->lines[0]->newLineNum)->toBe(10)
-        ->and($result[0]->lines[2]->type)->toBe('add')
+        ->and($result[0]->lines[2]->type)->toBe(LineType::Add)
         ->and($result[0]->lines[2]->oldLineNum)->toBeNull()
         ->and($result[0]->lines[2]->newLineNum)->toBe(12);
 });
