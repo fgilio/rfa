@@ -46,14 +46,10 @@
             };
         }
 
-        // Commits are listed newest-first; lowest index = tip, highest = oldest.
-        // Working tree is conceptually at index -1 (one step newer than the tip).
-        // When WT is selected alongside commits, the commits must start at
-        // index 0. Normally the Alpine state machine auto-unticks WT before
-        // the user can press Apply on a violating selection (see
-        // `_enforceWorkingTreeTipAnchor`), so this branch is a backstop for
-        // anything that might bypass it (programmatic state, future code).
-        if (workingTreeSelected && indices.length > 0 && indices[0] !== 0) {
+        // Backstop for the tip-anchor invariant. Normally the Alpine state
+        // machine auto-unticks WT (see `_enforceWorkingTreeTipAnchor`); this
+        // catches any bypass (programmatic state, future code).
+        if (violatesTipAnchor({ selectedHashes, workingTreeSelected, commits })) {
             return {
                 kind: 'alert',
                 message: 'Selection is not contiguous — working tree must be paired with the newest commits.',
@@ -90,6 +86,26 @@
         if (selectedHashes.length !== hashesInRange.length) return false;
         const set = new Set(hashesInRange);
         return selectedHashes.every(h => set.has(h));
+    }
+
+    /**
+     * Working tree extends a diff through HEAD's working state, so a selection
+     * that pairs WT with commits MUST include the tip — otherwise the user is
+     * asking for a diff that excludes HEAD's commit while still including its
+     * working tree, which has no coherent diff range. Used as both a guard
+     * (in the picker's auto-untick) and a backstop (in `decideSelection`).
+     *
+     * @param {object} input
+     * @param {string[]} input.selectedHashes
+     * @param {boolean}  input.workingTreeSelected
+     * @param {Array<{hash: string}>} input.commits  newest-first; index 0 = tip.
+     */
+    function violatesTipAnchor({ selectedHashes, workingTreeSelected, commits }) {
+        if (!workingTreeSelected) return false;
+        if (selectedHashes.length === 0) return false;
+        const tip = commits[0];
+        if (!tip) return false;
+        return !selectedHashes.includes(tip.hash);
     }
 
     function createBranchExplorer({ currentBranch, activeCommitHash, activeDiffFrom, projectSlug, branches }) {
@@ -327,22 +343,17 @@
             },
 
             /**
-             * Working tree extends the diff through HEAD's working state, so a
-             * selection that pairs WT with commits MUST include the tip —
-             * otherwise the user is asking for a diff that excludes HEAD's
-             * commit while still including its working tree, which has no
-             * coherent diff range. When the user's last action would leave
-             * that invariant violated (e.g. unticking the tip while WT is
-             * selected), auto-untick WT and explain via a toast. Quietly
-             * fixing the state after the action feels less hostile than
-             * blocking the action itself.
+             * Auto-fix the tip-anchor invariant after the user's last action,
+             * so e.g. unticking the tip while WT is selected silently unticks
+             * WT (with a toast) instead of blocking on Apply. Quietly fixing
+             * the state feels less hostile than rejecting the action.
              */
             _enforceWorkingTreeTipAnchor() {
-                if (!this.workingTreeSelected) return;
-                if (this.selectedHashes.length === 0) return;
-                const tip = this.$wire.commits[0];
-                if (!tip) return;
-                if (this.selectedHashes.includes(tip.hash)) return;
+                if (!violatesTipAnchor({
+                    selectedHashes: this.selectedHashes,
+                    workingTreeSelected: this.workingTreeSelected,
+                    commits: this.$wire.commits,
+                })) return;
 
                 this.workingTreeSelected = false;
                 if (typeof window !== 'undefined' && window.Flux?.toast) {
@@ -470,5 +481,5 @@
         }
     }
 
-    return { decideSelection, isSinceBaseExactly, createBranchExplorer, install, autoInstall };
+    return { decideSelection, isSinceBaseExactly, violatesTipAnchor, createBranchExplorer, install, autoInstall };
 });

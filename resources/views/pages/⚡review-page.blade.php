@@ -1269,22 +1269,18 @@ new #[Layout('layouts.app')] class extends Component
                 @php
                     $shortFrom = $diffFrom === 'HEAD' ? 'HEAD' : substr($diffFrom, 0, 7);
                     $shortTo = $diffTo ? substr($diffTo, 0, 7) : null;
-                    if ($diffTo === null && $diffFrom === 'HEAD') {
-                        $selectionLabel = 'Working tree';
-                        $selectionTitle = 'Working tree changes';
-                    } elseif ($isSinceBaseView) {
-                        $selectionLabel = 'Since '.$defaultBaseBranch;
-                        $selectionTitle = 'All changes since '.$defaultBaseBranch.' (commits + uncommitted)';
-                    } elseif ($diffTo === null) {
-                        $selectionLabel = 'WT · '.$shortFrom;
-                        $selectionTitle = 'Working tree + commits through '.$diffFrom;
-                    } elseif ($diffFrom === $diffTo.'^') {
-                        $selectionLabel = $shortTo;
-                        $selectionTitle = $commitInfo['message'] ?? $diffTo;
-                    } else {
-                        $selectionLabel = $shortFrom.'..'.$shortTo;
-                        $selectionTitle = 'Range '.$diffFrom.'..'.$diffTo;
-                    }
+                    [$selectionLabel, $selectionTitle] = match (true) {
+                        $diffTo === null && $diffFrom === 'HEAD'
+                            => ['Working tree', 'Working tree changes'],
+                        $isSinceBaseView
+                            => ['Since '.$defaultBaseBranch, 'All changes since '.$defaultBaseBranch.' (commits + uncommitted)'],
+                        $diffTo === null
+                            => ['WT · '.$shortFrom, 'Working tree + commits through '.$diffFrom],
+                        $diffFrom === $diffTo.'^'
+                            => [$shortTo, $commitInfo['message'] ?? $diffTo],
+                        default
+                            => [$shortFrom.'..'.$shortTo, 'Range '.$diffFrom.'..'.$diffTo],
+                    };
                 @endphp
                 @if($projectBranch)
                     <x-header-separator />
