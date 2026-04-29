@@ -149,9 +149,22 @@ test('restartAndUpdate sets error state on failure', function () {
 
     Livewire::test('update-banner')
         ->call('restartAndUpdate')
-        ->assertSet('status', 'error');
+        ->assertSet('status', 'error')
+        ->assertDispatched('restart-failed');
 
     expect(Cache::get('native-update-state')['status'])->toBe('error');
+});
+
+test('renders restart overlay with installing version when ready', function () {
+    Cache::put('native-update-state', [
+        'status' => 'ready',
+        'version' => '1.2.0',
+        'percent' => 100,
+    ]);
+
+    Livewire::test('update-banner')
+        ->assertSee('Restarting')
+        ->assertSee('Installing v1.2.0');
 });
 
 test('refreshState updates component from cache changes', function () {

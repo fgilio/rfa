@@ -114,6 +114,7 @@ new class extends Component
         } catch (\Throwable) {
             Cache::put('native-update-state', ['status' => 'error'], now()->addMinutes(5));
             $this->status = 'error';
+            $this->dispatch('restart-failed');
         }
     }
 
@@ -255,6 +256,8 @@ new class extends Component
                 <span class="text-gh-muted truncate max-w-xs" title="{{ $releaseNotes }}">{{ Str::limit($releaseNotes, 60) }}</span>
             @endif
             <button
+                x-data
+                @click="$dispatch('restart-started')"
                 wire:click="restartAndUpdate"
                 class="text-gh-link hover:underline font-medium"
             >
@@ -308,4 +311,6 @@ new class extends Component
             </button>
         </div>
     @endif
+
+    <x-restart-overlay :version="$version" />
 </div>
