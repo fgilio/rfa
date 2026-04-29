@@ -50,9 +50,7 @@ new class extends Component {
     public function hydrate(): void
     {
         $cached = Cache::get($this->diffCacheKey());
-        $this->diffData = is_array($cached) && ($cached['lineTypesAreEnum'] ?? false)
-            ? $cached
-            : null;
+        $this->diffData = DiffCacheKey::isCurrentShape($cached) ? $cached : null;
     }
 
     /** @param array<int, array<string, mixed>> $comments */

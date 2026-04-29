@@ -39,9 +39,8 @@ final readonly class BuildDiffContextAction
             $fileId = $file['id'];
 
             if (! array_key_exists($fileId, $loaded)) {
-                $cacheKey = DiffCacheKey::for($repoPath, $fileId);
-                $cached = Cache::get($cacheKey);
-                $loaded[$fileId] = is_array($cached) && ($cached['lineTypesAreEnum'] ?? false)
+                $cached = Cache::get(DiffCacheKey::for($repoPath, $fileId));
+                $loaded[$fileId] = DiffCacheKey::isCurrentShape($cached)
                     ? $cached
                     : $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false);
             }
