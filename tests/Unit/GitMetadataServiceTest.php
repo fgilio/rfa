@@ -148,6 +148,53 @@ test('getCommitParents returns empty array for root commit', function () {
     expect($parents)->toBeEmpty();
 });
 
+// -- getMergeBase tests --
+
+test('getMergeBase returns common ancestor of diverged branches', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "v1\n");
+    $this->commitTestRepo($this->tmpDir, 'shared');
+
+    $shared = $this->service->resolveRef($this->tmpDir, 'HEAD');
+
+    $this->runTestRepoCommand($this->tmpDir, 'git checkout -b feature');
+    File::put($this->tmpDir.'/file.txt', "v2\n");
+    $this->commitTestRepo($this->tmpDir, 'feature only');
+
+    $this->runTestRepoCommand($this->tmpDir, 'git checkout main');
+
+    expect($this->service->getMergeBase($this->tmpDir, 'main', 'feature'))->toBe($shared);
+});
+
+test('getMergeBase returns the older ref when one is an ancestor of the other', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "v1\n");
+    $this->commitTestRepo($this->tmpDir, 'first');
+
+    $first = $this->service->resolveRef($this->tmpDir, 'HEAD');
+
+    File::put($this->tmpDir.'/file.txt', "v2\n");
+    $this->commitTestRepo($this->tmpDir, 'second');
+
+    expect($this->service->getMergeBase($this->tmpDir, $first, 'HEAD'))->toBe($first);
+});
+
+test('getMergeBase returns null for unknown ref', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "v1\n");
+    $this->commitTestRepo($this->tmpDir, 'first');
+
+    expect($this->service->getMergeBase($this->tmpDir, 'HEAD', 'nonexistent-xyz'))->toBeNull();
+});
+
+test('getMergeBase returns null for ref starting with dash', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "v1\n");
+    $this->commitTestRepo($this->tmpDir, 'first');
+
+    expect($this->service->getMergeBase($this->tmpDir, 'HEAD', '--exec=bad'))->toBeNull();
+});
+
 // -- getChildCommit tests --
 
 test('getChildCommit returns child hash', function () {
