@@ -1444,29 +1444,7 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                 </div>
                 @if(count($sourceFiles) > 0)
-                    <div data-testid="status-strip-copy-paths" x-show="visibleFileCount > 0">
-                        <flux:dropdown position="bottom" align="end">
-                            <flux:tooltip>
-                                <flux:button variant="ghost" size="xs" icon="square-2-stack" icon:variant="outline"
-                                    aria-label="Copy file paths"
-                                    data-testid="status-strip-copy-paths-trigger" />
-                                <flux:tooltip.content>
-                                    <span x-text="`Copy paths for ${visibleFileCount} ${visibleFileCount === 1 ? 'file' : 'files'}`"></span>
-                                </flux:tooltip.content>
-                            </flux:tooltip>
-                            <flux:menu>
-                                <flux:menu.item icon="document" icon:variant="outline" @click="copyVisibleFilePaths('name')">
-                                    Copy file names
-                                </flux:menu.item>
-                                <flux:menu.item icon="document-duplicate" icon:variant="outline" @click="copyVisibleFilePaths('relative')">
-                                    Copy relative paths
-                                </flux:menu.item>
-                                <flux:menu.item icon="link" icon:variant="outline" @click="copyVisibleFilePaths('full')">
-                                    Copy full paths
-                                </flux:menu.item>
-                            </flux:menu>
-                        </flux:dropdown>
-                    </div>
+                    <x-copy-paths-menu testid-prefix="status-strip-copy-paths" />
                 @endif
             </div>
         </div>
@@ -1582,29 +1560,7 @@ new #[Layout('layouts.app')] class extends Component
                 <div class="flex items-center justify-between mb-3">
                     <span class="section-label text-gh-muted">Files</span>
                     @if(count($sourceFiles) > 0)
-                        <div data-testid="sidebar-copy-paths" x-show="visibleFileCount > 0">
-                            <flux:dropdown position="bottom" align="end">
-                                <flux:tooltip>
-                                    <flux:button variant="ghost" size="xs" icon="square-2-stack" icon:variant="outline"
-                                        aria-label="Copy file paths"
-                                        data-testid="sidebar-copy-paths-trigger" />
-                                    <flux:tooltip.content>
-                                        <span x-text="`Copy paths for ${visibleFileCount} ${visibleFileCount === 1 ? 'file' : 'files'}`"></span>
-                                    </flux:tooltip.content>
-                                </flux:tooltip>
-                                <flux:menu>
-                                    <flux:menu.item icon="document" icon:variant="outline" @click="copyVisibleFilePaths('name')">
-                                        Copy file names
-                                    </flux:menu.item>
-                                    <flux:menu.item icon="document-duplicate" icon:variant="outline" @click="copyVisibleFilePaths('relative')">
-                                        Copy relative paths
-                                    </flux:menu.item>
-                                    <flux:menu.item icon="link" icon:variant="outline" @click="copyVisibleFilePaths('full')">
-                                        Copy full paths
-                                    </flux:menu.item>
-                                </flux:menu>
-                            </flux:dropdown>
-                        </div>
+                        <x-copy-paths-menu testid-prefix="sidebar-copy-paths" />
                     @endif
                 </div>
                 <flux:input
