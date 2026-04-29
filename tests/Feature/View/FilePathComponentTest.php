@@ -78,21 +78,17 @@ test('forwards extra classes to the outer span', function () {
         ->toContain('font-mono');
 });
 
-test('directory span allows shrinking so the basename never gets clipped', function () {
+test('whole line truncates from the right when it overflows', function () {
     $html = Blade::render('<x-file-path path="some/long/dir/file.php" />');
 
     expect($html)
         ->toContain('min-w-0')
         ->toContain('truncate')
-        ->toContain('shrink-0');
+        ->toContain('max-w-full');
 });
 
-test('root-level basename allows truncation so it cannot bleed over neighboring icons', function () {
-    $html = Blade::render('<x-file-path path="20260428-migrate-cursor-rules-to-claude-code.md" />');
+test('overrides inherited text-align so short paths don\'t drift in centered parents like buttons', function () {
+    $html = Blade::render('<x-file-path path="README.md" />');
 
-    expect($html)
-        ->toContain('20260428-migrate-cursor-rules-to-claude-code.md')
-        ->toContain('min-w-0')
-        ->toContain('truncate')
-        ->not->toContain('shrink-0');
+    expect($html)->toContain('text-left');
 });
