@@ -17,6 +17,13 @@ class ExternalFilesService
 {
     public const MOUNT_PREFIX = 'external';
 
+    /**
+     * Cap recursion depth so a misconfigured root (e.g. `$HOME`) can't pull a
+     * massive subtree into the file list. Eight levels comfortably covers
+     * design-note folders without inviting pathological walks.
+     */
+    public const MAX_DEPTH = 8;
+
     public function __construct(
         private readonly GitDiffService $gitDiffService,
     ) {}
@@ -133,6 +140,7 @@ class ExternalFilesService
             new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS | FilesystemIterator::FOLLOW_SYMLINKS),
             RecursiveIteratorIterator::LEAVES_ONLY
         );
+        $iterator->setMaxDepth(self::MAX_DEPTH);
 
         $entries = [];
 

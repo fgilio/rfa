@@ -21,6 +21,23 @@ test('returns empty list when no configs are supplied', function () {
     expect($this->service->getEntries([]))->toBe([]);
 });
 
+test('caps recursion at MAX_DEPTH so a misconfigured root cannot pull in a huge subtree', function () {
+    $deep = $this->createTempDirectory('rfa_ext_deep_');
+    $segments = array_fill(0, ExternalFilesService::MAX_DEPTH + 3, 'd');
+    File::ensureDirectoryExists($deep.'/'.implode('/', $segments));
+    File::put($deep.'/top.md', "shallow\n");
+    File::put($deep.'/'.implode('/', $segments).'/buried.md', "too deep\n");
+
+    $paths = collect($this->service->getEntries([['label' => 'deep', 'path' => $deep]]))
+        ->pluck('path')
+        ->all();
+
+    expect($paths)->toContain('external/deep/top.md');
+    foreach ($paths as $p) {
+        expect($p)->not->toContain('buried.md');
+    }
+});
+
 test('walks the configured directory recursively and mounts files under external/<label>', function () {
     $entries = $this->service->getEntries($this->configs);
 
