@@ -43,6 +43,23 @@ class GitFileContentService
         return $this->hashCache[$key];
     }
 
+    /**
+     * Hash a file by its absolute on-disk path, sharing the same request-scoped
+     * memoization as `hashAt()`. Used for files that live outside any repo
+     * (see `GitRef::External` and `Project::external_paths`).
+     */
+    public function hashAtAbsolute(string $absolutePath): ?string
+    {
+        $key = "\0".GitRef::External->value."\0".$absolutePath;
+
+        if (! array_key_exists($key, $this->hashCache)) {
+            $hash = is_file($absolutePath) ? @hash_file('xxh128', $absolutePath) : false;
+            $this->hashCache[$key] = $hash === false ? null : $hash;
+        }
+
+        return $this->hashCache[$key];
+    }
+
     /** Drop every memoized hash. Call between requests under long-lived workers. */
     public function flushCache(): void
     {

@@ -222,7 +222,12 @@ test('places external comments when the on-disk hash matches the stored hash', f
     file_put_contents($absolute, "stable\n");
     $hash = hash_file('xxh128', $absolute);
 
-    $result = $this->action->handle(
+    // Use the real GitFileContentService for hashAtAbsolute; the beforeEach
+    // mock only stubs git-side hashAt() calls.
+    app()->forgetInstance(GitFileContentService::class);
+    $action = app(ResolveCommentAnchorAction::class);
+
+    $result = $action->handle(
         '/tmp/repo',
         [[
             'id' => 'c-ext',
@@ -252,7 +257,10 @@ test('marks external comments as unplaced when the on-disk content has changed',
     $absolute = $tmp.'/note.md';
     file_put_contents($absolute, "current\n");
 
-    $result = $this->action->handle(
+    app()->forgetInstance(GitFileContentService::class);
+    $action = app(ResolveCommentAnchorAction::class);
+
+    $result = $action->handle(
         '/tmp/repo',
         [[
             'id' => 'c-ext-stale',

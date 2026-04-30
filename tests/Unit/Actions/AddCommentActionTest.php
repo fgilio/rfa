@@ -166,6 +166,8 @@ test('hashes external-file comments off disk and stamps origin_ref=external', fu
     $absolute = $tmp.'/note.md';
     file_put_contents($absolute, "external content\n");
 
+    // Drop the beforeEach mock so we exercise the real hashAtAbsolute path.
+    app()->forgetInstance(GitFileContentService::class);
     $action = app(AddCommentAction::class);
     $files = [[
         'id' => 'file-ext',

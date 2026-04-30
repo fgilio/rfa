@@ -63,13 +63,8 @@ final readonly class ResolveCommentAnchorAction
                 $absolute = $externalPathByPath[$filePath] ?? null;
 
                 if ($absolute !== null) {
-                    if ($storedHash === null || $storedHash === '') {
+                    if ($storedHash === null || $storedHash === '' || $storedHash === $this->gitFileContentService->hashAtAbsolute($absolute)) {
                         $anchorStatus = 'placed';
-                    } else {
-                        $currentHash = is_file($absolute) ? @hash_file('xxh128', $absolute) : null;
-                        if ($currentHash !== false && $storedHash === $currentHash) {
-                            $anchorStatus = 'placed';
-                        }
                     }
                 }
             } elseif ($storedHash !== null && $storedHash !== '' && isset($fileIdByPath[$filePath])) {

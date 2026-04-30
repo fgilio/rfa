@@ -293,40 +293,45 @@ class GitDiffService
             return "diff --git a/{$path} b/{$path}\nnew file mode {$mode}\n--- /dev/null\n+++ b/{$path}\n@@ -0,0 +1 @@\n+{$symlinkTarget}\n\\ No newline at end of file\n";
         }
 
-        if (! File::isFile($fullPath)) {
+        return $this->buildAddedFileDiff($fullPath, $path, $maxBytes);
+    }
+
+    /**
+     * Build a unified diff for a brand-new file (`/dev/null` → contents). Used
+     * for both untracked working-tree files and externally-mounted files; the
+     * format mirrors `git diff` output for new files exactly.
+     */
+    public function buildAddedFileDiff(string $absolutePath, string $diffPath, int $maxBytes): ?string
+    {
+        if (! File::isFile($absolutePath)) {
             return '';
         }
 
-        if ($this->isBinary($fullPath)) {
-            return "diff --git a/{$path} b/{$path}\nnew file mode 100644\nBinary files /dev/null and b/{$path} differ\n";
+        if ($this->isBinary($absolutePath)) {
+            return "diff --git a/{$diffPath} b/{$diffPath}\nnew file mode 100644\nBinary files /dev/null and b/{$diffPath} differ\n";
         }
 
-        $size = File::size($fullPath);
+        $size = File::size($absolutePath);
         if ($size > $maxBytes) {
             return null;
         }
 
-        $content = File::get($fullPath);
+        $content = File::get($absolutePath);
         if ($content === '') {
-            $diff = "diff --git a/{$path} b/{$path}\n";
-            $diff .= "new file mode 100644\n";
-
-            return $diff;
+            return "diff --git a/{$diffPath} b/{$diffPath}\nnew file mode 100644\n";
         }
 
         $lines = explode("\n", $content);
 
-        // Strip trailing empty element from files ending with \n
         if (end($lines) === '') {
             array_pop($lines);
         }
 
-        $diff = "diff --git a/{$path} b/{$path}\n";
+        $diff = "diff --git a/{$diffPath} b/{$diffPath}\n";
         $diff .= "new file mode 100644\n";
         $diff .= "--- /dev/null\n";
-        $diff .= "+++ b/{$path}\n";
+        $diff .= "+++ b/{$diffPath}\n";
         $diff .= '@@ -0,0 +1,'.count($lines)." @@\n";
-
         $diff .= '+'.implode("\n+", $lines)."\n";
 
         return $diff;
@@ -337,19 +342,7 @@ class GitDiffService
         $target ??= DiffTarget::workingDirectory();
 
         if ($target->isWorkingDirectory()) {
-            $fullPath = $repoPath.'/'.$path;
-
-            if (! File::isFile($fullPath)) {
-                return null;
-            }
-
-            $content = File::get($fullPath);
-
-            if ($content === '') {
-                return 0;
-            }
-
-            return substr_count($content, "\n") + (str_ends_with($content, "\n") ? 0 : 1);
+            return $this->countLinesInFile($repoPath.'/'.$path);
         }
 
         try {
@@ -358,6 +351,21 @@ class GitDiffService
             return null;
         }
 
+        return $this->countLinesInString($content);
+    }
+
+    /** Line count for a file on disk, or null if the file is missing. */
+    public function countLinesInFile(string $absolutePath): ?int
+    {
+        if (! File::isFile($absolutePath)) {
+            return null;
+        }
+
+        return $this->countLinesInString(File::get($absolutePath));
+    }
+
+    private function countLinesInString(string $content): int
+    {
         if ($content === '') {
             return 0;
         }

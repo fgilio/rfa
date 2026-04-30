@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Models\Project;
+use App\Services\ExternalFilesService;
 
 final readonly class LinkExternalPathAction
 {
+    public function __construct(
+        private ExternalFilesService $externalFilesService,
+    ) {}
+
     /**
-     * Append an external directory link to a project. Idempotent on `path`:
-     * the same absolute path is never added twice.
-     *
-     * Returns the project's updated `external_paths` value (a list of
-     * `{label: string, path: string}` rows), or null if the project does
-     * not exist or the path is invalid.
+     * Append an external directory link to a project. Idempotent on the
+     * canonical path: the same directory is never linked twice. Returns the
+     * project's updated `external_paths` value, or null if the project does
+     * not exist or the path is not a directory.
      *
      * @return list<array{label: string, path: string}>|null
      */
@@ -52,28 +55,18 @@ final readonly class LinkExternalPathAction
             return null;
         }
 
-        /** @var list<array{label: string, path: string}> $current */
-        $current = collect($project->external_paths ?? [])
-            ->filter(fn ($row): bool => is_array($row) && isset($row['path']) && is_string($row['path']))
-            ->map(fn (array $row): array => [
-                'label' => isset($row['label']) && is_string($row['label']) && trim($row['label']) !== ''
-                    ? $row['label']
-                    : basename((string) $row['path']),
-                'path' => (string) $row['path'],
-            ])
-            ->values()
-            ->all();
+        $current = $this->externalFilesService->normalizeForStorage((array) ($project->external_paths ?? []));
 
-        // Idempotent: skip if already linked at the same canonical path.
         foreach ($current as $row) {
             if (realpath($row['path']) === $real) {
                 return $current;
             }
         }
 
-        $finalLabel = $label !== null && trim($label) !== '' ? trim($label) : basename($real);
-
-        $current[] = ['label' => $finalLabel, 'path' => $real];
+        $current[] = [
+            'label' => $label !== null && trim($label) !== '' ? trim($label) : basename($real),
+            'path' => $real,
+        ];
 
         $project->forceFill(['external_paths' => $current])->save();
 

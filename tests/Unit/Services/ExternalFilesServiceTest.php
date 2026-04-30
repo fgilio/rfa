@@ -7,7 +7,7 @@ use Tests\TestCase;
 uses(TestCase::class);
 
 beforeEach(function () {
-    $this->service = new ExternalFilesService;
+    $this->service = app(ExternalFilesService::class);
 
     $this->extDir = $this->createTempDirectory('rfa_ext_dir_');
     File::put($this->extDir.'/note.md', "# Title\n\nbody\n");

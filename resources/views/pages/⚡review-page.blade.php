@@ -166,7 +166,9 @@ new #[Layout('layouts.app')] class extends Component
         $this->respectGlobalGitignore = $project['respect_global_gitignore'] ?? true;
         $this->globalGitignorePath = $project['global_gitignore_path'] ?: null;
         $this->defaultBaseBranch = (string) ($project['default_base_branch'] ?? '');
-        $this->externalPaths = $this->normalizeExternalPathsForView($project['external_paths'] ?? []);
+        // Stored shape is `[{label, path}]` because every write goes through
+        // Link/UnlinkExternalPathAction; trust it without re-normalizing.
+        $this->externalPaths = (array) ($project['external_paths'] ?? []);
 
         // Commit mode: resolve hash to full SHA
         if ($hash !== null) {
@@ -319,7 +321,7 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
-        $this->externalPaths = $this->normalizeExternalPathsForView($updated);
+        $this->externalPaths = $updated;
         $this->reloadAfterExternalPathsChange();
     }
 
@@ -332,7 +334,7 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
-        $this->externalPaths = $this->normalizeExternalPathsForView($updated);
+        $this->externalPaths = $updated;
         $this->reloadAfterExternalPathsChange();
     }
 
@@ -348,24 +350,6 @@ new #[Layout('layouts.app')] class extends Component
         if (! empty($session['orphanedPaths'])) {
             $this->injectOrphanedFiles($session['orphanedPaths']);
         }
-    }
-
-    /**
-     * @param  array<int|string, mixed>  $rows
-     * @return list<array{label: string, path: string}>
-     */
-    private function normalizeExternalPathsForView(array $rows): array
-    {
-        return collect($rows)
-            ->filter(fn ($row): bool => is_array($row) && isset($row['path']) && is_string($row['path']))
-            ->map(fn (array $row): array => [
-                'label' => isset($row['label']) && is_string($row['label']) && trim($row['label']) !== ''
-                    ? $row['label']
-                    : basename((string) $row['path']),
-                'path' => (string) $row['path'],
-            ])
-            ->values()
-            ->all();
     }
 
     public function updatedRespectGlobalGitignore(): void

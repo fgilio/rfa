@@ -8,7 +8,7 @@ use Tests\TestCase;
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
 beforeEach(function () {
-    $this->action = new LinkExternalPathAction;
+    $this->action = app(LinkExternalPathAction::class);
     $this->repoDir = $this->createTempDirectory('rfa_link_repo_');
     $this->extDir = $this->createTempDirectory('rfa_link_ext_');
 

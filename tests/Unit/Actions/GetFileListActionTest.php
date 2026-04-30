@@ -27,7 +27,7 @@ beforeEach(function () {
 test('returns files as arrays with id field', function () {
     File::put($this->tmpDir.'/file.txt', "changed\n");
 
-    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), new ExternalFilesService);
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class));
     $files = $action->handle($this->tmpDir);
 
     expect($files)->toHaveCount(1);
@@ -39,7 +39,7 @@ test('returns files as arrays with id field', function () {
 test('clears cache by default', function () {
     File::put($this->tmpDir.'/file.txt', "changed\n");
 
-    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), new ExternalFilesService);
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class));
     $files = $action->handle($this->tmpDir);
 
     $cacheKey = DiffCacheKey::for($this->tmpDir, $files[0]['id']);
@@ -53,7 +53,7 @@ test('clears cache by default', function () {
 test('preserves cache when clearCache is false', function () {
     File::put($this->tmpDir.'/file.txt', "changed\n");
 
-    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), new ExternalFilesService);
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class));
     $files = $action->handle($this->tmpDir, clearCache: false);
 
     $cacheKey = DiffCacheKey::for($this->tmpDir, $files[0]['id']);
@@ -76,7 +76,7 @@ test('appends entries from configured external paths in working-tree mode', func
         'external_paths' => [['label' => 'notes', 'path' => $extDir]],
     ]);
 
-    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), new ExternalFilesService);
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class));
     $files = $action->handle($this->tmpDir, projectId: $project->id);
 
     $paths = collect($files)->pluck('path')->all();
@@ -98,7 +98,7 @@ test('hides external entries when the diff target is an immutable commit range',
         'external_paths' => [['label' => 'notes', 'path' => $extDir]],
     ]);
 
-    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), new ExternalFilesService);
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class));
 
     $files = $action->handle(
         $this->tmpDir,

@@ -8,7 +8,7 @@ use Tests\TestCase;
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
 beforeEach(function () {
-    $this->action = new UnlinkExternalPathAction;
+    $this->action = app(UnlinkExternalPathAction::class);
     $this->repoDir = $this->createTempDirectory('rfa_unlink_repo_');
 
     $this->project = Project::factory()->create([

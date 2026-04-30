@@ -16,7 +16,6 @@ use App\Services\MarkdownTableAlignerService;
 use App\Services\SyntaxHighlightService;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 
 final readonly class LoadFileDiffAction
@@ -85,7 +84,9 @@ final readonly class LoadFileDiffAction
 
             $newFileLineCount = $fileDiff->status === 'deleted'
                 ? null
-                : $this->newFileLineCount($repoPath, $path, $target, $externalAbsolutePath);
+                : ($externalAbsolutePath !== null
+                    ? $this->gitDiffService->countLinesInFile($externalAbsolutePath)
+                    : $this->gitDiffService->getNewFileLineCount($repoPath, $path, $target));
 
             return $fileDiff->withHunks($annotatedHunks)->toArray() + [
                 'tooLarge' => false,
@@ -111,24 +112,5 @@ final readonly class LoadFileDiffAction
         }
 
         return $compute();
-    }
-
-    private function newFileLineCount(string $repoPath, string $path, DiffTarget $target, ?string $externalAbsolutePath): ?int
-    {
-        if ($externalAbsolutePath === null) {
-            return $this->gitDiffService->getNewFileLineCount($repoPath, $path, $target);
-        }
-
-        if (! File::isFile($externalAbsolutePath)) {
-            return null;
-        }
-
-        $content = File::get($externalAbsolutePath);
-
-        if ($content === '') {
-            return 0;
-        }
-
-        return substr_count($content, "\n") + (str_ends_with($content, "\n") ? 0 : 1);
     }
 }

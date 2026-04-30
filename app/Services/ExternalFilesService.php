@@ -17,6 +17,10 @@ class ExternalFilesService
 {
     public const MOUNT_PREFIX = 'external';
 
+    public function __construct(
+        private readonly GitDiffService $gitDiffService,
+    ) {}
+
     /**
      * Build synthetic FileListEntry rows for every configured external directory.
      * Each file is mounted under `external/<label>/<relative>` so the synthetic
@@ -27,7 +31,7 @@ class ExternalFilesService
      */
     public function getEntries(array $rawConfigs): array
     {
-        $configs = $this->normalizeConfigs($rawConfigs);
+        $configs = $this->resolvedConfigs($rawConfigs);
 
         if ($configs === []) {
             return [];
@@ -51,7 +55,7 @@ class ExternalFilesService
             return null;
         }
 
-        $configs = $this->normalizeConfigs($rawConfigs);
+        $configs = $this->resolvedConfigs($rawConfigs);
         $remainder = substr($mountPath, strlen(self::MOUNT_PREFIX) + 1);
 
         foreach ($configs as $config) {
@@ -61,8 +65,7 @@ class ExternalFilesService
                 continue;
             }
 
-            $relative = substr($remainder, strlen($prefix));
-            $candidate = $config['root'].DIRECTORY_SEPARATOR.$relative;
+            $candidate = $config['root'].DIRECTORY_SEPARATOR.substr($remainder, strlen($prefix));
 
             if (! File::isFile($candidate)) {
                 return null;
@@ -81,45 +84,37 @@ class ExternalFilesService
 
     /**
      * Build a synthetic unified diff for an external file: whole-file "added"
-     * view against /dev/null, mirroring the format `git diff` would produce
-     * for a brand-new file. Returns null if the file exceeds $maxBytes, ''
-     * for empty files, and a header-only diff for binaries.
+     * view against /dev/null, identical to what `git diff` produces for a
+     * brand-new file. Returns null if the file exceeds $maxBytes, '' for
+     * empty files, and a header-only diff for binaries.
      */
     public function buildDiff(string $absolutePath, string $mountPath, ?int $maxBytes = null): ?string
     {
         $maxBytes ??= (int) config('rfa.diff_max_bytes', 512_000);
 
-        if (! File::isFile($absolutePath)) {
-            return '';
-        }
+        return $this->gitDiffService->buildAddedFileDiff($absolutePath, $mountPath, $maxBytes);
+    }
 
-        if ($this->isBinary($absolutePath)) {
-            return "diff --git a/{$mountPath} b/{$mountPath}\nnew file mode 100644\nBinary files /dev/null and b/{$mountPath} differ\n";
-        }
-
-        $size = File::size($absolutePath);
-        if ($size > $maxBytes) {
-            return null;
-        }
-
-        $content = File::get($absolutePath);
-        if ($content === '') {
-            return "diff --git a/{$mountPath} b/{$mountPath}\nnew file mode 100644\n";
-        }
-
-        $lines = explode("\n", $content);
-        if (end($lines) === '') {
-            array_pop($lines);
-        }
-
-        $diff = "diff --git a/{$mountPath} b/{$mountPath}\n";
-        $diff .= "new file mode 100644\n";
-        $diff .= "--- /dev/null\n";
-        $diff .= "+++ b/{$mountPath}\n";
-        $diff .= '@@ -0,0 +1,'.count($lines)." @@\n";
-        $diff .= '+'.implode("\n+", $lines)."\n";
-
-        return $diff;
+    /**
+     * Normalize raw `external_paths` rows into the canonical storage shape used
+     * by Project::external_paths: `{label, path}` with a non-empty label that
+     * defaults to `basename($path)`. Tolerates malformed rows by dropping them.
+     *
+     * @param  array<int, mixed>  $raw
+     * @return list<array{label: string, path: string}>
+     */
+    public function normalizeForStorage(array $raw): array
+    {
+        return collect($raw)
+            ->filter(fn ($row): bool => is_array($row) && isset($row['path']) && is_string($row['path']))
+            ->map(fn (array $row): array => [
+                'label' => isset($row['label']) && is_string($row['label']) && trim($row['label']) !== ''
+                    ? $row['label']
+                    : basename((string) $row['path']),
+                'path' => (string) $row['path'],
+            ])
+            ->values()
+            ->all();
     }
 
     /**
@@ -148,25 +143,24 @@ class ExternalFilesService
             }
 
             $absolutePath = $file->getPathname();
+            $additions = $this->streamCountLines($absolutePath);
 
-            if ($this->isBinary($absolutePath)) {
+            // streamCountLines returns null for binary files in a single read
+            // pass; skip them rather than listing meaningless line counts.
+            if ($additions === null) {
                 continue;
             }
 
-            $relative = ltrim(substr($absolutePath, strlen($root)), DIRECTORY_SEPARATOR);
-            // Normalize Windows separators for the synthetic mount path.
-            $relative = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
-
-            $mountPath = self::MOUNT_PREFIX.'/'.$config['label'].'/'.$relative;
+            $relative = str_replace(
+                DIRECTORY_SEPARATOR,
+                '/',
+                ltrim(substr($absolutePath, strlen($root)), DIRECTORY_SEPARATOR),
+            );
 
             $size = $file->getSize();
-            $content = $size > 0 ? @file_get_contents($absolutePath) : '';
-            $additions = is_string($content) && $content !== ''
-                ? substr_count($content, "\n") + (str_ends_with($content, "\n") ? 0 : 1)
-                : 0;
 
             $entries[] = new FileListEntry(
-                path: $mountPath,
+                path: self::MOUNT_PREFIX.'/'.$config['label'].'/'.$relative,
                 status: 'added',
                 oldPath: null,
                 additions: $additions,
@@ -188,31 +182,25 @@ class ExternalFilesService
     }
 
     /**
-     * Normalize raw config rows from the JSON column into a canonical shape:
-     * `{label: string, root: string}` with a real, absolute root.
+     * Resolve normalized rows to absolute roots ready for filesystem walking.
+     * Drops rows whose path no longer exists; disambiguates duplicate labels
+     * with a numeric suffix.
      *
-     * @param  array<int|string, mixed>  $raw
+     * @param  array<int, mixed>  $raw
      * @return list<array{label: string, root: string}>
      */
-    private function normalizeConfigs(array $raw): array
+    private function resolvedConfigs(array $raw): array
     {
         $usedLabels = [];
 
-        return collect($raw)
-            ->map(function ($entry) use (&$usedLabels): ?array {
-                if (! is_array($entry) || ! isset($entry['path']) || ! is_string($entry['path'])) {
-                    return null;
-                }
-
-                $root = realpath($entry['path']);
+        return collect($this->normalizeForStorage($raw))
+            ->map(function (array $row) use (&$usedLabels): ?array {
+                $root = realpath($row['path']);
                 if ($root === false || ! is_dir($root)) {
                     return null;
                 }
 
-                $label = isset($entry['label']) && is_string($entry['label']) && trim($entry['label']) !== ''
-                    ? $this->sanitizeLabel($entry['label'])
-                    : $this->sanitizeLabel(basename($root));
-
+                $label = $this->sanitizeLabel($row['label']);
                 $base = $label;
                 $suffix = 2;
                 while (isset($usedLabels[$label])) {
@@ -229,22 +217,43 @@ class ExternalFilesService
 
     private function sanitizeLabel(string $label): string
     {
-        $clean = preg_replace('/[^A-Za-z0-9._-]+/', '-', $label) ?? '';
-        $clean = trim($clean, '-');
+        $clean = trim((string) preg_replace('/[^A-Za-z0-9._-]+/', '-', $label), '-');
 
         return $clean === '' ? 'external' : $clean;
     }
 
-    private function isBinary(string $path): bool
+    /**
+     * Stream-count newlines while opportunistically detecting binary files
+     * (NUL byte in the first chunk). Returns null for binaries so the caller
+     * can skip them, 0 for empty/unreadable, and the line count otherwise.
+     * One disk pass per file — replaces the prior open+read+close-twice.
+     */
+    private function streamCountLines(string $absolutePath): ?int
     {
-        $handle = @fopen($path, 'rb');
+        $handle = @fopen($absolutePath, 'rb');
         if ($handle === false) {
-            return true;
+            return 0;
         }
 
-        $chunk = (string) fread($handle, 8192);
+        $count = 0;
+        $lastByte = '';
+        $firstChunk = true;
+        while (! feof($handle)) {
+            $chunk = (string) fread($handle, 65_536);
+            if ($chunk === '') {
+                break;
+            }
+            if ($firstChunk && str_contains($chunk, "\0")) {
+                fclose($handle);
+
+                return null;
+            }
+            $firstChunk = false;
+            $count += substr_count($chunk, "\n");
+            $lastByte = $chunk[strlen($chunk) - 1];
+        }
         fclose($handle);
 
-        return str_contains($chunk, "\0");
+        return $lastByte !== '' && $lastByte !== "\n" ? $count + 1 : $count;
     }
 }
