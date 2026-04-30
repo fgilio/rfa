@@ -111,3 +111,29 @@ test('preserves other entries on toggle off', function () {
 
     expect($result)->toBe(['a.php' => 'h1', 'c.php' => 'h3']);
 });
+
+test('hashes external files off disk so a content edit un-reviews them', function () {
+    // Don't mock GitFileContentService here — we want the real hashAtAbsolute().
+    app()->forgetInstance(GitFileContentService::class);
+    $action = app(ToggleReviewedAction::class);
+
+    $tmp = sys_get_temp_dir().'/rfa_toggle_ext_'.getmypid().'_'.uniqid('', true);
+    mkdir($tmp);
+    $absolute = $tmp.'/note.md';
+    file_put_contents($absolute, "v1\n");
+
+    $files = [[
+        'id' => 'file-ext',
+        'path' => 'external/notes/note.md',
+        'isExternal' => true,
+        'externalAbsolutePath' => $absolute,
+    ]];
+
+    $result = $action->handle([], 'external/notes/note.md', $files, '/tmp/repo');
+
+    expect($result['external/notes/note.md'])->toBe(hash_file('xxh128', $absolute));
+    expect($result['external/notes/note.md'])->not->toBe('');
+
+    unlink($absolute);
+    rmdir($tmp);
+});

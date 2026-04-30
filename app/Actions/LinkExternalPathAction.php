@@ -34,9 +34,11 @@ final readonly class LinkExternalPathAction
      */
     public function handleByReference(string $reference, string $path, ?string $label = null): ?array
     {
-        $project = ctype_digit($reference)
-            ? Project::find((int) $reference)
-            : Project::where('slug', $reference)->orWhere('name', $reference)->first();
+        // Prefer slug/name so a project with a numeric slug or name (e.g.
+        // `"123"`) still resolves correctly. Only fall back to numeric ID
+        // when no slug/name match exists.
+        $project = Project::where('slug', $reference)->orWhere('name', $reference)->first()
+            ?? (ctype_digit($reference) ? Project::find((int) $reference) : null);
 
         return $this->handleForProject($project, $path, $label);
     }

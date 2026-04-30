@@ -63,6 +63,21 @@ test('appends a second distinct path', function () {
         ->toContain(realpath($other));
 });
 
+test('handleByReference prefers slug match over numeric id when the reference is digit-only', function () {
+    $numericSlug = (string) $this->project->id + 1; // ensure the slug is not the project's actual id
+    $other = Project::factory()->create([
+        'slug' => (string) ($this->project->id + 1000),
+        'path' => $this->createTempDirectory('rfa_link_other_repo_'),
+        'git_common_dir' => '/tmp/none/.git',
+    ]);
+
+    $updated = $this->action->handleByReference($other->slug, $this->extDir);
+
+    expect($updated)->not->toBeNull();
+    expect($other->fresh()->external_paths)->toHaveCount(1);
+    expect($this->project->fresh()->external_paths)->toBeNull();
+});
+
 test('disambiguates the label at write time when a sibling already uses the same basename', function () {
     $a = $this->createTempDirectory('rfa_link_ext_collide_');
     $b = $this->createTempDirectory('rfa_link_ext_collide_');

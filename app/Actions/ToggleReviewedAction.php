@@ -17,7 +17,7 @@ final readonly class ToggleReviewedAction
 
     /**
      * @param  array<string, string>  $reviewedFiles  Current view state: {path => content_hash}.
-     * @param  array<int, array{id?: string, path: string, isUntracked?: bool}>  $knownFiles  Files in the current diff.
+     * @param  array<int, array{id?: string, path: string, isUntracked?: bool, isExternal?: bool, externalAbsolutePath?: ?string}>  $knownFiles  Files in the current diff.
      * @return array<string, string>|null Updated view state, or null when the file is unknown.
      */
     public function handle(
@@ -34,9 +34,9 @@ final readonly class ToggleReviewedAction
             return null;
         }
 
-        $contentHash = $repoPath !== ''
-            ? ($this->resolveContentHash($repoPath, $target, $filePath) ?? '')
-            : '';
+        $contentHash = ($file['isExternal'] ?? false) && ! empty($file['externalAbsolutePath'])
+            ? ($this->gitFileContentService->hashAtAbsolute((string) $file['externalAbsolutePath']) ?? '')
+            : ($repoPath !== '' ? ($this->resolveContentHash($repoPath, $target, $filePath) ?? '') : '');
 
         if (array_key_exists($filePath, $reviewedFiles)) {
             ReviewedFile::query()

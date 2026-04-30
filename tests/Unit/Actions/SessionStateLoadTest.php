@@ -213,6 +213,51 @@ test('marks comment as placed when content hash matches right side', function ()
     expect($result['comments'][0]['anchorStatus'])->toBe('placed');
 });
 
+test('rehydrates external reviewed files via on-disk hash, not git refs', function () {
+    // External files store an absolute-path hash. The session loader must
+    // compare the stored hash to the current on-disk hash; if it changes,
+    // the reviewed flag drops, matching the diff-anchor model.
+    $repoPath = '/tmp/'.$this->faker->word();
+    $tmp = sys_get_temp_dir().'/rfa_session_ext_'.getmypid().'_'.uniqid('', true);
+    mkdir($tmp);
+    $absolute = $tmp.'/note.md';
+    file_put_contents($absolute, "stable\n");
+    $hash = hash_file('xxh128', $absolute);
+
+    ReviewedFile::create([
+        'repo_path' => $repoPath,
+        'file_path' => 'external/notes/note.md',
+        'content_hash' => $hash,
+    ]);
+
+    $files = [[
+        'id' => 'file-ext',
+        'path' => 'external/notes/note.md',
+        'isUntracked' => false,
+        'isExternal' => true,
+        'externalAbsolutePath' => $absolute,
+    ]];
+
+    // Use the real hashAtAbsolute; mock the git-side hashAt as before.
+    $this->gitFileContentMock->shouldReceive('hashAtAbsolute')->andReturnUsing(
+        fn (string $p) => is_file($p) ? hash_file('xxh128', $p) : null,
+    );
+
+    $result = app(SessionStateAction::class)->handle($repoPath, $files);
+
+    expect($result['reviewedFiles'])->toBe(['external/notes/note.md' => $hash]);
+
+    // Mutate the file → reviewed state should drop on the next load.
+    file_put_contents($absolute, "changed\n");
+
+    $result = app(SessionStateAction::class)->handle($repoPath, $files);
+
+    expect($result['reviewedFiles'])->toBe([]);
+
+    unlink($absolute);
+    rmdir($tmp);
+});
+
 test('rehydrates reviewed files via left-side hash when the right ref has no content', function () {
     // ToggleReviewedAction explicitly stores the left-side hash for deleted /
     // left-only files. Without matching against the left ref too, those reviewed
