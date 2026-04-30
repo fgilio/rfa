@@ -57,8 +57,14 @@ final readonly class AddCommentAction
 
         $filePath = (string) $file['path'];
         $oldPath = ! empty($file['oldPath']) ? (string) $file['oldPath'] : null;
-        $contentHash = $this->resolveContentHash($repoPath, $target, $side, $filePath, $oldPath);
-        $originRef = $target->to() ?? GitRef::Working->value;
+        $isExternal = (bool) ($file['isExternal'] ?? false);
+        $externalAbsolutePath = $isExternal ? (string) ($file['externalAbsolutePath'] ?? '') : null;
+        $contentHash = $isExternal
+            ? $this->hashExternalFile($externalAbsolutePath)
+            : $this->resolveContentHash($repoPath, $target, $side, $filePath, $oldPath);
+        $originRef = $isExternal
+            ? GitRef::External->value
+            : ($target->to() ?? GitRef::Working->value);
 
         $id = 'c-'.Str::ulid();
 
@@ -106,5 +112,16 @@ final readonly class AddCommentAction
         $ref = $target->to() ?? GitRef::Working->value;
 
         return $this->gitFileContentService->hashAt($repoPath, $ref, $filePath);
+    }
+
+    private function hashExternalFile(?string $absolutePath): ?string
+    {
+        if ($absolutePath === null || $absolutePath === '' || ! is_file($absolutePath)) {
+            return null;
+        }
+
+        $hash = @hash_file('xxh128', $absolutePath);
+
+        return $hash === false ? null : $hash;
     }
 }

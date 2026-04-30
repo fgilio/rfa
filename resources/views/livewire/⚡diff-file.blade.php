@@ -73,6 +73,7 @@ new class extends Component {
             cacheKey: $this->diffCacheKey(),
             target: $this->buildDiffTarget(),
             oldPath: $this->file['oldPath'] ?? null,
+            externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
         );
 
         $this->ensureCommentedLinesVisible();
@@ -107,6 +108,7 @@ new class extends Component {
             contextLines: 99999,
             target: $this->buildDiffTarget(),
             oldPath: $this->file['oldPath'] ?? null,
+            externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
         );
     }
 
@@ -124,6 +126,7 @@ new class extends Component {
             contextLines: 99999,
             target: $this->buildDiffTarget(),
             oldPath: $this->file['oldPath'] ?? null,
+            externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
         );
 
         if (empty($fullDiff['hunks'])) {

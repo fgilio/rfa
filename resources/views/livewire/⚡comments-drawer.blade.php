@@ -172,7 +172,7 @@ class extends Component
                         <div class="group px-4 py-2.5 border-t border-gh-border/30 text-xs">
                             <div class="flex items-center gap-2 text-[10px] font-mono text-gh-muted mb-1">
                                 @if(! empty($c['origin_ref']))
-                                    <span>{{ $c['origin_ref'] === 'working' ? 'WD' : Str::limit($c['origin_ref'], 7, '') }}</span>
+                                    <span>{{ match($c['origin_ref']) { 'working' => 'WD', 'external' => 'EXT', default => Str::limit($c['origin_ref'], 7, '') } }}</span>
                                 @endif
                                 @if(! empty($c['start_line']))
                                     <span>&middot;</span>

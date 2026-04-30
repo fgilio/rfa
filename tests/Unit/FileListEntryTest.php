@@ -52,6 +52,8 @@ test('toArray includes all properties and computed id', function () {
         'isSymlink' => false,
         'symlinkTarget' => null,
         'fileSize' => null,
+        'isExternal' => false,
+        'externalAbsolutePath' => null,
     ]);
 });
 

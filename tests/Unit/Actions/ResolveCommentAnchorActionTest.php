@@ -216,6 +216,65 @@ test('keeps stored side when stored hash matches that same side', function () {
     expect($result[0]['originalSide'])->toBe('left');
 });
 
+test('places external comments when the on-disk hash matches the stored hash', function () {
+    $tmp = $this->createTempDirectory('rfa_anchor_ext_');
+    $absolute = $tmp.'/note.md';
+    file_put_contents($absolute, "stable\n");
+    $hash = hash_file('xxh128', $absolute);
+
+    $result = $this->action->handle(
+        '/tmp/repo',
+        [[
+            'id' => 'c-ext',
+            'file_path' => 'external/notes/note.md',
+            'side' => 'right',
+            'start_line' => 1,
+            'file_content_hash' => $hash,
+            'body' => 'body',
+            'origin_ref' => 'external',
+        ]],
+        [[
+            'id' => 'file-ext',
+            'path' => 'external/notes/note.md',
+            'isExternal' => true,
+            'externalAbsolutePath' => $absolute,
+        ]],
+        DiffTarget::workingDirectory(),
+    );
+
+    expect($result[0]['anchorStatus'])->toBe('placed');
+    expect($result[0]['fileId'])->toBe('file-ext');
+    expect($result[0]['originRef'])->toBe('external');
+});
+
+test('marks external comments as unplaced when the on-disk content has changed', function () {
+    $tmp = $this->createTempDirectory('rfa_anchor_ext_stale_');
+    $absolute = $tmp.'/note.md';
+    file_put_contents($absolute, "current\n");
+
+    $result = $this->action->handle(
+        '/tmp/repo',
+        [[
+            'id' => 'c-ext-stale',
+            'file_path' => 'external/notes/note.md',
+            'side' => 'right',
+            'start_line' => 1,
+            'file_content_hash' => 'stale-hash',
+            'body' => 'body',
+            'origin_ref' => 'external',
+        ]],
+        [[
+            'id' => 'file-ext',
+            'path' => 'external/notes/note.md',
+            'isExternal' => true,
+            'externalAbsolutePath' => $absolute,
+        ]],
+        DiffTarget::workingDirectory(),
+    );
+
+    expect($result[0]['anchorStatus'])->toBe('unplaced');
+});
+
 test('uses the working copy as the right side when the target has no `to`', function () {
     $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'HEAD', 'f.php')->andReturn('old');
     $this->gitFileContent->shouldReceive('hashAt')

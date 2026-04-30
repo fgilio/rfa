@@ -140,6 +140,7 @@ final class PerfScenarioRunner
                 int $contextLines = 3,
                 ?DiffTarget $target = null,
                 ?string $oldPath = null,
+                ?string $externalAbsolutePath = null,
             ): array {
                 return $this->diffData;
             }

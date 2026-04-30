@@ -9,12 +9,14 @@ use App\DTOs\FileDiff;
 use App\Exceptions\GitCommandException;
 use App\Services\CsvAlignerService;
 use App\Services\DiffParser;
+use App\Services\ExternalFilesService;
 use App\Services\GitDiffService;
 use App\Services\MarkdownRegionService;
 use App\Services\MarkdownTableAlignerService;
 use App\Services\SyntaxHighlightService;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 
 final readonly class LoadFileDiffAction
@@ -26,16 +28,19 @@ final readonly class LoadFileDiffAction
         private MarkdownTableAlignerService $markdownTableAligner,
         private CsvAlignerService $csvAligner,
         private MarkdownRegionService $markdownRegionService,
+        private ExternalFilesService $externalFilesService,
     ) {}
 
     /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool, syntaxStyles: string} */
-    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null): array
+    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
     {
         $target ??= DiffTarget::workingDirectory();
 
-        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target, $oldPath): array {
+        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target, $oldPath, $externalAbsolutePath): array {
             try {
-                $rawDiff = $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, contextLines: $contextLines, target: $target, oldPath: $oldPath);
+                $rawDiff = $externalAbsolutePath !== null
+                    ? $this->externalFilesService->buildDiff($externalAbsolutePath, $path)
+                    : $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, contextLines: $contextLines, target: $target, oldPath: $oldPath);
             } catch (GitCommandException $e) {
                 Log::warning('Git diff failed', ['path' => $path, 'stderr' => $e->stderr]);
 
@@ -80,7 +85,7 @@ final readonly class LoadFileDiffAction
 
             $newFileLineCount = $fileDiff->status === 'deleted'
                 ? null
-                : $this->gitDiffService->getNewFileLineCount($repoPath, $path, $target);
+                : $this->newFileLineCount($repoPath, $path, $target, $externalAbsolutePath);
 
             return $fileDiff->withHunks($annotatedHunks)->toArray() + [
                 'tooLarge' => false,
@@ -106,5 +111,24 @@ final readonly class LoadFileDiffAction
         }
 
         return $compute();
+    }
+
+    private function newFileLineCount(string $repoPath, string $path, DiffTarget $target, ?string $externalAbsolutePath): ?int
+    {
+        if ($externalAbsolutePath === null) {
+            return $this->gitDiffService->getNewFileLineCount($repoPath, $path, $target);
+        }
+
+        if (! File::isFile($externalAbsolutePath)) {
+            return null;
+        }
+
+        $content = File::get($externalAbsolutePath);
+
+        if ($content === '') {
+            return 0;
+        }
+
+        return substr_count($content, "\n") + (str_ends_with($content, "\n") ? 0 : 1);
     }
 }
