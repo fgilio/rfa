@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\View;
 
+use App\Enums\DiffSide;
 use Illuminate\Support\Collection;
 
 /**
@@ -23,7 +24,7 @@ final readonly class DiffFileViewModel
     {
         $byLine = [];
         foreach ($fileComments as $c) {
-            if (($c['side'] ?? null) === 'file') {
+            if (($c['side'] ?? null) === DiffSide::File->value) {
                 continue;
             }
             if (($c['anchorStatus'] ?? 'placed') === 'unplaced') {
@@ -46,7 +47,7 @@ final readonly class DiffFileViewModel
     public static function unplacedInlineComments(array $fileComments, array $visibleLineKeys): Collection
     {
         return collect($fileComments)
-            ->where('side', '!=', 'file')
+            ->where('side', '!=', DiffSide::File->value)
             ->filter(function ($c) use ($visibleLineKeys) {
                 if (($c['anchorStatus'] ?? null) === 'unplaced') {
                     return true;
@@ -62,7 +63,7 @@ final readonly class DiffFileViewModel
      */
     public static function anchorKeyFor(array $comment): string
     {
-        $side = $comment['side'] ?? 'right';
+        $side = $comment['side'] ?? DiffSide::Right->value;
         $line = $comment['endLine'] ?? $comment['startLine'] ?? 0;
 
         return $side.':'.$line;

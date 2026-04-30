@@ -30,7 +30,9 @@ use App\Concerns\InteractsWithRemoteLinks;
 use App\DTOs\CurrentHeadResult;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\Enums\DiffSide;
 use App\Enums\DivergenceState;
+use App\Enums\GitRef;
 use App\Exceptions\GitCommandException;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
@@ -700,9 +702,9 @@ new #[Layout('layouts.app')] class extends Component
                 [
                     'project_id' => $this->projectId ?: null,
                     'repo_path' => $this->repoPath,
-                    'origin_ref' => $c['originRef'] ?? 'working',
+                    'origin_ref' => $c['originRef'] ?? GitRef::Working->value,
                     'file_path' => $c['file'] ?? '',
-                    'side' => $c['side'] ?? 'right',
+                    'side' => $c['side'] ?? DiffSide::Right->value,
                     'start_line' => $c['startLine'] ?? null,
                     'end_line' => $c['endLine'] ?? null,
                     'file_content_hash' => $c['fileContentHash'] ?? null,

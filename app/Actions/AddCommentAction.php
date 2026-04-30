@@ -43,11 +43,11 @@ final readonly class AddCommentAction
             return null;
         }
 
-        if ($side === 'file' && ($startLine !== null || $endLine !== null)) {
+        if ($side === DiffSide::File->value && ($startLine !== null || $endLine !== null)) {
             return null;
         }
 
-        if ($side !== 'file' && $startLine === null) {
+        if ($side !== DiffSide::File->value && $startLine === null) {
             return null;
         }
 
@@ -101,7 +101,7 @@ final readonly class AddCommentAction
 
     private function resolveContentHash(string $repoPath, DiffTarget $target, string $side, string $filePath, ?string $oldPath): ?string
     {
-        if ($side === 'left') {
+        if ($side === DiffSide::Left->value) {
             // For renames the file exists at `from` under its pre-rename path only.
             $leftPath = $oldPath ?? $filePath;
 

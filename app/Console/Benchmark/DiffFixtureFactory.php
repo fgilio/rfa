@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Benchmark;
 
 use App\DTOs\FileListEntry;
+use App\Enums\DiffSide;
 use App\Enums\LineType;
 
 /**
@@ -213,7 +214,7 @@ final class DiffFixtureFactory
         $comments = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $side = $i % 2 === 0 ? 'right' : 'left';
+            $side = $i % 2 === 0 ? DiffSide::Right->value : DiffSide::Left->value;
             $line = ($i + 1) * 5;
 
             $comments[] = [

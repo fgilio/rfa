@@ -4,6 +4,7 @@ use App\Actions\ExpandDiffGapAction;
 use App\Actions\GetFileCopyContentAction;
 use App\Actions\LoadFileDiffAction;
 use App\DTOs\DiffTarget;
+use App\Enums\DiffSide;
 use App\Support\DiffCacheKey;
 use App\View\DiffFileViewModel;
 use Illuminate\Support\Facades\Cache;
@@ -154,7 +155,7 @@ new class extends Component {
             return;
         }
 
-        $inlineComments = array_filter($this->fileComments, fn ($c) => ($c['side'] ?? '') !== 'file');
+        $inlineComments = array_filter($this->fileComments, fn ($c) => ($c['side'] ?? '') !== DiffSide::File->value);
         if (empty($inlineComments)) {
             return;
         }
@@ -263,7 +264,7 @@ new class extends Component {
                 <x-comment-form save="submitComment" placeholder="File comment..." border-class="border-b" />
             </template>
             @foreach($fileComments as $comment)
-                @if($comment['side'] === 'file')
+                @if($comment['side'] === DiffSide::File->value)
                     <div x-data x-show="editingCommentId !== '{{ $comment['id'] }}'">
                         <x-comment-display :comment="$comment" border-class="border-b" />
                     </div>

@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\Enums\DiffSide;
 use App\Enums\GitRef;
 use App\Services\GitFileContentService;
 
@@ -52,7 +53,7 @@ final readonly class ResolveCommentAnchorAction
 
             $storedHash = $row['file_content_hash'] ?? null;
             $fileId = $fileIdByPath[$filePath] ?? FileListEntry::idForPath($filePath);
-            $storedSide = (string) ($row['side'] ?? 'right');
+            $storedSide = (string) ($row['side'] ?? DiffSide::Right->value);
             $storedOriginRef = (string) ($row['origin_ref'] ?? $row['originRef'] ?? GitRef::Working->value);
             $isExternal = $storedOriginRef === GitRef::External->value;
 
@@ -75,18 +76,18 @@ final readonly class ResolveCommentAnchorAction
                 $leftHash = $this->gitFileContentService->hashAt($repoPath, $target->from(), $leftPath);
                 $rightHash = $this->gitFileContentService->hashAt($repoPath, $rightRef, $filePath);
 
-                $matchesStoredSide = ($storedSide === 'left' && $storedHash === $leftHash)
-                    || ($storedSide === 'right' && $storedHash === $rightHash)
-                    || ($storedSide === 'file' && ($storedHash === $leftHash || $storedHash === $rightHash));
+                $matchesStoredSide = ($storedSide === DiffSide::Left->value && $storedHash === $leftHash)
+                    || ($storedSide === DiffSide::Right->value && $storedHash === $rightHash)
+                    || ($storedSide === DiffSide::File->value && ($storedHash === $leftHash || $storedHash === $rightHash));
 
                 if ($matchesStoredSide) {
                     $anchorStatus = 'placed';
                 } elseif ($storedHash === $leftHash) {
                     $anchorStatus = 'placed';
-                    $resolvedSide = 'left';
+                    $resolvedSide = DiffSide::Left->value;
                 } elseif ($storedHash === $rightHash) {
                     $anchorStatus = 'placed';
-                    $resolvedSide = 'right';
+                    $resolvedSide = DiffSide::Right->value;
                 }
             } elseif (isset($fileIdByPath[$filePath])) {
                 $anchorStatus = 'placed';
