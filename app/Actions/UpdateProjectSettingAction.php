@@ -8,7 +8,7 @@ use App\Models\Project;
 
 final readonly class UpdateProjectSettingAction
 {
-    private const ALLOWED_ATTRIBUTES = ['respect_global_gitignore', 'branch', 'default_base_branch', 'external_paths'];
+    private const ALLOWED_ATTRIBUTES = ['respect_global_gitignore', 'branch', 'default_base_branch'];
 
     /** @param array<string, mixed> $attributes */
     public function handle(int $projectId, array $attributes): void

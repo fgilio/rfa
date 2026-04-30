@@ -63,8 +63,10 @@ final readonly class LinkExternalPathAction
             }
         }
 
+        $candidate = $label !== null && trim($label) !== '' ? trim($label) : basename($real);
+
         $current[] = [
-            'label' => $label !== null && trim($label) !== '' ? trim($label) : basename($real),
+            'label' => $this->externalFilesService->uniqueLabelFor($current, $candidate),
             'path' => $real,
         ];
 

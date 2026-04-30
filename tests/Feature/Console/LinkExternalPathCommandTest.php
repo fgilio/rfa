@@ -31,7 +31,7 @@ test('links a path by project id with a custom label', function () {
         ->assertSuccessful();
 
     $stored = $this->project->fresh()->external_paths;
-    expect($stored[0]['label'])->toBe('design notes');
+    expect($stored[0]['label'])->toBe('design-notes');
 });
 
 test('fails cleanly when the project cannot be found', function () {

@@ -73,17 +73,31 @@ test('defaults the label to the directory basename when none is supplied', funct
     expect($entries[0]->path)->toStartWith('external/'.basename($this->extDir).'/');
 });
 
-test('disambiguates duplicate labels with a numeric suffix', function () {
+test('uniqueLabelFor picks a fresh suffix when the candidate clashes with existing labels', function () {
+    $existing = [
+        ['label' => 'notes', 'path' => '/tmp/a'],
+        ['label' => 'notes-2', 'path' => '/tmp/b'],
+    ];
+
+    expect($this->service->uniqueLabelFor($existing, 'notes'))->toBe('notes-3');
+    expect($this->service->uniqueLabelFor($existing, 'fresh'))->toBe('fresh');
+});
+
+test('uses stored labels literally at read time so unlinking a sibling cannot rename survivors', function () {
     $other = $this->createTempDirectory('rfa_ext_dir_b_');
     File::put($other.'/x.md', "x\n");
 
-    $paths = collect($this->service->getEntries([
+    // Stored shape after Link assigned the disambiguated label at write time.
+    $configs = [
         ['label' => 'notes', 'path' => $this->extDir],
-        ['label' => 'notes', 'path' => $other],
-    ]))->pluck('path')->all();
+        ['label' => 'notes-2', 'path' => $other],
+    ];
 
-    expect($paths)->toContain('external/notes/note.md');
-    expect($paths)->toContain('external/notes-2/x.md');
+    // Unlinking the first row leaves 'notes-2' alone; it must not collapse back to 'notes'.
+    $survivorOnly = [['label' => 'notes-2', 'path' => $other]];
+
+    expect(collect($this->service->getEntries($survivorOnly))->pluck('path')->all())
+        ->toContain('external/notes-2/x.md');
 });
 
 test('drops configs with non-existent paths', function () {

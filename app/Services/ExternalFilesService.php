@@ -191,36 +191,51 @@ class ExternalFilesService
 
     /**
      * Resolve normalized rows to absolute roots ready for filesystem walking.
-     * Drops rows whose path no longer exists; disambiguates duplicate labels
-     * with a numeric suffix.
+     * Drops rows whose path no longer exists. Stored labels are used as-is
+     * (only sanitized) — disambiguation happens at link time so unlinking a
+     * sibling never renames a surviving mount.
      *
      * @param  array<int, mixed>  $raw
      * @return list<array{label: string, root: string}>
      */
     private function resolvedConfigs(array $raw): array
     {
-        $usedLabels = [];
-
         return collect($this->normalizeForStorage($raw))
-            ->map(function (array $row) use (&$usedLabels): ?array {
+            ->map(function (array $row): ?array {
                 $root = realpath($row['path']);
                 if ($root === false || ! is_dir($root)) {
                     return null;
                 }
 
-                $label = $this->sanitizeLabel($row['label']);
-                $base = $label;
-                $suffix = 2;
-                while (isset($usedLabels[$label])) {
-                    $label = $base.'-'.$suffix++;
-                }
-                $usedLabels[$label] = true;
-
-                return ['label' => $label, 'root' => $root];
+                return ['label' => $this->sanitizeLabel($row['label']), 'root' => $root];
             })
             ->filter()
             ->values()
             ->all();
+    }
+
+    /**
+     * Pick a sanitized, unique label for a new external path against the labels
+     * already used by other rows. Called at link time so the disambiguated
+     * label is persisted and stable across future unlinks.
+     *
+     * @param  list<array{label: string, path: string}>  $existing
+     */
+    public function uniqueLabelFor(array $existing, string $candidate): string
+    {
+        $base = $this->sanitizeLabel($candidate);
+        $taken = array_flip(array_map(fn (array $row): string => $this->sanitizeLabel($row['label']), $existing));
+
+        if (! isset($taken[$base])) {
+            return $base;
+        }
+
+        $suffix = 2;
+        while (isset($taken[$base.'-'.$suffix])) {
+            $suffix++;
+        }
+
+        return $base.'-'.$suffix;
     }
 
     private function sanitizeLabel(string $label): string

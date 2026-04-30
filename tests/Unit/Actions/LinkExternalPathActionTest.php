@@ -37,10 +37,10 @@ test('appends a new external path with a default label of the directory basename
     expect($this->project->fresh()->external_paths)->toEqual($updated);
 });
 
-test('honors a custom label override', function () {
+test('honors a custom label override and sanitizes it for the mount path', function () {
     $updated = $this->action->handle($this->project->id, $this->extDir, label: 'design notes');
 
-    expect($updated[0]['label'])->toBe('design notes');
+    expect($updated[0]['label'])->toBe('design-notes');
 });
 
 test('is idempotent on the same canonical path', function () {
@@ -61,4 +61,18 @@ test('appends a second distinct path', function () {
     expect(collect($updated)->pluck('path')->all())
         ->toContain(realpath($this->extDir))
         ->toContain(realpath($other));
+});
+
+test('disambiguates the label at write time when a sibling already uses the same basename', function () {
+    $a = $this->createTempDirectory('rfa_link_ext_collide_');
+    $b = $this->createTempDirectory('rfa_link_ext_collide_');
+    rename($a, $a.'_renamed');
+    rename($b, $b.'_renamed');
+    $a .= '_renamed';
+    $b .= '_renamed';
+
+    $this->action->handle($this->project->id, $a, label: 'notes');
+    $updated = $this->action->handle($this->project->id, $b, label: 'notes');
+
+    expect(collect($updated)->pluck('label')->all())->toBe(['notes', 'notes-2']);
 });

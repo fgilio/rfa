@@ -44,6 +44,9 @@ test('view mode persists in localStorage across page reload', function () {
     expect(json_decode($stored, true))->toBe('split');
 
     $page->refresh();
+    // refresh() doesn't run visitAndLoad's networkidle wait, so the lazy
+    // diff-file children may not have rendered yet under parallel pressure.
+    $page->page()->waitForLoadState('networkidle');
 
     $page->page()->locator('[data-testid="diff-table"][data-view-mode="split"]')->first()->waitFor();
 });
