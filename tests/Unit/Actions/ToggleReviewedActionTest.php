@@ -117,8 +117,7 @@ test('hashes external files off disk so a content edit un-reviews them', functio
     app()->forgetInstance(GitFileContentService::class);
     $action = app(ToggleReviewedAction::class);
 
-    $tmp = sys_get_temp_dir().'/rfa_toggle_ext_'.getmypid().'_'.uniqid('', true);
-    mkdir($tmp);
+    $tmp = $this->createTempDirectory('rfa_toggle_ext_');
     $absolute = $tmp.'/note.md';
     file_put_contents($absolute, "v1\n");
 
@@ -133,7 +132,4 @@ test('hashes external files off disk so a content edit un-reviews them', functio
 
     expect($result['external/notes/note.md'])->toBe(hash_file('xxh128', $absolute));
     expect($result['external/notes/note.md'])->not->toBe('');
-
-    unlink($absolute);
-    rmdir($tmp);
 });

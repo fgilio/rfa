@@ -21,6 +21,22 @@ test('returns empty list when no configs are supplied', function () {
     expect($this->service->getEntries([]))->toBe([]);
 });
 
+test('does not follow symlinks out of the configured root', function () {
+    $secret = $this->createTempDirectory('rfa_ext_secret_');
+    File::put($secret.'/secret.md', "secret\n");
+
+    symlink($secret, $this->extDir.'/escape');
+
+    $paths = collect($this->service->getEntries($this->configs))->pluck('path')->all();
+
+    // The legitimate file is still listed.
+    expect($paths)->toContain('external/notes/note.md');
+    // But the symlink target's contents are NOT walked.
+    foreach ($paths as $p) {
+        expect($p)->not->toContain('secret.md');
+    }
+});
+
 test('caps recursion at MAX_DEPTH so a misconfigured root cannot pull in a huge subtree', function () {
     $deep = $this->createTempDirectory('rfa_ext_deep_');
     $segments = array_fill(0, ExternalFilesService::MAX_DEPTH + 3, 'd');

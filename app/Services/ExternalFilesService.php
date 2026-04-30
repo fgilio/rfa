@@ -136,13 +136,18 @@ class ExternalFilesService
             return [];
         }
 
+        // Don't follow symlinks: a link inside the configured root could point
+        // anywhere on disk (e.g. `~`, `/etc`), which would walk out of scope
+        // and surface unrelated files. resolveAbsolutePath() also re-checks
+        // confinement on the read side; this is the matching write-side guard.
         $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS | FilesystemIterator::FOLLOW_SYMLINKS),
+            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
             RecursiveIteratorIterator::LEAVES_ONLY
         );
         $iterator->setMaxDepth(self::MAX_DEPTH);
 
         $entries = [];
+        $rootPrefix = $root.DIRECTORY_SEPARATOR;
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
@@ -150,7 +155,13 @@ class ExternalFilesService
                 continue;
             }
 
-            $absolutePath = $file->getPathname();
+            // Defense in depth: drop entries whose canonical path leaves the
+            // configured root, even if a symlink slipped past the flag above.
+            $absolutePath = realpath($file->getPathname());
+            if ($absolutePath === false || ! str_starts_with($absolutePath, $rootPrefix)) {
+                continue;
+            }
+
             $additions = $this->streamCountLines($absolutePath);
 
             // streamCountLines returns null for binary files in a single read

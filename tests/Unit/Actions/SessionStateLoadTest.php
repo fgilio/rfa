@@ -218,8 +218,7 @@ test('rehydrates external reviewed files via on-disk hash, not git refs', functi
     // compare the stored hash to the current on-disk hash; if it changes,
     // the reviewed flag drops, matching the diff-anchor model.
     $repoPath = '/tmp/'.$this->faker->word();
-    $tmp = sys_get_temp_dir().'/rfa_session_ext_'.getmypid().'_'.uniqid('', true);
-    mkdir($tmp);
+    $tmp = $this->createTempDirectory('rfa_session_ext_');
     $absolute = $tmp.'/note.md';
     file_put_contents($absolute, "stable\n");
     $hash = hash_file('xxh128', $absolute);
@@ -253,9 +252,6 @@ test('rehydrates external reviewed files via on-disk hash, not git refs', functi
     $result = app(SessionStateAction::class)->handle($repoPath, $files);
 
     expect($result['reviewedFiles'])->toBe([]);
-
-    unlink($absolute);
-    rmdir($tmp);
 });
 
 test('rehydrates reviewed files via left-side hash when the right ref has no content', function () {

@@ -1580,7 +1580,7 @@ new #[Layout('layouts.app')] class extends Component
                                             <li class="flex items-center gap-2 group" wire:key="external-path-{{ $index }}">
                                                 <div class="min-w-0 flex-1">
                                                     <div class="text-xs font-display text-gh-text truncate" title="{{ $row['path'] }}">{{ $row['label'] }}</div>
-                                                    <div class="text-[10px] font-mono text-gh-muted/70 truncate" title="{{ $row['path'] }}">{{ $row['path'] }}</div>
+                                                    <x-file-path :path="$row['path']" class="text-[10px] text-gh-muted/70" />
                                                 </div>
                                                 <flux:tooltip content="Unlink">
                                                     <flux:button
