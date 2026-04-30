@@ -12,6 +12,7 @@ use App\Actions\GetCurrentHeadAction;
 use App\Actions\GetFileListAction;
 use App\Actions\GroupReviewFilesAction;
 use App\Actions\IsSinceBaseViewAction;
+use App\Actions\LinkExternalPathAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
@@ -22,13 +23,16 @@ use App\Actions\RestoreDiscardedFileAction;
 use App\Actions\ScanReviewFilesAction;
 use App\Actions\SessionStateAction;
 use App\Actions\ToggleReviewedAction;
+use App\Actions\UnlinkExternalPathAction;
 use App\Actions\UpdateCommentAction;
 use App\Actions\UpdateProjectSettingAction;
 use App\Concerns\InteractsWithRemoteLinks;
 use App\DTOs\CurrentHeadResult;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\Enums\DiffSide;
 use App\Enums\DivergenceState;
+use App\Enums\GitRef;
 use App\Exceptions\GitCommandException;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
@@ -100,6 +104,9 @@ new #[Layout('layouts.app')] class extends Component
 
     public string $defaultBaseBranch = '';
 
+    /** @var list<array{label: string, path: string}> */
+    public array $externalPaths = [];
+
     #[Locked]
     public string $diffFrom = 'HEAD';
 
@@ -161,6 +168,9 @@ new #[Layout('layouts.app')] class extends Component
         $this->respectGlobalGitignore = $project['respect_global_gitignore'] ?? true;
         $this->globalGitignorePath = $project['global_gitignore_path'] ?: null;
         $this->defaultBaseBranch = (string) ($project['default_base_branch'] ?? '');
+        // Stored shape is `[{label, path}]` because every write goes through
+        // Link/UnlinkExternalPathAction; trust it without re-normalizing.
+        $this->externalPaths = (array) ($project['external_paths'] ?? []);
 
         // Commit mode: resolve hash to full SHA
         if ($hash !== null) {
@@ -291,6 +301,57 @@ new #[Layout('layouts.app')] class extends Component
         ]);
 
         $this->isSinceBaseView = $this->detectSinceBaseView();
+    }
+
+    public function addExternalPath(): void
+    {
+        $picked = app(\Native\Desktop\Dialog::class)
+            ->title('Link External Folder')
+            ->folders()
+            ->open();
+
+        if (! is_string($picked) || $picked === '') {
+            $this->skipRender();
+
+            return;
+        }
+
+        $updated = app(LinkExternalPathAction::class)->handle($this->projectId, $picked);
+        if ($updated === null) {
+            $this->skipRender();
+
+            return;
+        }
+
+        $this->externalPaths = $updated;
+        $this->reloadAfterExternalPathsChange();
+    }
+
+    public function removeExternalPath(int $index): void
+    {
+        $updated = app(UnlinkExternalPathAction::class)->handle($this->projectId, $index);
+        if ($updated === null) {
+            $this->skipRender();
+
+            return;
+        }
+
+        $this->externalPaths = $updated;
+        $this->reloadAfterExternalPathsChange();
+    }
+
+    private function reloadAfterExternalPathsChange(): void
+    {
+        $this->refreshFileList();
+
+        $target = $this->buildDiffTarget();
+        $session = app(SessionStateAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target);
+        $this->comments = $session['comments'];
+        $this->reviewedFiles = $session['reviewedFiles'];
+
+        if (! empty($session['orphanedPaths'])) {
+            $this->injectOrphanedFiles($session['orphanedPaths']);
+        }
     }
 
     public function updatedRespectGlobalGitignore(): void
@@ -641,9 +702,9 @@ new #[Layout('layouts.app')] class extends Component
                 [
                     'project_id' => $this->projectId ?: null,
                     'repo_path' => $this->repoPath,
-                    'origin_ref' => $c['originRef'] ?? 'working',
+                    'origin_ref' => $c['originRef'] ?? GitRef::Working->value,
                     'file_path' => $c['file'] ?? '',
-                    'side' => $c['side'] ?? 'right',
+                    'side' => $c['side'] ?? DiffSide::Right->value,
                     'start_line' => $c['startLine'] ?? null,
                     'end_line' => $c['endLine'] ?? null,
                     'file_content_hash' => $c['fileContentHash'] ?? null,
@@ -1477,6 +1538,9 @@ new #[Layout('layouts.app')] class extends Component
                             <flux:menu.item keep-open>
                                 <flux:checkbox wire:model.live="respectGlobalGitignore" label="Global .gitignore" class="text-xs whitespace-nowrap" />
                             </flux:menu.item>
+                            <p class="px-3 pb-2 text-[10px] font-mono text-gh-muted/80 leading-snug w-56">
+                                Hide files matched by your global .gitignore (e.g. ~/.gitignore_global).
+                            </p>
                             <flux:menu.separator />
                             <div class="px-3 py-2 w-56 space-y-1.5" wire:ignore.self>
                                 <label for="default-base-branch-input" class="block text-[10px] font-display font-semibold uppercase tracking-brutal text-gh-muted">
@@ -1492,8 +1556,58 @@ new #[Layout('layouts.app')] class extends Component
                                     class="!font-mono text-xs"
                                 />
                                 <p class="text-[10px] font-mono text-gh-muted/80 leading-snug">
-                                    Used by the "Since {base}" shortcut in the branch picker.
+                                    Default branch to compare against. Pre-fills the
+                                    @if($defaultBaseBranch !== '')
+                                        <span class="text-gh-text">Since {{ $defaultBaseBranch }}</span>
+                                        shortcut
+                                    @else
+                                        Since shortcut (e.g. <span class="text-gh-text">Since dev</span>)
+                                    @endif
+                                    in the branch picker.
                                 </p>
+                            </div>
+                            <flux:menu.separator />
+                            <div class="px-3 py-2 w-72 space-y-2" wire:ignore.self>
+                                <label class="block text-[10px] font-display font-semibold uppercase tracking-brutal text-gh-muted">
+                                    Linked external paths
+                                </label>
+                                <p class="text-[10px] font-mono text-gh-muted/80 leading-snug">
+                                    Folders outside the repo that show up as commentable files (e.g. design notes from external tools).
+                                </p>
+                                @if(count($externalPaths) > 0)
+                                    <ul class="space-y-1" data-testid="external-paths-list">
+                                        @foreach($externalPaths as $index => $row)
+                                            <li class="flex items-center gap-2 group" wire:key="external-path-{{ $index }}">
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="text-xs font-display text-gh-text truncate" title="{{ $row['path'] }}">{{ $row['label'] }}</div>
+                                                    <x-file-path :path="$row['path']" class="text-[10px] text-gh-muted/70" />
+                                                </div>
+                                                <flux:tooltip content="Unlink">
+                                                    <flux:button
+                                                        size="xs"
+                                                        variant="ghost"
+                                                        icon="x-mark"
+                                                        icon:variant="outline"
+                                                        wire:click="removeExternalPath({{ $index }})"
+                                                        aria-label="Unlink {{ $row['label'] }}"
+                                                        data-testid="external-path-remove-{{ $index }}"
+                                                    />
+                                                </flux:tooltip>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+                                <flux:button
+                                    size="xs"
+                                    variant="ghost"
+                                    icon="plus"
+                                    icon:variant="outline"
+                                    wire:click="addExternalPath"
+                                    data-testid="external-path-add"
+                                    class="w-full"
+                                >
+                                    Link folder…
+                                </flux:button>
                             </div>
                         </flux:menu>
                     </flux:dropdown>

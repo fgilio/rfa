@@ -43,11 +43,11 @@ final readonly class AddCommentAction
             return null;
         }
 
-        if ($side === 'file' && ($startLine !== null || $endLine !== null)) {
+        if ($side === DiffSide::File->value && ($startLine !== null || $endLine !== null)) {
             return null;
         }
 
-        if ($side !== 'file' && $startLine === null) {
+        if ($side !== DiffSide::File->value && $startLine === null) {
             return null;
         }
 
@@ -57,8 +57,13 @@ final readonly class AddCommentAction
 
         $filePath = (string) $file['path'];
         $oldPath = ! empty($file['oldPath']) ? (string) $file['oldPath'] : null;
-        $contentHash = $this->resolveContentHash($repoPath, $target, $side, $filePath, $oldPath);
-        $originRef = $target->to() ?? GitRef::Working->value;
+        $isExternal = (bool) ($file['isExternal'] ?? false);
+        $contentHash = $isExternal
+            ? $this->gitFileContentService->hashAtAbsolute((string) ($file['externalAbsolutePath'] ?? ''))
+            : $this->resolveContentHash($repoPath, $target, $side, $filePath, $oldPath);
+        $originRef = $isExternal
+            ? GitRef::External->value
+            : ($target->to() ?? GitRef::Working->value);
 
         $id = 'c-'.Str::ulid();
 
@@ -96,7 +101,7 @@ final readonly class AddCommentAction
 
     private function resolveContentHash(string $repoPath, DiffTarget $target, string $side, string $filePath, ?string $oldPath): ?string
     {
-        if ($side === 'left') {
+        if ($side === DiffSide::Left->value) {
             // For renames the file exists at `from` under its pre-rename path only.
             $leftPath = $oldPath ?? $filePath;
 

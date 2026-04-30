@@ -134,6 +134,18 @@ final readonly class SessionStateAction
 
             $storedHashes = $hashesByPath[$path];
 
+            // External files live outside the repo, so their reviewed-anchor
+            // hash must come from the absolute on-disk path rather than a
+            // git ref. Mismatch → un-review, matching the diff-anchor model.
+            if (($file['isExternal'] ?? false) && ! empty($file['externalAbsolutePath'])) {
+                $currentHash = $this->gitFileContentService->hashAtAbsolute((string) $file['externalAbsolutePath']);
+                if ($currentHash !== null && in_array($currentHash, $storedHashes, true)) {
+                    $reviewed[$path] = $currentHash;
+                }
+
+                continue;
+            }
+
             // Legacy rows (indexed `reviewed_files` arrays or immutable-context sessions)
             // were migrated with an empty `content_hash`. Treat those as "reviewed
             // regardless of content" so migrated users keep their state.

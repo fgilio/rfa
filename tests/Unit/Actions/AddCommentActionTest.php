@@ -161,6 +161,31 @@ test('hashes right-side comments on renamed files using the post-rename path', f
     expect($result['fileContentHash'])->toBe('right-hash');
 });
 
+test('hashes external-file comments off disk and stamps origin_ref=external', function () {
+    $tmp = $this->createTempDirectory('rfa_addcomment_ext_');
+    $absolute = $tmp.'/note.md';
+    file_put_contents($absolute, "external content\n");
+
+    // Drop the beforeEach mock so we exercise the real hashAtAbsolute path.
+    app()->forgetInstance(GitFileContentService::class);
+    $action = app(AddCommentAction::class);
+    $files = [[
+        'id' => 'file-ext',
+        'path' => 'external/notes/note.md',
+        'isExternal' => true,
+        'externalAbsolutePath' => $absolute,
+    ]];
+
+    $result = $action->handle('/tmp/repo', null, DiffTarget::workingDirectory(), $files, 'file-ext', 'right', 1, 1, 'body');
+
+    expect($result['originRef'])->toBe('external');
+    expect($result['fileContentHash'])->toBe(hash_file('xxh128', $absolute));
+
+    $row = Comment::find($result['id']);
+    expect($row->origin_ref)->toBe('external');
+    expect($row->file_path)->toBe('external/notes/note.md');
+});
+
 test('file-level comments on renamed files hash the post-rename path at `to`', function () {
     $gitFileContent = Mockery::mock(GitFileContentService::class);
     $gitFileContent->shouldReceive('hashAt')

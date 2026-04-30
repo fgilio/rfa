@@ -21,6 +21,8 @@ class FileListEntry
         public readonly bool $isSymlink = false,
         public readonly ?string $symlinkTarget = null,
         public readonly ?string $fileSize = null,
+        public readonly bool $isExternal = false,
+        public readonly ?string $externalAbsolutePath = null,
     ) {}
 
     public static function idForPath(string $path): string
@@ -57,6 +59,8 @@ class FileListEntry
             'isSymlink' => $this->isSymlink,
             'symlinkTarget' => $this->symlinkTarget,
             'fileSize' => $this->fileSize,
+            'isExternal' => $this->isExternal,
+            'externalAbsolutePath' => $this->externalAbsolutePath,
         ];
     }
 }

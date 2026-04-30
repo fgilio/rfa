@@ -11,6 +11,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Stored as a JSON column. We type it loosely — defensive shape checks at the
+ * boundaries (LinkExternalPathAction, ExternalFilesService) handle malformed
+ * rows without relying on PHPStan-level guarantees the DB doesn't enforce.
+ *
+ * @property array<int, mixed>|null $external_paths
+ */
 #[ObservedBy(ProjectObserver::class)]
 class Project extends Model
 {
@@ -28,6 +35,7 @@ class Project extends Model
         'global_gitignore_path',
         'respect_global_gitignore',
         'default_base_branch',
+        'external_paths',
     ];
 
     /** @return HasMany<ReviewSession, $this> */
@@ -59,6 +67,7 @@ class Project extends Model
         return [
             'is_worktree' => 'boolean',
             'respect_global_gitignore' => 'boolean',
+            'external_paths' => 'array',
         ];
     }
 }
