@@ -16,6 +16,8 @@ use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
+use function Illuminate\Support\defer;
+
 /**
  * Context page: inventory + line-level review of every CLAUDE.md / AGENTS.md
  * in the current repo. Sibling to ⚡review-page; intentionally does not share
@@ -73,11 +75,19 @@ new #[Layout('layouts.app')] class extends Component
 
         Cache::put('rfa.active-project-id', $this->projectId, now()->addDay());
 
-        app(PersistProjectViewAction::class)->handle(
-            $this->projectId,
-            $this->repoPath,
-            LastViewMode::Context,
-        );
+        $projectId = $this->projectId;
+        $repoPath = $this->repoPath;
+
+        // Run after the response is sent: the persisted view is only consumed
+        // on the next navigation, so making the user wait for the UPSERT here
+        // would be needless mount latency.
+        defer(static function () use ($projectId, $repoPath) {
+            app(PersistProjectViewAction::class)->handle(
+                $projectId,
+                $repoPath,
+                LastViewMode::Context,
+            );
+        });
 
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title("rfa - {$this->projectName} · context");

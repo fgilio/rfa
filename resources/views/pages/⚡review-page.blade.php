@@ -45,6 +45,8 @@ use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
+use function Illuminate\Support\defer;
+
 new #[Layout('layouts.app')] class extends Component
 {
     use InteractsWithRemoteLinks;
@@ -239,14 +241,24 @@ new #[Layout('layouts.app')] class extends Component
             default => LastViewKind::WorkingTree,
         };
 
-        app(PersistProjectViewAction::class)->handle(
-            $this->projectId,
-            $this->repoPath,
-            LastViewMode::Review,
-            $kind,
-            $kind === LastViewKind::WorkingTree || $kind === LastViewKind::Commit ? null : $this->diffFrom,
-            $kind === LastViewKind::WorkingTree ? null : $this->diffTo,
-        );
+        $projectId = $this->projectId;
+        $repoPath = $this->repoPath;
+        $diffFrom = $this->diffFrom;
+        $diffTo = $this->diffTo;
+
+        // Run after the response is sent: the persisted view is only consumed
+        // on the next navigation, so making the user wait for the UPSERT here
+        // would be needless mount latency.
+        defer(static function () use ($projectId, $repoPath, $kind, $diffFrom, $diffTo) {
+            app(PersistProjectViewAction::class)->handle(
+                $projectId,
+                $repoPath,
+                LastViewMode::Review,
+                $kind,
+                $kind === LastViewKind::WorkingTree || $kind === LastViewKind::Commit ? null : $diffFrom,
+                $kind === LastViewKind::WorkingTree ? null : $diffTo,
+            );
+        });
     }
 
     private function rehydrateForTarget(): void
