@@ -7,7 +7,6 @@ namespace App\Actions;
 use App\DTOs\Comment as CommentDTO;
 use App\Enums\DiffSide;
 use App\Models\Comment;
-use App\Services\GitFileContentService;
 
 /**
  * Load context-file comments for the Context page in the view-state shape
@@ -27,17 +26,13 @@ use App\Services\GitFileContentService;
  */
 final readonly class LoadContextCommentsAction
 {
-    public function __construct(
-        private GitFileContentService $gitFileContentService,
-    ) {}
-
     /** @return array<int, array<string, mixed>> */
     public function handle(string $repoPath, ?int $projectId): array
     {
         return Comment::query()
             ->forProjectOrRepo($projectId, $repoPath)
-            ->where('origin_ref', ContextCommentWorkflowAction::ORIGIN_REF)
-            ->whereNull('submitted_at')
+            ->fromContext()
+            ->unsubmitted()
             ->orderBy('created_at')
             ->get()
             ->map(fn (Comment $row): array => $this->reanchor($repoPath, $row))
@@ -47,19 +42,17 @@ final readonly class LoadContextCommentsAction
     /** @return array<string, mixed> */
     private function reanchor(string $repoPath, Comment $row): array
     {
-        $absolute = $repoPath.'/'.$row->file_path;
         $side = DiffSide::from($row->side);
         $startLine = $row->start_line;
         $endLine = $row->end_line;
         $anchorStatus = 'placed';
 
-        $currentHash = $this->gitFileContentService->hashAtAbsolute($absolute);
+        $content = $this->fileContent($repoPath.'/'.$row->file_path);
 
-        if ($currentHash === null) {
+        if ($content === null) {
             $anchorStatus = 'unplaced';
-        } elseif ($side !== DiffSide::File && $row->file_content_hash !== null && $currentHash !== $row->file_content_hash) {
-            // Hash drifted; try to recover line numbers from the snippet.
-            $shifted = $this->shiftedLines($absolute, $row->line_snippet, $row->start_line, $row->end_line);
+        } elseif ($side !== DiffSide::File && $row->file_content_hash !== null && hash('xxh128', $content) !== $row->file_content_hash) {
+            $shifted = $this->shiftedLines($content, $row->line_snippet, $row->start_line, $row->end_line);
 
             if ($shifted === null) {
                 $anchorStatus = 'unplaced';
@@ -87,6 +80,17 @@ final readonly class LoadContextCommentsAction
         ))->toArray();
     }
 
+    private function fileContent(string $absolutePath): ?string
+    {
+        if (! is_file($absolutePath)) {
+            return null;
+        }
+
+        $content = @file_get_contents($absolutePath);
+
+        return $content === false ? null : $content;
+    }
+
     /**
      * Find $snippet in the current file. When it occurs more than once we
      * pick the occurrence whose first line is closest to the original
@@ -95,14 +99,9 @@ final readonly class LoadContextCommentsAction
      *
      * @return array{0: int, 1: int}|null New [startLine, endLine], or null when unrecoverable.
      */
-    private function shiftedLines(string $absolutePath, ?string $snippet, ?int $startLine, ?int $endLine): ?array
+    private function shiftedLines(string $content, ?string $snippet, ?int $startLine, ?int $endLine): ?array
     {
-        if ($snippet === null || $snippet === '' || $startLine === null || ! is_file($absolutePath)) {
-            return null;
-        }
-
-        $content = @file_get_contents($absolutePath);
-        if ($content === false) {
+        if ($snippet === null || $snippet === '' || $startLine === null) {
             return null;
         }
 
@@ -111,16 +110,15 @@ final readonly class LoadContextCommentsAction
         $snippetLen = count($snippetLines);
         $haystackLen = count($fileLines);
 
-        // explode() always yields at least one element so $snippetLen >= 1.
         if ($snippetLen > $haystackLen) {
             return null;
         }
 
+        $needle = rtrim($snippet);
         $matches = [];
         for ($i = 0; $i <= $haystackLen - $snippetLen; $i++) {
             $candidate = array_slice($fileLines, $i, $snippetLen);
-            if (rtrim(implode("\n", $candidate)) === rtrim($snippet)) {
-                // Convert to 1-based file line numbers.
+            if (rtrim(implode("\n", $candidate)) === $needle) {
                 $matches[] = $i + 1;
             }
         }

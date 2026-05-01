@@ -115,7 +115,7 @@ final readonly class ContextCommentWorkflowAction
 
         return Comment::query()
             ->forProjectOrRepo($projectId, $repoPath)
-            ->where('origin_ref', self::ORIGIN_REF)
+            ->fromContext()
             ->whereKey($commentId)
             ->update(['body' => $body, 'is_draft' => $isDraft]) > 0;
     }
@@ -132,7 +132,7 @@ final readonly class ContextCommentWorkflowAction
 
         $deleted = Comment::query()
             ->forProjectOrRepo($projectId, $repoPath)
-            ->where('origin_ref', self::ORIGIN_REF)
+            ->fromContext()
             ->whereKey($commentId)
             ->delete();
 
