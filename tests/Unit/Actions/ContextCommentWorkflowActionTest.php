@@ -118,6 +118,16 @@ test('update mutates body and draft flag, scoped to context-file rows', function
     expect($row->is_draft)->toBeTrue();
 });
 
+test('update rejects blank bodies, mirroring the create-time rule', function () {
+    $fileId = $this->files[0]['id'];
+    $created = $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 1, 1, 'orig');
+
+    expect($this->action->update($created['id'], ''))->toBeFalse();
+    expect($this->action->update($created['id'], '   '))->toBeFalse();
+
+    expect(Comment::find($created['id'])->body)->toBe('orig');
+});
+
 test('update refuses to touch comments owned by other origin_refs', function () {
     $reviewComment = app(AddCommentAction::class)->handle(
         '/tmp/whatever',

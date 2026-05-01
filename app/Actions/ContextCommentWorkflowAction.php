@@ -100,6 +100,10 @@ final readonly class ContextCommentWorkflowAction
 
     public function update(string $commentId, string $body, bool $isDraft = false): bool
     {
+        if (trim($body) === '') {
+            return false;
+        }
+
         if (! str_starts_with($commentId, 'c-')) {
             return false;
         }
