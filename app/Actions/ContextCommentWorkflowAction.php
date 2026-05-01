@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
  * Comment workflow for the Context page (CLAUDE.md / AGENTS.md inventory).
  *
  * Lives parallel to review-page's inline comment writes. Uses the deterministic
- * sentinel `origin_ref = ContextCommentWorkflowAction::ORIGIN_REF` so context-
+ * sentinel `origin_ref = Comment::ORIGIN_CONTEXT` so context-
  * file comments coexist with review comments on the same `(repo_path, file_path)`
  * row without collision. Designed as a sibling to the pending
  * `ReviewCommentWorkflow` extraction noted in this project's CLAUDE.md.
@@ -24,8 +24,6 @@ use Illuminate\Support\Str;
  */
 final readonly class ContextCommentWorkflowAction
 {
-    public const ORIGIN_REF = Comment::ORIGIN_CONTEXT;
-
     public function __construct(
         private GitFileContentService $gitFileContentService,
     ) {}
@@ -76,7 +74,7 @@ final readonly class ContextCommentWorkflowAction
             'id' => $id,
             'project_id' => $projectId,
             'repo_path' => $repoPath,
-            'origin_ref' => self::ORIGIN_REF,
+            'origin_ref' => Comment::ORIGIN_CONTEXT,
             'file_path' => $filePath,
             'side' => $side,
             'start_line' => $startLine,
@@ -95,7 +93,7 @@ final readonly class ContextCommentWorkflowAction
             'startLine' => $startLine,
             'endLine' => $endLine,
             'body' => $body,
-            'originRef' => self::ORIGIN_REF,
+            'originRef' => Comment::ORIGIN_CONTEXT,
             'fileContentHash' => $contentHash,
             'lineSnippet' => $lineSnippet,
             'isDraft' => $isDraft,

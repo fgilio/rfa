@@ -22,7 +22,7 @@ final readonly class ClearContextCommentsAction
 
         return Comment::query()
             ->forProjectOrRepo($projectId, $repoPath)
-            ->where('origin_ref', ContextCommentWorkflowAction::ORIGIN_REF)
+            ->fromContext()
             ->whereIn('id', $commentIds)
             ->delete();
     }

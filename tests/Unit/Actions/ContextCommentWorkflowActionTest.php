@@ -42,7 +42,7 @@ test('handle returns a placed comment stamped with the context-file origin_ref',
     expect($result['side'])->toBe('right');
     expect($result['startLine'])->toBe(2);
     expect($result['body'])->toBe($body);
-    expect($result['originRef'])->toBe(ContextCommentWorkflowAction::ORIGIN_REF);
+    expect($result['originRef'])->toBe(Comment::ORIGIN_CONTEXT);
     expect($result['fileContentHash'])->toBe(hash_file('xxh128', $this->repo.'/CLAUDE.md'));
     expect($result['anchorStatus'])->toBe('placed');
 

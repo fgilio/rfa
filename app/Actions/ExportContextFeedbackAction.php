@@ -42,8 +42,8 @@ final readonly class ExportContextFeedbackAction
         if ($ids !== []) {
             Comment::query()
                 ->forProjectOrRepo($projectId, $repoPath)
-                ->where('origin_ref', ContextCommentWorkflowAction::ORIGIN_REF)
-                ->whereNull('submitted_at')
+                ->fromContext()
+                ->unsubmitted()
                 ->whereIn('id', $ids)
                 ->update(['submitted_at' => now()]);
         }
