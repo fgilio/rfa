@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\DTOs\Comment;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
 class CommentExporter
@@ -21,23 +21,15 @@ class CommentExporter
      */
     public function export(string $repoPath, array $comments, string $globalComment = '', array $diffContext = []): array
     {
-        $hash = Str::random(8);
-        $now = date('Ymd_His');
-        $basename = "{$now}_comments_{$hash}";
+        $basename = date('Ymd_His').'_comments_'.Str::random(8);
         $rfaDir = $repoPath.'/.rfa';
+        $path = "{$rfaDir}/{$basename}.md";
 
-        $disk = Storage::build([
-            'driver' => 'local',
-            'root' => $rfaDir,
-            'throw' => true,
-        ]);
-
-        $md = $this->markdownFormatter->format($comments, $globalComment, $diffContext);
-
-        $disk->put("{$basename}.md", $md);
+        File::ensureDirectoryExists($rfaDir);
+        File::put($path, $this->markdownFormatter->format($comments, $globalComment, $diffContext));
 
         return [
-            'md' => $disk->path("{$basename}.md"),
+            'md' => $path,
             'clipboard' => "address my comments on these changes in @.rfa/{$basename}.md",
         ];
     }

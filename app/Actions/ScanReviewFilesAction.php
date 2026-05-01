@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\File;
 final readonly class ScanReviewFilesAction
 {
     /**
-     * Scan the .rfa/ directory for review file pairs via direct filesystem access.
+     * Scan the .rfa/ directory for review files via direct filesystem access.
      *
      * @return array<int, array<string, mixed>>
      */

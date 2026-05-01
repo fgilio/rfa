@@ -243,25 +243,18 @@ test('undo mark-reviewed deletes the DB row even when reviewedFiles map dropped 
     expect(ReviewedFile::where('file_path', 'src/Foo.php')->count())->toBe(0);
 });
 
-test('marking a review-pair artifact does not consume a "Recently reviewed" slot', function () {
-    // Bind a GroupReviewFilesAction that puts notes.json into reviewPairs and
-    // leaves Foo as the only source file. The page-level $files still includes
-    // the pair artifact, so toggleReviewed must look it up via $sourceFiles.
+test('marking a review artifact does not consume a "Recently reviewed" slot', function () {
+    // Bind a GroupReviewFilesAction that excludes notes.json so Foo is the only
+    // source file. The page-level $files still includes the artifact, so
+    // toggleReviewed must look it up via $sourceFiles.
     app()->bind(GroupReviewFilesAction::class, fn () => new class
     {
         public function handle(array $files): array
         {
-            $pairs = [];
-            $source = [];
-            foreach ($files as $f) {
-                if (str_ends_with($f['path'], 'notes.json')) {
-                    $pairs[] = ['basename' => 'notes', 'id' => $f['id'], 'displayName' => 'notes'];
-                } else {
-                    $source[] = $f;
-                }
-            }
-
-            return ['reviewPairs' => $pairs, 'sourceFiles' => $source];
+            return array_values(array_filter(
+                $files,
+                fn (array $f) => ! str_ends_with($f['path'], 'notes.json'),
+            ));
         }
     });
 

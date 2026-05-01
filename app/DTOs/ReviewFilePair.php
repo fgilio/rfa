@@ -14,13 +14,22 @@ class ReviewFilePair
     private const BASENAME_PATTERN = '/^(\d{8}_\d{6})_comments_[A-Za-z0-9]+$/';
 
     /**
-     * @param  ?array<string, mixed>  $mdFile
+     * @param  array<string, mixed>  $mdFile
      */
     public function __construct(
         public readonly string $basename,
-        public readonly ?array $mdFile,
+        public readonly array $mdFile,
         public readonly ?Carbon $createdAt,
     ) {}
+
+    /**
+     * Validate a basename against the canonical pattern. Used by callers that
+     * receive a basename from user input (e.g. the delete action).
+     */
+    public static function isValidBasename(string $basename): bool
+    {
+        return (bool) preg_match(self::BASENAME_PATTERN, $basename);
+    }
 
     /**
      * Extract the shared basename from an .rfa/ review file path.

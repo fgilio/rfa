@@ -71,22 +71,10 @@ test('serializes to array with all fields', function () {
         ->and($array['createdAtHuman'])->not->toBeNull();
 });
 
-test('handles null mdFile in toArray', function () {
-    $pair = new ReviewFilePair(
-        basename: '20250115_143022_comments_AbCdEf12',
-        mdFile: null,
-        createdAt: Carbon::parse('2025-01-15 14:30:22'),
-    );
-
-    $array = $pair->toArray();
-
-    expect($array['mdFile'])->toBeNull();
-});
-
 test('handles null createdAt in toArray', function () {
     $pair = new ReviewFilePair(
         basename: '20250115_143022_comments_AbCdEf12',
-        mdFile: null,
+        mdFile: ['id' => 'file-def', 'path' => '.rfa/20250115_143022_comments_AbCdEf12.md'],
         createdAt: null,
     );
 
@@ -101,7 +89,7 @@ test('handles null createdAt in toArray', function () {
 test('displayName formats timestamp as friendly date', function () {
     $pair = new ReviewFilePair(
         basename: '20250226_231521_comments_aA06ntL4',
-        mdFile: null,
+        mdFile: ['id' => 'file-def', 'path' => '.rfa/20250226_231521_comments_aA06ntL4.md'],
         createdAt: Carbon::parse('2025-02-26 23:15:21'),
     );
 
@@ -111,9 +99,23 @@ test('displayName formats timestamp as friendly date', function () {
 test('displayName falls back to basename when createdAt is null', function () {
     $pair = new ReviewFilePair(
         basename: '20250226_231521_comments_aA06ntL4',
-        mdFile: null,
+        mdFile: ['id' => 'file-def', 'path' => '.rfa/20250226_231521_comments_aA06ntL4.md'],
         createdAt: null,
     );
 
     expect($pair->toArray()['displayName'])->toBe('20250226_231521_comments_aA06ntL4');
+});
+
+// -- isValidBasename --
+
+test('isValidBasename accepts canonical pattern', function () {
+    expect(ReviewFilePair::isValidBasename('20250115_143022_comments_AbCdEf12'))->toBeTrue();
+});
+
+test('isValidBasename rejects path traversal', function () {
+    expect(ReviewFilePair::isValidBasename('../../etc/passwd'))->toBeFalse();
+});
+
+test('isValidBasename rejects unrelated strings', function () {
+    expect(ReviewFilePair::isValidBasename('random_file_name'))->toBeFalse();
 });

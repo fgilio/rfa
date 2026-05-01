@@ -1,15 +1,12 @@
 <?php
 
 use App\Actions\GroupReviewFilesAction;
-use Faker\Factory as Faker;
 
 beforeEach(function () {
-    $this->faker = Faker::create();
-    $this->faker->seed(crc32(static::class.$this->name()));
     $this->action = new GroupReviewFilesAction;
 });
 
-test('groups md files into review pairs and separates source files', function () {
+test('excludes md review files and keeps source files', function () {
     $files = [
         ['id' => 'file-b', 'path' => '.rfa/20250115_143022_comments_AbCd1234.md', 'status' => 'added', 'additions' => 5, 'deletions' => 0],
         ['id' => 'file-c', 'path' => 'src/Foo.php', 'status' => 'modified', 'additions' => 3, 'deletions' => 1],
@@ -17,14 +14,11 @@ test('groups md files into review pairs and separates source files', function ()
 
     $result = $this->action->handle($files);
 
-    expect($result['reviewPairs'])->toHaveCount(1)
-        ->and($result['reviewPairs'][0]['basename'])->toBe('20250115_143022_comments_AbCd1234')
-        ->and($result['reviewPairs'][0]['mdFile']['id'])->toBe('file-b')
-        ->and($result['sourceFiles'])->toHaveCount(1)
-        ->and($result['sourceFiles'][0]['id'])->toBe('file-c');
+    expect($result)->toHaveCount(1)
+        ->and($result[0]['id'])->toBe('file-c');
 });
 
-test('treats stray json files as source files', function () {
+test('treats stray json files in .rfa/ as source files', function () {
     $files = [
         ['id' => 'file-a', 'path' => '.rfa/20250115_143022_comments_AbCd1234.json', 'status' => 'added', 'additions' => 10, 'deletions' => 0],
         ['id' => 'file-b', 'path' => '.rfa/20250115_143022_comments_AbCd1234.md', 'status' => 'added', 'additions' => 5, 'deletions' => 0],
@@ -32,42 +26,29 @@ test('treats stray json files as source files', function () {
 
     $result = $this->action->handle($files);
 
-    expect($result['reviewPairs'])->toHaveCount(1)
-        ->and($result['reviewPairs'][0]['mdFile']['id'])->toBe('file-b')
-        ->and($result['sourceFiles'])->toHaveCount(1)
-        ->and($result['sourceFiles'][0]['id'])->toBe('file-a');
+    expect($result)->toHaveCount(1)
+        ->and($result[0]['id'])->toBe('file-a');
 });
 
-test('sorts review pairs newest first', function () {
+test('returns empty when only review files', function () {
     $files = [
-        ['id' => 'file-2', 'path' => '.rfa/20250110_100000_comments_aaaa1111.md', 'status' => 'added', 'additions' => 1, 'deletions' => 0],
-        ['id' => 'file-4', 'path' => '.rfa/20250115_143022_comments_bbbb2222.md', 'status' => 'added', 'additions' => 1, 'deletions' => 0],
+        ['id' => 'file-a', 'path' => '.rfa/20250115_143022_comments_AbCd1234.md', 'status' => 'added', 'additions' => 5, 'deletions' => 0],
     ];
 
-    $result = $this->action->handle($files);
-
-    expect($result['reviewPairs'])->toHaveCount(2)
-        ->and($result['reviewPairs'][0]['basename'])->toBe('20250115_143022_comments_bbbb2222')
-        ->and($result['reviewPairs'][1]['basename'])->toBe('20250110_100000_comments_aaaa1111');
+    expect($this->action->handle($files))->toBeEmpty();
 });
 
-test('returns empty reviewPairs when no review files', function () {
+test('returns input untouched when no review files', function () {
     $files = [
         ['id' => 'file-a', 'path' => 'src/Foo.php', 'status' => 'modified', 'additions' => 3, 'deletions' => 1],
         ['id' => 'file-b', 'path' => 'src/Bar.php', 'status' => 'added', 'additions' => 10, 'deletions' => 0],
     ];
 
-    $result = $this->action->handle($files);
-
-    expect($result['reviewPairs'])->toBeEmpty()
-        ->and($result['sourceFiles'])->toHaveCount(2);
+    expect($this->action->handle($files))->toHaveCount(2);
 });
 
 test('handles empty files array', function () {
-    $result = $this->action->handle([]);
-
-    expect($result['reviewPairs'])->toBeEmpty()
-        ->and($result['sourceFiles'])->toBeEmpty();
+    expect($this->action->handle([]))->toBeEmpty();
 });
 
 test('preserves source file order', function () {
@@ -79,7 +60,7 @@ test('preserves source file order', function () {
 
     $result = $this->action->handle($files);
 
-    expect($result['sourceFiles'])->toHaveCount(2)
-        ->and($result['sourceFiles'][0]['id'])->toBe('file-a')
-        ->and($result['sourceFiles'][1]['id'])->toBe('file-b');
+    expect($result)->toHaveCount(2)
+        ->and($result[0]['id'])->toBe('file-a')
+        ->and($result[1]['id'])->toBe('file-b');
 });
