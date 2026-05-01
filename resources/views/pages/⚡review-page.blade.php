@@ -217,30 +217,25 @@ new #[Layout('layouts.app')] class extends Component
         $this->rehydrateForTarget();
         $this->checkHeadDivergence();
 
-        $this->persistCurrentView($hash, $from, $to, $ref, $rangeFromWorking);
+        $this->persistCurrentView($hash, $from, $to, $ref, $baseRef, $rangeFromWorking);
     }
 
     /**
-     * Persist the (mode, kind, from, to) shape of the diff currently being
-     * viewed so that re-entering this project via the picker, the home
-     * redirect, or a deep-link puts the user back on the same surface.
+     * Persist the (mode, kind, from, to) shape so that re-entering this
+     * project — via the picker, the home redirect, or a deep-link — puts
+     * the user back on the same surface.
      *
-     * Kind is derived from the arrival shape — which mount branch was taken
-     * — rather than recomputed from `$diffFrom`/`$diffTo`, because resolved
-     * SHAs lose the original "single commit vs explicit range" distinction.
-     *
-     * `since_base` is saved as semantic intent rather than the resolved SHA
-     * so the restore side re-resolves the merge-base. Base-branch advance
-     * after this save carries the user forward instead of pinning a stale
-     * commit.
+     * Kind is derived from the arrival shape (which mount branch fired)
+     * rather than from `$diffFrom`/`$diffTo`, because resolved SHAs lose
+     * the original "single commit vs explicit range" distinction.
      */
-    private function persistCurrentView(?string $hash, ?string $from, ?string $to, ?string $ref, ?string $rangeFromWorking): void
+    private function persistCurrentView(?string $hash, ?string $from, ?string $to, ?string $ref, ?string $baseRef, ?string $rangeFromWorking): void
     {
         $kind = match (true) {
             $hash !== null => LastViewKind::Commit,
             $from !== null && $to !== null => LastViewKind::Range,
             $rangeFromWorking !== null => $this->isSinceBaseView ? LastViewKind::SinceBase : LastViewKind::RangeToWorking,
-            $ref !== null => LastViewKind::Range,
+            $ref !== null && $baseRef !== null => LastViewKind::Range,
             default => LastViewKind::WorkingTree,
         };
 

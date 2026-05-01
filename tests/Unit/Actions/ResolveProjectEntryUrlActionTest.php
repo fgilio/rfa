@@ -131,7 +131,7 @@ test('builds the range URL via the catchall format', function () {
     ]);
 
     expect($this->action->handle($this->project->slug))
-        ->toBe('/p/entry-test/'.$this->secondSha.'/'.$this->firstSha);
+        ->toBe(route('review-page', ['slug' => 'entry-test', 'ref' => $this->secondSha, 'baseRef' => $this->firstSha]));
 });
 
 test('preserves a parent-suffix on the range from', function () {
@@ -147,7 +147,7 @@ test('preserves a parent-suffix on the range from', function () {
     ]);
 
     expect($this->action->handle($this->project->slug))
-        ->toBe('/p/entry-test/'.$this->secondSha.'/'.rawurlencode($fromWithSuffix));
+        ->toBe(route('review-page', ['slug' => 'entry-test', 'ref' => $this->secondSha, 'baseRef' => $fromWithSuffix]));
 });
 
 test('builds the range-to-working URL', function () {

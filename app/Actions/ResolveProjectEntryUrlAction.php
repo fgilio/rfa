@@ -16,17 +16,11 @@ use App\Services\GitMetadataService;
  * project {slug}?". Consulted from the project picker, the home redirect,
  * and {@see ResolveStartupRouteAction}.
  *
- * Bullet-proofness rules:
- *  - Every saved selection is validated against the live repo before the URL
- *    is built. Stale refs (rebased commits, force-pushed branches, removed
- *    base branch) silently fall back to the working-tree URL — re-entry never
- *    fails closed on persisted state.
- *  - {@see LastViewKind::SinceBase} is re-resolved through
- *    {@see ResolveBranchBaseAction} so the restored view follows base-branch
- *    advancement rather than pinning the SHA that was current at save time.
- *  - Projects with no saved row use $fallbackMode (defaults to Review) so the
- *    picker's mode-stickiness still works for projects visited for the first
- *    time.
+ * Stale refs (rebased commits, force-pushed branches, removed base branch)
+ * silently fall back to the working-tree URL — re-entry never fails closed.
+ * `SinceBase` is re-resolved through {@see ResolveBranchBaseAction} so the
+ * restored view follows base-branch advancement instead of pinning the SHA
+ * that was current at save time.
  */
 final readonly class ResolveProjectEntryUrlAction
 {
@@ -40,7 +34,7 @@ final readonly class ResolveProjectEntryUrlAction
         $project = Project::where('slug', $slug)->first();
 
         if ($project === null) {
-            return route('review-page', ['slug' => $slug]);
+            return $this->workingTreeUrl($slug);
         }
 
         $session = ReviewSession::query()
@@ -56,17 +50,17 @@ final readonly class ResolveProjectEntryUrlAction
         }
 
         if ($session === null) {
-            return route('review-page', ['slug' => $slug]);
+            return $this->workingTreeUrl($slug);
         }
 
         $kind = $session->last_view_kind;
 
         if ($kind === null || $kind === LastViewKind::WorkingTree) {
-            return route('review-page', ['slug' => $slug]);
+            return $this->workingTreeUrl($slug);
         }
 
         return $this->buildReviewUrl($project, $session, $kind, $slug)
-            ?? route('review-page', ['slug' => $slug]);
+            ?? $this->workingTreeUrl($slug);
     }
 
     private function buildReviewUrl(Project $project, ReviewSession $session, LastViewKind $kind, string $slug): ?string
@@ -79,8 +73,8 @@ final readonly class ResolveProjectEntryUrlAction
             LastViewKind::Commit => $this->buildCommitUrl($project, $slug, $to),
             LastViewKind::Range => $this->buildRangeUrl($project, $slug, $from, $to),
             LastViewKind::RangeToWorking => $this->buildRangeToWorkingUrl($project, $slug, $from),
-            // Working tree branch is handled by the caller; keep this exhaustive.
-            LastViewKind::WorkingTree => route('review-page', ['slug' => $slug]),
+            // Unreachable: `handle()` returns early for WorkingTree before delegating here.
+            LastViewKind::WorkingTree => $this->workingTreeUrl($slug),
         };
     }
 
@@ -121,17 +115,16 @@ final readonly class ResolveProjectEntryUrlAction
             return null;
         }
 
-        // Range `from` may carry a parent suffix (e.g. `abc1234^`) when the
-        // selection was applied via the catchall route. Strip the suffix
-        // before existence-checking so a still-reachable commit doesn't
-        // fail validation, and route via the catchall format that accepts
-        // the suffix verbatim.
+        // `from` may carry a parent suffix (e.g. `abc1234^`) when the selection
+        // was applied via the catchall route. Strip it for the existence check
+        // so a still-reachable commit doesn't fail validation, and round-trip
+        // the suffix to the URL via the catchall route shape.
         $fromBase = str_ends_with($from, '^') ? substr($from, 0, -1) : $from;
         if ($fromBase !== '' && ! $this->refExists($project->path, $fromBase)) {
             return null;
         }
 
-        return '/p/'.rawurlencode($slug).'/'.rawurlencode($to).'/'.rawurlencode($from);
+        return route('review-page', ['slug' => $slug, 'ref' => $to, 'baseRef' => $from]);
     }
 
     private function buildRangeToWorkingUrl(Project $project, string $slug, ?string $from): ?string
@@ -149,6 +142,11 @@ final readonly class ResolveProjectEntryUrlAction
             'slug' => $slug,
             'rangeFromWorking' => $from,
         ]);
+    }
+
+    private function workingTreeUrl(string $slug): string
+    {
+        return route('review-page', ['slug' => $slug]);
     }
 
     private function refExists(string $repoPath, string $ref): bool

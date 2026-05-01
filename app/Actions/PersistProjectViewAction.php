@@ -9,19 +9,13 @@ use App\Enums\LastViewMode;
 use App\Models\ReviewSession;
 
 /**
- * Persists "the page the user is currently looking at" for a project so that
- * re-entry (project picker, startup redirect, menu deep-link) can put them
- * back on the same surface.
+ * Saves "the page the user is currently looking at" so that re-entry — via
+ * the project picker, startup redirect, or menu deep-link — can put them back
+ * on the same surface. Read side: {@see ResolveProjectEntryUrlAction}.
  *
- * Save-side only — the matching read happens in {@see ResolveProjectEntryUrlAction}.
- *
- * Mode and kind are orthogonal:
- *  - {@see LastViewMode::Context} stores nothing else (kind/from/to are nulled)
- *  - {@see LastViewMode::Review} stores the diff selection via $kind/$from/$to
- *
- * `SinceBase` is saved as semantic intent rather than the resolved SHA so the
- * restore side can re-resolve against the current merge-base. The other four
- * review kinds round-trip the literal refs.
+ * SinceBase intentionally does not persist `from`/`to`: the resolver
+ * re-resolves the merge-base at restore time so the view follows base-branch
+ * advancement. Storing the at-save SHA would be both unused and misleading.
  */
 final readonly class PersistProjectViewAction
 {
@@ -33,16 +27,18 @@ final readonly class PersistProjectViewAction
         ?string $from = null,
         ?string $to = null,
     ): void {
-        $isContext = $mode === LastViewMode::Context;
+        $persistsRefs = $mode === LastViewMode::Review
+            && $kind !== null
+            && $kind !== LastViewKind::SinceBase;
 
         ReviewSession::updateOrCreate(
             ReviewSession::lookupKey($repoPath, $projectId ?: null),
             [
                 'repo_path' => $repoPath,
                 'last_view_mode' => $mode,
-                'last_view_kind' => $isContext ? null : $kind,
-                'last_view_from' => $isContext ? null : $from,
-                'last_view_to' => $isContext ? null : $to,
+                'last_view_kind' => $mode === LastViewMode::Context ? null : $kind,
+                'last_view_from' => $persistsRefs ? $from : null,
+                'last_view_to' => $persistsRefs ? $to : null,
             ]
         );
     }

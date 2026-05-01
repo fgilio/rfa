@@ -44,7 +44,7 @@ test('persists range refs on a Range save', function () {
         ->and($row->last_view_to)->toBe('bbbb2222');
 });
 
-test('persists since_base intent without freezing the SHA', function () {
+test('persists since_base as semantic intent and discards the at-save SHA', function () {
     $this->action->handle(
         $this->project->id,
         $this->project->path,
@@ -56,7 +56,8 @@ test('persists since_base intent without freezing the SHA', function () {
     $row = ReviewSession::where('project_id', $this->project->id)->first();
 
     expect($row->last_view_kind)->toBe(LastViewKind::SinceBase)
-        ->and($row->last_view_from)->toBe('merge-base-sha');
+        ->and($row->last_view_from)->toBeNull()
+        ->and($row->last_view_to)->toBeNull();
 });
 
 test('clears review-only columns when saving Context mode', function () {
