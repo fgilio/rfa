@@ -821,7 +821,7 @@ new #[Layout('layouts.app')] class extends Component
             );
         } catch (\Throwable $e) {
             $message = $e instanceof GitCommandException ? $e->stderr : $e->getMessage();
-            Flux::toast(variant: 'danger', text: 'Discard failed: '.$message);
+            Flux::toast(variant: 'danger', text: 'Discard failed for '.basename($file['path']).': '.$message);
             $this->skipRender();
 
             return;
@@ -1636,10 +1636,13 @@ new #[Layout('layouts.app')] class extends Component
                                     icon="plus"
                                     icon:variant="outline"
                                     wire:click="addExternalPath"
+                                    wire:loading.attr="disabled"
+                                    wire:target="addExternalPath"
                                     data-testid="external-path-add"
                                     class="w-full"
                                 >
-                                    Link folder…
+                                    <span wire:loading.remove wire:target="addExternalPath">Link folder…</span>
+                                    <span wire:loading wire:target="addExternalPath">Opening…</span>
                                 </flux:button>
                             </div>
                         </flux:menu>
