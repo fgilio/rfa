@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\DTOs\Comment;
 use App\DTOs\DiffTarget;
+use App\Enums\AnchorStatus;
 use App\Models\Comment as CommentModel;
 use App\Services\CommentExporter;
 
@@ -61,7 +62,7 @@ final readonly class ExportReviewAction
 
         return array_values(array_filter(
             $comments,
-            fn (array $c) => ($c['anchorStatus'] ?? 'placed') === 'placed',
+            fn (array $c) => ($c['anchorStatus'] ?? AnchorStatus::Placed->value) === AnchorStatus::Placed->value,
         ));
     }
 }

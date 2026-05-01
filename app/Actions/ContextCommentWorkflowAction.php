@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use App\Models\Comment;
 use App\Services\GitFileContentService;
@@ -99,7 +100,7 @@ final readonly class ContextCommentWorkflowAction
             'lineSnippet' => $lineSnippet,
             'isDraft' => $isDraft,
             'submittedAt' => null,
-            'anchorStatus' => 'placed',
+            'anchorStatus' => AnchorStatus::Placed->value,
         ];
     }
 

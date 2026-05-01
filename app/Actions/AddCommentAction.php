@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
+use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use App\Enums\GitRef;
 use App\Models\Comment;
@@ -95,7 +96,7 @@ final readonly class AddCommentAction
             'lineSnippet' => $lineSnippet,
             'isDraft' => $isDraft,
             'submittedAt' => null,
-            'anchorStatus' => 'placed',
+            'anchorStatus' => AnchorStatus::Placed->value,
         ];
     }
 
