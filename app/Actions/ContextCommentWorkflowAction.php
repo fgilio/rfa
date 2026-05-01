@@ -60,6 +60,11 @@ final readonly class ContextCommentWorkflowAction
             return null;
         }
 
+        $lineCount = isset($file['lineCount']) ? (int) $file['lineCount'] : null;
+        if (! $this->validateLineBounds($side, $startLine, $endLine, $lineCount)) {
+            return null;
+        }
+
         $filePath = (string) $file['path'];
         $absolutePath = (string) ($file['absolutePath'] ?? ($repoPath.'/'.$filePath));
         $contentHash = $this->gitFileContentService->hashAtAbsolute($absolutePath);
@@ -159,5 +164,23 @@ final readonly class ContextCommentWorkflowAction
         }
 
         return true;
+    }
+
+    /**
+     * Reject anchors that fall outside the file. Defends against stale Livewire
+     * payloads (e.g. user clicked line 90 in a now-50-line file). File-level
+     * comments have no line numbers and aren't bounded; line-level comments
+     * are. When the scanner couldn't read the file (lineCount === null), skip
+     * the check rather than rejecting valid input.
+     */
+    private function validateLineBounds(string $side, ?int $startLine, ?int $endLine, ?int $lineCount): bool
+    {
+        if ($side === DiffSide::File->value || $startLine === null || $lineCount === null) {
+            return true;
+        }
+
+        $lastLine = $endLine ?? $startLine;
+
+        return $startLine >= 1 && $lastLine <= $lineCount;
     }
 }

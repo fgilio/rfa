@@ -23,6 +23,7 @@ beforeEach(function () {
             'id' => 'ctx-'.hash('xxh128', 'CLAUDE.md'),
             'path' => 'CLAUDE.md',
             'absolutePath' => $this->repo.'/CLAUDE.md',
+            'lineCount' => 3,
         ],
     ];
 });
@@ -98,6 +99,39 @@ test('handle rejects line-level comments with no startLine', function () {
     $fileId = $this->files[0]['id'];
 
     expect($this->action->handle($this->repo, null, $this->files, $fileId, 'right', null, 5, 'body'))->toBeNull();
+});
+
+test('handle rejects anchors past the file end (stale payload guard)', function () {
+    $fileId = $this->files[0]['id'];
+
+    // File is 3 lines; anything past line 3 is an obviously-stale anchor.
+    expect($this->action->handle($this->repo, null, $this->files, $fileId, 'right', 4, 4, 'past EOF'))->toBeNull();
+    expect($this->action->handle($this->repo, null, $this->files, $fileId, 'right', 2, 4, 'range past EOF'))->toBeNull();
+    expect($this->action->handle($this->repo, null, $this->files, $fileId, 'right', 0, 1, 'sub-1 start'))->toBeNull();
+
+    // In-bounds is still accepted.
+    expect($this->action->handle($this->repo, null, $this->files, $fileId, 'right', 3, 3, 'last line'))->not->toBeNull();
+});
+
+test('handle skips bounds-check when lineCount is unknown', function () {
+    $fileId = 'ctx-noline';
+    $files = [
+        [
+            'id' => $fileId,
+            'path' => 'CLAUDE.md',
+            'absolutePath' => $this->repo.'/CLAUDE.md',
+            // lineCount missing on purpose (e.g. scanner couldn't stat the file).
+        ],
+    ];
+
+    expect($this->action->handle($this->repo, null, $files, $fileId, 'right', 9999, 9999, 'no upper bound'))->not->toBeNull();
+});
+
+test('handle accepts file-level comments regardless of lineCount', function () {
+    $fileId = $this->files[0]['id'];
+
+    // File is 3 lines; file-level has null lines so bounds-check is moot.
+    expect($this->action->handle($this->repo, null, $this->files, $fileId, 'file', null, null, 'file note'))->not->toBeNull();
 });
 
 test('handle rejects ranges where startLine > endLine', function () {
