@@ -855,7 +855,8 @@ new #[Layout('layouts.app')] class extends Component
         try {
             $comments = app(RestoreDiscardedFileAction::class)->handle($trashId, $this->repoPath, $this->projectId);
         } catch (\Throwable $e) {
-            Flux::toast(variant: 'danger', text: 'Restore failed');
+            $message = $e instanceof GitCommandException ? $e->stderr : $e->getMessage();
+            Flux::toast(variant: 'danger', text: 'Restore failed: '.$message);
             $this->skipRender();
 
             return;
@@ -1902,6 +1903,7 @@ new #[Layout('layouts.app')] class extends Component
                                 <span class="font-mono text-xs text-gh-muted truncate flex-1" title="{{ $trashed['file_path'] }}">{{ basename($trashed['file_path']) }}</span>
                                 <span class="text-[10px] text-gh-muted tabular-nums" x-text="remaining"></span>
                                 <button @click="$wire.restoreDiscardedFile({{ $trashed['id'] }})" title="Restore"
+                                    aria-label="Restore discarded file"
                                     class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-green hover:text-green-400 shrink-0">
                                     <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
                                 </button>
@@ -1945,7 +1947,10 @@ new #[Layout('layouts.app')] class extends Component
                     @foreach($reviewPairs as $pair)
                         <div id="{{ $pair['id'] }}" class="border-b border-gh-border" x-data="{ collapsed: true }">
                             <div class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
-                                <button @click="collapsed = !collapsed" class="text-gh-muted hover:text-gh-text transition-colors">
+                                <button @click="collapsed = !collapsed"
+                                    :aria-label="collapsed ? 'Expand review' : 'Collapse review'"
+                                    :aria-expanded="!collapsed"
+                                    class="text-gh-muted hover:text-gh-text transition-colors">
                                     <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
                                     <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
                                 </button>
