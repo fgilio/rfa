@@ -45,6 +45,7 @@
         <div class="flex items-center gap-0.5 opacity-30 group-hover:opacity-100 transition-opacity">
             <flux:button
                 tooltip="Copy file name"
+                aria-label="Copy file name"
                 icon="square-2-stack"
                 icon:variant="outline"
                 variant="ghost"
@@ -72,6 +73,7 @@
             @if($diffTo === null && ($file['status'] ?? '') !== 'commented')
                 <flux:button
                     tooltip="Discard changes"
+                    aria-label="Discard changes"
                     icon="arrow-uturn-left"
                     icon:variant="outline"
                     variant="ghost"

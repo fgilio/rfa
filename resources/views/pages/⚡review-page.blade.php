@@ -1443,11 +1443,13 @@ new #[Layout('layouts.app')] class extends Component
                 <div x-show="reviewedCount > 0" x-cloak class="grid place-items-center">
                     <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
                         tooltip="Hide reviewed"
+                        aria-label="Hide reviewed"
                         class="col-start-1 row-start-1"
                         @click="hideReviewed = true"
                         x-show="!hideReviewed" />
                     <flux:button variant="ghost" size="sm" icon="eye" icon:variant="outline"
                         tooltip="Show all files"
+                        aria-label="Show all files"
                         class="col-start-1 row-start-1"
                         @click="hideReviewed = false; $wire.clearRecentlyReviewed()"
                         x-show="hideReviewed" x-cloak />

@@ -15,7 +15,7 @@
             x-show="!loading"
             class="text-gh-link hover:text-gh-text transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
         >
-            Expand {{ $hiddenCount }} hidden lines
+            Expand {{ $hiddenCount }} hidden {{ Str::plural('line', $hiddenCount) }}
         </button>
     @else
         <span x-show="!loading" class="inline-flex items-center gap-1.5">
@@ -40,7 +40,7 @@
                 wire:target="expandGap"
                 @click="loading = true"
                 class="text-gh-link hover:bg-gh-link/10 hover:text-gh-text rounded px-1.5 py-0.5 transition-colors disabled:opacity-50 tabular-nums"
-            >{{ $hiddenCount }} <span class="text-gh-muted/60">hidden lines</span></button>
+            >{{ $hiddenCount }} <span class="text-gh-muted/60">hidden {{ Str::plural('line', $hiddenCount) }}</span></button>
         </span>
     @endif
     <span x-show="loading" x-cloak class="inline-flex items-center gap-1.5 text-gh-muted">

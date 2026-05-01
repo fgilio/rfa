@@ -503,7 +503,11 @@ new class extends Component {
 
         <x-overlay-footer>
             <x-slot:meta>
-                <span x-text="($wire.commits?.length || 0) + ($wire.hasMore ? '+' : '') + ' commits'"></span>
+                <span x-text="(() => {
+                    const n = $wire.commits?.length || 0;
+                    const noun = (n === 1 && !$wire.hasMore) ? 'commit' : 'commits';
+                    return n + ($wire.hasMore ? '+' : '') + ' ' + noun;
+                })()"></span>
             </x-slot:meta>
         </x-overlay-footer>
     </x-overlay-panel>
