@@ -45,13 +45,13 @@
     <div class="flex items-center gap-2 text-xs shrink-0 font-mono">
         <div class="flex items-center gap-0.5 opacity-30 group-hover:opacity-100 transition-opacity">
             <flux:button
-                tooltip="Copy file name"
-                aria-label="Copy file name"
+                tooltip="Copy file path"
+                aria-label="Copy file path"
                 icon="square-2-stack"
                 icon:variant="outline"
                 variant="ghost"
                 size="sm"
-                @click="$dispatch('copy-to-clipboard', { text: filePath })"
+                @click="$dispatch('copy-to-clipboard', { text: filePath, toast: 'Copied path' })"
             />
 
             @if($showContentCopy)

@@ -103,7 +103,7 @@ test('copy button click does not collapse file', function () {
 
     $page->assertSee("'debug'");
 
-    $page->page()->getByLabel('Copy file name')->first()->click();
+    $page->page()->getByLabel('Copy file path')->first()->click();
 
     // Wait past the collapse animation duration (150ms)
     usleep(300_000);
@@ -111,7 +111,7 @@ test('copy button click does not collapse file', function () {
     $page->assertSee("'debug'");
 });
 
-test('copy file name button dispatches copy event', function () {
+test('copy file path button dispatches copy event', function () {
     $page = $this->visit($this->projectUrl());
 
     // Listen for the copy-to-clipboard event
@@ -120,7 +120,7 @@ test('copy file name button dispatches copy event', function () {
         window.addEventListener('copy-to-clipboard', e => window.__copiedText = e.detail.text);
     ");
 
-    $page->page()->getByLabel('Copy file name')->first()->click();
+    $page->page()->getByLabel('Copy file path')->first()->click();
 
     $result = $page->script('window.__copiedText');
     expect($result)->not->toBeNull();
