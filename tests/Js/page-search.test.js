@@ -60,16 +60,17 @@ describe('markMatches', () => {
         document.body.innerHTML = '';
     });
 
-    it('returns one span per match, wrapped with the match class', () => {
+    it('returns one group per match, each group is an array of one or more spans', () => {
         document.body.innerHTML = '<p>the cat sat on the cat mat</p>';
 
         const matches = data.markMatches('cat');
 
         expect(matches).toHaveLength(2);
-        matches.forEach((span) => {
-            expect(span.tagName).toBe('SPAN');
-            expect(span.classList.contains('rfa-search-match')).toBe(true);
-            expect(span.textContent).toBe('cat');
+        matches.forEach((spans) => {
+            expect(spans).toHaveLength(1);
+            expect(spans[0].tagName).toBe('SPAN');
+            expect(spans[0].classList.contains('rfa-search-match')).toBe(true);
+            expect(spans[0].textContent).toBe('cat');
         });
         expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(2);
     });
@@ -80,7 +81,7 @@ describe('markMatches', () => {
         const matches = data.markMatches('Cat');
 
         expect(matches).toHaveLength(3);
-        expect(matches.map((m) => m.textContent)).toEqual(['Cat', 'cat', 'CAT']);
+        expect(matches.map(([span]) => span.textContent)).toEqual(['Cat', 'cat', 'CAT']);
     });
 
     it('skips text inside script, style, input, textarea, and [data-search-ignore]', () => {
@@ -98,8 +99,8 @@ describe('markMatches', () => {
 
         // Only the two visible <p> matches should be wrapped.
         expect(matches).toHaveLength(2);
-        expect(matches[0].closest('p').textContent).toBe('visible cat one');
-        expect(matches[1].closest('p').textContent).toBe('visible cat two');
+        expect(matches[0][0].closest('p').textContent).toBe('visible cat one');
+        expect(matches[1][0].closest('p').textContent).toBe('visible cat two');
     });
 
     it('skips text inside elements with display:none', () => {
@@ -111,7 +112,7 @@ describe('markMatches', () => {
         const matches = data.markMatches('cat');
 
         expect(matches).toHaveLength(1);
-        expect(matches[0].closest('p').textContent).toBe('visible cat');
+        expect(matches[0][0].closest('p').textContent).toBe('visible cat');
     });
 
     it('escapes special regex chars in the query', () => {
@@ -121,7 +122,32 @@ describe('markMatches', () => {
 
         // Only the literal period matches; '.' as a regex would match every char.
         expect(matches).toHaveLength(1);
-        expect(matches[0].textContent).toBe('.');
+        expect(matches[0][0].textContent).toBe('.');
+    });
+
+    it('matches a query that spans sibling syntax-highlighter token spans', () => {
+        // Phiki renders `'local'` as three sibling token spans, each with its
+        // own text node. The old per-text-node search couldn't match across
+        // that boundary; this guards against regressing.
+        document.body.innerHTML = "<p><span>'</span><span>local</span><span>'</span></p>";
+
+        const matches = data.markMatches("'local'");
+
+        expect(matches).toHaveLength(1);
+        expect(matches[0]).toHaveLength(3);
+        expect(matches[0].map((s) => s.textContent).join('')).toBe("'local'");
+        // One logical match, but rendered as three pieces (one per crossed text node).
+        expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(3);
+    });
+
+    it('does not match across block-level boundaries', () => {
+        // Joining text across separate <p>s would let "ab" match across lines.
+        document.body.innerHTML = '<p>a</p><p>b</p>';
+
+        const matches = data.markMatches('ab');
+
+        expect(matches).toHaveLength(0);
+        expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(0);
     });
 });
 
@@ -142,7 +168,7 @@ describe('refresh', () => {
 
         data.refresh();
 
-        expect(data.matchElements).toHaveLength(0);
+        expect(data.matches).toHaveLength(0);
         expect(data.currentMatch).toBe(0);
         expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(0);
     });
@@ -164,7 +190,7 @@ describe('find', () => {
         data.query = 'cat';
         data.refresh();
 
-        expect(data.matchElements).toHaveLength(3);
+        expect(data.matches).toHaveLength(3);
         expect(data.currentMatch).toBe(1);
 
         data.find(false);
@@ -185,23 +211,23 @@ describe('find', () => {
         expect(data.currentMatch).toBe(2);
     });
 
-    it('triggers a refresh when matchElements is empty but query is set', () => {
+    it('triggers a refresh when matches is empty but query is set', () => {
         data.query = 'cat';
-        // Note: no refresh() call before find(). matchElements starts as [].
-        expect(data.matchElements).toHaveLength(0);
+        // Note: no refresh() call before find(). matches starts as [].
+        expect(data.matches).toHaveLength(0);
 
         data.find(false);
 
-        expect(data.matchElements).toHaveLength(3);
+        expect(data.matches).toHaveLength(3);
         expect(data.currentMatch).toBe(1);
     });
 
-    it('is a no-op when query is empty and matchElements is empty', () => {
+    it('is a no-op when query is empty and matches is empty', () => {
         data.query = '';
 
         data.find(false);
 
-        expect(data.matchElements).toHaveLength(0);
+        expect(data.matches).toHaveLength(0);
         expect(data.currentMatch).toBe(0);
         expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(0);
     });
@@ -236,7 +262,20 @@ describe('clearMarks', () => {
         expect(p.textContent).toBe(originalText);
         // normalize() should merge adjacent text nodes back into a single text node.
         expect(p.childNodes.length).toBe(originalChildCount);
-        expect(data.matchElements).toEqual([]);
+        expect(data.matches).toEqual([]);
+    });
+
+    it('round-trips a cross-text-node match without leaving stray spans', () => {
+        const original = "<span>'</span><span>local</span><span>'</span>";
+        document.body.innerHTML = `<p>${original}</p>`;
+
+        data.markMatches("'local'");
+        expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(3);
+
+        data.clearMarks();
+
+        expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(0);
+        expect(document.querySelector('p').innerHTML).toBe(original);
     });
 });
 
@@ -257,7 +296,7 @@ describe('close', () => {
         data.query = 'cat';
         data.refresh();
 
-        expect(data.matchElements.length).toBeGreaterThan(0);
+        expect(data.matches.length).toBeGreaterThan(0);
         expect(data.currentMatch).toBe(1);
 
         data.close();
@@ -288,28 +327,47 @@ describe('updateCurrent', () => {
         data.refresh();
 
         // After refresh, currentMatch === 1; badge should be on the first match.
-        expect(data.matchElements[0].getAttribute('data-match-number')).toBe('1 of 3');
-        expect(data.matchElements[1].hasAttribute('data-match-number')).toBe(false);
-        expect(data.matchElements[2].hasAttribute('data-match-number')).toBe(false);
+        expect(data.matches[0][0].getAttribute('data-match-number')).toBe('1 of 3');
+        expect(data.matches[1][0].hasAttribute('data-match-number')).toBe(false);
+        expect(data.matches[2][0].hasAttribute('data-match-number')).toBe(false);
 
         data.find(false);
 
-        expect(data.matchElements[0].hasAttribute('data-match-number')).toBe(false);
-        expect(data.matchElements[1].getAttribute('data-match-number')).toBe('2 of 3');
-        expect(data.matchElements[2].hasAttribute('data-match-number')).toBe(false);
+        expect(data.matches[0][0].hasAttribute('data-match-number')).toBe(false);
+        expect(data.matches[1][0].getAttribute('data-match-number')).toBe('2 of 3');
+        expect(data.matches[2][0].hasAttribute('data-match-number')).toBe(false);
     });
 
     it('toggles the rfa-search-match--current class to track the current match', () => {
         data.query = 'cat';
         data.refresh();
 
-        expect(data.matchElements[0].classList.contains('rfa-search-match--current')).toBe(true);
-        expect(data.matchElements[1].classList.contains('rfa-search-match--current')).toBe(false);
+        expect(data.matches[0][0].classList.contains('rfa-search-match--current')).toBe(true);
+        expect(data.matches[1][0].classList.contains('rfa-search-match--current')).toBe(false);
 
         data.find(false);
 
-        expect(data.matchElements[0].classList.contains('rfa-search-match--current')).toBe(false);
-        expect(data.matchElements[1].classList.contains('rfa-search-match--current')).toBe(true);
+        expect(data.matches[0][0].classList.contains('rfa-search-match--current')).toBe(false);
+        expect(data.matches[1][0].classList.contains('rfa-search-match--current')).toBe(true);
+    });
+
+    it('toggles the current class on every span of a multi-piece match', () => {
+        document.body.innerHTML = "<p><span>'</span><span>local</span><span>'</span></p>";
+        data.query = "'local'";
+        data.refresh();
+
+        expect(data.matches).toHaveLength(1);
+        const [spans] = data.matches;
+        expect(spans).toHaveLength(3);
+
+        spans.forEach((span) => {
+            expect(span.classList.contains('rfa-search-match--current')).toBe(true);
+        });
+        // Badge sits on the first piece only so the "X of Y" indicator
+        // doesn't render once per crossed token span.
+        expect(spans[0].getAttribute('data-match-number')).toBe('1 of 1');
+        expect(spans[1].hasAttribute('data-match-number')).toBe(false);
+        expect(spans[2].hasAttribute('data-match-number')).toBe(false);
     });
 });
 
