@@ -349,6 +349,8 @@ new #[Layout('layouts.app')] class extends Component
             ->pluck('fileId')
             ->unique()
             ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
+
+        $this->skipRender();
     }
 
     public function submitFeedback(): void
