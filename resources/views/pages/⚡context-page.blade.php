@@ -256,6 +256,11 @@ new #[Layout('layouts.app')] class extends Component
             $this->dispatchFileComments($fileId);
         }
         $this->dispatchSidebarSummary();
+
+        if ($deleted) {
+            $this->dispatch('undo-available', type: 'delete', payload: [$deleted], message: 'Comment deleted');
+        }
+
         $this->skipRender();
     }
 
@@ -279,7 +284,55 @@ new #[Layout('layouts.app')] class extends Component
             ->unique()
             ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
         $this->dispatchSidebarSummary();
+
+        $count = count($deleted);
+        $this->dispatch('undo-available', type: 'clear-all', payload: $deleted,
+            message: "Cleared {$count} comment".($count === 1 ? '' : 's'));
+
         $this->skipRender();
+    }
+
+    public function undo(string $type, mixed $payload): void
+    {
+        match ($type) {
+            'delete', 'clear-all' => $this->restoreComments($payload),
+            default => null,
+        };
+    }
+
+    /** @param array<int, array<string, mixed>> $comments */
+    public function restoreComments(array $comments): void
+    {
+        if (empty($comments)) {
+            return;
+        }
+
+        foreach ($comments as $c) {
+            \App\Models\Comment::updateOrCreate(
+                ['id' => $c['id']],
+                [
+                    'project_id' => $this->projectId ?: null,
+                    'repo_path' => $this->repoPath,
+                    'origin_ref' => \App\Models\Comment::ORIGIN_CONTEXT,
+                    'file_path' => $c['file'] ?? '',
+                    'side' => $c['side'] ?? 'right',
+                    'start_line' => $c['startLine'] ?? null,
+                    'end_line' => $c['endLine'] ?? null,
+                    'file_content_hash' => $c['fileContentHash'] ?? null,
+                    'line_snippet' => $c['lineSnippet'] ?? null,
+                    'body' => $c['body'] ?? '',
+                    'is_draft' => (bool) ($c['isDraft'] ?? false),
+                    'submitted_at' => null,
+                ],
+            );
+        }
+
+        $this->reloadComments();
+        $this->dispatchSidebarSummary();
+        collect($comments)
+            ->pluck('fileId')
+            ->unique()
+            ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
     }
 
     public function submitFeedback(): void
@@ -413,6 +466,8 @@ new #[Layout('layouts.app')] class extends Component
             @endforeach
         @endif
     </x-resizable-sidebar-shell>
+
+    @include('livewire.undo-toast')
 
     <x-feedback-submit-bar
         :submitted="$submitted"
