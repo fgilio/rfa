@@ -237,7 +237,11 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $deleted = $this->comments;
-        app(ClearContextCommentsAction::class)->handle(array_column($deleted, 'id'));
+        app(ClearContextCommentsAction::class)->handle(
+            $this->repoPath,
+            $this->projectId ?: null,
+            array_column($deleted, 'id'),
+        );
 
         $this->comments = [];
 
