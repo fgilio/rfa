@@ -2,7 +2,7 @@
     'submitted' => false,
     'exportResult' => null,
     'submittedHeading' => 'Review submitted',
-    'submitLabel' => 'Submit Review',
+    'submitLabel' => 'Submit review',
     'submitAction' => 'submitReview',
     'newRoundLabel' => 'Start a new review',
     'newRoundAction' => 'startNewReview',
