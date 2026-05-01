@@ -10,10 +10,6 @@ use Native\Desktop\Facades\Window;
 
 final readonly class HandleDeepLink
 {
-    public function __construct(
-        private OpenProjectFromPathAction $openProject,
-    ) {}
-
     public function handle(OpenedFromURL $event): void
     {
         $parsed = parse_url($event->url);
@@ -29,10 +25,16 @@ final readonly class HandleDeepLink
             return;
         }
 
-        $project = $this->openProject->handle($path);
+        $project = app(OpenProjectFromPathAction::class)->handle($path);
 
-        if ($project) {
-            Window::get('main')->url(route('review-page', ['slug' => $project->slug]));
+        if (! $project) {
+            return;
         }
+
+        // Fail open on junk mode values: anything that isn't 'context' lands
+        // on review-page rather than failing the whole open.
+        $routeName = (($query['mode'] ?? null) === 'context') ? 'context-page' : 'review-page';
+
+        Window::get('main')->url(route($routeName, ['slug' => $project->slug]));
     }
 }
