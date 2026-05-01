@@ -186,18 +186,34 @@ new #[Layout('layouts.app')] class extends Component
 
     private function createComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, ?string $lineSnippet, bool $isDraft): void
     {
-        $comment = app(ContextCommentWorkflowAction::class)->handle(
-            $this->repoPath,
-            $this->projectId ?: null,
-            $this->contextFiles,
-            $fileId,
-            $side,
-            $startLine,
-            $endLine,
-            $body,
-            $isDraft,
-            $lineSnippet,
-        );
+        try {
+            $comment = app(ContextCommentWorkflowAction::class)->handle(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $this->contextFiles,
+                $fileId,
+                $side,
+                $startLine,
+                $endLine,
+                $body,
+                $isDraft,
+                $lineSnippet,
+            );
+        } catch (\App\Exceptions\ContextCommentRejectedException $e) {
+            // Stale or malformed payload (renderer state drifted from
+            // the actual file). Log the named reason for diagnostics
+            // and treat the action as a no-op so the page never
+            // crashes on a bad screen state.
+            \Illuminate\Support\Facades\Log::debug('Context comment payload rejected', [
+                'reason' => $e->reason->value,
+                'fileId' => $fileId,
+                'side' => $side,
+                'startLine' => $startLine,
+                'endLine' => $endLine,
+            ]);
+
+            return;
+        }
 
         if (! $comment) {
             return;

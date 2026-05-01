@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Enums\AnchorStatus;
+use App\Enums\ContextCommentRejection;
 use App\Enums\DiffSide;
+use App\Exceptions\ContextCommentRejectedException;
 use App\Models\Comment;
 use App\Services\GitFileContentService;
 use Illuminate\Support\Str;
@@ -31,8 +33,15 @@ final readonly class ContextCommentWorkflowAction
     /**
      * Add a comment (draft or submitted) on a context file.
      *
+     * Returns null when the body is empty (user pressed save on a
+     * blank textarea). Throws ContextCommentRejectedException for
+     * every other refusal so the caller can name the cause instead
+     * of staring at a bare null.
+     *
      * @param  array<int, array<string, mixed>>  $contextFiles  AgentContextFile::toArray() entries.
      * @return array<string, mixed>|null
+     *
+     * @throws ContextCommentRejectedException
      */
     public function handle(
         string $repoPath,
@@ -52,16 +61,16 @@ final readonly class ContextCommentWorkflowAction
 
         $file = collect($contextFiles)->firstWhere('id', $fileId);
         if (! $file) {
-            return null;
+            throw new ContextCommentRejectedException(ContextCommentRejection::UnknownFileId);
         }
 
-        if (! $this->validateSideAndLines($side, $startLine, $endLine)) {
-            return null;
+        if ($reason = $this->rejectionForSideAndLines($side, $startLine, $endLine)) {
+            throw new ContextCommentRejectedException($reason);
         }
 
         $lineCount = isset($file['lineCount']) ? (int) $file['lineCount'] : null;
-        if (! $this->validateLineBounds($side, $startLine, $endLine, $lineCount)) {
-            return null;
+        if (! $this->isWithinFileBounds($side, $startLine, $endLine, $lineCount)) {
+            throw new ContextCommentRejectedException(ContextCommentRejection::LineOutOfFileBounds);
         }
 
         $filePath = (string) $file['path'];
@@ -145,42 +154,46 @@ final readonly class ContextCommentWorkflowAction
             ->all();
     }
 
-    private function validateSideAndLines(string $side, ?int $startLine, ?int $endLine): bool
+    /**
+     * Walk the side/line shape rules and return the first rejection that
+     * fires, or null when the payload is acceptable.
+     */
+    private function rejectionForSideAndLines(string $side, ?int $startLine, ?int $endLine): ?ContextCommentRejection
     {
         $sideEnum = DiffSide::tryFrom($side);
         if ($sideEnum === null) {
-            return false;
+            return ContextCommentRejection::InvalidSide;
         }
 
-        // Context files only render the additions (right) side; the left
+        // Context files only render the additions (right) side. The left
         // side is always /dev/null and cannot be commented on.
         if ($sideEnum === DiffSide::Left) {
-            return false;
+            return ContextCommentRejection::LeftSideNotAllowed;
         }
 
         if ($sideEnum === DiffSide::File && ($startLine !== null || $endLine !== null)) {
-            return false;
+            return ContextCommentRejection::FileSideWithLines;
         }
 
         if ($sideEnum !== DiffSide::File && $startLine === null) {
-            return false;
+            return ContextCommentRejection::LineLevelMissingStart;
         }
 
         if ($startLine !== null && $endLine !== null && $startLine > $endLine) {
-            return false;
+            return ContextCommentRejection::LineRangeReversed;
         }
 
-        return true;
+        return null;
     }
 
     /**
-     * Reject anchors that fall outside the file. Defends against stale Livewire
-     * payloads (e.g. user clicked line 90 in a now-50-line file). File-level
-     * comments have no line numbers and aren't bounded; line-level comments
-     * are. When the scanner couldn't read the file (lineCount === null), skip
-     * the check rather than rejecting valid input.
+     * Defends against stale Livewire payloads (e.g. user clicked line 90
+     * in a now-50-line file). File-level comments have no line numbers
+     * and aren't bounded. When the scanner couldn't read the file
+     * (lineCount === null), skip the check rather than rejecting valid
+     * input.
      */
-    private function validateLineBounds(string $side, ?int $startLine, ?int $endLine, ?int $lineCount): bool
+    private function isWithinFileBounds(string $side, ?int $startLine, ?int $endLine, ?int $lineCount): bool
     {
         if ($side === DiffSide::File->value || $startLine === null || $lineCount === null) {
             return true;

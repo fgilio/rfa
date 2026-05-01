@@ -3,6 +3,8 @@
 use App\Actions\AddCommentAction;
 use App\Actions\ContextCommentWorkflowAction;
 use App\DTOs\DiffTarget;
+use App\Enums\ContextCommentRejection;
+use App\Exceptions\ContextCommentRejectedException;
 use App\Models\Comment;
 use App\Models\Project;
 use Faker\Factory as Faker;
@@ -79,36 +81,53 @@ test('handle rejects empty body', function () {
 });
 
 test('handle rejects unknown file id', function () {
-    $result = $this->action->handle($this->repo, null, $this->files, 'ctx-nope', 'right', 1, 1, 'body');
-
-    expect($result)->toBeNull();
+    expect(fn () => $this->action->handle($this->repo, null, $this->files, 'ctx-nope', 'right', 1, 1, 'body'))
+        ->toThrow(
+            ContextCommentRejectedException::class,
+            ContextCommentRejection::UnknownFileId->value,
+        );
 });
 
 test('handle rejects left-side comments (one-sided diff)', function () {
     $fileId = $this->files[0]['id'];
 
-    expect($this->action->handle($this->repo, null, $this->files, $fileId, 'left', 1, 1, 'body'))->toBeNull();
+    expect(fn () => $this->action->handle($this->repo, null, $this->files, $fileId, 'left', 1, 1, 'body'))
+        ->toThrow(
+            ContextCommentRejectedException::class,
+            ContextCommentRejection::LeftSideNotAllowed->value,
+        );
 });
 
 test('handle rejects file-level comments with line numbers', function () {
     $fileId = $this->files[0]['id'];
 
-    expect($this->action->handle($this->repo, null, $this->files, $fileId, 'file', 1, 1, 'body'))->toBeNull();
+    expect(fn () => $this->action->handle($this->repo, null, $this->files, $fileId, 'file', 1, 1, 'body'))
+        ->toThrow(
+            ContextCommentRejectedException::class,
+            ContextCommentRejection::FileSideWithLines->value,
+        );
 });
 
 test('handle rejects line-level comments with no startLine', function () {
     $fileId = $this->files[0]['id'];
 
-    expect($this->action->handle($this->repo, null, $this->files, $fileId, 'right', null, 5, 'body'))->toBeNull();
+    expect(fn () => $this->action->handle($this->repo, null, $this->files, $fileId, 'right', null, 5, 'body'))
+        ->toThrow(
+            ContextCommentRejectedException::class,
+            ContextCommentRejection::LineLevelMissingStart->value,
+        );
 });
 
 test('handle rejects anchors past the file end (stale payload guard)', function () {
     $fileId = $this->files[0]['id'];
 
     // File is 3 lines; anything past line 3 is an obviously-stale anchor.
-    expect($this->action->handle($this->repo, null, $this->files, $fileId, 'right', 4, 4, 'past EOF'))->toBeNull();
-    expect($this->action->handle($this->repo, null, $this->files, $fileId, 'right', 2, 4, 'range past EOF'))->toBeNull();
-    expect($this->action->handle($this->repo, null, $this->files, $fileId, 'right', 0, 1, 'sub-1 start'))->toBeNull();
+    expect(fn () => $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 4, 4, 'past EOF'))
+        ->toThrow(ContextCommentRejectedException::class, ContextCommentRejection::LineOutOfFileBounds->value);
+    expect(fn () => $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 2, 4, 'range past EOF'))
+        ->toThrow(ContextCommentRejectedException::class, ContextCommentRejection::LineOutOfFileBounds->value);
+    expect(fn () => $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 0, 1, 'sub-1 start'))
+        ->toThrow(ContextCommentRejectedException::class, ContextCommentRejection::LineOutOfFileBounds->value);
 
     // In-bounds is still accepted.
     expect($this->action->handle($this->repo, null, $this->files, $fileId, 'right', 3, 3, 'last line'))->not->toBeNull();
@@ -138,7 +157,11 @@ test('handle accepts file-level comments regardless of lineCount', function () {
 test('handle rejects ranges where startLine > endLine', function () {
     $fileId = $this->files[0]['id'];
 
-    expect($this->action->handle($this->repo, null, $this->files, $fileId, 'right', 5, 1, 'body'))->toBeNull();
+    expect(fn () => $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 5, 1, 'body'))
+        ->toThrow(
+            ContextCommentRejectedException::class,
+            ContextCommentRejection::LineRangeReversed->value,
+        );
 });
 
 test('update mutates body and draft flag, scoped to context-file rows', function () {
