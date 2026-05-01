@@ -116,6 +116,8 @@ class extends Component
             icon="chat-bubble-left-right"
             icon:variant="outline"
             aria-label="All comments in this repo"
+            aria-haspopup="dialog"
+            x-bind:aria-expanded="open"
             x-on:click="toggle()"
         >
             @if($this->totalCount > 0)
