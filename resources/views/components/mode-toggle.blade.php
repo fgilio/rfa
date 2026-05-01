@@ -1,13 +1,5 @@
-{{--
-    Segmented [Review · Context] toggle. Renders the two views of one repo
-    side by side in the page header. Active state derives from the page's
-    own route (passed via :mode), so navigating swaps highlights without
-    any local state.
-
-    The amber dot signals unsubmitted comments on the *other* side. It
-    never renders on the side you're already viewing: while you're on
-    that mode, the activity isn't a navigation hint.
---}}
+{{-- The amber dot only renders on the *other* side: while you're on that
+     mode, the activity is not a navigation hint. --}}
 @props([
     'mode',
     'projectSlug',

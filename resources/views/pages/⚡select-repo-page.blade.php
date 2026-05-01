@@ -34,9 +34,8 @@ new #[Layout('layouts.app')] class extends Component
         $this->currentSlug = app(ResolveStartupRouteAction::class)->lastOpenedSlug() ?? '';
         $this->refreshProjects();
 
-        // Clear the menu-handler's cached active project. Without this, ⌘⇧K
-        // from the repo picker would ambush the user with the last project
-        // they had open (eng-review issue 1B).
+        // Without this, ⌘⇧K from the repo picker would ambush the user with
+        // the last project they had open via the menu-handler's cache lookup.
         Cache::forget('rfa.active-project-id');
 
         if (config('nativephp-internal.running')) {
