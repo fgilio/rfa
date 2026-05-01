@@ -463,6 +463,9 @@ new #[Layout('layouts.app')] class extends Component
                     icon:variant="outline"
                     aria-label="Re-scan"
                     wire:click="refresh"
+                    wire:loading.attr="disabled"
+                    wire:target="refresh"
+                    wire:loading.class="animate-spin"
                 />
             </flux:tooltip>
         </div>
