@@ -1951,7 +1951,7 @@ new #[Layout('layouts.app')] class extends Component
             @elseif(empty($files))
                 <div class="flex items-center justify-center h-[60vh]">
                     <div class="text-center">
-                        <p class="rfa-logo text-5xl text-gh-muted/20 mb-6">rfa</p>
+                        <p class="rfa-logo text-5xl text-gh-muted/20 mb-6" aria-hidden="true">rfa</p>
                         @if($this->isCommitMode())
                             <h2 class="font-semibold tracking-brutal text-lg mb-2">No file changes in this commit</h2>
                             <p class="text-sm text-gh-muted">This commit has no diff (empty or merge commit)</p>

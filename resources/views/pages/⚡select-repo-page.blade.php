@@ -135,7 +135,7 @@ new #[Layout('layouts.app')] class extends Component
         @else
             <div class="w-full max-w-2xl">
                 <div class="mb-6 text-center">
-                    <p class="rfa-logo text-3xl text-gh-muted/40 mb-3">rfa</p>
+                    <p class="rfa-logo text-3xl text-gh-muted/40 mb-3" aria-hidden="true">rfa</p>
                     <flux:heading class="font-display tracking-brutal">Pick a repo</flux:heading>
                 </div>
 
