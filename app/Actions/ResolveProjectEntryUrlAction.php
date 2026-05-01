@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
-use App\Enums\BranchBaseState;
 use App\Enums\LastViewKind;
 use App\Enums\LastViewMode;
+use App\Exceptions\GitCommandException;
 use App\Models\Project;
 use App\Models\ReviewSession;
 use App\Services\GitMetadataService;
@@ -18,15 +18,14 @@ use App\Services\GitMetadataService;
  *
  * Stale refs (rebased commits, force-pushed branches, removed base branch)
  * silently fall back to the working-tree URL — re-entry never fails closed.
- * `SinceBase` is re-resolved through {@see ResolveBranchBaseAction} so the
- * restored view follows base-branch advancement instead of pinning the SHA
- * that was current at save time.
+ * `SinceBase` is re-resolved against the current merge-base so the restored
+ * view follows base-branch advancement instead of pinning the SHA that was
+ * current at save time.
  */
 final readonly class ResolveProjectEntryUrlAction
 {
     public function __construct(
         private GitMetadataService $gitMetadataService,
-        private ResolveBranchBaseAction $resolveBranchBase,
     ) {}
 
     public function handle(string $slug, ?LastViewMode $fallbackMode = null): string
@@ -80,19 +79,42 @@ final readonly class ResolveProjectEntryUrlAction
 
     private function buildSinceBaseUrl(Project $project, string $slug): ?string
     {
-        $result = $this->resolveBranchBase->handle(
-            $project->path,
-            $project->default_base_branch ?? null,
-            $project->branch ?? null,
-        );
+        $base = trim((string) ($project->default_base_branch ?? ''));
 
-        if ($result->state !== BranchBaseState::Ready || $result->baseSha === null) {
+        if ($base === '') {
+            return null;
+        }
+
+        // On the base branch itself there's nothing to diff "since base".
+        if (trim((string) ($project->branch ?? '')) === $base) {
+            return null;
+        }
+
+        // Inlined merge-base resolution: ResolveBranchBaseAction runs an extra
+        // `git log base..HEAD` to list every commit ahead of base, which is
+        // proportional to branch length (50–200ms on long-lived branches) and
+        // wasted here — the resolver only needs the merge-base for the URL and
+        // an "is HEAD ahead?" check (head SHA equality). Two git subprocesses
+        // instead of three.
+        $mergeBase = $this->gitMetadataService->getMergeBase($project->path, $base, 'HEAD');
+
+        if ($mergeBase === null) {
+            return null;
+        }
+
+        try {
+            $headSha = $this->gitMetadataService->getHeadSha($project->path);
+        } catch (GitCommandException) {
+            return null;
+        }
+
+        if ($headSha === $mergeBase) {
             return null;
         }
 
         return route('review-page.range-to-working', [
             'slug' => $slug,
-            'rangeFromWorking' => $result->baseSha,
+            'rangeFromWorking' => $mergeBase,
         ]);
     }
 
