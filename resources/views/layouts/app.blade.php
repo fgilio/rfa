@@ -199,6 +199,11 @@
         /* Prevent Flux menu scroll-lock from hiding scrollbar and causing layout shift */
         html { overflow-y: scroll !important; }
 
+        /* Alpine x-cloak: hide elements until Alpine has processed them so
+           x-show / x-if conditions don't briefly flash their off state on
+           initial paint. Alpine doesn't ship this rule itself. */
+        [x-cloak] { display: none !important; }
+
         /* Fix checkbox visibility in dark mode */
         .dark [data-flux-checkbox-indicator] {
             border-color: rgb(var(--gh-border));

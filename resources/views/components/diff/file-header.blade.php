@@ -24,6 +24,7 @@
          @click="toggleCollapse($event)"
          class="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer">
         <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'"
+                :aria-expanded="!collapsed"
                 class="text-gh-muted hover:text-gh-text transition-colors">
             <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
             <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />

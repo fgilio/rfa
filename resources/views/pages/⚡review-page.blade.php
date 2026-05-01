@@ -1766,7 +1766,8 @@ new #[Layout('layouts.app')] class extends Component
                             <button type="button"
                                 @click="$wire.clearRecentlyReviewed()"
                                 class="text-[10px] uppercase tracking-wider text-gh-muted hover:text-gh-text transition-colors"
-                                title="Clear recently reviewed list">Clear</button>
+                                title="Clear recently reviewed list"
+                                aria-label="Clear recently reviewed list">Clear</button>
                         </div>
                         <template x-for="id in $wire.recentlyReviewedIds" :key="id">
                             <div
