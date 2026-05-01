@@ -192,6 +192,8 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->comments[] = $comment;
         $this->dispatchFileComments($fileId);
+        $this->dispatchSidebarSummary();
+        $this->skipRender();
     }
 
     #[On('update-comment')]
@@ -209,6 +211,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->comments[$index]['body'] = $body;
         $this->comments[$index]['isDraft'] = $isDraft;
         $this->dispatchFileComments($this->comments[$index]['fileId']);
+        $this->dispatchSidebarSummary();
         $this->skipRender();
     }
 
@@ -228,6 +231,8 @@ new #[Layout('layouts.app')] class extends Component
         if ($fileId) {
             $this->dispatchFileComments($fileId);
         }
+        $this->dispatchSidebarSummary();
+        $this->skipRender();
     }
 
     public function clearAllComments(): void
@@ -249,6 +254,8 @@ new #[Layout('layouts.app')] class extends Component
             ->pluck('fileId')
             ->unique()
             ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
+        $this->dispatchSidebarSummary();
+        $this->skipRender();
     }
 
     public function submitFeedback(): void
@@ -282,6 +289,17 @@ new #[Layout('layouts.app')] class extends Component
     {
         $fileComments = collect($this->comments)->where('fileId', $fileId)->values()->all();
         $this->dispatch('comment-updated', fileId: $fileId, comments: $fileComments);
+    }
+
+    /**
+     * Push the per-file count/draft summary into the sidebar without re-rendering
+     * the page. Pairs with skipRender() on every comment mutation — keeps the
+     * sidebar's commentSummary in sync without rehydrating N diff-file children.
+     */
+    private function dispatchSidebarSummary(): void
+    {
+        $this->dispatch('context-comment-summary-updated', summary: $this->commentSummary())
+            ->to('context-tree');
     }
 };
 

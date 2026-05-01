@@ -2,6 +2,7 @@
 
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
@@ -28,6 +29,20 @@ new class extends Component
     /** @var array<string, array<string, int>> Comment counts per fileId, by status. */
     #[Locked]
     public array $commentSummary = [];
+
+    /**
+     * Update the per-file comment counts in place. Page dispatches this when
+     * a context-page mutation is wrapped in skipRender(): the parent stays
+     * unrendered (so N diff-file children don't rehydrate), but the sidebar
+     * still needs to reflect the new counts/draft state.
+     *
+     * @param  array<string, array{count: int, drafts: int}>  $summary
+     */
+    #[On('context-comment-summary-updated')]
+    public function syncCommentSummary(array $summary): void
+    {
+        $this->commentSummary = $summary;
+    }
 
     /**
      * @return array<string, mixed>
@@ -90,7 +105,7 @@ new class extends Component
         <span class="font-mono text-[10px] text-gh-muted">{{ count($contextFiles) }}</span>
     </div>
 
-    <flux:select wire:model.live="filterMode" size="sm" variant="filled">
+    <flux:select wire:model.live="filterMode" size="sm">
         <flux:select.option value="all">All paths</flux:select.option>
         <flux:select.option value="with-context">With context only</flux:select.option>
         <flux:select.option value="missing">Missing only</flux:select.option>
