@@ -56,3 +56,12 @@ test('mount writes the project id to the active-project-id cache key', function 
 
     expect(Cache::get('rfa.active-project-id'))->toBe($this->project->id);
 });
+
+test('startNewFeedback clears the submitted, exportResult, and globalComment fields', fn () => Livewire::test('pages::context-page', ['slug' => 'test-project'])
+    ->set('submitted', true)
+    ->set('exportResult', '/tmp/repo/.rfa/feedback.md')
+    ->set('globalComment', 'leftover thoughts')
+    ->call('startNewFeedback')
+    ->assertSet('submitted', false)
+    ->assertSet('exportResult', null)
+    ->assertSet('globalComment', ''));

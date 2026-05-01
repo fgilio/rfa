@@ -290,6 +290,7 @@ new #[Layout('layouts.app')] class extends Component
     {
         $this->submitted = false;
         $this->exportResult = null;
+        $this->globalComment = '';
         $this->reloadComments();
     }
 
