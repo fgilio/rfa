@@ -471,7 +471,7 @@ new class extends Component {
                                         <div data-testid="commit-message" class="text-xs text-gh-text truncate font-medium tracking-tight" x-text="commit.message" :title="commit.message"></div>
                                         <div class="flex items-center gap-2 mt-0.5">
                                             <span class="text-[10px] font-mono text-gh-muted" x-text="commit.author"></span>
-                                            <span class="text-[10px] text-gh-muted">&middot;</span>
+                                            <span class="text-[10px] text-gh-muted" aria-hidden="true">&middot;</span>
                                             <span class="text-[10px] font-mono text-gh-muted" x-text="commit.relativeDate" :title="commit.date"></span>
                                         </div>
                                     </div>

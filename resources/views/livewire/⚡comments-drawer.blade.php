@@ -177,7 +177,7 @@ class extends Component
                                     <span>{{ match($c['origin_ref']) { 'working' => 'WD', 'external' => 'EXT', default => Str::limit($c['origin_ref'], 7, '') } }}</span>
                                 @endif
                                 @if(! empty($c['start_line']))
-                                    <span>&middot;</span>
+                                    <span aria-hidden="true">&middot;</span>
                                     <span>L{{ $c['start_line'] }}@if(! empty($c['end_line']) && $c['end_line'] !== $c['start_line'])-L{{ $c['end_line'] }}@endif</span>
                                 @endif
                                 <div class="ml-auto flex items-center gap-1">

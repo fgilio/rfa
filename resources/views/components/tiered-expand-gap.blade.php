@@ -23,7 +23,7 @@
             <span class="inline-flex items-center">
                 @foreach($applicableTiers as $tier)
                     @if(!$loop->first)
-                        <span class="text-gh-muted/20 select-none">&middot;</span>
+                        <span class="text-gh-muted/20 select-none" aria-hidden="true">&middot;</span>
                     @endif
                     <button
                         wire:click="expandGap({{ $hunkIndex }}, {{ $tier }})"

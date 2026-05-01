@@ -185,7 +185,7 @@ new #[Layout('layouts.app')] class extends Component
 
     <footer class="py-2 flex items-center justify-center gap-1.5 font-mono text-[11px] text-gh-muted/40">
         <x-external-link href="https://x.com/fgili0" class="hover:text-gh-muted transition-colors">Franco Gilio</x-external-link>
-        <span>&middot;</span>
+        <span aria-hidden="true">&middot;</span>
         <x-external-link href="https://github.com/fgilio/rfa" class="hover:text-gh-muted transition-colors">PRs welcome</x-external-link>
     </footer>
 </div>
