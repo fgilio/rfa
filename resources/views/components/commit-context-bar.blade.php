@@ -9,7 +9,7 @@
      bar describes. --}}
 <div data-testid="commit-context-bar" class="sticky top-[var(--header-h)] z-40 bg-gh-surface border-b border-gh-border px-5 py-2.5 flex items-center gap-3 text-xs" style="--commit-bar-h: 40px;">
     <flux:icon icon="code-bracket" variant="outline" class="text-gh-muted shrink-0" />
-    <span class="font-mono text-xs text-gh-muted shrink-0 px-1.5 py-0.5 rounded border border-gh-border">{{ $commitInfo['shortHash'] }}</span>
+    <x-stat-chip class="shrink-0">{{ $commitInfo['shortHash'] }}</x-stat-chip>
     <span class="text-gh-text truncate font-medium">{{ $commitInfo['message'] }}</span>
     <span class="text-gh-muted shrink-0">{{ $commitInfo['author'] }}</span>
     <div class="ml-auto flex items-center gap-1 shrink-0">

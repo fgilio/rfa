@@ -30,7 +30,7 @@
             <div class="flex items-center gap-3 min-w-0">
                 <flux:icon icon="check-circle" variant="outline" class="text-gh-green shrink-0" />
                 <span class="font-semibold tracking-brutal shrink-0">{{ $submittedHeading }}</span>
-                <span class="font-mono text-xs text-gh-muted px-2 py-0.5 rounded border border-gh-border truncate">{{ $exportResult }}</span>
+                <x-stat-chip class="truncate">{{ $exportResult }}</x-stat-chip>
             </div>
             <div class="flex items-center gap-2 shrink-0">
                 @if ($copyAgainTooltip)

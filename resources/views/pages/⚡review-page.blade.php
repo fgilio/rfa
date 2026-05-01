@@ -1332,7 +1332,7 @@ new #[Layout('layouts.app')] class extends Component
                     @native
                         <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" mode="review" />
                     @else
-                        <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
+                        <x-page-title>{{ $projectName }}</x-page-title>
                     @endnative
                 </div>
                 <x-mode-toggle
@@ -1483,11 +1483,13 @@ new #[Layout('layouts.app')] class extends Component
                                 <span x-text="tooltip"></span>
                             </flux:tooltip.content>
                         </flux:tooltip>
-                        <span x-show="hasChanges" x-cloak
-                            class="pointer-events-none absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-gh-attention opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-gh-attention"></span>
-                        </span>
+                        <x-pulse-dot
+                            size="md"
+                            x-show="hasChanges"
+                            x-cloak
+                            class="absolute -top-0.5 -right-0.5"
+                            label="external changes pending"
+                        />
                     </div>
                 @endif
 

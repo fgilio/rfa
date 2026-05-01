@@ -415,7 +415,7 @@ new #[Layout('layouts.app')] class extends Component
             @native
                 <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" mode="context" />
             @else
-                <span class="font-display font-bold tracking-brutal-tight text-base truncate">{{ $projectName }}</span>
+                <x-page-title class="truncate">{{ $projectName }}</x-page-title>
             @endnative
             <x-mode-toggle
                 mode="context"
