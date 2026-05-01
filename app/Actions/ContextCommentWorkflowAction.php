@@ -103,7 +103,7 @@ final readonly class ContextCommentWorkflowAction
         ];
     }
 
-    public function update(string $commentId, string $body, bool $isDraft = false): bool
+    public function update(string $repoPath, ?int $projectId, string $commentId, string $body, bool $isDraft = false): bool
     {
         if (trim($body) === '') {
             return false;
@@ -113,8 +113,10 @@ final readonly class ContextCommentWorkflowAction
             return false;
         }
 
-        return Comment::whereKey($commentId)
+        return Comment::query()
+            ->forProjectOrRepo($projectId, $repoPath)
             ->where('origin_ref', self::ORIGIN_REF)
+            ->whereKey($commentId)
             ->update(['body' => $body, 'is_draft' => $isDraft]) > 0;
     }
 
@@ -122,15 +124,21 @@ final readonly class ContextCommentWorkflowAction
      * @param  array<int, array<string, mixed>>  $comments
      * @return array<int, array<string, mixed>>|null Updated comments view, or null if invalid id.
      */
-    public function delete(array $comments, string $commentId): ?array
+    public function delete(string $repoPath, ?int $projectId, array $comments, string $commentId): ?array
     {
         if (! str_starts_with($commentId, 'c-')) {
             return null;
         }
 
-        Comment::whereKey($commentId)
+        $deleted = Comment::query()
+            ->forProjectOrRepo($projectId, $repoPath)
             ->where('origin_ref', self::ORIGIN_REF)
+            ->whereKey($commentId)
             ->delete();
+
+        if ($deleted === 0) {
+            return null;
+        }
 
         return collect($comments)
             ->reject(fn (array $comment): bool => $comment['id'] === $commentId)

@@ -217,7 +217,13 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
-        if (! app(ContextCommentWorkflowAction::class)->update($commentId, $body, $isDraft)) {
+        if (! app(ContextCommentWorkflowAction::class)->update(
+            $this->repoPath,
+            $this->projectId ?: null,
+            $commentId,
+            $body,
+            $isDraft,
+        )) {
             return;
         }
 
@@ -234,7 +240,12 @@ new #[Layout('layouts.app')] class extends Component
         $deleted = collect($this->comments)->firstWhere('id', $commentId);
         $fileId = $deleted['fileId'] ?? null;
 
-        $result = app(ContextCommentWorkflowAction::class)->delete($this->comments, $commentId);
+        $result = app(ContextCommentWorkflowAction::class)->delete(
+            $this->repoPath,
+            $this->projectId ?: null,
+            $this->comments,
+            $commentId,
+        );
         if ($result === null) {
             return;
         }

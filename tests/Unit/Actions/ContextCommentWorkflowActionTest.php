@@ -4,6 +4,7 @@ use App\Actions\AddCommentAction;
 use App\Actions\ContextCommentWorkflowAction;
 use App\DTOs\DiffTarget;
 use App\Models\Comment;
+use App\Models\Project;
 use Faker\Factory as Faker;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
@@ -144,7 +145,7 @@ test('update mutates body and draft flag, scoped to context-file rows', function
     $fileId = $this->files[0]['id'];
     $created = $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 1, 1, 'orig');
 
-    $ok = $this->action->update($created['id'], 'edited', isDraft: true);
+    $ok = $this->action->update($this->repo, null, $created['id'], 'edited', isDraft: true);
 
     expect($ok)->toBeTrue();
     $row = Comment::find($created['id']);
@@ -156,15 +157,15 @@ test('update rejects blank bodies, mirroring the create-time rule', function () 
     $fileId = $this->files[0]['id'];
     $created = $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 1, 1, 'orig');
 
-    expect($this->action->update($created['id'], ''))->toBeFalse();
-    expect($this->action->update($created['id'], '   '))->toBeFalse();
+    expect($this->action->update($this->repo, null, $created['id'], ''))->toBeFalse();
+    expect($this->action->update($this->repo, null, $created['id'], '   '))->toBeFalse();
 
     expect(Comment::find($created['id'])->body)->toBe('orig');
 });
 
 test('update refuses to touch comments owned by other origin_refs', function () {
     $reviewComment = app(AddCommentAction::class)->handle(
-        '/tmp/whatever',
+        $this->repo,
         null,
         DiffTarget::workingDirectory(),
         [['id' => 'file-x', 'path' => 'src/a.php']],
@@ -175,10 +176,46 @@ test('update refuses to touch comments owned by other origin_refs', function () 
         'review body',
     );
 
-    $ok = $this->action->update($reviewComment['id'], 'hijacked', false);
+    $ok = $this->action->update($this->repo, null, $reviewComment['id'], 'hijacked', false);
 
     expect($ok)->toBeFalse();
     expect(Comment::find($reviewComment['id'])->body)->toBe('review body');
+});
+
+test('update refuses to touch comments from a different workspace', function () {
+    $fileId = $this->files[0]['id'];
+    $created = $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 1, 1, 'orig');
+
+    $ok = $this->action->update('/tmp/some-other-repo', null, $created['id'], 'hijacked');
+
+    expect($ok)->toBeFalse();
+    expect(Comment::find($created['id'])->body)->toBe('orig');
+});
+
+test('update scopes by project_id when one is set', function () {
+    $owner = Project::create([
+        'slug' => 'ctx-owner',
+        'name' => 'Owner',
+        'path' => $this->repo,
+        'git_common_dir' => $this->repo.'/.git',
+        'branch' => 'main',
+    ]);
+    $other = Project::create([
+        'slug' => 'ctx-other',
+        'name' => 'Other',
+        'path' => $this->repo.'-other',
+        'git_common_dir' => $this->repo.'-other/.git',
+        'branch' => 'main',
+    ]);
+
+    $fileId = $this->files[0]['id'];
+    $created = $this->action->handle($this->repo, $owner->id, $this->files, $fileId, 'right', 1, 1, 'orig');
+
+    expect($this->action->update($this->repo, $other->id, $created['id'], 'wrong project'))->toBeFalse();
+    expect(Comment::find($created['id'])->body)->toBe('orig');
+
+    expect($this->action->update($this->repo, $owner->id, $created['id'], 'right project'))->toBeTrue();
+    expect(Comment::find($created['id'])->body)->toBe('right project');
 });
 
 test('delete removes the row and prunes the view-state list', function () {
@@ -186,7 +223,7 @@ test('delete removes the row and prunes the view-state list', function () {
     $a = $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 1, 1, 'a');
     $b = $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 2, 2, 'b');
 
-    $remaining = $this->action->delete([$a, $b], $a['id']);
+    $remaining = $this->action->delete($this->repo, null, [$a, $b], $a['id']);
 
     expect($remaining)->toHaveCount(1);
     expect($remaining[0]['id'])->toBe($b['id']);
@@ -195,9 +232,38 @@ test('delete removes the row and prunes the view-state list', function () {
 });
 
 test('delete refuses ids without the c- prefix', function () {
-    $result = $this->action->delete([], 'bogus-id');
+    $result = $this->action->delete($this->repo, null, [], 'bogus-id');
 
     expect($result)->toBeNull();
+});
+
+test('delete refuses comments from a different workspace', function () {
+    $fileId = $this->files[0]['id'];
+    $created = $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 1, 1, 'orig');
+
+    $result = $this->action->delete('/tmp/some-other-repo', null, [$created], $created['id']);
+
+    expect($result)->toBeNull();
+    expect(Comment::find($created['id']))->not->toBeNull();
+});
+
+test('delete refuses comments owned by another origin_ref', function () {
+    $reviewComment = app(AddCommentAction::class)->handle(
+        $this->repo,
+        null,
+        DiffTarget::workingDirectory(),
+        [['id' => 'file-x', 'path' => 'src/a.php']],
+        'file-x',
+        'right',
+        1,
+        1,
+        'review body',
+    );
+
+    $result = $this->action->delete($this->repo, null, [$reviewComment], $reviewComment['id']);
+
+    expect($result)->toBeNull();
+    expect(Comment::find($reviewComment['id']))->not->toBeNull();
 });
 
 test('context-file comments coexist with review comments on the same file_path', function () {
