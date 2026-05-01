@@ -372,49 +372,45 @@ new #[Layout('layouts.app')] class extends Component
         </header>
     </div>
 
-    <div class="flex flex-1">
-        {{-- Sidebar --}}
-        <aside class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-bg hidden lg:block w-72">
+    <x-resizable-sidebar-shell class="flex-1" main-class="pb-32">
+        <x-slot:sidebar>
             <div class="p-4">
                 <livewire:context-tree
                     :context-files="$contextFiles"
                     :comment-summary="$this->commentSummary"
                 />
             </div>
-        </aside>
+        </x-slot:sidebar>
 
-        {{-- Main column --}}
-        <main class="flex-1 min-w-0 pb-32">
-            @if(empty($contextFiles))
-                <div class="flex flex-col items-center justify-center py-24 px-8 text-center gap-3">
-                    <flux:icon icon="document-magnifying-glass" variant="outline" class="size-10 text-gh-muted" />
-                    <div class="font-display font-bold tracking-brutal text-lg">No context files found</div>
-                    <p class="text-sm text-gh-muted max-w-md">
-                        rfa scans for <code class="font-mono">CLAUDE.md</code> and
-                        <code class="font-mono">AGENTS.md</code> across this repo. Drop one in
-                        the repo root or any subdirectory and re-scan.
-                    </p>
+        @if(empty($contextFiles))
+            <div class="flex flex-col items-center justify-center py-24 px-8 text-center gap-3">
+                <flux:icon icon="document-magnifying-glass" variant="outline" class="size-10 text-gh-muted" />
+                <div class="font-display font-bold tracking-brutal text-lg">No context files found</div>
+                <p class="text-sm text-gh-muted max-w-md">
+                    rfa scans for <code class="font-mono">CLAUDE.md</code> and
+                    <code class="font-mono">AGENTS.md</code> across this repo. Drop one in
+                    the repo root or any subdirectory and re-scan.
+                </p>
+            </div>
+        @else
+            @foreach($contextFiles as $file)
+                <div id="{{ $file['id'] }}" class="border-b border-gh-border">
+                    <livewire:diff-file
+                        :key="$file['id']"
+                        :file="$file"
+                        :load-delay="(int) (floor($loop->index / 15) * 100)"
+                        :file-comments="$this->groupedComments[$file['id']] ?? []"
+                        :is-reviewed="false"
+                        :repo-path="$repoPath"
+                        :project-id="$projectId"
+                        :has-remote="$hasRemote"
+                        :diff-from="$diffFrom"
+                        :diff-to="$diffTo"
+                    />
                 </div>
-            @else
-                @foreach($contextFiles as $file)
-                    <div id="{{ $file['id'] }}" class="border-b border-gh-border">
-                        <livewire:diff-file
-                            :key="$file['id']"
-                            :file="$file"
-                            :load-delay="(int) (floor($loop->index / 15) * 100)"
-                            :file-comments="$this->groupedComments[$file['id']] ?? []"
-                            :is-reviewed="false"
-                            :repo-path="$repoPath"
-                            :project-id="$projectId"
-                            :has-remote="$hasRemote"
-                            :diff-from="$diffFrom"
-                            :diff-to="$diffTo"
-                        />
-                    </div>
-                @endforeach
-            @endif
-        </main>
-    </div>
+            @endforeach
+        @endif
+    </x-resizable-sidebar-shell>
 
     {{-- Submit bar --}}
     <div class="fixed bottom-0 left-0 right-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-t border-gh-border">
