@@ -33,22 +33,13 @@ final readonly class ScanReviewFilesAction
                 continue;
             }
 
-            $ext = strtolower($file->getExtension());
-
-            if (! isset($pairs[$basename])) {
-                $pairs[$basename] = ['json' => null, 'md' => null];
-            }
-
-            if ($ext === 'json' || $ext === 'md') {
-                $pairs[$basename][$ext] = $this->buildFileEntry($relativePath, $file->getSize());
-            }
+            $pairs[$basename] = $this->buildFileEntry($relativePath, $file->getSize());
         }
 
         return collect($pairs)
-            ->map(fn (array $pair, string $basename) => new ReviewFilePair(
+            ->map(fn (array $mdFile, string $basename) => new ReviewFilePair(
                 basename: $basename,
-                jsonFile: $pair['json'],
-                mdFile: $pair['md'],
+                mdFile: $mdFile,
                 createdAt: ReviewFilePair::parseTimestamp($basename),
             ))
             ->sortByDesc(fn (ReviewFilePair $p) => $p->createdAt?->getTimestamp() ?? 0)

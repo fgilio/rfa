@@ -38,33 +38,6 @@ test('toArray returns camelCase keys for internal use', function () {
     ]);
 });
 
-test('toExportArray returns snake_case keys without fileId', function () {
-    $id = $this->faker->uuid();
-    $fileId = 'file-'.$this->faker->uuid();
-    $file = $this->faker->filePath();
-    $startLine = $this->faker->numberBetween(1, 500);
-    $endLine = $this->faker->numberBetween($startLine, $startLine + 50);
-    $body = $this->faker->paragraph();
-
-    $comment = new Comment($id, $fileId, $file, DiffSide::Right, $startLine, $endLine, $body);
-    $array = $comment->toExportArray();
-
-    expect($array)->toBe([
-        'id' => $id,
-        'file' => $file,
-        'side' => 'right',
-        'start_line' => $startLine,
-        'end_line' => $endLine,
-        'body' => $body,
-        'anchor' => [
-            'origin_ref' => 'working',
-            'file_content_hash' => null,
-            'line_snippet' => null,
-        ],
-    ]);
-    expect($array)->not->toHaveKey('fileId');
-});
-
 test('toArray handles null lines', function () {
     $comment = new Comment(
         $this->faker->uuid(),

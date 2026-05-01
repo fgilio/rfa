@@ -28,25 +28,13 @@ final readonly class GroupReviewFilesAction
                 continue;
             }
 
-            $ext = strtolower(pathinfo($file['path'], PATHINFO_EXTENSION));
-
-            if (! isset($pairs[$basename])) {
-                $pairs[$basename] = ['json' => null, 'md' => null];
-            }
-
-            if ($ext === 'json') {
-                $pairs[$basename]['json'] = $file;
-            } elseif ($ext === 'md') {
-                $pairs[$basename]['md'] = $file;
-            }
+            $pairs[$basename] = $file;
         }
 
-        // Build ReviewFilePair DTOs, sort newest-first
         $reviewPairs = collect($pairs)
-            ->map(fn (array $pair, string $basename) => new ReviewFilePair(
+            ->map(fn (array $mdFile, string $basename) => new ReviewFilePair(
                 basename: $basename,
-                jsonFile: $pair['json'],
-                mdFile: $pair['md'],
+                mdFile: $mdFile,
                 createdAt: ReviewFilePair::parseTimestamp($basename),
             ))
             ->sortByDesc(fn (ReviewFilePair $p) => $p->createdAt?->getTimestamp() ?? 0)

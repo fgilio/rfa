@@ -26,48 +26,32 @@ test('returns empty array when .rfa/ directory is empty', function () {
     expect($result)->toBe([]);
 });
 
-test('discovers and pairs json + md files', function () {
+test('discovers md review files', function () {
     File::makeDirectory($this->rfaDir, 0755, true);
     $basename = '20250115_143022_comments_AbCd1234';
-    File::put($this->rfaDir."/{$basename}.json", '{}');
     File::put($this->rfaDir."/{$basename}.md", '# Review');
 
     $result = $this->action->handle($this->tempDir);
 
     expect($result)->toHaveCount(1)
         ->and($result[0]['basename'])->toBe($basename)
-        ->and($result[0]['jsonFile'])->not->toBeNull()
         ->and($result[0]['mdFile'])->not->toBeNull()
-        ->and($result[0]['jsonFile']['path'])->toBe(".rfa/{$basename}.json")
-        ->and($result[0]['jsonFile']['id'])->toBe('file-'.hash('xxh128', ".rfa/{$basename}.json"))
         ->and($result[0]['mdFile']['path'])->toBe(".rfa/{$basename}.md")
+        ->and($result[0]['mdFile']['id'])->toBe('file-'.hash('xxh128', ".rfa/{$basename}.md"))
         ->and($result[0]['mdFile']['isUntracked'])->toBeTrue();
 });
 
-test('handles orphan json (no md)', function () {
+test('ignores stray json files alongside md', function () {
     File::makeDirectory($this->rfaDir, 0755, true);
     $basename = '20250115_143022_comments_AbCd1234';
     File::put($this->rfaDir."/{$basename}.json", '{}');
-
-    $result = $this->action->handle($this->tempDir);
-
-    expect($result)->toHaveCount(1)
-        ->and($result[0]['basename'])->toBe($basename)
-        ->and($result[0]['jsonFile'])->not->toBeNull()
-        ->and($result[0]['mdFile'])->toBeNull();
-});
-
-test('handles orphan md (no json)', function () {
-    File::makeDirectory($this->rfaDir, 0755, true);
-    $basename = '20250115_143022_comments_AbCd1234';
     File::put($this->rfaDir."/{$basename}.md", '# Review');
 
     $result = $this->action->handle($this->tempDir);
 
     expect($result)->toHaveCount(1)
         ->and($result[0]['basename'])->toBe($basename)
-        ->and($result[0]['jsonFile'])->toBeNull()
-        ->and($result[0]['mdFile'])->not->toBeNull();
+        ->and($result[0]['mdFile']['path'])->toBe(".rfa/{$basename}.md");
 });
 
 test('sorts newest-first', function () {
@@ -75,9 +59,7 @@ test('sorts newest-first', function () {
     $older = '20250115_100000_comments_OlDr1234';
     $newer = '20250116_100000_comments_NeWr5678';
 
-    File::put($this->rfaDir."/{$older}.json", '{}');
     File::put($this->rfaDir."/{$older}.md", '# Older');
-    File::put($this->rfaDir."/{$newer}.json", '{}');
     File::put($this->rfaDir."/{$newer}.md", '# Newer');
 
     $result = $this->action->handle($this->tempDir);

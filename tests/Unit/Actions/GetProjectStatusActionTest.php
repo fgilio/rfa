@@ -35,7 +35,6 @@ test('counts additions and deletions from source files', function () {
 
 test('excludes rfa review files from metrics', function () {
     File::ensureDirectoryExists($this->tmpDir.'/.rfa');
-    File::put($this->tmpDir.'/.rfa/20260410_095500_comments_AbCd1234.json', '{"schema_version":1}');
     File::put($this->tmpDir.'/.rfa/20260410_095500_comments_AbCd1234.md', "# Review\nsome content\n");
 
     $result = $this->action->handle($this->tmpDir);
@@ -51,7 +50,6 @@ test('counts only source files when both source and review files exist', functio
     File::put($this->tmpDir.'/new.txt', "hello\n");
 
     File::ensureDirectoryExists($this->tmpDir.'/.rfa');
-    File::put($this->tmpDir.'/.rfa/20260410_095500_comments_AbCd1234.json', '{"schema_version":1}');
     File::put($this->tmpDir.'/.rfa/20260410_095500_comments_AbCd1234.md', "# Review\n");
 
     $result = $this->action->handle($this->tmpDir);

@@ -16,36 +16,22 @@ beforeEach(function () {
     File::makeDirectory($this->rfaDir, 0755, true);
 });
 
-test('deletes both json and md files', function () {
+test('deletes md file', function () {
     $basename = '20250115_143022_comments_AbCd1234';
-    File::put($this->rfaDir."/{$basename}.json", '{}');
     File::put($this->rfaDir."/{$basename}.md", '# Review');
 
     $deleted = $this->action->handle($this->tempDir, $basename);
 
-    expect($deleted)->toBe(2)
-        ->and(File::exists($this->rfaDir."/{$basename}.json"))->toBeFalse()
+    expect($deleted)->toBe(1)
         ->and(File::exists($this->rfaDir."/{$basename}.md"))->toBeFalse();
 });
 
 test('handles missing md file gracefully', function () {
     $basename = '20250115_143022_comments_AbCd1234';
-    File::put($this->rfaDir."/{$basename}.json", '{}');
 
     $deleted = $this->action->handle($this->tempDir, $basename);
 
-    expect($deleted)->toBe(1)
-        ->and(File::exists($this->rfaDir."/{$basename}.json"))->toBeFalse();
-});
-
-test('handles missing json file gracefully', function () {
-    $basename = '20250115_143022_comments_AbCd1234';
-    File::put($this->rfaDir."/{$basename}.md", '# Review');
-
-    $deleted = $this->action->handle($this->tempDir, $basename);
-
-    expect($deleted)->toBe(1)
-        ->and(File::exists($this->rfaDir."/{$basename}.md"))->toBeFalse();
+    expect($deleted)->toBe(0);
 });
 
 test('rejects path traversal in basename', function () {
@@ -72,21 +58,19 @@ test('bulk deletes multiple basenames', function () {
     $basename1 = '20250115_143022_comments_AbCd1234';
     $basename2 = '20250116_100000_comments_EfGh5678';
 
-    File::put($this->rfaDir."/{$basename1}.json", '{}');
     File::put($this->rfaDir."/{$basename1}.md", '# Review 1');
-    File::put($this->rfaDir."/{$basename2}.json", '{}');
     File::put($this->rfaDir."/{$basename2}.md", '# Review 2');
 
     $deleted = $this->action->handle($this->tempDir, [$basename1, $basename2]);
 
-    expect($deleted)->toBe(4)
-        ->and(File::exists($this->rfaDir."/{$basename1}.json"))->toBeFalse()
+    expect($deleted)->toBe(2)
+        ->and(File::exists($this->rfaDir."/{$basename1}.md"))->toBeFalse()
         ->and(File::exists($this->rfaDir."/{$basename2}.md"))->toBeFalse();
 });
 
 test('bulk delete skips invalid basenames', function () {
     $valid = '20250115_143022_comments_AbCd1234';
-    File::put($this->rfaDir."/{$valid}.json", '{}');
+    File::put($this->rfaDir."/{$valid}.md", '# Review');
 
     $deleted = $this->action->handle($this->tempDir, [$valid, '../../etc/passwd', 'invalid']);
 

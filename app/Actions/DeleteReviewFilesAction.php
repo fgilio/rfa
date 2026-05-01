@@ -26,15 +26,11 @@ final readonly class DeleteReviewFilesAction
                 continue;
             }
 
-            $rfaDir = $repoPath.'/.rfa';
+            $path = $repoPath.'/.rfa/'.$basename.'.md';
 
-            foreach (['json', 'md'] as $ext) {
-                $path = $rfaDir.'/'.$basename.'.'.$ext;
-
-                if (File::exists($path)) {
-                    File::delete($path);
-                    $deleted++;
-                }
+            if (File::exists($path)) {
+                File::delete($path);
+                $deleted++;
             }
         }
 

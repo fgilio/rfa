@@ -17,32 +17,6 @@ beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_test_');
 });
 
-test('exports JSON with schema version and snake_case keys', function () {
-    $file = $this->faker->word().'.php';
-    $line = $this->faker->numberBetween(1, 200);
-    $body = $this->faker->sentence();
-    $global = $this->faker->paragraph();
-
-    $comments = [
-        new Comment($this->faker->uuid(), 'file-abc', $file, DiffSide::Right, $line, $line, $body),
-    ];
-
-    $result = $this->exporter->export($this->tmpDir, $comments, $global);
-
-    expect($result['json'])->toMatch('/\/\.rfa\/\d{8}_\d{6}_comments_/');
-    expect(File::exists($result['json']))->toBeTrue();
-
-    $json = json_decode(File::get($result['json']), true);
-    expect($json['schema_version'])->toBe(1);
-    expect($json['global_comment'])->toBe($global);
-    expect($json['comments'])->toHaveCount(1);
-    expect($json['comments'][0]['file'])->toBe($file);
-    expect($json['comments'][0]['start_line'])->toBe($line);
-    expect($json['comments'][0]['body'])->toBe($body);
-    expect($json['comments'][0])->not->toHaveKey('fileId');
-    expect($json['markdown_file'])->toMatch('/^\.rfa\/\d{8}_\d{6}_comments_.*\.md$/');
-});
-
 test('exports Markdown with file grouping', function () {
     $fileA = $this->faker->word().'.php';
     do {
@@ -66,7 +40,6 @@ test('exports Markdown with file grouping', function () {
     $result = $this->exporter->export($this->tmpDir, $comments, $global);
 
     $md = File::get($result['md']);
-    expect($md)->toMatch('/^<!-- json: \.rfa\/\d{8}_\d{6}_comments_[a-zA-Z0-9]{8}\.json -->/');
     expect($md)->toContain('# Code Review Comments');
     expect($md)->toContain('## General');
     expect($md)->toContain($global);
@@ -83,7 +56,7 @@ test('returns clipboard text', function () {
 });
 
 test('creates .rfa directory if missing', function () {
-    $result = $this->exporter->export($this->tmpDir, [], '');
+    $this->exporter->export($this->tmpDir, [], '');
 
     expect(File::isDirectory($this->tmpDir.'/.rfa'))->toBeTrue();
 });
@@ -99,40 +72,12 @@ test('handles empty comments', function () {
 test('uses timestamp prefix in filenames', function () {
     $result = $this->exporter->export($this->tmpDir, [], 'test');
 
-    expect(basename($result['json']))->toMatch('/^\d{8}_\d{6}_comments_[a-zA-Z0-9]{8}\.json$/');
     expect(basename($result['md']))->toMatch('/^\d{8}_\d{6}_comments_[a-zA-Z0-9]{8}\.md$/');
-});
-
-test('cross-references are consistent between files', function () {
-    $result = $this->exporter->export($this->tmpDir, [], 'test');
-
-    $json = json_decode(File::get($result['json']), true);
-    expect($json['markdown_file'])->toBe('.rfa/'.basename($result['md']));
-
-    $md = File::get($result['md']);
-    $firstLine = strtok($md, "\n");
-    preg_match('/<!-- json: (.+?) -->/', $firstLine, $matches);
-    expect($matches[1])->toBe('.rfa/'.basename($result['json']));
 });
 
 // -- edge cases --
 
-test('escapes quotes and backslashes in JSON bodies', function () {
-    $body = 'has "quotes" and \\ backslashes and `ticks`';
-    $comments = [
-        new Comment('id', 'file-1', 'f.php', DiffSide::Right, 1, 1, $body),
-    ];
-
-    $result = $this->exporter->export($this->tmpDir, $comments, '');
-
-    $raw = File::get($result['json']);
-    expect(json_validate($raw))->toBeTrue();
-
-    $json = json_decode($raw, true);
-    expect($json['comments'][0]['body'])->toBe($body);
-});
-
-test('preserves unicode and emoji round-trip through JSON', function () {
+test('preserves unicode and emoji round-trip in markdown', function () {
     $body = 'café 日本語 ✨';
     $comments = [
         new Comment('id', 'file-1', 'f.php', DiffSide::Right, 1, 1, $body),
@@ -140,9 +85,9 @@ test('preserves unicode and emoji round-trip through JSON', function () {
 
     $result = $this->exporter->export($this->tmpDir, $comments, '🎉 hola');
 
-    $json = json_decode(File::get($result['json']), true);
-    expect($json['comments'][0]['body'])->toBe($body)
-        ->and($json['global_comment'])->toBe('🎉 hola');
+    $md = File::get($result['md']);
+    expect($md)->toContain($body)
+        ->and($md)->toContain('🎉 hola');
 });
 
 test('preserves embedded fenced code blocks in markdown output', function () {

@@ -1981,9 +1981,6 @@ new #[Layout('layouts.app')] class extends Component
                                 </button>
                                 <span class="text-[10px] font-mono font-medium text-purple-500 dark:text-purple-400 shrink-0">R</span>
                                 <span class="font-mono text-sm truncate">{{ $pair['displayName'] }}</span>
-                                @if($pair['jsonFile'])
-                                    <span class="text-[10px] font-mono text-gh-muted">.json</span>
-                                @endif
                                 @if($pair['mdFile'])
                                     <span class="text-[10px] font-mono text-gh-muted">.md</span>
                                 @endif
@@ -1996,20 +1993,6 @@ new #[Layout('layouts.app')] class extends Component
                                 </span>
                             </div>
                             <div x-show="!collapsed" x-collapse.duration.150ms>
-                                @if($pair['jsonFile'])
-                                    <livewire:diff-file
-                                        :key="$pair['jsonFile']['id']"
-                                        :file="$pair['jsonFile']"
-                                        :load-delay="0"
-                                        :file-comments="$this->groupedComments[$pair['jsonFile']['id']] ?? []"
-                                        :is-reviewed="array_key_exists($pair['jsonFile']['path'], $reviewedFiles)"
-                                        :repo-path="$repoPath"
-                                        :project-id="$projectId"
-                                        :has-remote="$hasRemote"
-                                        :diff-from="$diffFrom"
-                                        :diff-to="$diffTo"
-                                    />
-                                @endif
                                 @if($pair['mdFile'])
                                     <livewire:diff-file
                                         :key="$pair['mdFile']['id']"
