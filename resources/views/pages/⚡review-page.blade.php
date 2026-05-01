@@ -1617,32 +1617,7 @@ new #[Layout('layouts.app')] class extends Component
             </div>
         </header>
 
-        {{-- Status strip: state, not actions --}}
-        <div data-testid="status-strip" class="bg-gh-bg/60 border-b border-gh-border px-5 py-1 flex items-center gap-3 font-mono text-[11px] text-gh-muted">
-            <span
-                x-text="fileFilter === '' && !hideReviewed
-                    ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
-                    : sourceFileEntries.filter(f => fileMatchesFilter(f.path, f.id)).length + '/{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'"
-            >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</span>
-            <span class="text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
-            <span class="text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
-
-            @if(count($reviewPairs) > 0)
-                <span class="px-1.5 py-px rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
-            @endif
-
-            <div class="ml-auto flex items-center gap-2">
-                <div x-show="reviewedCount > 0" x-cloak class="flex items-center gap-2">
-                    <span data-testid="reviewed-counter" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
-                    <div class="w-24 h-0.5 bg-gh-border/50 rounded-full overflow-hidden">
-                        <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
-                    </div>
-                </div>
-                @if(count($sourceFiles) > 0)
-                    <x-copy-paths-menu testid-prefix="status-strip-copy-paths" />
-                @endif
-            </div>
-        </div>
+        <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" />
     </div>
 
     {{-- Branch divergence banner + polling island (working-tree mode only) --}}
@@ -1692,32 +1667,8 @@ new #[Layout('layouts.app')] class extends Component
         @endif
     @endif
 
-    {{-- Commit context bar --}}
     @if($commitInfo)
-        <div data-testid="commit-context-bar" class="sticky top-[var(--header-h)] z-40 bg-gh-surface border-b border-gh-border px-5 py-2.5 flex items-center gap-3 text-xs" style="--commit-bar-h: 40px;">
-            <flux:icon icon="code-bracket" variant="outline" class="text-gh-muted shrink-0" />
-            <span class="font-mono text-xs text-gh-muted shrink-0 px-1.5 py-0.5 rounded border border-gh-border">{{ $commitInfo['shortHash'] }}</span>
-            <span class="text-gh-text truncate font-medium">{{ $commitInfo['message'] }}</span>
-            <span class="text-gh-muted shrink-0">{{ $commitInfo['author'] }}</span>
-            <div class="ml-auto flex items-center gap-1 shrink-0">
-                @if($commitInfo['prevHash'])
-                    <flux:tooltip content="Previous commit ([)">
-                        <flux:button aria-label="Previous commit" variant="ghost" size="xs" icon="chevron-left" icon:variant="outline"
-                            onclick="Livewire.navigate('/p/{{ $projectSlug }}/c/{{ $commitInfo['prevHash'] }}')" />
-                    </flux:tooltip>
-                @endif
-                @if($commitInfo['nextHash'])
-                    <flux:tooltip content="Next commit (])">
-                        <flux:button aria-label="Next commit" variant="ghost" size="xs" icon="chevron-right" icon:variant="outline"
-                            onclick="Livewire.navigate('/p/{{ $projectSlug }}/c/{{ $commitInfo['nextHash'] }}')" />
-                    </flux:tooltip>
-                @endif
-                <flux:tooltip content="Back to working directory">
-                    <flux:button aria-label="Back to working directory" variant="ghost" size="xs" icon="x-mark" icon:variant="outline"
-                        onclick="Livewire.navigate('/p/{{ $projectSlug }}')" />
-                </flux:tooltip>
-            </div>
-        </div>
+        <x-commit-context-bar :commit-info="$commitInfo" :project-slug="$projectSlug" />
     @endif
 
     <div class="flex">
