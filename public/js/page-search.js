@@ -235,14 +235,8 @@
                             range.setEnd(seg.node, localEnd);
                             const span = document.createElement('span');
                             span.className = MATCH_CLASS;
-                            try {
-                                range.surroundContents(span);
-                                spans.unshift(span);
-                            } catch (_) {
-                                // surroundContents only throws when the range
-                                // partially selects a non-text node, which our
-                                // text-only ranges never do.
-                            }
+                            range.surroundContents(span);
+                            spans.unshift(span);
                         }
                         wrapped[i] = spans;
                     }
