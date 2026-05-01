@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\DTOs\Comment;
+use App\Enums\CommentExportKind;
 
 class MarkdownFormatter
 {
@@ -12,9 +13,22 @@ class MarkdownFormatter
      * @param  Comment[]  $comments
      * @param  array<string, string>  $diffContext
      */
-    public function format(array $comments, string $globalComment, array $diffContext): string
+    public function format(array $comments, string $globalComment, array $diffContext, CommentExportKind $kind = CommentExportKind::Review): string
     {
-        $md = "# Code Review Comments\n\n";
+        $isContextFile = $kind === CommentExportKind::ContextFile;
+
+        $title = $isContextFile
+            ? '# Agent Context Feedback'
+            : '# Code Review Comments';
+
+        $md = "{$title}\n\n";
+
+        if ($isContextFile) {
+            $md .= 'Improve the CLAUDE.md / AGENTS.md files below based on the comments. '
+                .'Treat each comment as a directive: tighten, clarify, remove stale rules, '
+                .'or restructure as the comment instructs. Preserve unmentioned content unless '
+                ."a comment makes it redundant.\n\n";
+        }
 
         if ($globalComment !== '') {
             $md .= "## General\n\n{$globalComment}\n\n";
@@ -24,7 +38,6 @@ class MarkdownFormatter
             return $md;
         }
 
-        // Group by file
         $byFile = collect($comments)->groupBy(fn (Comment $comment): string => $comment->file);
 
         foreach ($byFile as $file => $fileComments) {
@@ -39,7 +52,6 @@ class MarkdownFormatter
                     $lineRef = "**{$lineRef}**";
                 }
 
-                // Include diff context snippet if available
                 $contextKey = "{$comment->file}:{$comment->side->value}:{$comment->startLine}:{$comment->endLine}";
                 if (isset($diffContext[$contextKey]) && $diffContext[$contextKey] !== '') {
                     $md .= "{$lineRef}\n\n";
