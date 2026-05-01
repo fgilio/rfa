@@ -1682,7 +1682,7 @@ new #[Layout('layouts.app')] class extends Component
         />
 
         @if($divergenceState === DivergenceState::Diverged)
-            <div class="px-5 py-3 border-b border-gh-border" data-testid="divergence-banner-diverged">
+            <div class="px-5 py-3 border-b border-gh-border" role="status" aria-live="polite" data-testid="divergence-banner-diverged">
                 <flux:callout icon="arrow-path" variant="warning" inline>
                     <flux:callout.heading>Repo switched to <span class="font-mono">{{ $divergenceContext['currentBranch'] }}</span></flux:callout.heading>
                     <flux:callout.text>Still reviewing <span class="font-mono">{{ $divergenceContext['target'] }}</span>.</flux:callout.text>
@@ -1697,7 +1697,7 @@ new #[Layout('layouts.app')] class extends Component
                 </flux:callout>
             </div>
         @elseif($divergenceState === DivergenceState::Detached)
-            <div class="px-5 py-3 border-b border-gh-border" data-testid="divergence-banner-detached">
+            <div class="px-5 py-3 border-b border-gh-border" role="status" aria-live="polite" data-testid="divergence-banner-detached">
                 <flux:callout icon="information-circle" variant="secondary" inline>
                     <flux:callout.heading>Repo detached at <span class="font-mono">{{ $divergenceContext['shortSha'] }}</span></flux:callout.heading>
                     <flux:callout.text>Still reviewing <span class="font-mono">{{ $divergenceContext['target'] }}</span>.</flux:callout.text>
@@ -1707,7 +1707,7 @@ new #[Layout('layouts.app')] class extends Component
                 </flux:callout>
             </div>
         @elseif($divergenceState === DivergenceState::MissingTarget)
-            <div class="px-5 py-3 border-b border-gh-border" data-testid="divergence-banner-missing">
+            <div class="px-5 py-3 border-b border-gh-border" role="alert" aria-live="assertive" data-testid="divergence-banner-missing">
                 <flux:callout icon="exclamation-triangle" variant="danger" inline>
                     <flux:callout.heading>Review target <span class="font-mono">{{ $divergenceContext['target'] }}</span> no longer exists</flux:callout.heading>
                     <x-slot name="actions">
