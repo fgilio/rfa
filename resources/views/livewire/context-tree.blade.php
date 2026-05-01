@@ -108,7 +108,7 @@ new class extends Component
     <flux:select wire:model.live="filterMode" size="sm">
         <flux:select.option value="all">All paths</flux:select.option>
         <flux:select.option value="with-context">With context only</flux:select.option>
-        <flux:select.option value="missing">Missing only</flux:select.option>
+        <flux:select.option value="missing" disabled>Missing only — coming soon</flux:select.option>
     </flux:select>
 
     @if(empty($contextFiles))
