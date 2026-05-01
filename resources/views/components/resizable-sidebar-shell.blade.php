@@ -31,7 +31,7 @@
                     raf = null;
                 });
             };
-            const onUp = () => {
+            const finish = () => {
                 if (raf) { cancelAnimationFrame(raf); raf = null; }
                 aside.style.position = '';
                 aside.style.left = '';
@@ -44,11 +44,15 @@
                     $store.settings.sidebarWidth = currentWidth;
                 }
                 document.removeEventListener('mousemove', onMove);
-                document.removeEventListener('mouseup', onUp);
+                document.removeEventListener('mouseup', finish);
+                window.removeEventListener('blur', finish);
             };
 
             document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
+            document.addEventListener('mouseup', finish);
+            // Alt-tab or app switch mid-drag never fires mouseup, so without
+            // this listener resizing stays true and main keeps pointer-events-none.
+            window.addEventListener('blur', finish);
         }
     }"
 >

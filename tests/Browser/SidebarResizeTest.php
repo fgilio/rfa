@@ -142,6 +142,30 @@ test('double-clicking resize handle resets sidebar to default width', function (
     expect($stored)->toBe(288);
 })->with('shell pages');
 
+test('window blur during drag finishes the resize cleanly', function (string $suffix) {
+    $page = $this->visit($this->projectUrl().$suffix);
+
+    dragSidebar($page, 25, release: false);
+
+    $page->page()->waitForFunction(
+        "document.querySelector('main').classList.contains('pointer-events-none')"
+    );
+
+    // Alt-tab simulator: window losing focus must trigger the same teardown
+    // that mouseup does, so resizing flips off and pointer-events re-enable.
+    $page->script("window.dispatchEvent(new Event('blur'));");
+
+    $page->page()->waitForFunction(
+        "!document.querySelector('main').classList.contains('pointer-events-none')"
+    );
+
+    $page->page()->waitForFunction("localStorage.getItem('rfa.sidebarWidth') !== null");
+    $stored = $page->page()->evaluate("JSON.parse(localStorage.getItem('rfa.sidebarWidth'))");
+    $width = $page->page()->evaluate("document.querySelector('aside').offsetWidth");
+
+    expect(abs($stored - $width))->toBeLessThan(5);
+})->with('shell pages');
+
 test('sidebar width set on review page persists on context page', function () {
     $page = $this->visit($this->projectUrl());
 
