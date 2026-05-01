@@ -14,18 +14,24 @@ new class extends Component
     #[Locked]
     public string $target = '';
 
+    /** Branch + detached + targetExists. Changes here flip a banner. */
     #[Locked]
-    public string $fingerprint = '';
+    public string $identity = '';
+
+    /** Empty until first successful prime; doubles as the "primed" flag. */
+    #[Locked]
+    public string $sha = '';
 
     public function mount(): void
     {
-        // Prime the fingerprint so the first poll after mount does not dispatch
-        // unless HEAD actually moves. The parent's own mount() already ran
+        // Prime so the first poll after mount does not dispatch unless HEAD
+        // actually moves. The parent's own mount() already ran
         // checkHeadDivergence once; we don't need to force a second round-trip.
         $head = app(GetCurrentHeadAction::class)->handle($this->repoPath, $this->target !== '' ? $this->target : null);
 
         if ($head->sha !== '') {
-            $this->fingerprint = $this->fingerprintOf($head);
+            $this->identity = $this->identityOf($head);
+            $this->sha = $head->sha;
         }
     }
 
@@ -41,25 +47,42 @@ new class extends Component
             return;
         }
 
-        $next = $this->fingerprintOf($head);
+        $nextIdentity = $this->identityOf($head);
+        $identityChanged = $nextIdentity !== $this->identity;
+        $shaChanged = $head->sha !== $this->sha;
 
-        if ($next === $this->fingerprint) {
+        if (! $identityChanged && ! $shaChanged) {
             return;
         }
 
-        $this->fingerprint = $next;
-        $this->dispatch('head-divergence-transitioned');
+        $primed = $this->sha !== '';
+        $this->identity = $nextIdentity;
+        $this->sha = $head->sha;
+
+        // A primed identity transition (branch switch, detach, target gone)
+        // is a banner-only concern — recompute divergence without re-reading
+        // the file list. Everything else (sha-only advance OR a post-recovery
+        // first prime where we don't know what mount-time HEAD was) leaves
+        // the file list potentially stale; route it through softRefresh,
+        // which re-reads files AND recomputes divergence.
+        if ($primed && $identityChanged) {
+            $this->dispatch('head-divergence-transitioned');
+
+            return;
+        }
+
+        $this->dispatch('head-advanced-on-branch');
     }
 
-    private function fingerprintOf(CurrentHeadResult $head): string
+    private function identityOf(CurrentHeadResult $head): string
     {
-        $targetExists = match ($head->targetExists) {
+        $exists = match ($head->targetExists) {
             true => '1',
             false => '0',
             null => 'n',
         };
 
-        return ($head->branch ?? '').'|'.$head->sha.'|'.($head->detached ? '1' : '0').'|'.$targetExists;
+        return ($head->branch ?? '').'|'.($head->detached ? '1' : '0').'|'.$exists;
     }
 };
 ?>

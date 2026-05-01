@@ -152,3 +152,31 @@ test('softRefresh with no file changes and stable divergence skips the render', 
 
     expect($component->effects['html'] ?? null)->toBeNull();
 });
+
+test('head-advanced-on-branch triggers softRefresh and dispatches refresh-completed', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
+
+    // Simulate a new commit landing on the branch the user is reviewing —
+    // the file list now reflects post-commit state.
+    $this->fileListFake->files = [
+        ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 12, 'deletions' => 3, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T02:00:00Z', 'fileSize' => '150'],
+        ['id' => 'new789', 'path' => 'src/JustCommitted.php', 'status' => 'added', 'oldPath' => null, 'additions' => 20, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T02:00:00Z', 'fileSize' => '300'],
+    ];
+
+    $component->call('refreshAfterHeadAdvance')
+        ->assertDispatched('fingerprint-reset')
+        ->assertDispatched('refresh-completed')
+        ->assertSee('src/JustCommitted.php');
+});
+
+test('head-advanced-on-branch is a no-op in commit/range mode', function () {
+    $component = Livewire::test('pages::review-page', [
+        'slug' => 'soft-refresh-test',
+        'from' => 'aaaa111',
+        'to' => 'bbbb222',
+    ]);
+
+    $component->call('refreshAfterHeadAdvance')
+        ->assertNotDispatched('fingerprint-reset')
+        ->assertNotDispatched('refresh-completed');
+});

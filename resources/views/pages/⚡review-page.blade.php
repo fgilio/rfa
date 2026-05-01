@@ -426,6 +426,24 @@ new #[Layout('layouts.app')] class extends Component
     }
 
     /**
+     * HEAD advanced on the same branch the user is reviewing — typically
+     * because they just committed. Reload the file list so the diff reflects
+     * the new commit. Commit/range modes pin both endpoints, so a HEAD move
+     * cannot affect what's shown; skip render in that case.
+     */
+    #[On('head-advanced-on-branch')]
+    public function refreshAfterHeadAdvance(): void
+    {
+        if ($this->isCommitMode()) {
+            $this->skipRender();
+
+            return;
+        }
+
+        $this->softRefresh();
+    }
+
+    /**
      * Recompute divergence state. Returns true if state changed since the last
      * check (i.e. the caller should render), false when the caller can skip.
      * Kept separate from `checkHeadDivergence()` so callers like `softRefresh`
