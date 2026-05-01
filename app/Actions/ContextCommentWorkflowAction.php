@@ -23,7 +23,7 @@ use Illuminate\Support\Str;
  */
 final readonly class ContextCommentWorkflowAction
 {
-    public const ORIGIN_REF = 'context-file';
+    public const ORIGIN_REF = Comment::ORIGIN_CONTEXT;
 
     public function __construct(
         private GitFileContentService $gitFileContentService,

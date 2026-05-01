@@ -980,19 +980,13 @@ new #[Layout('layouts.app')] class extends Component
         return collect($this->comments)->groupBy('fileId')->map(fn ($group) => $group->values()->all())->all();
     }
 
-    /**
-     * Drives the amber dot on the Context side of the mode-toggle. Catches
-     * both drafts and saved-but-not-exported context comments. Both states
-     * represent work that would be lost if the user forgets.
-     */
+    /** Drives the amber dot on the Context side of the mode-toggle. */
     #[Computed]
     public function hasContextActivity(): bool
     {
-        $projectId = $this->projectId === 0 ? null : $this->projectId;
-
-        return \App\Models\Comment::forProjectOrRepo($projectId, $this->repoPath)
-            ->where('origin_ref', 'context-file')
-            ->whereNull('submitted_at')
+        return \App\Models\Comment::forProjectOrRepo($this->projectId ?: null, $this->repoPath)
+            ->fromContext()
+            ->unsubmitted()
             ->exists();
     }
 

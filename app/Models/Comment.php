@@ -15,6 +15,9 @@ class Comment extends Model
     /** @use HasFactory<CommentFactory> */
     use HasFactory;
 
+    /** Sentinel for `origin_ref` rows owned by the Context page. */
+    public const ORIGIN_CONTEXT = 'context-file';
+
     protected $keyType = 'string';
 
     public $incrementing = false;
@@ -46,6 +49,43 @@ class Comment extends Model
         return $projectId
             ? $query->where('project_id', $projectId)
             : $query->whereNull('project_id')->where('repo_path', $repoPath);
+    }
+
+    /**
+     * Scope a query to comments not yet exported. Catches both drafts and
+     * saved-but-not-exported rows — both states represent work that would be
+     * lost if the user forgets.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeUnsubmitted(Builder $query): Builder
+    {
+        return $query->whereNull('submitted_at');
+    }
+
+    /**
+     * Scope a query to comments that originate on the Context page (the
+     * CLAUDE.md / AGENTS.md inventory).
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeFromContext(Builder $query): Builder
+    {
+        return $query->where('origin_ref', self::ORIGIN_CONTEXT);
+    }
+
+    /**
+     * Scope a query to comments that originate on the Review page (anything
+     * not stamped with the context-file sentinel).
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeFromReview(Builder $query): Builder
+    {
+        return $query->where('origin_ref', '!=', self::ORIGIN_CONTEXT);
     }
 
     /** @return BelongsTo<Project, $this> */
