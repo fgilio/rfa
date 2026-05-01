@@ -92,7 +92,13 @@ new class extends Component {
         );
 
         if ($text !== null) {
-            $this->dispatch('copy-to-clipboard', text: $text);
+            $toast = match ($kind) {
+                'diff' => 'Copied diff',
+                'original' => 'Copied original',
+                'new' => 'Copied new',
+                default => 'Copied',
+            };
+            $this->dispatch('copy-to-clipboard', text: $text, toast: $toast);
         }
     }
 
