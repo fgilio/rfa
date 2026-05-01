@@ -258,7 +258,7 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $result = app(ExportContextFeedbackAction::class)
-            ->handle($this->repoPath, $this->comments, $this->globalComment);
+            ->handle($this->repoPath, $this->projectId ?: null, $this->comments, $this->globalComment);
 
         $this->dispatch('copy-to-clipboard', text: $result['clipboard'], toast: 'Feedback copied');
 

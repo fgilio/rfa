@@ -26,7 +26,7 @@ final readonly class ExportContextFeedbackAction
      * @param  array<int, array<string, mixed>>  $comments  View-state context-file comments.
      * @return array{json: string, md: string, clipboard: string, submittedIds: array<int, string>}
      */
-    public function handle(string $repoPath, array $comments, string $globalComment): array
+    public function handle(string $repoPath, ?int $projectId, array $comments, string $globalComment): array
     {
         $commentDTOs = array_map(fn ($c) => CommentDTO::fromArray($c), $comments);
 
@@ -40,7 +40,12 @@ final readonly class ExportContextFeedbackAction
 
         $ids = array_column($comments, 'id');
         if ($ids !== []) {
-            Comment::whereIn('id', $ids)->update(['submitted_at' => now()]);
+            Comment::query()
+                ->forProjectOrRepo($projectId, $repoPath)
+                ->where('origin_ref', ContextCommentWorkflowAction::ORIGIN_REF)
+                ->whereNull('submitted_at')
+                ->whereIn('id', $ids)
+                ->update(['submitted_at' => now()]);
         }
 
         $this->ensureGitExclude->handle($repoPath);
