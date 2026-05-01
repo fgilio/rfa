@@ -1129,8 +1129,6 @@ new #[Layout('layouts.app')] class extends Component
                 default => 'text-amber-500 dark:text-amber-400',
             },
         ]])->all()),
-        sidebarWidth: $store.settings.sidebarWidth,
-        resizing: false,
         remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '', disabled: false, disabledReason: '' },
         showRemoteMenu($event) {
             const d = $event.detail;
@@ -1248,49 +1246,6 @@ new #[Layout('layouts.app')] class extends Component
             this.activeFile = id;
             this.$dispatch('expand-file', { id });
             document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        },
-        startResize(e) {
-            this.resizing = true;
-            const startX = e.clientX;
-            const startWidth = this.sidebarWidth;
-            const aside = this.$refs.sidebar;
-            const main = aside.parentElement.querySelector('main');
-            let raf = null;
-            let currentWidth = startWidth;
-
-            // Float sidebar above main so diff DOM never reflows during drag
-            aside.style.position = 'fixed';
-            aside.style.left = '0';
-            aside.style.zIndex = '40';
-            aside.style.willChange = 'width';
-            main.style.marginLeft = startWidth + 'px';
-            document.body.classList.add('cursor-col-resize', 'select-none');
-
-            const onMove = (e) => {
-                currentWidth = Math.min(600, Math.max(200, startWidth + e.clientX - startX));
-                if (raf) return;
-                raf = requestAnimationFrame(() => {
-                    aside.style.width = currentWidth + 'px';
-                    raf = null;
-                });
-            };
-            const onUp = () => {
-                if (raf) { cancelAnimationFrame(raf); raf = null; }
-                aside.style.position = '';
-                aside.style.left = '';
-                aside.style.zIndex = '';
-                aside.style.willChange = '';
-                main.style.marginLeft = '';
-                this.resizing = false;
-                this.sidebarWidth = currentWidth;
-                document.body.classList.remove('cursor-col-resize', 'select-none');
-                $store.settings.sidebarWidth = currentWidth;
-                document.removeEventListener('mousemove', onMove);
-                document.removeEventListener('mouseup', onUp);
-            };
-
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
         }
     }"
     @file-reviewed-changed.window="reviewedFiles[$event.detail.id] = $event.detail.reviewed"
@@ -1689,9 +1644,8 @@ new #[Layout('layouts.app')] class extends Component
         <x-commit-context-bar :commit-info="$commitInfo" :project-slug="$projectSlug" />
     @endif
 
-    <div class="flex">
-        {{-- Sidebar --}}
-        <aside class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-bg hidden lg:block" :style="{ width: sidebarWidth + 'px' }" x-ref="sidebar">
+    <x-resizable-sidebar-shell main-class="pb-24">
+        <x-slot:sidebar>
             <div class="p-4">
                 @if(! $this->isCommitMode() && count($reviewPairs) > 0)
                     <div class="flex items-center justify-between mb-3">
@@ -1902,21 +1856,8 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                 @endif
             </div>
-        </aside>
-        <div data-testid="sidebar-resize-handle" class="group/resize hidden lg:flex sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-0 cursor-col-resize items-center justify-center z-10 shrink-0"
-            style="padding: 0 6px; margin: 0 -6px;"
-            @mousedown="startResize($event)"
-            @dblclick="sidebarWidth = 288; $store.settings.sidebarWidth = 288">
-            <div class="absolute inset-y-0 w-px bg-transparent group-hover/resize:bg-gh-muted/40 transition-colors"></div>
-            <div class="absolute px-1 py-1.5 rounded-full bg-gh-surface border border-gh-border shadow-sm opacity-0 group-hover/resize:opacity-100 transition-opacity pointer-events-none flex flex-col items-center gap-[3px]">
-                <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
-                <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
-                <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
-            </div>
-        </div>
+        </x-slot:sidebar>
 
-        {{-- Main content --}}
-        <main class="flex-1 min-w-0 pb-24" :class="resizing && 'pointer-events-none'" style="contain: inline-size layout style">
             @if($gitError)
                 <div class="flex items-center justify-center h-[60vh]">
                     <div class="text-center max-w-lg">
@@ -2022,8 +1963,7 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                 @endforeach
             @endif
-        </main>
-    </div>
+    </x-resizable-sidebar-shell>
 
     {{-- Undo toast --}}
     @include('livewire.undo-toast')
