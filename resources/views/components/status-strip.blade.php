@@ -25,7 +25,7 @@
         <div x-show="reviewedCount > 0" x-cloak class="flex items-center gap-2">
             <span data-testid="reviewed-counter" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
             <div class="w-24 h-0.5 bg-gh-border/50 rounded-full overflow-hidden">
-                <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
+                <div class="h-full bg-gh-green/70 rounded-full transition-all duration-200" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
             </div>
         </div>
         @if(count($sourceFiles) > 0)
