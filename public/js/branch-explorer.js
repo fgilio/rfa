@@ -291,7 +291,7 @@
             },
 
             copyHash(hash) {
-                navigator.clipboard.writeText(hash).catch(() => {});
+                this.$dispatch('copy-to-clipboard', { text: hash, toast: 'Copied ' + hash.slice(0, 7) });
             },
 
             openRemoteContext(event, type, params, label) {
