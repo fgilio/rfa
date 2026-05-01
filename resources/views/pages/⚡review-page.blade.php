@@ -1950,7 +1950,7 @@ new #[Layout('layouts.app')] class extends Component
                                     <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
                                 </button>
                                 <span class="text-[10px] font-mono font-medium text-purple-500 dark:text-purple-400 shrink-0">R</span>
-                                <span class="font-mono text-sm truncate">{{ $pair['displayName'] }}</span>
+                                <span class="font-mono text-sm truncate" title="{{ $pair['displayName'] }}">{{ $pair['displayName'] }}</span>
                                 <span class="text-[10px] font-mono text-gh-muted">.md</span>
                                 <span class="ml-auto">
                                     <x-arm-commit-button
