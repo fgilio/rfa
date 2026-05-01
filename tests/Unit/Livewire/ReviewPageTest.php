@@ -194,7 +194,6 @@ test('submitReview refreshes file list and populates reviewPairs', function () {
         'id' => 'review-'.hash('xxh128', $basename),
         'basename' => $basename,
         'displayName' => 'Feb 27, 5:30 PM',
-        'jsonFile' => ['id' => 'file-'.hash('xxh128', ".rfa/{$basename}.json"), 'path' => ".rfa/{$basename}.json", 'status' => 'added', 'oldPath' => null, 'additions' => 0, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => true, 'isImage' => false, 'lastModified' => null, 'isSymlink' => false, 'symlinkTarget' => null, 'fileSize' => null],
         'mdFile' => ['id' => 'file-'.hash('xxh128', ".rfa/{$basename}.md"), 'path' => ".rfa/{$basename}.md", 'status' => 'added', 'oldPath' => null, 'additions' => 0, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => true, 'isImage' => false, 'lastModified' => null, 'isSymlink' => false, 'symlinkTarget' => null, 'fileSize' => null],
         'createdAt' => '2026-02-27T17:30:00+00:00',
         'createdAtHuman' => '1 month ago',
@@ -221,7 +220,6 @@ test('submitReview refreshes file list and populates reviewPairs', function () {
         public function handle(string $repoPath, array $comments, string $globalComment, array $files, ?DiffTarget $target = null): array
         {
             return [
-                'json' => '/tmp/review.json',
                 'md' => '/tmp/review.md',
                 'clipboard' => 'review exported',
                 'submittedIds' => array_column($comments, 'id'),

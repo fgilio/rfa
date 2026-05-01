@@ -11,16 +11,14 @@ beforeEach(function () {
 
 // -- extractBasename --
 
-test('extracts basename from json review file path', function () {
-    $result = ReviewFilePair::extractBasename('.rfa/20250115_143022_comments_AbCdEf12.json');
-
-    expect($result)->toBe('20250115_143022_comments_AbCdEf12');
-});
-
 test('extracts basename from md review file path', function () {
     $result = ReviewFilePair::extractBasename('.rfa/20250115_143022_comments_AbCdEf12.md');
 
     expect($result)->toBe('20250115_143022_comments_AbCdEf12');
+});
+
+test('returns null for json review file path', function () {
+    expect(ReviewFilePair::extractBasename('.rfa/20250115_143022_comments_AbCdEf12.json'))->toBeNull();
 });
 
 test('returns null for non-rfa path', function () {
@@ -28,15 +26,15 @@ test('returns null for non-rfa path', function () {
 });
 
 test('returns null for rfa file without comments pattern', function () {
-    expect(ReviewFilePair::extractBasename('.rfa/config.json'))->toBeNull();
+    expect(ReviewFilePair::extractBasename('.rfa/config.md'))->toBeNull();
 });
 
 test('returns null for invalid timestamp format', function () {
-    expect(ReviewFilePair::extractBasename('.rfa/abc_def_comments_hash1234.json'))->toBeNull();
+    expect(ReviewFilePair::extractBasename('.rfa/abc_def_comments_hash1234.md'))->toBeNull();
 });
 
 test('handles nested rfa path', function () {
-    $result = ReviewFilePair::extractBasename('some/repo/.rfa/20250115_143022_comments_Ab12Cd34.json');
+    $result = ReviewFilePair::extractBasename('some/repo/.rfa/20250115_143022_comments_Ab12Cd34.md');
 
     expect($result)->toBe('20250115_143022_comments_Ab12Cd34');
 });
@@ -60,7 +58,6 @@ test('serializes to array with all fields', function () {
     $createdAt = Carbon::parse('2025-01-15 14:30:22');
     $pair = new ReviewFilePair(
         basename: '20250115_143022_comments_AbCdEf12',
-        jsonFile: ['id' => 'file-abc', 'path' => '.rfa/20250115_143022_comments_AbCdEf12.json'],
         mdFile: ['id' => 'file-def', 'path' => '.rfa/20250115_143022_comments_AbCdEf12.md'],
         createdAt: $createdAt,
     );
@@ -69,31 +66,15 @@ test('serializes to array with all fields', function () {
 
     expect($array['id'])->toBe('review-'.hash('xxh128', '20250115_143022_comments_AbCdEf12'))
         ->and($array['basename'])->toBe('20250115_143022_comments_AbCdEf12')
-        ->and($array['jsonFile'])->toBe(['id' => 'file-abc', 'path' => '.rfa/20250115_143022_comments_AbCdEf12.json'])
         ->and($array['mdFile'])->toBe(['id' => 'file-def', 'path' => '.rfa/20250115_143022_comments_AbCdEf12.md'])
         ->and($array['createdAt'])->toBe($createdAt->toIso8601String())
         ->and($array['createdAtHuman'])->not->toBeNull();
 });
 
-test('handles nullable files in toArray', function () {
-    $pair = new ReviewFilePair(
-        basename: '20250115_143022_comments_AbCdEf12',
-        jsonFile: null,
-        mdFile: ['id' => 'file-def', 'path' => '.rfa/20250115_143022_comments_AbCdEf12.md'],
-        createdAt: Carbon::parse('2025-01-15 14:30:22'),
-    );
-
-    $array = $pair->toArray();
-
-    expect($array['jsonFile'])->toBeNull()
-        ->and($array['mdFile'])->not->toBeNull();
-});
-
 test('handles null createdAt in toArray', function () {
     $pair = new ReviewFilePair(
         basename: '20250115_143022_comments_AbCdEf12',
-        jsonFile: null,
-        mdFile: null,
+        mdFile: ['id' => 'file-def', 'path' => '.rfa/20250115_143022_comments_AbCdEf12.md'],
         createdAt: null,
     );
 
@@ -108,8 +89,7 @@ test('handles null createdAt in toArray', function () {
 test('displayName formats timestamp as friendly date', function () {
     $pair = new ReviewFilePair(
         basename: '20250226_231521_comments_aA06ntL4',
-        jsonFile: null,
-        mdFile: null,
+        mdFile: ['id' => 'file-def', 'path' => '.rfa/20250226_231521_comments_aA06ntL4.md'],
         createdAt: Carbon::parse('2025-02-26 23:15:21'),
     );
 
@@ -119,10 +99,23 @@ test('displayName formats timestamp as friendly date', function () {
 test('displayName falls back to basename when createdAt is null', function () {
     $pair = new ReviewFilePair(
         basename: '20250226_231521_comments_aA06ntL4',
-        jsonFile: null,
-        mdFile: null,
+        mdFile: ['id' => 'file-def', 'path' => '.rfa/20250226_231521_comments_aA06ntL4.md'],
         createdAt: null,
     );
 
     expect($pair->toArray()['displayName'])->toBe('20250226_231521_comments_aA06ntL4');
+});
+
+// -- isValidBasename --
+
+test('isValidBasename accepts canonical pattern', function () {
+    expect(ReviewFilePair::isValidBasename('20250115_143022_comments_AbCdEf12'))->toBeTrue();
+});
+
+test('isValidBasename rejects path traversal', function () {
+    expect(ReviewFilePair::isValidBasename('../../etc/passwd'))->toBeFalse();
+});
+
+test('isValidBasename rejects unrelated strings', function () {
+    expect(ReviewFilePair::isValidBasename('random_file_name'))->toBeFalse();
 });

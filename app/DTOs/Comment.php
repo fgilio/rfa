@@ -45,24 +45,6 @@ class Comment
         ];
     }
 
-    /** @return array<string, mixed> */
-    public function toExportArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'file' => $this->file,
-            'side' => $this->side->value,
-            'start_line' => $this->startLine,
-            'end_line' => $this->endLine,
-            'body' => $this->body,
-            'anchor' => [
-                'origin_ref' => $this->originRef,
-                'file_content_hash' => $this->fileContentHash,
-                'line_snippet' => $this->lineSnippet,
-            ],
-        ];
-    }
-
     /** @param array<string, mixed> $data */
     public static function fromArray(array $data): self
     {

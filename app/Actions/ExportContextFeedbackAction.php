@@ -24,7 +24,7 @@ final readonly class ExportContextFeedbackAction
 
     /**
      * @param  array<int, array<string, mixed>>  $comments  View-state context-file comments.
-     * @return array{json: string, md: string, clipboard: string, submittedIds: array<int, string>}
+     * @return array{md: string, clipboard: string, submittedIds: array<int, string>}
      */
     public function handle(string $repoPath, ?int $projectId, array $comments, string $globalComment): array
     {
