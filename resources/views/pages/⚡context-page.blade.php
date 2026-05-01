@@ -5,14 +5,18 @@ use App\Actions\ContextCommentWorkflowAction;
 use App\Actions\DiscoverAgentContextFilesAction;
 use App\Actions\ExportContextFeedbackAction;
 use App\Actions\LoadContextCommentsAction;
+use App\Actions\PersistProjectViewAction;
 use App\Actions\ResolveProjectAction;
 use App\DTOs\AgentContextFile;
+use App\Enums\LastViewMode;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
+
+use function Illuminate\Support\defer;
 
 /**
  * Context page: inventory + line-level review of every CLAUDE.md / AGENTS.md
@@ -70,6 +74,20 @@ new #[Layout('layouts.app')] class extends Component
         $this->hasRemote = ! empty($project['remote_url']);
 
         Cache::put('rfa.active-project-id', $this->projectId, now()->addDay());
+
+        $projectId = $this->projectId;
+        $repoPath = $this->repoPath;
+
+        // Run after the response is sent: the persisted view is only consumed
+        // on the next navigation, so making the user wait for the UPSERT here
+        // would be needless mount latency.
+        defer(static function () use ($projectId, $repoPath) {
+            app(PersistProjectViewAction::class)->handle(
+                $projectId,
+                $repoPath,
+                LastViewMode::Context,
+            );
+        });
 
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title("rfa - {$this->projectName} · context");

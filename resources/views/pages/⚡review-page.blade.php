@@ -14,6 +14,7 @@ use App\Actions\GroupReviewFilesAction;
 use App\Actions\IsSinceBaseViewAction;
 use App\Actions\LinkExternalPathAction;
 use App\Actions\LoadCommitMetadataAction;
+use App\Actions\PersistProjectViewAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\ResolveRangeAction;
@@ -33,6 +34,8 @@ use App\DTOs\FileListEntry;
 use App\Enums\DiffSide;
 use App\Enums\DivergenceState;
 use App\Enums\GitRef;
+use App\Enums\LastViewKind;
+use App\Enums\LastViewMode;
 use App\Exceptions\GitCommandException;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
@@ -41,6 +44,8 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
+
+use function Illuminate\Support\defer;
 
 new #[Layout('layouts.app')] class extends Component
 {
@@ -213,6 +218,47 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->rehydrateForTarget();
         $this->checkHeadDivergence();
+
+        $this->persistCurrentView($hash, $from, $to, $ref, $baseRef, $rangeFromWorking);
+    }
+
+    /**
+     * Persist the (mode, kind, from, to) shape so that re-entering this
+     * project — via the picker, the home redirect, or a deep-link — puts
+     * the user back on the same surface.
+     *
+     * Kind is derived from the arrival shape (which mount branch fired)
+     * rather than from `$diffFrom`/`$diffTo`, because resolved SHAs lose
+     * the original "single commit vs explicit range" distinction.
+     */
+    private function persistCurrentView(?string $hash, ?string $from, ?string $to, ?string $ref, ?string $baseRef, ?string $rangeFromWorking): void
+    {
+        $kind = match (true) {
+            $hash !== null => LastViewKind::Commit,
+            $from !== null && $to !== null => LastViewKind::Range,
+            $rangeFromWorking !== null => $this->isSinceBaseView ? LastViewKind::SinceBase : LastViewKind::RangeToWorking,
+            $ref !== null && $baseRef !== null => LastViewKind::Range,
+            default => LastViewKind::WorkingTree,
+        };
+
+        $projectId = $this->projectId;
+        $repoPath = $this->repoPath;
+        $diffFrom = $this->diffFrom;
+        $diffTo = $this->diffTo;
+
+        // Run after the response is sent: the persisted view is only consumed
+        // on the next navigation, so making the user wait for the UPSERT here
+        // would be needless mount latency.
+        defer(static function () use ($projectId, $repoPath, $kind, $diffFrom, $diffTo) {
+            app(PersistProjectViewAction::class)->handle(
+                $projectId,
+                $repoPath,
+                LastViewMode::Review,
+                $kind,
+                $kind === LastViewKind::WorkingTree || $kind === LastViewKind::Commit ? null : $diffFrom,
+                $kind === LastViewKind::WorkingTree ? null : $diffTo,
+            );
+        });
     }
 
     private function rehydrateForTarget(): void

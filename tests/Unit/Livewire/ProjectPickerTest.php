@@ -1,8 +1,11 @@
 <?php
 
 use App\Actions\ResolveStartupRouteAction;
+use App\Enums\LastViewKind;
+use App\Enums\LastViewMode;
 use App\Models\Comment;
 use App\Models\Project;
+use App\Models\ReviewSession;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -55,6 +58,37 @@ test('selectProject defaults to review-page when mode is unrecognized', function
     Project::factory()->create(['slug' => 'other']);
 
     Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current', 'mode' => 'whatever'])
+        ->call('selectProject', 'other')
+        ->assertRedirect(route('review-page', ['slug' => 'other']));
+});
+
+test('selectProject restores the target project saved Context mode regardless of host mode', function () {
+    Project::factory()->create(['slug' => 'current']);
+    $other = Project::factory()->create(['slug' => 'other']);
+
+    ReviewSession::create([
+        'project_id' => $other->id,
+        'repo_path' => $other->path,
+        'last_view_mode' => LastViewMode::Context,
+    ]);
+
+    Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current', 'mode' => 'review'])
+        ->call('selectProject', 'other')
+        ->assertRedirect(route('context-page', ['slug' => 'other']));
+});
+
+test('selectProject restores the target project saved Review WT when host is on Context', function () {
+    Project::factory()->create(['slug' => 'current']);
+    $other = Project::factory()->create(['slug' => 'other']);
+
+    ReviewSession::create([
+        'project_id' => $other->id,
+        'repo_path' => $other->path,
+        'last_view_mode' => LastViewMode::Review,
+        'last_view_kind' => LastViewKind::WorkingTree,
+    ]);
+
+    Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current', 'mode' => 'context'])
         ->call('selectProject', 'other')
         ->assertRedirect(route('review-page', ['slug' => 'other']));
 });
