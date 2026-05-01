@@ -84,11 +84,13 @@ new class extends Component {
                 />
 
                 <flux:menu>
-                    <flux:menu.item wire:click="openRepository" icon="folder-open" icon:variant="outline">
-                        Add a repo
+                    <flux:menu.item wire:click="openRepository" wire:loading.attr="disabled" icon="folder-open" icon:variant="outline">
+                        <span wire:loading.remove wire:target="openRepository,scanDirectory">Add a repo</span>
+                        <span wire:loading wire:target="openRepository">Opening...</span>
                     </flux:menu.item>
-                    <flux:menu.item wire:click="scanDirectory" icon="rectangle-stack" icon:variant="outline">
-                        Scan folder for repos
+                    <flux:menu.item wire:click="scanDirectory" wire:loading.attr="disabled" icon="rectangle-stack" icon:variant="outline">
+                        <span wire:loading.remove wire:target="openRepository,scanDirectory">Scan folder for repos</span>
+                        <span wire:loading wire:target="scanDirectory">Scanning...</span>
                     </flux:menu.item>
                 </flux:menu>
             </flux:dropdown>

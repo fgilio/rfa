@@ -257,6 +257,7 @@
         </svg>
         <input x-ref="input" type="text" x-model="query"
                placeholder="Find..."
+               aria-label="Find in page"
                class="bg-transparent text-gh-text text-sm font-mono outline-none w-56 placeholder:text-gh-muted"
                @input="onQueryInput()"
                @keydown.enter.prevent="find($event.shiftKey)"
@@ -264,17 +265,17 @@
         <span x-show="query" role="status" aria-live="polite" aria-atomic="true"
               class="text-gh-muted text-xs font-mono tabular-nums shrink-0 min-w-[3rem] text-right"
               x-text="matches.length === 0 ? 'No results' : currentMatch + ' of ' + matches.length"></span>
-        <button @click="find(true)" class="text-gh-muted hover:text-gh-text p-0.5" title="Previous (Shift+Enter)">
+        <button type="button" @click="find(true)" class="text-gh-muted hover:text-gh-text p-0.5" title="Previous (Shift+Enter)" aria-label="Previous match">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
             </svg>
         </button>
-        <button @click="find(false)" class="text-gh-muted hover:text-gh-text p-0.5" title="Next (Enter)">
+        <button type="button" @click="find(false)" class="text-gh-muted hover:text-gh-text p-0.5" title="Next (Enter)" aria-label="Next match">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
             </svg>
         </button>
-        <button @click="close()" class="text-gh-muted hover:text-gh-text p-0.5 ml-0.5" title="Close (Esc)">
+        <button type="button" @click="close()" class="text-gh-muted hover:text-gh-text p-0.5 ml-0.5" title="Close (Esc)" aria-label="Close find">
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>

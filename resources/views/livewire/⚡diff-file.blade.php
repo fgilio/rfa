@@ -357,18 +357,16 @@ new class extends Component {
                 @endif
             </div>
         @elseif($diffData === null)
-            {{-- Loading state: trigger lazy load via x-intersect --}}
+            {{-- Loading state: trigger lazy load via x-intersect.
+                 Pre-request and in-flight states share one visual so users
+                 don't see a brief "Waiting to load..." message swap to
+                 "Loading diff..." when the request actually fires. --}}
             <div
                 x-intersect.once="setTimeout(() => $wire.loadFileDiff(), {{ $loadDelay }})"
                 class="px-4 py-8 text-center"
             >
-                <div wire:loading wire:target="loadFileDiff">
-                    <flux:icon icon="arrow-path" variant="outline" class="animate-spin inline-block text-gh-muted mr-1" />
-                    <flux:text variant="subtle" size="sm" inline>Loading diff...</flux:text>
-                </div>
-                <div wire:loading.remove wire:target="loadFileDiff">
-                    <flux:text variant="subtle" size="sm">Waiting to load...</flux:text>
-                </div>
+                <flux:icon icon="arrow-path" variant="outline" class="animate-spin inline-block text-gh-muted mr-1" />
+                <flux:text variant="subtle" size="sm" inline>Loading diff...</flux:text>
             </div>
         @elseif($diffData['tooLarge'] ?? false)
             <div class="px-4 py-8 text-center">
