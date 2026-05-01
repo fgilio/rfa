@@ -1125,7 +1125,7 @@ new #[Layout('layouts.app')] class extends Component
                 'added' => 'text-gh-green',
                 'deleted' => 'text-gh-red',
                 'commented' => 'text-gh-muted',
-                default => 'text-amber-500 dark:text-amber-400',
+                default => 'text-gh-attention',
             },
         ]])->all()),
         remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '', disabled: false, disabledReason: '' },
@@ -1477,7 +1477,7 @@ new #[Layout('layouts.app')] class extends Component
                         <flux:tooltip>
                             <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
                                 x-bind:aria-label="tooltip"
-                                x-bind:class="hasChanges && '!text-amber-500 dark:!text-amber-400'"
+                                x-bind:class="hasChanges && '!text-gh-attention'"
                                 wire:click.preserve-scroll="softRefresh" />
                             <flux:tooltip.content>
                                 <span x-text="tooltip"></span>
@@ -1485,8 +1485,8 @@ new #[Layout('layouts.app')] class extends Component
                         </flux:tooltip>
                         <span x-show="hasChanges" x-cloak
                             class="pointer-events-none absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-gh-attention opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-gh-attention"></span>
                         </span>
                     </div>
                 @endif
@@ -1753,7 +1753,7 @@ new #[Layout('layouts.app')] class extends Component
                         ]"
                     >
                         <button @click="scrollToFile('{{ $file['id'] }}')" class="flex items-center gap-2.5 min-w-0 flex-1">
-                            <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', 'C' => 'text-gh-muted', default => 'text-amber-500 dark:text-amber-400' } }}">{{ $badgeLabel }}</span>
+                            <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', 'C' => 'text-gh-muted', default => 'text-gh-attention' } }}">{{ $badgeLabel }}</span>
                             @if($file['isSymlink'] ?? false)
                                 <flux:icon icon="link" variant="outline" class="!size-3 text-gh-muted shrink-0" aria-hidden="true" />
                             @endif

@@ -33,8 +33,8 @@ enum AgentContextFileKind: string
     public function badgeColorClass(): string
     {
         return match ($this) {
-            self::Claude => 'text-orange-500 dark:text-orange-400',
-            self::Agents => 'text-blue-500 dark:text-blue-400',
+            self::Claude => 'text-gh-kind-claude',
+            self::Agents => 'text-gh-kind-agents',
         };
     }
 }

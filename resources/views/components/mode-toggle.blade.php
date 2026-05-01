@@ -35,8 +35,8 @@
         <span>Review</span>
         @if($showReviewDot)
             <span aria-hidden="true" class="pointer-events-none flex h-2 w-2">
-                <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-gh-attention opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-gh-attention"></span>
             </span>
             <span class="sr-only">unsubmitted comments on review</span>
         @endif
@@ -53,8 +53,8 @@
         <span>Context</span>
         @if($showContextDot)
             <span aria-hidden="true" class="pointer-events-none flex h-2 w-2">
-                <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-gh-attention opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-gh-attention"></span>
             </span>
             <span class="sr-only">unsubmitted comments on context</span>
         @endif

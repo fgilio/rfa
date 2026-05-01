@@ -34,24 +34,24 @@ test('renders the amber dot on the context side when context activity exists and
     $html = Blade::render('<x-mode-toggle mode="review" project-slug="rfa" :has-context-activity="true" />');
     [$review, $context] = modeToggleAnchors($html);
 
-    expect($context)->toContain('bg-amber-500')->toContain('animate-ping');
-    expect($review)->not->toContain('bg-amber-500');
+    expect($context)->toContain('bg-gh-attention')->toContain('animate-ping');
+    expect($review)->not->toContain('bg-gh-attention');
 });
 
 test('renders the amber dot on the review side when review activity exists and mode is context', function () {
     $html = Blade::render('<x-mode-toggle mode="context" project-slug="rfa" :has-review-activity="true" />');
     [$review, $context] = modeToggleAnchors($html);
 
-    expect($review)->toContain('bg-amber-500')->toContain('animate-ping');
-    expect($context)->not->toContain('bg-amber-500');
+    expect($review)->toContain('bg-gh-attention')->toContain('animate-ping');
+    expect($context)->not->toContain('bg-gh-attention');
 });
 
 test('never renders the dot on the active side regardless of the activity flag', function () {
     $reviewActiveHtml = Blade::render('<x-mode-toggle mode="review" project-slug="rfa" :has-review-activity="true" :has-context-activity="false" />');
     $contextActiveHtml = Blade::render('<x-mode-toggle mode="context" project-slug="rfa" :has-review-activity="false" :has-context-activity="true" />');
 
-    expect($reviewActiveHtml)->not->toContain('bg-amber-500');
-    expect($contextActiveHtml)->not->toContain('bg-amber-500');
+    expect($reviewActiveHtml)->not->toContain('bg-gh-attention');
+    expect($contextActiveHtml)->not->toContain('bg-gh-attention');
 });
 
 test('href attributes resolve to the page routes for both sides', function () {
