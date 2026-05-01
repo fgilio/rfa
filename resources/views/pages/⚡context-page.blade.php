@@ -7,6 +7,7 @@ use App\Actions\ExportContextFeedbackAction;
 use App\Actions\LoadContextCommentsAction;
 use App\Actions\ResolveProjectAction;
 use App\DTOs\AgentContextFile;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
@@ -67,6 +68,8 @@ new #[Layout('layouts.app')] class extends Component
         $this->projectSlug = $project['slug'];
         $this->projectBranch = $project['branch'] ?? '';
         $this->hasRemote = ! empty($project['remote_url']);
+
+        Cache::put('rfa.active-project-id', $this->projectId, now()->addDay());
 
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title("rfa - {$this->projectName} · context");
@@ -157,6 +160,19 @@ new #[Layout('layouts.app')] class extends Component
                 'drafts' => $group->where('isDraft', true)->count(),
             ])
             ->all();
+    }
+
+    /**
+     * Drives the amber dot on the Review side of the mode-toggle. Mirrors
+     * hasContextActivity on review-page (inverse origin_ref filter).
+     */
+    #[Computed]
+    public function hasReviewActivity(): bool
+    {
+        return \App\Models\Comment::forProjectOrRepo($this->projectId ?: null, $this->repoPath)
+            ->where('origin_ref', '!=', 'context-file')
+            ->whereNull('submitted_at')
+            ->exists();
     }
 
     #[On('add-comment')]
@@ -327,17 +343,17 @@ new #[Layout('layouts.app')] class extends Component
     >
         <header class="bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
             <div class="flex items-center gap-3 min-w-0">
-                <flux:tooltip content="Back to review">
-                    <flux:button
-                        variant="ghost"
-                        size="sm"
-                        icon="arrow-left"
-                        icon:variant="outline"
-                        aria-label="Back to review"
-                        onclick="Livewire.navigate('/p/{{ $projectSlug }}')"
-                    />
-                </flux:tooltip>
-                <span class="font-display font-bold tracking-brutal-tight text-base truncate">{{ $projectName }}</span>
+                @native
+                    <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" mode="context" />
+                @else
+                    <span class="font-display font-bold tracking-brutal-tight text-base truncate">{{ $projectName }}</span>
+                @endnative
+                <x-mode-toggle
+                    mode="context"
+                    :project-slug="$projectSlug"
+                    :has-review-activity="$this->hasReviewActivity"
+                    :has-context-activity="false"
+                />
                 <x-header-separator />
                 <span class="section-label text-gh-muted">Agent context</span>
                 <span class="font-mono text-xs text-gh-muted">

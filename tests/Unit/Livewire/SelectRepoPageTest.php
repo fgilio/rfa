@@ -4,6 +4,7 @@ use App\Actions\ResolveStartupRouteAction;
 use App\Models\Comment;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -167,4 +168,12 @@ test('footer reflects total and filtered counts', function () {
         ->assertSee('2 repos')
         ->set('search', 'match')
         ->assertSee('1/2 repos');
+});
+
+test('mount clears the cached active-project-id so cmd-shift-k opens the file picker', function () {
+    Cache::put('rfa.active-project-id', 42);
+
+    Livewire::test('pages::select-repo-page');
+
+    expect(Cache::get('rfa.active-project-id'))->toBeNull();
 });

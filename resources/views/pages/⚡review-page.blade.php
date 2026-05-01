@@ -161,6 +161,8 @@ new #[Layout('layouts.app')] class extends Component
 
         app(ResolveStartupRouteAction::class)->rememberLastOpened($slug);
 
+        Cache::put('rfa.active-project-id', $this->projectId, now()->addDay());
+
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title("rfa - {$this->projectName}");
         }
@@ -978,6 +980,22 @@ new #[Layout('layouts.app')] class extends Component
         return collect($this->comments)->groupBy('fileId')->map(fn ($group) => $group->values()->all())->all();
     }
 
+    /**
+     * Drives the amber dot on the Context side of the mode-toggle. Catches
+     * both drafts and saved-but-not-exported context comments. Both states
+     * represent work that would be lost if the user forgets.
+     */
+    #[Computed]
+    public function hasContextActivity(): bool
+    {
+        $projectId = $this->projectId === 0 ? null : $this->projectId;
+
+        return \App\Models\Comment::forProjectOrRepo($projectId, $this->repoPath)
+            ->where('origin_ref', 'context-file')
+            ->whereNull('submitted_at')
+            ->exists();
+    }
+
     public function deleteReviewPair(string $basename): void
     {
         app(DeleteReviewFilesAction::class)->handle($this->repoPath, $basename);
@@ -1372,11 +1390,17 @@ new #[Layout('layouts.app')] class extends Component
                     class="inline-flex"
                 >
                     @native
-                        <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" />
+                        <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" mode="review" />
                     @else
                         <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
                     @endnative
                 </div>
+                <x-mode-toggle
+                    mode="review"
+                    :project-slug="$projectSlug"
+                    :has-review-activity="false"
+                    :has-context-activity="$this->hasContextActivity"
+                />
                 @php
                     $shortFrom = $diffFrom === 'HEAD' ? 'HEAD' : substr($diffFrom, 0, 7);
                     $shortTo = $diffTo ? substr($diffTo, 0, 7) : null;

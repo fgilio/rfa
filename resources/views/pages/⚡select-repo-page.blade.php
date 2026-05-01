@@ -4,6 +4,7 @@ use App\Actions\ListProjectsAction;
 use App\Actions\RemoveProjectAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Concerns\InteractsWithRemoteLinks;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Session;
@@ -32,6 +33,11 @@ new #[Layout('layouts.app')] class extends Component
     {
         $this->currentSlug = app(ResolveStartupRouteAction::class)->lastOpenedSlug() ?? '';
         $this->refreshProjects();
+
+        // Clear the menu-handler's cached active project. Without this, ⌘⇧K
+        // from the repo picker would ambush the user with the last project
+        // they had open (eng-review issue 1B).
+        Cache::forget('rfa.active-project-id');
 
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title('rfa');
