@@ -12,8 +12,32 @@
     const CURRENT_CLASS = 'rfa-search-match--current';
     const SKIP_SELECTOR = 'script,style,noscript,iframe,input,textarea,[data-search-ignore]';
 
+    // Tag whitelist used to find the nearest block-level ancestor of a text
+    // node. Anything outside this set ends the walk; sibling text nodes
+    // sharing a block ancestor get joined for matching, so a query can span
+    // adjacent syntax-highlighter token spans (e.g. `'`, `local`, `'`)
+    // without bleeding across rows, cells, or paragraphs. Tag-based instead
+    // of getComputedStyle to keep the walker O(1) on big diffs.
+    const INLINE_TAGS = new Set([
+        'A', 'ABBR', 'B', 'BDI', 'BDO', 'BIG', 'CITE', 'CODE', 'DEL', 'DFN',
+        'EM', 'FONT', 'I', 'INS', 'KBD', 'MARK', 'OUTPUT', 'Q', 'RP', 'RT',
+        'RUBY', 'S', 'SAMP', 'SMALL', 'SPAN', 'STRONG', 'SUB', 'SUP', 'TIME',
+        'TT', 'U', 'VAR', 'WBR',
+    ]);
+
     function escapeRegex(value) {
         return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function findBlockAncestor(el, cache) {
+        const cached = cache.get(el);
+        if (cached) return cached;
+        let cursor = el;
+        while (cursor.parentElement && INLINE_TAGS.has(cursor.tagName)) {
+            cursor = cursor.parentElement;
+        }
+        cache.set(el, cursor);
+        return cursor;
     }
 
     function createPageSearch() {
@@ -21,7 +45,10 @@
             open: false,
             query: '',
             currentMatch: 0,
-            matchElements: [],
+            // Each entry is one logical match: an array of one or more spans.
+            // A query that crosses sibling text nodes wraps each piece in its
+            // own `.rfa-search-match` span, all grouped under a single entry.
+            matches: [],
 
             handleKeydown(e) {
                 if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
@@ -48,13 +75,13 @@
                     this.currentMatch = 0;
                     return;
                 }
-                this.matchElements = this.markMatches(this.query);
-                this.currentMatch = this.matchElements.length > 0 ? 1 : 0;
+                this.matches = this.markMatches(this.query);
+                this.currentMatch = this.matches.length > 0 ? 1 : 0;
                 this.updateCurrent(true);
             },
 
             find(backwards) {
-                const total = this.matchElements.length;
+                const total = this.matches.length;
                 if (total === 0) {
                     if (this.query) {
                         this.refresh();
@@ -70,17 +97,20 @@
             },
 
             updateCurrent(scroll) {
-                const badge = `${this.currentMatch} of ${this.matchElements.length}`;
-                this.matchElements.forEach((el, i) => {
+                const total = this.matches.length;
+                const badge = `${this.currentMatch} of ${total}`;
+                this.matches.forEach((spans, i) => {
                     const isCurrent = (i + 1) === this.currentMatch;
-                    el.classList.toggle(CURRENT_CLASS, isCurrent);
-                    if (isCurrent) {
-                        el.setAttribute('data-match-number', badge);
-                        if (scroll) {
-                            el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    spans.forEach((el, j) => {
+                        el.classList.toggle(CURRENT_CLASS, isCurrent);
+                        if (isCurrent && j === 0) {
+                            el.setAttribute('data-match-number', badge);
+                        } else {
+                            el.removeAttribute('data-match-number');
                         }
-                    } else {
-                        el.removeAttribute('data-match-number');
+                    });
+                    if (isCurrent && scroll && spans[0]) {
+                        spans[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
                     }
                 });
             },
@@ -102,7 +132,7 @@
                     parents.add(parent);
                 });
                 parents.forEach(parent => parent.normalize());
-                this.matchElements = [];
+                this.matches = [];
             },
 
             markMatches(query) {
@@ -112,6 +142,7 @@
                 // so memoize the per-walk visibility answer to avoid re-walking
                 // the style chain for each one.
                 const visibility = new WeakMap();
+                const blockCache = new WeakMap();
                 const walker = document.createTreeWalker(
                     document.body,
                     NodeFilter.SHOW_TEXT,
@@ -136,51 +167,91 @@
                                 });
                                 visibility.set(parent, visible);
                             }
-                            if (!visible) return NodeFilter.FILTER_REJECT;
-                            // Substring check (not pattern.test) avoids
-                            // mutating the shared regex's lastIndex.
-                            return node.nodeValue.toLowerCase().includes(needle)
-                                ? NodeFilter.FILTER_ACCEPT
-                                : NodeFilter.FILTER_REJECT;
+                            return visible ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
                         },
                     }
                 );
 
-                const textNodes = [];
+                // Group accepted text nodes by their nearest block-level
+                // ancestor. Each block becomes one searchable string, so a
+                // query can cross sibling token spans inside a line but not
+                // hop between lines/cells/paragraphs.
+                const groups = new Map();
                 let node;
                 while ((node = walker.nextNode())) {
-                    textNodes.push(node);
+                    const block = findBlockAncestor(node.parentElement, blockCache);
+                    let bucket = groups.get(block);
+                    if (!bucket) {
+                        bucket = [];
+                        groups.set(block, bucket);
+                    }
+                    bucket.push(node);
                 }
 
                 const matches = [];
-                textNodes.forEach(textNode => {
-                    const text = textNode.nodeValue;
+                groups.forEach(textNodes => {
+                    const segments = [];
+                    let joined = '';
+                    textNodes.forEach(n => {
+                        const value = n.nodeValue;
+                        segments.push({ node: n, start: joined.length, length: value.length });
+                        joined += value;
+                    });
+                    if (joined.length === 0) return;
+                    // Cheap substring pre-check: the regex is just an escaped
+                    // literal, so if the lowercased needle isn't in the joined
+                    // string the regex can't match either.
+                    if (!joined.toLowerCase().includes(needle)) return;
+
                     pattern.lastIndex = 0;
-                    const fragments = [];
-                    let cursor = 0;
-                    let match;
-                    while ((match = pattern.exec(text)) !== null) {
-                        if (match.index > cursor) {
-                            fragments.push(document.createTextNode(text.slice(cursor, match.index)));
-                        }
-                        const span = document.createElement('span');
-                        span.className = MATCH_CLASS;
-                        span.textContent = match[0];
-                        fragments.push(span);
-                        matches.push(span);
-                        cursor = match.index + match[0].length;
-                        if (match[0].length === 0) {
+                    const ranges = [];
+                    let m;
+                    while ((m = pattern.exec(joined)) !== null) {
+                        if (m[0].length === 0) {
                             pattern.lastIndex++;
+                            continue;
                         }
+                        ranges.push([m.index, m.index + m[0].length]);
                     }
-                    if (fragments.length === 0) return;
-                    if (cursor < text.length) {
-                        fragments.push(document.createTextNode(text.slice(cursor)));
+                    if (ranges.length === 0) return;
+
+                    // Wrap each match's text-node ranges in their own
+                    // `.rfa-search-match` span. Process matches back-to-front
+                    // and segments back-to-front within a match so each DOM
+                    // split only invalidates offsets we've already handled.
+                    const wrapped = new Array(ranges.length);
+                    for (let i = ranges.length - 1; i >= 0; i--) {
+                        const [matchStart, matchEnd] = ranges[i];
+                        const spans = [];
+                        for (let s = segments.length - 1; s >= 0; s--) {
+                            const seg = segments[s];
+                            const segEnd = seg.start + seg.length;
+                            if (segEnd <= matchStart || seg.start >= matchEnd) continue;
+                            const localStart = Math.max(0, matchStart - seg.start);
+                            const localEnd = Math.min(seg.length, matchEnd - seg.start);
+                            if (localStart >= localEnd) continue;
+                            const range = document.createRange();
+                            range.setStart(seg.node, localStart);
+                            range.setEnd(seg.node, localEnd);
+                            const span = document.createElement('span');
+                            span.className = MATCH_CLASS;
+                            try {
+                                range.surroundContents(span);
+                                spans.unshift(span);
+                            } catch (_) {
+                                // surroundContents only throws when the range
+                                // partially selects a non-text node, which our
+                                // text-only ranges never do.
+                            }
+                        }
+                        wrapped[i] = spans;
                     }
-                    const parent = textNode.parentNode;
-                    fragments.forEach(fragment => parent.insertBefore(fragment, textNode));
-                    parent.removeChild(textNode);
+
+                    wrapped.forEach(spans => {
+                        if (spans && spans.length > 0) matches.push(spans);
+                    });
                 });
+
                 return matches;
             },
         };

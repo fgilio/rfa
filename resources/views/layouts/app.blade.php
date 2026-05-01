@@ -260,7 +260,7 @@
                @keydown.escape.prevent="close()">
         <span x-show="query" role="status" aria-live="polite" aria-atomic="true"
               class="text-gh-muted text-xs font-mono tabular-nums shrink-0 min-w-[3rem] text-right"
-              x-text="matchElements.length === 0 ? 'No results' : currentMatch + ' of ' + matchElements.length"></span>
+              x-text="matches.length === 0 ? 'No results' : currentMatch + ' of ' + matches.length"></span>
         <button @click="find(true)" class="text-gh-muted hover:text-gh-text p-0.5" title="Previous (Shift+Enter)">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
