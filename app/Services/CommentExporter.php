@@ -7,6 +7,7 @@ namespace App\Services;
 use App\DTOs\Comment;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class CommentExporter
 {
@@ -26,7 +27,10 @@ class CommentExporter
         $path = "{$rfaDir}/{$basename}.md";
 
         File::ensureDirectoryExists($rfaDir);
-        File::put($path, $this->markdownFormatter->format($comments, $globalComment, $diffContext));
+
+        if (File::put($path, $this->markdownFormatter->format($comments, $globalComment, $diffContext)) === false) {
+            throw new RuntimeException("Failed to write review file: {$path}");
+        }
 
         return [
             'md' => $path,

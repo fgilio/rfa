@@ -75,6 +75,14 @@ test('uses timestamp prefix in filenames', function () {
     expect(basename($result['md']))->toMatch('/^\d{8}_\d{6}_comments_[a-zA-Z0-9]{8}\.md$/');
 });
 
+test('throws when the markdown write fails', function () {
+    File::shouldReceive('ensureDirectoryExists')->andReturnTrue();
+    File::shouldReceive('put')->andReturn(false);
+
+    expect(fn () => $this->exporter->export($this->tmpDir, [], 'test'))
+        ->toThrow(RuntimeException::class, 'Failed to write review file');
+});
+
 // -- edge cases --
 
 test('preserves unicode and emoji round-trip in markdown', function () {

@@ -304,11 +304,11 @@ test('drafts excluded from export', function () {
     $page->assertSee('Review submitted');
 
     $rfaDir = $this->testRepoPath.'/.rfa';
-    $files = File::glob($rfaDir.'/*.json');
-    $json = File::get($files[0]);
+    $files = File::glob($rfaDir.'/*.md');
+    $md = File::get($files[0]);
 
-    expect($json)->toContain('Include me');
-    expect($json)->not->toContain('Exclude me');
+    expect($md)->toContain('Include me');
+    expect($md)->not->toContain('Exclude me');
 });
 
 // -- Confirm dialog cancel path --
