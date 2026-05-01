@@ -7,6 +7,7 @@ namespace App\Actions;
 use App\DTOs\Comment as CommentDTO;
 use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
+use Illuminate\Support\Facades\File;
 
 /**
  * Resolve placement for context-page comments against the current
@@ -104,13 +105,11 @@ final readonly class ResolveContextCommentAnchorAction
 
     private function readFile(string $absolutePath): ?string
     {
-        if (! is_file($absolutePath)) {
-            return null;
-        }
-
-        $content = @file_get_contents($absolutePath);
-
-        return $content === false ? null : $content;
+        return rescue(
+            fn (): ?string => File::isFile($absolutePath) ? File::get($absolutePath) : null,
+            null,
+            report: false,
+        );
     }
 
     /**
