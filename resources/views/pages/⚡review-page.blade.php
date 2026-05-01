@@ -1308,20 +1308,12 @@ new #[Layout('layouts.app')] class extends Component
         </template>
     @endif
 
-    <div
-        class="sticky top-0 z-50"
-        x-data
-        x-init="
-            const update = () => document.documentElement.style.setProperty('--header-h', $el.offsetHeight + 'px');
-            update();
-            new ResizeObserver(update).observe($el);
-        "
-    >
+    <x-page-header>
         @native
-            <livewire:update-banner />
+            <x-slot:above>
+                <livewire:update-banner />
+            </x-slot:above>
         @endnative
-
-        <header class="bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <div
                     @if($hasRemote)
@@ -1587,10 +1579,11 @@ new #[Layout('layouts.app')] class extends Component
 
                 <livewire:theme-switcher />
             </div>
-        </header>
 
-        <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" />
-    </div>
+        <x-slot:below>
+            <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" />
+        </x-slot:below>
+    </x-page-header>
 
     {{-- Branch divergence banner + polling island (working-tree mode only) --}}
     @if(! $this->isCommitMode())
@@ -1946,6 +1939,9 @@ new #[Layout('layouts.app')] class extends Component
     {{-- Undo toast --}}
     @include('livewire.undo-toast')
 
-    {{-- Submit bar --}}
-    @include('livewire.submit-bar')
+    <x-feedback-submit-bar
+        :submitted="$submitted"
+        :export-result="$exportResult"
+        copy-again-tooltip="Already on your clipboard — re-copy if you've copied something else since"
+    />
 </div>

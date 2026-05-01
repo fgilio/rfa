@@ -341,48 +341,38 @@ new #[Layout('layouts.app')] class extends Component
     }"
     class="min-h-screen flex flex-col"
 >
-    <div
-        class="sticky top-0 z-50"
-        x-data
-        x-init="
-            const update = () => document.documentElement.style.setProperty('--header-h', $el.offsetHeight + 'px');
-            update();
-            new ResizeObserver(update).observe($el);
-        "
-    >
-        <header class="bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
-            <div class="flex items-center gap-3 min-w-0">
-                @native
-                    <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" mode="context" />
-                @else
-                    <span class="font-display font-bold tracking-brutal-tight text-base truncate">{{ $projectName }}</span>
-                @endnative
-                <x-mode-toggle
-                    mode="context"
-                    :project-slug="$projectSlug"
-                    :has-review-activity="$this->hasReviewActivity"
-                    :has-context-activity="false"
+    <x-page-header>
+        <div class="flex items-center gap-3 min-w-0">
+            @native
+                <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" mode="context" />
+            @else
+                <span class="font-display font-bold tracking-brutal-tight text-base truncate">{{ $projectName }}</span>
+            @endnative
+            <x-mode-toggle
+                mode="context"
+                :project-slug="$projectSlug"
+                :has-review-activity="$this->hasReviewActivity"
+                :has-context-activity="false"
+            />
+            <x-header-separator />
+            <span class="section-label text-gh-muted">Agent context</span>
+            <span class="font-mono text-xs text-gh-muted">
+                {{ count($contextFiles) }} {{ count($contextFiles) === 1 ? 'file' : 'files' }}
+            </span>
+        </div>
+        <div class="flex items-center gap-2">
+            <flux:tooltip content="Re-scan repo">
+                <flux:button
+                    variant="ghost"
+                    size="sm"
+                    icon="arrow-path"
+                    icon:variant="outline"
+                    aria-label="Re-scan"
+                    wire:click="refresh"
                 />
-                <x-header-separator />
-                <span class="section-label text-gh-muted">Agent context</span>
-                <span class="font-mono text-xs text-gh-muted">
-                    {{ count($contextFiles) }} {{ count($contextFiles) === 1 ? 'file' : 'files' }}
-                </span>
-            </div>
-            <div class="flex items-center gap-2">
-                <flux:tooltip content="Re-scan repo">
-                    <flux:button
-                        variant="ghost"
-                        size="sm"
-                        icon="arrow-path"
-                        icon:variant="outline"
-                        aria-label="Re-scan"
-                        wire:click="refresh"
-                    />
-                </flux:tooltip>
-            </div>
-        </header>
-    </div>
+            </flux:tooltip>
+        </div>
+    </x-page-header>
 
     <x-resizable-sidebar-shell class="flex-1" main-class="pb-32">
         <x-slot:sidebar>
@@ -424,78 +414,14 @@ new #[Layout('layouts.app')] class extends Component
         @endif
     </x-resizable-sidebar-shell>
 
-    {{-- Submit bar --}}
-    <div class="fixed bottom-0 left-0 right-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-t border-gh-border">
-        @if($submitted)
-            <div class="px-5 py-3.5 flex items-center justify-between gap-4">
-                <div class="flex items-center gap-3 min-w-0">
-                    <flux:icon icon="check-circle" variant="outline" class="text-gh-green shrink-0" />
-                    <span class="font-semibold tracking-brutal shrink-0">Feedback exported</span>
-                    <span class="font-mono text-xs text-gh-muted px-2 py-0.5 rounded border border-gh-border truncate">{{ $exportResult }}</span>
-                </div>
-                <div class="flex items-center gap-2 shrink-0">
-                    <flux:button
-                        size="sm"
-                        icon="clipboard-document"
-                        icon:variant="outline"
-                        @click="$dispatch('copy-to-clipboard', { text: @js($exportResult), toast: 'Copied again' })"
-                    >
-                        Copy again
-                    </flux:button>
-                    <flux:button
-                        variant="primary"
-                        size="sm"
-                        icon="pencil-square"
-                        icon:variant="outline"
-                        wire:click="startNewFeedback"
-                    >
-                        New feedback round
-                    </flux:button>
-                </div>
-            </div>
-        @else
-            <div class="px-5 py-3.5 flex items-center gap-4"
-                x-data="{
-                    get commentCount() { return $wire.comments.filter(c => !c.isDraft).length },
-                    get draftCount() { return $wire.comments.filter(c => c.isDraft).length },
-                    get hasGlobal() { return ($wire.globalComment || '').trim().length > 0 }
-                }"
-            >
-                <div class="flex-1">
-                    <flux:textarea
-                        wire:model.live.debounce.500ms="globalComment"
-                        placeholder="Overall feedback on the agent context (optional)"
-                        rows="auto"
-                        resize="none"
-                        class="font-mono text-xs"
-                    />
-                </div>
-                <div class="flex items-center gap-3 shrink-0">
-                    <template x-if="commentCount > 0">
-                        <span class="font-mono text-xs text-gh-muted" x-text="commentCount + ' ' + (commentCount === 1 ? 'comment' : 'comments')"></span>
-                    </template>
-                    <template x-if="draftCount > 0">
-                        <span class="font-mono text-xs text-gh-draft" x-text="draftCount + ' ' + (draftCount === 1 ? 'draft' : 'drafts')"></span>
-                    </template>
-                    <template x-if="commentCount + draftCount > 0">
-                        <div class="flex items-center gap-3">
-                            <x-arm-commit-button
-                                icon="trash"
-                                tooltip="Clear all comments"
-                                @confirmed="$wire.clearAllComments()"
-                            />
-                            <span class="w-px h-4 bg-gh-border"></span>
-                        </div>
-                    </template>
-                    <flux:button
-                        variant="primary"
-                        @click="if (draftCount > 0 && !confirm(`You have ${draftCount} draft comment${draftCount === 1 ? '' : 's'} that won't be included. Submit anyway?`)) return; $wire.submitFeedback()"
-                        x-bind:disabled="commentCount === 0 && !hasGlobal"
-                    >
-                        Submit feedback
-                    </flux:button>
-                </div>
-            </div>
-        @endif
-    </div>
+    <x-feedback-submit-bar
+        :submitted="$submitted"
+        :export-result="$exportResult"
+        submitted-heading="Feedback exported"
+        submit-label="Submit feedback"
+        submit-action="submitFeedback"
+        new-round-label="New feedback round"
+        new-round-action="startNewFeedback"
+        placeholder="Overall feedback on the agent context (optional)"
+    />
 </div>
