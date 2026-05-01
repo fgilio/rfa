@@ -28,7 +28,7 @@
 <div class="inline-flex items-stretch rounded-md border border-gh-border/70 bg-gh-surface/30 hover:border-gh-text/30 transition-colors" role="group" aria-label="Switch between review and context">
     <a
         href="{{ $reviewHref }}"
-        onclick="Livewire.navigate(this.getAttribute('href')); return false;"
+        wire:navigate
         @if($reviewActive) aria-current="page" @endif
         class="{{ $reviewClasses }}"
     >
@@ -46,7 +46,7 @@
 
     <a
         href="{{ $contextHref }}"
-        onclick="Livewire.navigate(this.getAttribute('href')); return false;"
+        wire:navigate
         @if($contextActive) aria-current="page" @endif
         class="{{ $contextClasses }}"
     >

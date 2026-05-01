@@ -16,18 +16,18 @@
         @if($commitInfo['prevHash'])
             <flux:tooltip content="Previous commit ([)">
                 <flux:button aria-label="Previous commit" variant="ghost" size="xs" icon="chevron-left" icon:variant="outline"
-                    onclick="Livewire.navigate('/p/{{ $projectSlug }}/c/{{ $commitInfo['prevHash'] }}')" />
+                    href="/p/{{ $projectSlug }}/c/{{ $commitInfo['prevHash'] }}" wire:navigate />
             </flux:tooltip>
         @endif
         @if($commitInfo['nextHash'])
             <flux:tooltip content="Next commit (])">
                 <flux:button aria-label="Next commit" variant="ghost" size="xs" icon="chevron-right" icon:variant="outline"
-                    onclick="Livewire.navigate('/p/{{ $projectSlug }}/c/{{ $commitInfo['nextHash'] }}')" />
+                    href="/p/{{ $projectSlug }}/c/{{ $commitInfo['nextHash'] }}" wire:navigate />
             </flux:tooltip>
         @endif
         <flux:tooltip content="Back to working directory">
             <flux:button aria-label="Back to working directory" variant="ghost" size="xs" icon="x-mark" icon:variant="outline"
-                onclick="Livewire.navigate('/p/{{ $projectSlug }}')" />
+                href="/p/{{ $projectSlug }}" wire:navigate />
         </flux:tooltip>
     </div>
 </div>
