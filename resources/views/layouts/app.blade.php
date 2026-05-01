@@ -147,7 +147,11 @@
             cursor: pointer;
             user-select: none;
         }
-        .diff-cell-num:hover { color: rgb(var(--gh-link)); }
+        /* Empty num cells (added rows have no old number, deleted rows have no
+           new number) have no @mousedown handler — show the default cursor so
+           the affordance matches the actual click behavior. */
+        .diff-cell-num:empty { cursor: default; }
+        .diff-cell-num:not(:empty):hover { color: rgb(var(--gh-link)); }
         .diff-cell-prefix { padding: 0 0.25rem; text-align: center; user-select: none; }
         .diff-cell-content { padding: 0 0.5rem; white-space: pre-wrap; word-break: break-all; }
 
