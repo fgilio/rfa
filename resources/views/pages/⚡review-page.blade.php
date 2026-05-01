@@ -1941,9 +1941,9 @@ new #[Layout('layouts.app')] class extends Component
         </x-slot:sidebar>
 
             @if($gitError)
-                <div class="flex items-center justify-center h-[60vh]">
+                <div class="flex items-center justify-center h-[60vh]" role="alert" aria-live="assertive">
                     <div class="text-center max-w-lg">
-                        <p class="rfa-logo text-3xl text-red-400/30 mb-4">!</p>
+                        <p class="rfa-logo text-3xl text-red-400/30 mb-4" aria-hidden="true">!</p>
                         <h2 class="font-semibold tracking-brutal text-lg mb-2">Git error</h2>
                         <p class="font-mono text-xs text-gh-muted leading-relaxed">{{ $gitError }}</p>
                     </div>
