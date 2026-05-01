@@ -29,4 +29,20 @@ class CommentFactory extends Factory
             'body' => fake()->sentence(),
         ];
     }
+
+    /**
+     * Match the shape ContextCommentWorkflowAction creates: c-prefixed ULID,
+     * context-file origin_ref, and a CLAUDE.md file_path so re-anchor tests
+     * can drop in without overriding the same fields every time.
+     */
+    public function context(): self
+    {
+        return $this->state(fn (): array => [
+            'id' => 'c-'.Str::ulid(),
+            'origin_ref' => Comment::ORIGIN_CONTEXT,
+            'file_path' => 'CLAUDE.md',
+            'start_line' => 2,
+            'end_line' => 2,
+        ]);
+    }
 }

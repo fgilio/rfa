@@ -1,7 +1,16 @@
 #!/bin/bash
 set -e
 
-RFA_REPO_PATH="$(pwd)"
+# Parse args: optional path positional, optional --context flag (any order)
+MODE=""
+RFA_REPO_PATH=""
+for arg in "$@"; do
+    case "$arg" in
+        --context) MODE="context" ;;
+        *) RFA_REPO_PATH="$arg" ;;
+    esac
+done
+RFA_REPO_PATH="${RFA_REPO_PATH:-$(pwd)}"
 
 # Validate git repo
 git -C "$RFA_REPO_PATH" rev-parse --show-toplevel >/dev/null 2>&1 || {
@@ -13,7 +22,10 @@ git -C "$RFA_REPO_PATH" rev-parse --show-toplevel >/dev/null 2>&1 || {
 RFA_REPO_PATH="$(git -C "$RFA_REPO_PATH" rev-parse --show-toplevel)"
 
 # Write inbox file (cold-start safety: deep links can be lost if app isn't running yet)
-# Uses unique filenames to avoid races between concurrent invocations
+# Uses unique filenames to avoid races between concurrent invocations.
+# Two-line format when --context: <repo-path>\n<mode>. processInbox() splits
+# then trims each line independently, so the trailing newline doesn't drop
+# the mode line.
 if [ "$(uname)" = "Darwin" ]; then
     INBOX_DIR="$HOME/Library/Application Support/com.fgilio.rfa/inbox"
 else
@@ -22,11 +34,19 @@ fi
 mkdir -p "$INBOX_DIR"
 INBOX_FILE="$INBOX_DIR/$(date +%s%N)-$$.path"
 INBOX_TMP="$INBOX_FILE.tmp"
-echo "$RFA_REPO_PATH" > "$INBOX_TMP"
+if [ -n "$MODE" ]; then
+    printf '%s\n%s\n' "$RFA_REPO_PATH" "$MODE" > "$INBOX_TMP"
+else
+    echo "$RFA_REPO_PATH" > "$INBOX_TMP"
+fi
 mv "$INBOX_TMP" "$INBOX_FILE"
 
 # URL-encode the path
 ENCODED_PATH=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$RFA_REPO_PATH")
 
 # Open via deep link (launches app if not running, or sends to running instance)
-open "rfa://open?path=$ENCODED_PATH"
+DEEP_LINK="rfa://open?path=$ENCODED_PATH"
+if [ -n "$MODE" ]; then
+    DEEP_LINK="$DEEP_LINK&mode=$MODE"
+fi
+open "$DEEP_LINK"

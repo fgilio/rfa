@@ -161,6 +161,8 @@ new #[Layout('layouts.app')] class extends Component
 
         app(ResolveStartupRouteAction::class)->rememberLastOpened($slug);
 
+        Cache::put('rfa.active-project-id', $this->projectId, now()->addDay());
+
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title("rfa - {$this->projectName}");
         }
@@ -978,6 +980,16 @@ new #[Layout('layouts.app')] class extends Component
         return collect($this->comments)->groupBy('fileId')->map(fn ($group) => $group->values()->all())->all();
     }
 
+    /** Drives the amber dot on the Context side of the mode-toggle. */
+    #[Computed]
+    public function hasContextActivity(): bool
+    {
+        return \App\Models\Comment::forProjectOrRepo($this->projectId ?: null, $this->repoPath)
+            ->fromContext()
+            ->unsubmitted()
+            ->exists();
+    }
+
     public function deleteReviewPair(string $basename): void
     {
         app(DeleteReviewFilesAction::class)->handle($this->repoPath, $basename);
@@ -1113,11 +1125,9 @@ new #[Layout('layouts.app')] class extends Component
                 'added' => 'text-gh-green',
                 'deleted' => 'text-gh-red',
                 'commented' => 'text-gh-muted',
-                default => 'text-amber-500 dark:text-amber-400',
+                default => 'text-gh-attention',
             },
         ]])->all()),
-        sidebarWidth: $store.settings.sidebarWidth,
-        resizing: false,
         remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '', disabled: false, disabledReason: '' },
         showRemoteMenu($event) {
             const d = $event.detail;
@@ -1235,49 +1245,6 @@ new #[Layout('layouts.app')] class extends Component
             this.activeFile = id;
             this.$dispatch('expand-file', { id });
             document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        },
-        startResize(e) {
-            this.resizing = true;
-            const startX = e.clientX;
-            const startWidth = this.sidebarWidth;
-            const aside = this.$refs.sidebar;
-            const main = aside.parentElement.querySelector('main');
-            let raf = null;
-            let currentWidth = startWidth;
-
-            // Float sidebar above main so diff DOM never reflows during drag
-            aside.style.position = 'fixed';
-            aside.style.left = '0';
-            aside.style.zIndex = '40';
-            aside.style.willChange = 'width';
-            main.style.marginLeft = startWidth + 'px';
-            document.body.classList.add('cursor-col-resize', 'select-none');
-
-            const onMove = (e) => {
-                currentWidth = Math.min(600, Math.max(200, startWidth + e.clientX - startX));
-                if (raf) return;
-                raf = requestAnimationFrame(() => {
-                    aside.style.width = currentWidth + 'px';
-                    raf = null;
-                });
-            };
-            const onUp = () => {
-                if (raf) { cancelAnimationFrame(raf); raf = null; }
-                aside.style.position = '';
-                aside.style.left = '';
-                aside.style.zIndex = '';
-                aside.style.willChange = '';
-                main.style.marginLeft = '';
-                this.resizing = false;
-                this.sidebarWidth = currentWidth;
-                document.body.classList.remove('cursor-col-resize', 'select-none');
-                $store.settings.sidebarWidth = currentWidth;
-                document.removeEventListener('mousemove', onMove);
-                document.removeEventListener('mouseup', onUp);
-            };
-
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
         }
     }"
     @file-reviewed-changed.window="reviewedFiles[$event.detail.id] = $event.detail.reviewed"
@@ -1341,20 +1308,12 @@ new #[Layout('layouts.app')] class extends Component
         </template>
     @endif
 
-    <div
-        class="sticky top-0 z-50"
-        x-data
-        x-init="
-            const update = () => document.documentElement.style.setProperty('--header-h', $el.offsetHeight + 'px');
-            update();
-            new ResizeObserver(update).observe($el);
-        "
-    >
+    <x-page-header>
         @native
-            <livewire:update-banner />
+            <x-slot:above>
+                <livewire:update-banner />
+            </x-slot:above>
         @endnative
-
-        <header class="bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <div
                     @if($hasRemote)
@@ -1371,11 +1330,17 @@ new #[Layout('layouts.app')] class extends Component
                     class="inline-flex"
                 >
                     @native
-                        <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" />
+                        <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" mode="review" />
                     @else
-                        <span class="font-display font-bold tracking-brutal-tight text-base">{{ $projectName }}</span>
+                        <x-page-title>{{ $projectName }}</x-page-title>
                     @endnative
                 </div>
+                <x-mode-toggle
+                    mode="review"
+                    :project-slug="$projectSlug"
+                    :has-review-activity="false"
+                    :has-context-activity="$this->hasContextActivity"
+                />
                 @php
                     $shortFrom = $diffFrom === 'HEAD' ? 'HEAD' : substr($diffFrom, 0, 7);
                     $shortTo = $diffTo ? substr($diffTo, 0, 7) : null;
@@ -1512,17 +1477,19 @@ new #[Layout('layouts.app')] class extends Component
                         <flux:tooltip>
                             <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
                                 x-bind:aria-label="tooltip"
-                                x-bind:class="hasChanges && '!text-amber-500 dark:!text-amber-400'"
+                                x-bind:class="hasChanges && '!text-gh-attention'"
                                 wire:click.preserve-scroll="softRefresh" />
                             <flux:tooltip.content>
                                 <span x-text="tooltip"></span>
                             </flux:tooltip.content>
                         </flux:tooltip>
-                        <span x-show="hasChanges" x-cloak
-                            class="pointer-events-none absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-                        </span>
+                        <x-pulse-dot
+                            size="md"
+                            x-show="hasChanges"
+                            x-cloak
+                            class="absolute -top-0.5 -right-0.5"
+                            label="external changes pending"
+                        />
                     </div>
                 @endif
 
@@ -1614,35 +1581,11 @@ new #[Layout('layouts.app')] class extends Component
 
                 <livewire:theme-switcher />
             </div>
-        </header>
 
-        {{-- Status strip: state, not actions --}}
-        <div data-testid="status-strip" class="bg-gh-bg/60 border-b border-gh-border px-5 py-1 flex items-center gap-3 font-mono text-[11px] text-gh-muted">
-            <span
-                x-text="fileFilter === '' && !hideReviewed
-                    ? '{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'
-                    : sourceFileEntries.filter(f => fileMatchesFilter(f.path, f.id)).length + '/{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}'"
-            >{{ count($sourceFiles) }} {{ Str::plural('file', count($sourceFiles)) }}</span>
-            <span class="text-gh-green">+{{ collect($sourceFiles)->sum('additions') }}</span>
-            <span class="text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
-
-            @if(count($reviewPairs) > 0)
-                <span class="px-1.5 py-px rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
-            @endif
-
-            <div class="ml-auto flex items-center gap-2">
-                <div x-show="reviewedCount > 0" x-cloak class="flex items-center gap-2">
-                    <span data-testid="reviewed-counter" x-text="reviewedCount + '/{{ count($sourceFiles) }} reviewed'"></span>
-                    <div class="w-24 h-0.5 bg-gh-border/50 rounded-full overflow-hidden">
-                        <div class="h-full bg-gh-green/70 rounded-full transition-all duration-300" :style="'width:' + Math.round(reviewedCount / {{ count($sourceFiles) }} * 100) + '%'"></div>
-                    </div>
-                </div>
-                @if(count($sourceFiles) > 0)
-                    <x-copy-paths-menu testid-prefix="status-strip-copy-paths" />
-                @endif
-            </div>
-        </div>
-    </div>
+        <x-slot:below>
+            <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" />
+        </x-slot:below>
+    </x-page-header>
 
     {{-- Branch divergence banner + polling island (working-tree mode only) --}}
     @if(! $this->isCommitMode())
@@ -1691,37 +1634,12 @@ new #[Layout('layouts.app')] class extends Component
         @endif
     @endif
 
-    {{-- Commit context bar --}}
     @if($commitInfo)
-        <div data-testid="commit-context-bar" class="sticky top-[var(--header-h)] z-40 bg-gh-surface border-b border-gh-border px-5 py-2.5 flex items-center gap-3 text-xs" style="--commit-bar-h: 40px;">
-            <flux:icon icon="code-bracket" variant="outline" class="text-gh-muted shrink-0" />
-            <span class="font-mono text-xs text-gh-muted shrink-0 px-1.5 py-0.5 rounded border border-gh-border">{{ $commitInfo['shortHash'] }}</span>
-            <span class="text-gh-text truncate font-medium">{{ $commitInfo['message'] }}</span>
-            <span class="text-gh-muted shrink-0">{{ $commitInfo['author'] }}</span>
-            <div class="ml-auto flex items-center gap-1 shrink-0">
-                @if($commitInfo['prevHash'])
-                    <flux:tooltip content="Previous commit ([)">
-                        <flux:button aria-label="Previous commit" variant="ghost" size="xs" icon="chevron-left" icon:variant="outline"
-                            onclick="Livewire.navigate('/p/{{ $projectSlug }}/c/{{ $commitInfo['prevHash'] }}')" />
-                    </flux:tooltip>
-                @endif
-                @if($commitInfo['nextHash'])
-                    <flux:tooltip content="Next commit (])">
-                        <flux:button aria-label="Next commit" variant="ghost" size="xs" icon="chevron-right" icon:variant="outline"
-                            onclick="Livewire.navigate('/p/{{ $projectSlug }}/c/{{ $commitInfo['nextHash'] }}')" />
-                    </flux:tooltip>
-                @endif
-                <flux:tooltip content="Back to working directory">
-                    <flux:button aria-label="Back to working directory" variant="ghost" size="xs" icon="x-mark" icon:variant="outline"
-                        onclick="Livewire.navigate('/p/{{ $projectSlug }}')" />
-                </flux:tooltip>
-            </div>
-        </div>
+        <x-commit-context-bar :commit-info="$commitInfo" :project-slug="$projectSlug" />
     @endif
 
-    <div class="flex">
-        {{-- Sidebar --}}
-        <aside class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-bg hidden lg:block" :style="{ width: sidebarWidth + 'px' }" x-ref="sidebar">
+    <x-resizable-sidebar-shell main-class="pb-24">
+        <x-slot:sidebar>
             <div class="p-4">
                 @if(! $this->isCommitMode() && count($reviewPairs) > 0)
                     <div class="flex items-center justify-between mb-3">
@@ -1837,7 +1755,7 @@ new #[Layout('layouts.app')] class extends Component
                         ]"
                     >
                         <button @click="scrollToFile('{{ $file['id'] }}')" class="flex items-center gap-2.5 min-w-0 flex-1">
-                            <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', 'C' => 'text-gh-muted', default => 'text-amber-500 dark:text-amber-400' } }}">{{ $badgeLabel }}</span>
+                            <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', 'C' => 'text-gh-muted', default => 'text-gh-attention' } }}">{{ $badgeLabel }}</span>
                             @if($file['isSymlink'] ?? false)
                                 <flux:icon icon="link" variant="outline" class="!size-3 text-gh-muted shrink-0" aria-hidden="true" />
                             @endif
@@ -1932,21 +1850,8 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                 @endif
             </div>
-        </aside>
-        <div data-testid="sidebar-resize-handle" class="group/resize hidden lg:flex sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-0 cursor-col-resize items-center justify-center z-10 shrink-0"
-            style="padding: 0 6px; margin: 0 -6px;"
-            @mousedown="startResize($event)"
-            @dblclick="sidebarWidth = 288; $store.settings.sidebarWidth = 288">
-            <div class="absolute inset-y-0 w-px bg-transparent group-hover/resize:bg-gh-muted/40 transition-colors"></div>
-            <div class="absolute px-1 py-1.5 rounded-full bg-gh-surface border border-gh-border shadow-sm opacity-0 group-hover/resize:opacity-100 transition-opacity pointer-events-none flex flex-col items-center gap-[3px]">
-                <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
-                <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
-                <span class="block w-1 h-1 rounded-full bg-gh-muted"></span>
-            </div>
-        </div>
+        </x-slot:sidebar>
 
-        {{-- Main content --}}
-        <main class="flex-1 min-w-0 pb-24" :class="resizing && 'pointer-events-none'" style="contain: inline-size layout style">
             @if($gitError)
                 <div class="flex items-center justify-center h-[60vh]">
                     <div class="text-center max-w-lg">
@@ -2031,12 +1936,14 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                 @endforeach
             @endif
-        </main>
-    </div>
+    </x-resizable-sidebar-shell>
 
     {{-- Undo toast --}}
     @include('livewire.undo-toast')
 
-    {{-- Submit bar --}}
-    @include('livewire.submit-bar')
+    <x-feedback-submit-bar
+        :submitted="$submitted"
+        :export-result="$exportResult"
+        copy-again-tooltip="Already on your clipboard — re-copy if you've copied something else since"
+    />
 </div>

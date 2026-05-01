@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\View;
 
+use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use Illuminate\Support\Collection;
 
@@ -27,7 +28,7 @@ final readonly class DiffFileViewModel
             if (($c['side'] ?? null) === DiffSide::File->value) {
                 continue;
             }
-            if (($c['anchorStatus'] ?? 'placed') === 'unplaced') {
+            if (($c['anchorStatus'] ?? AnchorStatus::Placed->value) === AnchorStatus::Unplaced->value) {
                 continue;
             }
             $byLine[self::anchorKeyFor($c)][] = $c;
@@ -49,7 +50,7 @@ final readonly class DiffFileViewModel
         return collect($fileComments)
             ->where('side', '!=', DiffSide::File->value)
             ->filter(function ($c) use ($visibleLineKeys) {
-                if (($c['anchorStatus'] ?? null) === 'unplaced') {
+                if (($c['anchorStatus'] ?? null) === AnchorStatus::Unplaced->value) {
                     return true;
                 }
 

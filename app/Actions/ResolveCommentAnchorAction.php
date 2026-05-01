@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use App\Enums\GitRef;
 use App\Services\GitFileContentService;
@@ -57,7 +58,7 @@ final readonly class ResolveCommentAnchorAction
             $storedOriginRef = (string) ($row['origin_ref'] ?? $row['originRef'] ?? GitRef::Working->value);
             $isExternal = $storedOriginRef === GitRef::External->value;
 
-            $anchorStatus = 'unplaced';
+            $anchorStatus = AnchorStatus::Unplaced;
             $resolvedSide = $storedSide;
 
             if ($isExternal) {
@@ -65,7 +66,7 @@ final readonly class ResolveCommentAnchorAction
 
                 if ($absolute !== null) {
                     if ($storedHash === null || $storedHash === '' || $storedHash === $this->gitFileContentService->hashAtAbsolute($absolute)) {
-                        $anchorStatus = 'placed';
+                        $anchorStatus = AnchorStatus::Placed;
                     }
                 }
             } elseif ($storedHash !== null && $storedHash !== '' && isset($fileIdByPath[$filePath])) {
@@ -81,16 +82,16 @@ final readonly class ResolveCommentAnchorAction
                     || ($storedSide === DiffSide::File->value && ($storedHash === $leftHash || $storedHash === $rightHash));
 
                 if ($matchesStoredSide) {
-                    $anchorStatus = 'placed';
+                    $anchorStatus = AnchorStatus::Placed;
                 } elseif ($storedHash === $leftHash) {
-                    $anchorStatus = 'placed';
+                    $anchorStatus = AnchorStatus::Placed;
                     $resolvedSide = DiffSide::Left->value;
                 } elseif ($storedHash === $rightHash) {
-                    $anchorStatus = 'placed';
+                    $anchorStatus = AnchorStatus::Placed;
                     $resolvedSide = DiffSide::Right->value;
                 }
             } elseif (isset($fileIdByPath[$filePath])) {
-                $anchorStatus = 'placed';
+                $anchorStatus = AnchorStatus::Placed;
             }
 
             $resolved[] = [
@@ -107,7 +108,7 @@ final readonly class ResolveCommentAnchorAction
                 'lineSnippet' => $row['line_snippet'] ?? $row['lineSnippet'] ?? null,
                 'isDraft' => (bool) ($row['is_draft'] ?? $row['isDraft'] ?? false),
                 'submittedAt' => $row['submitted_at'] ?? $row['submittedAt'] ?? null,
-                'anchorStatus' => $anchorStatus,
+                'anchorStatus' => $anchorStatus->value,
             ];
         }
 

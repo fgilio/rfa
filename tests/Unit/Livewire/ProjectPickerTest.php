@@ -41,6 +41,24 @@ test('selectProject redirects to review-page for a different project', function 
         ->assertRedirect(route('review-page', ['slug' => 'other']));
 });
 
+test('selectProject preserves the context mode when redirecting', function () {
+    Project::factory()->create(['slug' => 'current']);
+    Project::factory()->create(['slug' => 'other']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current', 'mode' => 'context'])
+        ->call('selectProject', 'other')
+        ->assertRedirect(route('context-page', ['slug' => 'other']));
+});
+
+test('selectProject defaults to review-page when mode is unrecognized', function () {
+    Project::factory()->create(['slug' => 'current']);
+    Project::factory()->create(['slug' => 'other']);
+
+    Livewire::test('project-picker', ['currentSlug' => 'current', 'projectName' => 'Current', 'mode' => 'whatever'])
+        ->call('selectProject', 'other')
+        ->assertRedirect(route('review-page', ['slug' => 'other']));
+});
+
 test('removeProject redirects to select-repo when removing the current project', function () {
     $current = Project::factory()->create(['slug' => 'current', 'updated_at' => now()->subHour()]);
     Project::factory()->create(['slug' => 'surviving', 'updated_at' => now()]);

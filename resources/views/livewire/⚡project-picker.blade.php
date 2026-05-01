@@ -21,6 +21,10 @@ class extends Component
     #[Locked]
     public string $projectName = '';
 
+    /** Mode the host page is in. 'review' or 'context'. Picker preserves it on switch. */
+    #[Locked]
+    public string $mode = 'review';
+
     public string $search = '';
 
     #[Session('project-picker.sort-by')]
@@ -59,7 +63,9 @@ class extends Component
 
     public function selectProject(string $slug): void
     {
-        $this->redirect(route('review-page', ['slug' => $slug]), navigate: true);
+        $routeName = $this->mode === 'context' ? 'context-page' : 'review-page';
+
+        $this->redirect(route($routeName, ['slug' => $slug]), navigate: true);
     }
 
     public function removeProject(int $projectId): void

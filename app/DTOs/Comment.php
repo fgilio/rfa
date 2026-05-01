@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use App\Enums\GitRef;
 
@@ -22,7 +23,7 @@ class Comment
         public readonly ?string $lineSnippet = null,
         public readonly bool $isDraft = false,
         public readonly ?string $submittedAt = null,
-        public readonly string $anchorStatus = 'placed',
+        public readonly string $anchorStatus = AnchorStatus::Placed->value,
     ) {}
 
     /** @return array<string, mixed> */
@@ -61,7 +62,7 @@ class Comment
             lineSnippet: $data['lineSnippet'] ?? null,
             isDraft: (bool) ($data['isDraft'] ?? false),
             submittedAt: $data['submittedAt'] ?? null,
-            anchorStatus: $data['anchorStatus'] ?? 'placed',
+            anchorStatus: $data['anchorStatus'] ?? AnchorStatus::Placed->value,
         );
     }
 }

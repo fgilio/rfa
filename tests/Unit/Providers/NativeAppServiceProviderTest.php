@@ -71,6 +71,57 @@ test('dev compiled view cleanup skips deletion in testing environment', function
     File::delete($sentinel);
 });
 
+// -- Menu structure --
+
+test('the View submenu declares the show-context menu item with the cmd-shift-k accelerator', function () {
+    // The hotkey lives in the menu builder DSL, which is wired through the
+    // native bridge. Read the source directly so the assertion stays fast
+    // and decoupled from the bridge.
+    $source = file_get_contents((new ReflectionClass(NativeAppServiceProvider::class))->getFileName());
+
+    expect($source)
+        ->toContain("Menu::label('Show Context Files...')")
+        ->toContain("->id('show-context')")
+        ->toContain("->hotkey('CmdOrCtrl+Shift+K')");
+});
+
+// -- Inbox parser --
+
+test('two-line inbox with context mode routes to context-page', function () {
+    expect(NativeAppServiceProvider::parseInboxContents("/some/repo\ncontext\n"))
+        ->toBe(['path' => '/some/repo', 'route' => 'context-page']);
+});
+
+test('single-line legacy inbox file routes to review-page', function () {
+    expect(NativeAppServiceProvider::parseInboxContents("/some/repo\n"))
+        ->toBe(['path' => '/some/repo', 'route' => 'review-page']);
+
+    expect(NativeAppServiceProvider::parseInboxContents('/some/repo'))
+        ->toBe(['path' => '/some/repo', 'route' => 'review-page']);
+});
+
+test('two-line inbox with empty second line routes to review-page', function () {
+    expect(NativeAppServiceProvider::parseInboxContents("/some/repo\n\n"))
+        ->toBe(['path' => '/some/repo', 'route' => 'review-page']);
+});
+
+test('two-line inbox with junk second line routes to review-page (fail open)', function () {
+    expect(NativeAppServiceProvider::parseInboxContents("/some/repo\nxyz\n"))
+        ->toBe(['path' => '/some/repo', 'route' => 'review-page']);
+});
+
+test('trailing newline does not drop the mode line', function () {
+    // `printf '%s\n%s\n'` always emits a trailing newline. Split-then-trim
+    // per line keeps the mode intact even with extra blank lines after it.
+    expect(NativeAppServiceProvider::parseInboxContents("/some/repo\ncontext\n\n"))
+        ->toBe(['path' => '/some/repo', 'route' => 'context-page']);
+});
+
+test('CRLF line endings are handled the same as LF', function () {
+    expect(NativeAppServiceProvider::parseInboxContents("/some/repo\r\ncontext\r\n"))
+        ->toBe(['path' => '/some/repo', 'route' => 'context-page']);
+});
+
 test('dev compiled view cleanup skips deletion when benchmark isolation is active', function () {
     $viewsPath = storage_path('framework/views');
     File::ensureDirectoryExists($viewsPath);

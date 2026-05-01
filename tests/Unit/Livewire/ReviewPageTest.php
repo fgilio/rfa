@@ -13,6 +13,7 @@ use App\Models\Project;
 use App\Models\TrashedFile;
 use App\Services\GitFileContentService;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -436,4 +437,12 @@ test('discardFileChanges includes comment count in undo message', function () {
         && str_contains($params['message'], 'Foo.php')
         && str_contains($params['message'], '2 comments removed')
     );
+});
+
+test('mount writes the project id to the active-project-id cache key for the menu handler', function () {
+    Cache::forget('rfa.active-project-id');
+
+    Livewire::test('pages::review-page', ['slug' => 'test-project']);
+
+    expect(Cache::get('rfa.active-project-id'))->toBe($this->project->id);
 });

@@ -1,6 +1,7 @@
 <?php
 
 use App\DTOs\Comment;
+use App\Enums\CommentExportKind;
 use App\Enums\DiffSide;
 use App\Services\CommentExporter;
 use App\Services\MarkdownFormatter;
@@ -134,6 +135,33 @@ test('exports multi-file diff context blocks under their respective headings', f
         ->and($aSnippet)->toBeGreaterThan($aHeading)
         ->and($aSnippet)->toBeLessThan($bHeading)
         ->and($bSnippet)->toBeGreaterThan($bHeading);
+});
+
+// -- kind parameter --
+
+test('default review kind keeps the existing intro and clipboard text', function () {
+    $result = $this->exporter->export($this->tmpDir, [], 'global');
+
+    $md = File::get($result['md']);
+    expect($md)->toContain('# Code Review Comments');
+    expect($md)->not->toContain('# Agent Context Feedback');
+    expect($result['clipboard'])->toMatch('/^address my comments on these changes in @\.rfa\//');
+});
+
+test('context-file kind swaps intro, outro and clipboard prose', function () {
+    $comments = [
+        new Comment('id', 'file-1', 'CLAUDE.md', DiffSide::Right, 1, 1, 'tighten this'),
+    ];
+
+    $result = $this->exporter->export($this->tmpDir, $comments, 'general feedback', kind: CommentExportKind::ContextFile);
+
+    $md = File::get($result['md']);
+    expect($md)->toContain('# Agent Context Feedback');
+    expect($md)->toContain('Improve the CLAUDE.md');
+    expect($md)->toContain('## `CLAUDE.md`');
+    expect($md)->toContain('tighten this');
+
+    expect($result['clipboard'])->toMatch('/^improve the agent context files based on my comments in @\.rfa\//');
 });
 
 test('handles an empty comment body without truncating later comments', function () {
