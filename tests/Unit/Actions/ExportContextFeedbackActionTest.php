@@ -65,6 +65,18 @@ test('refuses to stamp non-context-file comments even when their id is supplied'
     expect(Comment::find($review->id)->submitted_at)->toBeNull();
 });
 
+test('skips draft comments from export and stamping', function () {
+    $finalized = $this->workflow->handle($this->repoA, null, $this->filesA, 'ctx-a', 'right', 1, 1, 'finalized');
+    $draft = $this->workflow->handle($this->repoA, null, $this->filesA, 'ctx-a', 'right', 2, 2, 'draft body', isDraft: true);
+
+    $result = $this->action->handle($this->repoA, null, [$finalized, $draft], '');
+
+    expect(Comment::find($finalized['id'])->submitted_at)->not->toBeNull();
+    expect(Comment::find($draft['id'])->submitted_at)->toBeNull();
+    expect($result['submittedIds'])->toBe([$finalized['id']]);
+    expect($result['md'])->not->toContain('draft body');
+});
+
 test('scopes by project_id when given one', function () {
     $project = Project::factory()->create(['path' => $this->repoA]);
 

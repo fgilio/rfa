@@ -28,7 +28,12 @@ final readonly class ExportContextFeedbackAction
      */
     public function handle(string $repoPath, ?int $projectId, array $comments, string $globalComment): array
     {
-        $commentDTOs = array_map(fn ($c) => CommentDTO::fromArray($c), $comments);
+        $finalized = array_values(array_filter(
+            $comments,
+            fn (array $c): bool => ! ($c['isDraft'] ?? false),
+        ));
+
+        $commentDTOs = array_map(fn ($c) => CommentDTO::fromArray($c), $finalized);
 
         $result = $this->commentExporter->export(
             $repoPath,
@@ -38,7 +43,7 @@ final readonly class ExportContextFeedbackAction
             kind: CommentExportKind::ContextFile,
         );
 
-        $ids = array_column($comments, 'id');
+        $ids = array_column($finalized, 'id');
         if ($ids !== []) {
             Comment::query()
                 ->forProjectOrRepo($projectId, $repoPath)
