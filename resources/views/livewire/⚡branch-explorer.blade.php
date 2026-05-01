@@ -472,7 +472,7 @@ new class extends Component {
                                         <div class="flex items-center gap-2 mt-0.5">
                                             <span class="text-[10px] font-mono text-gh-muted" x-text="commit.author"></span>
                                             <span class="text-[10px] text-gh-muted">&middot;</span>
-                                            <span class="text-[10px] font-mono text-gh-muted" x-text="commit.relativeDate"></span>
+                                            <span class="text-[10px] font-mono text-gh-muted" x-text="commit.relativeDate" :title="commit.date"></span>
                                         </div>
                                     </div>
 

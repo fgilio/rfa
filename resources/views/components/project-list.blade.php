@@ -115,7 +115,7 @@
                             <span class="text-gh-green" x-text="'+' + (status?.additions || 0)"></span>
                             <span class="text-gh-red" x-text="'-' + (status?.deletions || 0)"></span>
                         </span>
-                        <span class="text-gh-muted/70">{{ $project['last_active_ago'] }}</span>
+                        <span class="text-gh-muted/70" title="{{ $project['last_active_at'] }}">{{ $project['last_active_ago'] }}</span>
                         <flux:button
                             variant="ghost"
                             size="xs"

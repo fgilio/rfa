@@ -364,8 +364,17 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
+        $previousCount = count($this->externalPaths);
         $updated = app(LinkExternalPathAction::class)->handle($this->projectId, $picked);
         if ($updated === null) {
+            Flux::toast(variant: 'danger', text: 'Could not link folder: '.basename($picked));
+            $this->skipRender();
+
+            return;
+        }
+
+        if (count($updated) === $previousCount) {
+            Flux::toast(text: basename($picked).' is already linked');
             $this->skipRender();
 
             return;
@@ -373,10 +382,13 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->externalPaths = $updated;
         $this->reloadAfterExternalPathsChange();
+        Flux::toast(variant: 'success', text: 'Linked '.basename($picked));
     }
 
     public function removeExternalPath(int $index): void
     {
+        $removed = $this->externalPaths[$index]['label'] ?? null;
+
         $updated = app(UnlinkExternalPathAction::class)->handle($this->projectId, $index);
         if ($updated === null) {
             $this->skipRender();
@@ -386,6 +398,10 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->externalPaths = $updated;
         $this->reloadAfterExternalPathsChange();
+
+        if ($removed !== null) {
+            Flux::toast(text: 'Unlinked '.$removed);
+        }
     }
 
     private function reloadAfterExternalPathsChange(): void
