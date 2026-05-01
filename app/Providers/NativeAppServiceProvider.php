@@ -194,6 +194,10 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             //     #15496). Setting explicit menu accelerators doesn't help.
             //     Keyboard zoom is owned by focus-scoped global shortcuts.
             Menu::make(
+                Menu::label('Show Context Files...')
+                    ->id('show-context')
+                    ->hotkey('CmdOrCtrl+Shift+K'),
+                Menu::separator(),
                 Menu::label('Actual Size')->id('reset-zoom'),
                 Menu::label('Zoom In')->id('zoom-in'),
                 Menu::label('Zoom Out')->id('zoom-out'),
@@ -235,11 +239,41 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             return;
         }
 
-        $project = app(OpenProjectFromPathAction::class)->handle(trim($contents));
+        ['path' => $path, 'route' => $routeName] = self::parseInboxContents($contents);
 
-        if ($project) {
-            Window::get('main')->url(route('review-page', ['slug' => $project->slug]));
+        if ($path === '') {
+            return;
         }
+
+        $project = app(OpenProjectFromPathAction::class)->handle($path);
+
+        if (! $project) {
+            return;
+        }
+
+        Window::get('main')->url(route($routeName, ['slug' => $project->slug]));
+    }
+
+    /**
+     * Parse the two-line inbox file format: `<repo-path>\n<mode>`. The path
+     * lives on line 1, the optional mode on line 2. Splitting on newline
+     * first and trimming each line independently keeps a trailing newline
+     * (added by every `printf` / `echo`) from silently dropping the mode.
+     * Single-line legacy files and unknown mode values both fall through
+     * to review-page (fail open).
+     *
+     * @return array{path: string, route: string}
+     */
+    public static function parseInboxContents(string $contents): array
+    {
+        $lines = preg_split('/\r?\n/', $contents) ?: [];
+        $path = isset($lines[0]) ? trim($lines[0]) : '';
+        $mode = isset($lines[1]) ? trim($lines[1]) : '';
+
+        return [
+            'path' => $path,
+            'route' => $mode === 'context' ? 'context-page' : 'review-page',
+        ];
     }
 
     public static function inboxDir(): string
