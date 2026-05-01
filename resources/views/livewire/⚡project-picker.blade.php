@@ -2,7 +2,9 @@
 
 use App\Actions\ListProjectsAction;
 use App\Actions\RemoveProjectAction;
+use App\Actions\ResolveProjectEntryUrlAction;
 use App\Concerns\InteractsWithRemoteLinks;
+use App\Enums\LastViewMode;
 use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -21,7 +23,12 @@ class extends Component
     #[Locked]
     public string $projectName = '';
 
-    /** Mode the host page is in. 'review' or 'context'. Picker preserves it on switch. */
+    /**
+     * Mode the host page is in. 'review' or 'context'. Used as the *fallback*
+     * for projects with no saved selection — projects the user has visited
+     * before restore through {@see ResolveProjectEntryUrlAction} and may land
+     * on the other mode.
+     */
     #[Locked]
     public string $mode = 'review';
 
@@ -63,9 +70,12 @@ class extends Component
 
     public function selectProject(string $slug): void
     {
-        $routeName = $this->mode === 'context' ? 'context-page' : 'review-page';
+        $url = app(ResolveProjectEntryUrlAction::class)->handle(
+            $slug,
+            LastViewMode::tryFrom($this->mode),
+        );
 
-        $this->redirect(route($routeName, ['slug' => $slug]), navigate: true);
+        $this->redirect($url, navigate: true);
     }
 
     public function removeProject(int $projectId): void

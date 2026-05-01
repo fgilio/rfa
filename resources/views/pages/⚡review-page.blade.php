@@ -14,6 +14,7 @@ use App\Actions\GroupReviewFilesAction;
 use App\Actions\IsSinceBaseViewAction;
 use App\Actions\LinkExternalPathAction;
 use App\Actions\LoadCommitMetadataAction;
+use App\Actions\PersistProjectViewAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\ResolveRangeAction;
@@ -33,6 +34,8 @@ use App\DTOs\FileListEntry;
 use App\Enums\DiffSide;
 use App\Enums\DivergenceState;
 use App\Enums\GitRef;
+use App\Enums\LastViewKind;
+use App\Enums\LastViewMode;
 use App\Exceptions\GitCommandException;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
@@ -213,6 +216,42 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->rehydrateForTarget();
         $this->checkHeadDivergence();
+
+        $this->persistCurrentView($hash, $from, $to, $ref, $rangeFromWorking);
+    }
+
+    /**
+     * Persist the (mode, kind, from, to) shape of the diff currently being
+     * viewed so that re-entering this project via the picker, the home
+     * redirect, or a deep-link puts the user back on the same surface.
+     *
+     * Kind is derived from the arrival shape — which mount branch was taken
+     * — rather than recomputed from `$diffFrom`/`$diffTo`, because resolved
+     * SHAs lose the original "single commit vs explicit range" distinction.
+     *
+     * `since_base` is saved as semantic intent rather than the resolved SHA
+     * so the restore side re-resolves the merge-base. Base-branch advance
+     * after this save carries the user forward instead of pinning a stale
+     * commit.
+     */
+    private function persistCurrentView(?string $hash, ?string $from, ?string $to, ?string $ref, ?string $rangeFromWorking): void
+    {
+        $kind = match (true) {
+            $hash !== null => LastViewKind::Commit,
+            $from !== null && $to !== null => LastViewKind::Range,
+            $rangeFromWorking !== null => $this->isSinceBaseView ? LastViewKind::SinceBase : LastViewKind::RangeToWorking,
+            $ref !== null => LastViewKind::Range,
+            default => LastViewKind::WorkingTree,
+        };
+
+        app(PersistProjectViewAction::class)->handle(
+            $this->projectId,
+            $this->repoPath,
+            LastViewMode::Review,
+            $kind,
+            $kind === LastViewKind::WorkingTree || $kind === LastViewKind::Commit ? null : $this->diffFrom,
+            $kind === LastViewKind::WorkingTree ? null : $this->diffTo,
+        );
     }
 
     private function rehydrateForTarget(): void

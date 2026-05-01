@@ -5,8 +5,10 @@ use App\Actions\ContextCommentWorkflowAction;
 use App\Actions\DiscoverAgentContextFilesAction;
 use App\Actions\ExportContextFeedbackAction;
 use App\Actions\LoadContextCommentsAction;
+use App\Actions\PersistProjectViewAction;
 use App\Actions\ResolveProjectAction;
 use App\DTOs\AgentContextFile;
+use App\Enums\LastViewMode;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -70,6 +72,12 @@ new #[Layout('layouts.app')] class extends Component
         $this->hasRemote = ! empty($project['remote_url']);
 
         Cache::put('rfa.active-project-id', $this->projectId, now()->addDay());
+
+        app(PersistProjectViewAction::class)->handle(
+            $this->projectId,
+            $this->repoPath,
+            LastViewMode::Context,
+        );
 
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title("rfa - {$this->projectName} · context");

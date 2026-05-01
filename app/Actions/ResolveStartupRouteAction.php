@@ -11,12 +11,16 @@ final readonly class ResolveStartupRouteAction
 {
     private const string CACHE_KEY = 'last-opened-project-slug';
 
+    public function __construct(
+        private ResolveProjectEntryUrlAction $resolveProjectEntryUrl,
+    ) {}
+
     public function handle(): string
     {
         $lastSlug = Cache::get(self::CACHE_KEY);
 
         if ($lastSlug && Project::where('slug', $lastSlug)->exists()) {
-            return route('review-page', ['slug' => $lastSlug]);
+            return $this->resolveProjectEntryUrl->handle($lastSlug);
         }
 
         if ($lastSlug) {

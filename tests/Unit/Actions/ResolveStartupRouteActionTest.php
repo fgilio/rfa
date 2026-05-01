@@ -1,7 +1,9 @@
 <?php
 
 use App\Actions\ResolveStartupRouteAction;
+use App\Enums\LastViewMode;
 use App\Models\Project;
+use App\Models\ReviewSession;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
 
@@ -54,4 +56,19 @@ test('rememberLastOpened is a no-op when slug already cached', function () {
     $action->rememberLastOpened('foo');
 
     expect($action->lastOpenedSlug())->toBe('foo');
+});
+
+test('handle restores the saved Context mode for the last-opened project', function () {
+    $project = Project::factory()->create(['slug' => 'has-context']);
+    ReviewSession::create([
+        'project_id' => $project->id,
+        'repo_path' => $project->path,
+        'last_view_mode' => LastViewMode::Context,
+    ]);
+
+    $action = app(ResolveStartupRouteAction::class);
+    $action->rememberLastOpened('has-context');
+
+    expect($action->handle())
+        ->toBe(route('context-page', ['slug' => 'has-context']));
 });
