@@ -67,6 +67,6 @@ test('export works with lazily loaded diffs', function () {
     $rfaDir = $this->testRepoPath.'/.rfa';
     expect(File::isDirectory($rfaDir))->toBeTrue();
 
-    $files = File::glob($rfaDir.'/*');
-    expect($files)->toHaveCount(2);
+    $files = File::glob($rfaDir.'/*.md');
+    expect($files)->toHaveCount(1);
 });

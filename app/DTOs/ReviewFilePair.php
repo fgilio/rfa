@@ -14,15 +14,22 @@ class ReviewFilePair
     private const BASENAME_PATTERN = '/^(\d{8}_\d{6})_comments_[A-Za-z0-9]+$/';
 
     /**
-     * @param  ?array<string, mixed>  $jsonFile
-     * @param  ?array<string, mixed>  $mdFile
+     * @param  array<string, mixed>  $mdFile
      */
     public function __construct(
         public readonly string $basename,
-        public readonly ?array $jsonFile,
-        public readonly ?array $mdFile,
+        public readonly array $mdFile,
         public readonly ?Carbon $createdAt,
     ) {}
+
+    /**
+     * Validate a basename against the canonical pattern. Used by callers that
+     * receive a basename from user input (e.g. the delete action).
+     */
+    public static function isValidBasename(string $basename): bool
+    {
+        return (bool) preg_match(self::BASENAME_PATTERN, $basename);
+    }
 
     /**
      * Extract the shared basename from an .rfa/ review file path.
@@ -30,7 +37,7 @@ class ReviewFilePair
      */
     public static function extractBasename(string $path): ?string
     {
-        if (! preg_match('#(?:^|/)\.rfa/([^/]+)\.(json|md)$#', $path, $m)) {
+        if (! preg_match('#(?:^|/)\.rfa/([^/]+)\.md$#', $path, $m)) {
             return null;
         }
 
@@ -64,7 +71,6 @@ class ReviewFilePair
             'id' => 'review-'.hash('xxh128', $this->basename),
             'basename' => $this->basename,
             'displayName' => $this->createdAt?->format('M j, g:i A') ?? $this->basename,
-            'jsonFile' => $this->jsonFile,
             'mdFile' => $this->mdFile,
             'createdAt' => $this->createdAt?->toIso8601String(),
             'createdAtHuman' => $this->createdAt?->diffForHumans(),

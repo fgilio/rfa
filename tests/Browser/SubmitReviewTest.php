@@ -43,7 +43,7 @@ test('submitting with only global comment works', function () {
     $page->assertSee('Review submitted');
 });
 
-test('export creates rfa directory with json and md files on disk', function () {
+test('export creates rfa directory with md file on disk', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
     $page->page()->getByTestId('diff-line-number')->first()->click();
@@ -53,16 +53,12 @@ test('export creates rfa directory with json and md files on disk', function () 
 
     $page->assertSee('Review submitted');
 
-    // Verify .rfa directory was created with export files
     $rfaDir = $this->testRepoPath.'/.rfa';
     expect(File::isDirectory($rfaDir))->toBeTrue();
 
     $files = File::glob($rfaDir.'/*');
-    expect($files)->toHaveCount(2);
+    expect($files)->toHaveCount(1);
 
-    $jsonFile = collect($files)->first(fn ($f) => str_ends_with($f, '.json'));
     $mdFile = collect($files)->first(fn ($f) => str_ends_with($f, '.md'));
-
-    expect($jsonFile)->not->toBeNull();
     expect($mdFile)->not->toBeNull();
 });

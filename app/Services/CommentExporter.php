@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\DTOs\Comment;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class CommentExporter
 {
@@ -17,41 +18,22 @@ class CommentExporter
     /**
      * @param  Comment[]  $comments
      * @param  array<string, string>  $diffContext
-     * @return array{json: string, md: string, clipboard: string}
+     * @return array{md: string, clipboard: string}
      */
     public function export(string $repoPath, array $comments, string $globalComment = '', array $diffContext = []): array
     {
-        $hash = Str::random(8);
-        $now = date('Ymd_His');
-        $basename = "{$now}_comments_{$hash}";
+        $basename = date('Ymd_His').'_comments_'.Str::random(8);
         $rfaDir = $repoPath.'/.rfa';
+        $path = "{$rfaDir}/{$basename}.md";
 
-        $disk = Storage::build([
-            'driver' => 'local',
-            'root' => $rfaDir,
-            'throw' => true,
-        ]);
+        File::ensureDirectoryExists($rfaDir);
 
-        // Build JSON
-        $jsonData = [
-            'schema_version' => 1,
-            'repo_path' => $repoPath,
-            'created_at' => date('c'),
-            'markdown_file' => ".rfa/{$basename}.md",
-            'global_comment' => $globalComment,
-            'comments' => array_map(fn (Comment $c) => $c->toExportArray(), $comments),
-        ];
-
-        // Build Markdown
-        $md = "<!-- json: .rfa/{$basename}.json -->\n"
-            .$this->markdownFormatter->format($comments, $globalComment, $diffContext);
-
-        $disk->put("{$basename}.json", json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-        $disk->put("{$basename}.md", $md);
+        if (File::put($path, $this->markdownFormatter->format($comments, $globalComment, $diffContext)) === false) {
+            throw new RuntimeException("Failed to write review file: {$path}");
+        }
 
         return [
-            'json' => $disk->path("{$basename}.json"),
-            'md' => $disk->path("{$basename}.md"),
+            'md' => $path,
             'clipboard' => "address my comments on these changes in @.rfa/{$basename}.md",
         ];
     }

@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\ReviewFilePair;
 use Illuminate\Support\Facades\File;
 
 final readonly class DeleteReviewFilesAction
 {
-    private const BASENAME_PATTERN = '/^\d{8}_\d{6}_comments_[A-Za-z0-9]+$/';
-
     /**
-     * Delete review file pair(s) by basename.
+     * Delete review file(s) by basename.
      *
      * @param  string|array<int, string>  $basenames
      * @return int Number of files deleted
@@ -22,19 +21,12 @@ final readonly class DeleteReviewFilesAction
         $deleted = 0;
 
         foreach ($basenames as $basename) {
-            if (! preg_match(self::BASENAME_PATTERN, $basename)) {
+            if (! ReviewFilePair::isValidBasename($basename)) {
                 continue;
             }
 
-            $rfaDir = $repoPath.'/.rfa';
-
-            foreach (['json', 'md'] as $ext) {
-                $path = $rfaDir.'/'.$basename.'.'.$ext;
-
-                if (File::exists($path)) {
-                    File::delete($path);
-                    $deleted++;
-                }
+            if (File::delete($repoPath.'/.rfa/'.$basename.'.md')) {
+                $deleted++;
             }
         }
 
