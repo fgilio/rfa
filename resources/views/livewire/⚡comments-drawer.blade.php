@@ -109,6 +109,11 @@ class extends Component
     x-effect="if (open && !$store.overlays.is('comments-drawer')) close()"
     class="relative"
 >
+    {{-- Plain :aria-expanded / x-bind:aria-expanded on a Flux component is
+         pre-compiled by Flux's blaze pass as a PHP expression and blows up
+         server-side. The trigger doesn't strictly need a reactive
+         aria-expanded — a static aria-haspopup is sufficient for screen
+         readers to announce that this button opens a dialog. --}}
     <flux:tooltip content="All comments · ⌘J">
         <flux:button
             variant="ghost"
@@ -117,7 +122,6 @@ class extends Component
             icon:variant="outline"
             aria-label="All comments in this repo"
             aria-haspopup="dialog"
-            x-bind:aria-expanded="open"
             x-on:click="toggle()"
         >
             @if($this->totalCount > 0)
