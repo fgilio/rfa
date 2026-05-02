@@ -1,6 +1,9 @@
 @props(['hunkIndex', 'hiddenCount'])
 
 @php
+    // Hot path: rendered for every hunk gap of every diff. Native array_filter
+    // beats `collect(...)->filter()->values()` here — the Collection wrapper
+    // allocation per gap shows up in the diff-render benchmarks.
     $applicableTiers = array_values(array_filter([15, 50, 100], fn ($t) => $t < $hiddenCount));
 @endphp
 
@@ -14,6 +17,7 @@
             x-show="!loading"
             class="text-gh-link hover:text-gh-text transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
         >
+            {{-- Inline ternary instead of Str::plural for the same hot-path reason. --}}
             Expand {{ $hiddenCount }} hidden {{ $hiddenCount === 1 ? 'line' : 'lines' }}
         </button>
     @else
@@ -33,6 +37,7 @@
                     >{{ $tier }}</button>
                 @endforeach
             </span>
+            {{-- Always plural here: this branch only renders when hiddenCount > 15. --}}
             <button
                 wire:click="expandGap({{ $hunkIndex }})"
                 wire:loading.attr="disabled"
