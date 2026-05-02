@@ -181,6 +181,12 @@
                 return parts.join(' + ') || 'nothing';
             },
 
+            get loadedCommitsSummary() {
+                const n = this.$wire.commits?.length || 0;
+                const noun = (n === 1 && !this.$wire.hasMore) ? 'commit' : 'commits';
+                return `${n}${this.$wire.hasMore ? '+' : ''} ${noun}`;
+            },
+
             _filterBranches(key) {
                 const list = this.allBranches[key] || [];
                 if (this.search === '') return list;

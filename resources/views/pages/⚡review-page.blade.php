@@ -1332,11 +1332,6 @@ new #[Layout('layouts.app')] class extends Component
     @reset-reviewed-files.window="reviewedFiles = {}"
     @reviewed-files-reverted.window="($event.detail.fileIds || []).forEach(id => { reviewedFiles[id] = false })"
     @open-remote-menu.window="showRemoteMenu($event)"
-    @copy-to-clipboard.window="
-        navigator.clipboard.writeText($event.detail.text).then(() => {
-            if ($event.detail.toast) Flux.toast({ text: $event.detail.toast, variant: 'success' });
-        }).catch(() => {});
-    "
     @keydown.window="
         if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {
             if ($event.key === 'Escape' && !$event.target.closest('[data-comment-form]')) { fileFilter = ''; $event.target.blur(); $event.preventDefault(); }

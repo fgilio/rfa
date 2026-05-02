@@ -428,11 +428,6 @@ new #[Layout('layouts.app')] class extends Component
             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }"
-    @copy-to-clipboard.window="
-        navigator.clipboard.writeText($event.detail.text).then(() => {
-            if ($event.detail.toast) Flux.toast({ text: $event.detail.toast, variant: 'success' });
-        }).catch(() => {});
-    "
     class="min-h-screen flex flex-col"
 >
     <x-page-header>

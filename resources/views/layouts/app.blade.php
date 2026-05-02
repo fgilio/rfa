@@ -203,9 +203,7 @@
         /* Prevent Flux menu scroll-lock from hiding scrollbar and causing layout shift */
         html { overflow-y: scroll !important; }
 
-        /* Alpine x-cloak: hide elements until Alpine has processed them so
-           x-show / x-if conditions don't briefly flash their off state on
-           initial paint. Alpine doesn't ship this rule itself. */
+        /* Alpine doesn't ship the x-cloak rule itself. */
         [x-cloak] { display: none !important; }
 
         /* Fix checkbox visibility in dark mode */
@@ -256,7 +254,14 @@
     </style>
     @fluxAppearance
 </head>
-<body class="bg-gh-bg text-gh-text min-h-screen font-display text-sm antialiased">
+<body class="bg-gh-bg text-gh-text min-h-screen font-display text-sm antialiased"
+    x-data
+    @copy-to-clipboard.window="
+        navigator.clipboard.writeText($event.detail.text).then(() => {
+            if ($event.detail.toast) Flux.toast({ text: $event.detail.toast, variant: 'success' });
+        }).catch(() => {});
+    "
+>
     {{-- Find-in-page search bar (Cmd/Ctrl+F) --}}
     <div x-data="pageSearch" x-show="open" x-cloak data-search-ignore
          @keydown.window="handleKeydown($event)"

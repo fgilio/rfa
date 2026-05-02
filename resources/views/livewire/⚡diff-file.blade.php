@@ -363,10 +363,8 @@ new class extends Component {
                 @endif
             </div>
         @elseif($diffData === null)
-            {{-- Loading state: trigger lazy load via x-intersect.
-                 Pre-request and in-flight states share one visual so users
-                 don't see a brief "Waiting to load..." message swap to
-                 "Loading diff..." when the request actually fires. --}}
+            {{-- One spinner for both the pre-request setTimeout window and the
+                 in-flight request, so the visual doesn't swap mid-load. --}}
             <div
                 x-intersect.once="setTimeout(() => $wire.loadFileDiff(), {{ $loadDelay }})"
                 class="px-4 py-8 text-center"
