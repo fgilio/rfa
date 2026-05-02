@@ -1,12 +1,11 @@
 @props(['hunkIndex', 'hiddenCount'])
 
 @php
-    $expandTiers = [15, 50, 100];
-    $applicableTiers = collect($expandTiers)->filter(fn ($t) => $t < $hiddenCount)->values();
+    $applicableTiers = array_values(array_filter([15, 50, 100], fn ($t) => $t < $hiddenCount));
 @endphp
 
 <span wire:key="expand-gap-{{ $hunkIndex }}-{{ $hiddenCount }}" x-data="{ loading: false }">
-    @if($applicableTiers->isEmpty())
+    @if(empty($applicableTiers))
         <button
             wire:click="expandGap({{ $hunkIndex }})"
             wire:loading.attr="disabled"
@@ -15,7 +14,7 @@
             x-show="!loading"
             class="text-gh-link hover:text-gh-text transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
         >
-            Expand {{ $hiddenCount }} hidden {{ Str::plural('line', $hiddenCount) }}
+            Expand {{ $hiddenCount }} hidden {{ $hiddenCount === 1 ? 'line' : 'lines' }}
         </button>
     @else
         <span x-show="!loading" class="inline-flex items-center gap-1.5">
@@ -40,7 +39,7 @@
                 wire:target="expandGap"
                 @click="loading = true"
                 class="text-gh-link hover:bg-gh-link/10 hover:text-gh-text rounded px-1.5 py-0.5 transition-colors disabled:opacity-50 tabular-nums"
-            >{{ $hiddenCount }} <span class="text-gh-muted/60">hidden {{ Str::plural('line', $hiddenCount) }}</span></button>
+            >{{ $hiddenCount }} <span class="text-gh-muted/60">hidden lines</span></button>
         </span>
     @endif
     <span x-show="loading" x-cloak class="inline-flex items-center gap-1.5 text-gh-muted">
