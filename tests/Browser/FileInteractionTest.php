@@ -127,9 +127,10 @@ test('copy file path button dispatches copy event', function () {
 });
 
 test('copy content dropdown is visible for text files', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     // The dropdown trigger should be present for text files
+    $page->page()->getByLabel('Copy content')->first()->waitFor();
     $count = $page->page()->getByLabel('Copy content')->count();
     expect($count)->toBeGreaterThan(0);
 

@@ -28,7 +28,8 @@ test('submitting shows success state with review submitted', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Looks good');
     $page->press('Save');
 
-    $page->pressAndWaitFor('Submit review', 3);
+    $page->assertButtonEnabled('Submit review');
+    $page->page()->getByRole('button', ['name' => 'Submit review'])->click();
 
     $page->assertSee('Review submitted');
 });
@@ -49,6 +50,8 @@ test('export creates rfa directory with md file on disk', function () {
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Export test comment');
     $page->press('Save');
+
+    $page->assertButtonEnabled('Submit review');
     $page->pressAndWaitFor('Submit review', 3);
 
     $page->assertSee('Review submitted');
