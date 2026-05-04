@@ -1171,6 +1171,10 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
+@assets
+<script src="/js/diff-file.js"></script>
+@endassets
+
 <div
     data-testid="review-component"
     x-data="{
@@ -1982,6 +1986,7 @@ new #[Layout('layouts.app')] class extends Component
                             </div>
                             <div x-show="!collapsed" x-collapse.duration.150ms>
                                 <livewire:diff-file
+                                    lazy
                                     :key="$pair['mdFile']['id']"
                                     :file="$pair['mdFile']"
                                     :load-delay="0"
@@ -2007,6 +2012,7 @@ new #[Layout('layouts.app')] class extends Component
                          x-collapse.duration.200ms
                          :class="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}') ? 'opacity-100' : 'opacity-0'">
                         <livewire:diff-file
+                            lazy
                             :key="$file['id']"
                             :file="$file"
                             :load-delay="(int) (floor($loop->index / 15) * 100)"
