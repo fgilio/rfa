@@ -59,25 +59,30 @@ test('escape on empty comment form closes it', function () {
 
 test('clicking the same line number again with an empty input closes the form', function () {
     $page = $this->visitAndLoad($this->projectUrl());
+    $file = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("config.php"))');
+    $lineNumber = $file->getByTestId('diff-line-number')->first();
 
-    $page->page()->getByTestId('diff-line-number')->first()->click();
-    $page->assertSee('Cancel');
+    $lineNumber->click();
+    $file->getByRole('button', ['name' => 'Cancel'])->waitFor();
 
-    $page->page()->getByTestId('diff-line-number')->first()->click();
+    $lineNumber->click();
 
-    $page->assertDontSee('Cancel');
+    $file->getByRole('button', ['name' => 'Cancel'])->waitFor(['state' => 'hidden']);
 });
 
 test('clicking the same line number again with a non-empty input keeps the form open', function () {
     $page = $this->visitAndLoad($this->projectUrl());
+    $file = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("config.php"))');
+    $lineNumber = $file->getByTestId('diff-line-number')->first();
+    $commentInput = $file->getByPlaceholder('Write a comment', false)->first();
 
-    $page->page()->getByTestId('diff-line-number')->first()->click();
-    $page->page()->getByPlaceholder('Write a comment', false)->fill('In progress draft');
+    $lineNumber->click();
+    $commentInput->fill('In progress draft');
 
-    $page->page()->getByTestId('diff-line-number')->first()->click();
+    $lineNumber->click();
 
-    $page->assertSee('Cancel');
-    expect($page->page()->getByPlaceholder('Write a comment', false)->inputValue())->toBe('In progress draft');
+    $file->getByRole('button', ['name' => 'Cancel'])->waitFor();
+    expect($commentInput->inputValue())->toBe('In progress draft');
 });
 
 test('shift+click selects a line range', function () {
