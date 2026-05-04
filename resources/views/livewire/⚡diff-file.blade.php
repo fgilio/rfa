@@ -48,6 +48,20 @@ new class extends Component {
 
     private ?DiffTarget $cachedTarget = null;
 
+    public function placeholder(): string
+    {
+        return <<<'HTML'
+<div class="group">
+    <div class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5 h-10">
+        <span class="size-3.5 rounded bg-gh-muted/20"></span>
+        <span class="h-3 w-3 rounded-sm bg-gh-muted/20"></span>
+        <span class="h-3 flex-1 max-w-md rounded bg-gh-muted/15"></span>
+        <span class="h-3 w-14 rounded bg-gh-muted/15"></span>
+    </div>
+</div>
+HTML;
+    }
+
     public function hydrate(): void
     {
         $cached = Cache::get($this->diffCacheKey());
