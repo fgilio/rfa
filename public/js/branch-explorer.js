@@ -202,7 +202,6 @@
                 this.open = true;
                 this.search = '';
                 this.selectedIndex = 0;
-                this.clearSelection();
                 Alpine.store('overlays').open('branch-explorer');
                 // Resolve base info before loading commits so the commit-load
                 // can extend its window to cover all base..HEAD hashes when the
@@ -214,7 +213,8 @@
                 this.allBranches = this.$wire.branches;
                 const currentIdx = this.allFiltered.findIndex(b => b.name === this.selectedBranch);
                 if (currentIdx >= 0) this.selectedIndex = currentIdx;
-                this.loadSelectedBranch();
+                await this.loadSelectedBranch();
+                this._rehydrateSelectionFromActiveView();
                 await this.$nextTick();
                 this.$refs.searchInput?.focus();
             },
@@ -397,6 +397,46 @@
                 this.selectedHashes = [];
                 this.workingTreeSelected = false;
                 this.lastSelectionIndex = -1;
+            },
+
+            /**
+             * Mirror the page's current diff target into the picker's
+             * multi-select shape. Only meaningful on the current branch -
+             * activeDiffFrom/activeCommitHash are HEAD-relative.
+             */
+            _rehydrateSelectionFromActiveView() {
+                if (this.selectedBranch !== this.currentBranch) return;
+
+                const from = this.activeDiffFrom;
+                const tip = this.activeCommitHash;
+
+                if (tip === null && from === 'HEAD') {
+                    this.workingTreeSelected = true;
+                    this.selectedHashes = [];
+                    return;
+                }
+
+                if (tip === null) {
+                    this.workingTreeSelected = true;
+                    const base = this.$wire.branchBase;
+                    this.selectedHashes = (base?.state === 'ready' && base.baseSha === from)
+                        ? [...base.hashesInRange]
+                        : this._hashesInRange(from, null);
+                    return;
+                }
+
+                this.workingTreeSelected = false;
+                const slice = this._hashesInRange(from, tip);
+                this.selectedHashes = slice.length ? slice : [tip];
+            },
+
+            /** Loaded commits in `(fromSha, toSha]`, newest-first. `toSha === null` means HEAD (index 0). */
+            _hashesInRange(fromSha, toSha) {
+                const commits = this.$wire.commits || [];
+                const fromIdx = commits.findIndex(c => c.hash === fromSha);
+                const tipIdx = toSha === null ? 0 : commits.findIndex(c => c.hash === toSha);
+                if (tipIdx < 0 || fromIdx < 0 || fromIdx <= tipIdx) return [];
+                return commits.slice(tipIdx, fromIdx).map(c => c.hash);
             },
 
             /**

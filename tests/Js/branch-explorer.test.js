@@ -342,6 +342,96 @@ describe('working-tree tip anchor', () => {
     });
 });
 
+describe('_rehydrateSelectionFromActiveView', () => {
+    function makeFor({ activeDiffFrom = 'HEAD', activeCommitHash = null, branch = 'main', commits = [], branchBase = null } = {}) {
+        const a = createBranchExplorer({
+            currentBranch: 'main',
+            activeCommitHash,
+            activeDiffFrom,
+            projectSlug: 'p',
+            branches: { local: [], remote: [] },
+        });
+        a.$wire = { commits, branchBase };
+        a.selectedBranch = branch;
+        return a;
+    }
+
+    it('does nothing when the picker is not on the current branch', () => {
+        const a = makeFor({ branch: 'feature/x', activeCommitHash: 'aaa1' });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.selectedHashes).toEqual([]);
+        expect(a.workingTreeSelected).toBe(false);
+    });
+
+    it('selects working tree only when viewing /p/{slug}', () => {
+        const a = makeFor();
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual([]);
+    });
+
+    it('selects WT + base..HEAD hashes from branchBase when viewing /rw/{baseSha}', () => {
+        const a = makeFor({
+            activeDiffFrom: 'base-sha',
+            commits,
+            branchBase: { state: 'ready', baseSha: 'base-sha', hashesInRange: ['aaa1', 'bbb2'] },
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual(['aaa1', 'bbb2']);
+    });
+
+    it('falls back to slicing loaded commits for /rw/{sha} when sha is not the configured base', () => {
+        const a = makeFor({
+            activeDiffFrom: 'ccc3',
+            commits,
+            branchBase: { state: 'ready', baseSha: 'other', hashesInRange: [] },
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual(['aaa1', 'bbb2']);
+    });
+
+    it('selects just the tip for a single commit view (/c/{hash})', () => {
+        const a = makeFor({
+            activeCommitHash: 'bbb2',
+            activeDiffFrom: 'ccc3', // parent of bbb2 in this fixture
+            commits,
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.selectedHashes).toEqual(['bbb2']);
+    });
+
+    it('selects every commit in (from, to] for an explicit range view (/r/{from}..{to})', () => {
+        const a = makeFor({
+            activeCommitHash: 'aaa1',
+            activeDiffFrom: 'ddd4',
+            commits,
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.selectedHashes).toEqual(['aaa1', 'bbb2', 'ccc3']);
+    });
+
+    it('falls back to [tip] when the range endpoints are not in the loaded commits', () => {
+        const a = makeFor({
+            activeCommitHash: 'unknown-tip',
+            activeDiffFrom: 'unknown-from',
+            commits,
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.selectedHashes).toEqual(['unknown-tip']);
+    });
+});
+
 describe('install', () => {
     afterEach(() => {
         delete window.Alpine;
