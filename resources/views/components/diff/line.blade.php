@@ -48,11 +48,11 @@
     @if($oldNum) data-line-old="{{ $oldNum }}" @endif
     @if($ancestorJs) x-show="!isLineFolded({{ $ancestorJs }})" @endif
 >
-    <div data-testid="diff-line-number" class="diff-cell diff-cell-num diff-cell-num-old {{ $bgClass }} {{ $oldNumBgClass }}"
+    <div @if($oldNum && ! $newNum) data-testid="diff-line-number" @endif class="diff-cell diff-cell-num diff-cell-num-old {{ $bgClass }} {{ $oldNumBgClass }}"
         @if($oldNum) @mousedown.prevent="handleLineMousedown({{ $oldNum }}, 'left', $event)" @endif
     >{{ $oldNum ?? '' }}</div>
 
-    <div data-testid="diff-line-number" class="diff-cell diff-cell-num diff-cell-num-new {{ $bgClass }} {{ $newNumBgClass }}"
+    <div @if($newNum) data-testid="diff-line-number" @endif class="diff-cell diff-cell-num diff-cell-num-new {{ $bgClass }} {{ $newNumBgClass }}"
         @if($newNum) @mousedown.prevent="handleLineMousedown({{ $newNum }}, 'right', $event)" @endif
     >{{ $newNum ?? '' }}</div>
 

@@ -147,7 +147,11 @@
             cursor: pointer;
             user-select: none;
         }
-        .diff-cell-num:hover { color: rgb(var(--gh-link)); }
+        /* Empty num cells (added rows have no old number, deleted rows have no
+           new number) have no @mousedown handler — show the default cursor so
+           the affordance matches the actual click behavior. */
+        .diff-cell-num:empty { cursor: default; }
+        .diff-cell-num:not(:empty):hover { color: rgb(var(--gh-link)); }
         .diff-cell-prefix { padding: 0 0.25rem; text-align: center; user-select: none; }
         .diff-cell-content { padding: 0 0.5rem; white-space: pre-wrap; word-break: break-all; }
 
@@ -199,6 +203,9 @@
         /* Prevent Flux menu scroll-lock from hiding scrollbar and causing layout shift */
         html { overflow-y: scroll !important; }
 
+        /* Alpine doesn't ship the x-cloak rule itself. */
+        [x-cloak] { display: none !important; }
+
         /* Fix checkbox visibility in dark mode */
         .dark [data-flux-checkbox-indicator] {
             border-color: rgb(var(--gh-border));
@@ -247,16 +254,24 @@
     </style>
     @fluxAppearance
 </head>
-<body class="bg-gh-bg text-gh-text min-h-screen font-display text-sm antialiased">
+<body class="bg-gh-bg text-gh-text min-h-screen font-display text-sm antialiased"
+    x-data
+    @copy-to-clipboard.window="
+        navigator.clipboard.writeText($event.detail.text).then(() => {
+            if ($event.detail.toast) Flux.toast({ text: $event.detail.toast, variant: 'success' });
+        }).catch(() => {});
+    "
+>
     {{-- Find-in-page search bar (Cmd/Ctrl+F) --}}
     <div x-data="pageSearch" x-show="open" x-cloak data-search-ignore
          @keydown.window="handleKeydown($event)"
          class="fixed top-2 right-4 z-[9999] flex items-center gap-1.5 bg-gh-surface border border-gh-border rounded-lg shadow-lg px-3 py-1.5">
-        <svg class="w-4 h-4 text-gh-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg class="w-4 h-4 text-gh-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
         </svg>
         <input x-ref="input" type="text" x-model="query"
                placeholder="Find..."
+               aria-label="Find in page"
                class="bg-transparent text-gh-text text-sm font-mono outline-none w-56 placeholder:text-gh-muted"
                @input="onQueryInput()"
                @keydown.enter.prevent="find($event.shiftKey)"
@@ -264,18 +279,18 @@
         <span x-show="query" role="status" aria-live="polite" aria-atomic="true"
               class="text-gh-muted text-xs font-mono tabular-nums shrink-0 min-w-[3rem] text-right"
               x-text="matches.length === 0 ? 'No results' : currentMatch + ' of ' + matches.length"></span>
-        <button @click="find(true)" class="text-gh-muted hover:text-gh-text p-0.5" title="Previous (Shift+Enter)">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <button type="button" @click="find(true)" class="text-gh-muted hover:text-gh-text p-0.5" title="Previous (Shift+Enter)" aria-label="Previous match">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
             </svg>
         </button>
-        <button @click="find(false)" class="text-gh-muted hover:text-gh-text p-0.5" title="Next (Enter)">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <button type="button" @click="find(false)" class="text-gh-muted hover:text-gh-text p-0.5" title="Next (Enter)" aria-label="Next match">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
             </svg>
         </button>
-        <button @click="close()" class="text-gh-muted hover:text-gh-text p-0.5 ml-0.5" title="Close (Esc)">
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <button type="button" @click="close()" class="text-gh-muted hover:text-gh-text p-0.5 ml-0.5" title="Close (Esc)" aria-label="Close find">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
         </button>

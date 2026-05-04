@@ -146,6 +146,44 @@ test('mount passes gitignore path when respectGlobalGitignore is true', function
     expect($captured->first())->toBe('/tmp/test-global-gitignore');
 });
 
+test('diff file lazy loads stay isolated to avoid Livewire max component payload', function () {
+    $files = collect(range(1, 25))
+        ->map(fn (int $index): array => [
+            'id' => "file-{$index}",
+            'path' => "src/File{$index}.php",
+            'status' => 'modified',
+            'oldPath' => null,
+            'additions' => 1,
+            'deletions' => 1,
+            'isBinary' => false,
+            'isUntracked' => false,
+            'isImage' => false,
+            'lastModified' => null,
+            'isSymlink' => false,
+            'symlinkTarget' => null,
+            'fileSize' => null,
+        ])
+        ->all();
+
+    app()->bind(GetFileListAction::class, fn () => new class($files)
+    {
+        public function __construct(private array $files) {}
+
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        {
+            return $this->files;
+        }
+    });
+
+    $html = Livewire::test('pages::review-page', ['slug' => 'test-project'])->html();
+    $lazyLoadCount = substr_count($html, '__lazyLoad');
+    $maxComponents = config('livewire.payload.max_components', 20);
+
+    expect($lazyLoadCount)
+        ->toBeGreaterThan($maxComponents)
+        ->and($html)->not->toContain('lazyIsolated&quot;:false');
+});
+
 test('mount backfills null gitignore path from git config', function () {
     $this->project->update(['global_gitignore_path' => null]);
 

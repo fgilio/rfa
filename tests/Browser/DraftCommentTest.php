@@ -234,7 +234,7 @@ test('drafts alone do not enable submit button', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
 
     $page->assertSee('1 draft');
-    $page->assertButtonDisabled('Submit Review');
+    $page->assertButtonDisabled('Submit review');
 });
 
 test('submit with drafts shows confirm dialog', function () {
@@ -257,7 +257,7 @@ test('submit with drafts shows confirm dialog', function () {
     // Override confirm to capture message and auto-accept
     $page->script('window.__confirmMsg = null; window.confirm = function(msg) { window.__confirmMsg = msg; return true; }');
 
-    $page->pressAndWaitFor('Submit Review', 3);
+    $page->pressAndWaitFor('Submit review', 3);
 
     $dialogMessage = $page->script('window.__confirmMsg');
     expect($dialogMessage)->toBeString()->toContain('draft');
@@ -300,7 +300,7 @@ test('drafts excluded from export', function () {
     // Auto-accept confirm dialog for drafts
     $page->script('window.confirm = function() { return true; }');
 
-    $page->pressAndWaitFor('Submit Review', 3);
+    $page->pressAndWaitFor('Submit review', 3);
     $page->assertSee('Review submitted');
 
     $rfaDir = $this->testRepoPath.'/.rfa';
@@ -330,7 +330,7 @@ test('canceling confirm dialog does not submit review', function () {
     // Override confirm to return false (cancel)
     $page->script('window.confirm = function() { return false; }');
 
-    $page->page()->getByRole('button', ['name' => 'Submit Review'])->click();
+    $page->page()->getByRole('button', ['name' => 'Submit review'])->click();
 
     $page->assertDontSee('Review submitted');
     $page->assertSee('Stay here');

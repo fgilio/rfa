@@ -38,6 +38,6 @@ test('clicking the selection badge opens the branch-explorer panel', function ()
     $page = $this->visit($this->projectUrl());
     $page->page()->getByLabel('Open selection drawer')->click();
 
-    $page->page()->getByPlaceholder('Filter branch')->waitFor();
+    $page->page()->getByPlaceholder('Filter branches...')->waitFor();
     $page->assertSee('Add greet function');
 });

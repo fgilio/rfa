@@ -181,6 +181,12 @@
                 return parts.join(' + ') || 'nothing';
             },
 
+            get loadedCommitsSummary() {
+                const n = this.$wire.commits?.length || 0;
+                const noun = (n === 1 && !this.$wire.hasMore) ? 'commit' : 'commits';
+                return `${n}${this.$wire.hasMore ? '+' : ''} ${noun}`;
+            },
+
             _filterBranches(key) {
                 const list = this.allBranches[key] || [];
                 if (this.search === '') return list;
@@ -291,7 +297,7 @@
             },
 
             copyHash(hash) {
-                navigator.clipboard.writeText(hash).catch(() => {});
+                this.$dispatch('copy-to-clipboard', { text: hash, toast: 'Copied ' + hash.slice(0, 7) });
             },
 
             openRemoteContext(event, type, params, label) {

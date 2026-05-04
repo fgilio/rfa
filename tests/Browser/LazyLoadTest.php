@@ -60,7 +60,7 @@ test('export works with lazily loaded diffs', function () {
     $page->press('Save');
     $page->assertSee('Lazy load export test');
 
-    $page->pressAndWaitFor('Submit Review', 3);
+    $page->pressAndWaitFor('Submit review', 3);
     $page->assertSee('Review submitted');
 
     // Verify .rfa directory was created

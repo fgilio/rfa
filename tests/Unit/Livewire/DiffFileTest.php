@@ -432,6 +432,7 @@ test('1-line gap shows single expand button', function () {
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
-    expect($html)->toContain('Expand 1 hidden lines')
+    expect($html)->toContain('Expand 1 hidden line')
+        ->and($html)->not->toContain('Expand 1 hidden lines')
         ->and($html)->not->toContain('&middot;');
 });

@@ -135,7 +135,7 @@ new #[Layout('layouts.app')] class extends Component
         @else
             <div class="w-full max-w-2xl">
                 <div class="mb-6 text-center">
-                    <p class="rfa-logo text-3xl text-gh-muted/40 mb-3">rfa</p>
+                    <p class="rfa-logo text-3xl text-gh-muted/40 mb-3" aria-hidden="true">rfa</p>
                     <flux:heading class="font-display tracking-brutal">Pick a repo</flux:heading>
                 </div>
 
@@ -185,7 +185,7 @@ new #[Layout('layouts.app')] class extends Component
 
     <footer class="py-2 flex items-center justify-center gap-1.5 font-mono text-[11px] text-gh-muted/40">
         <x-external-link href="https://x.com/fgili0" class="hover:text-gh-muted transition-colors">Franco Gilio</x-external-link>
-        <span>&middot;</span>
+        <span aria-hidden="true">&middot;</span>
         <x-external-link href="https://github.com/fgilio/rfa" class="hover:text-gh-muted transition-colors">PRs welcome</x-external-link>
     </footer>
 </div>

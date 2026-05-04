@@ -192,7 +192,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `delete-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{commentId}` |
 | `toggle-reviewed` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{filePath}` |
 | `comment-updated` | ReviewPage PHP dispatch | DiffFile Alpine `@window` | `{fileId, comments}` |
-| `copy-to-clipboard` | DiffFile Alpine/PHP, ReviewPage PHP, comment-display, comments-drawer | ReviewPage Alpine `@window` | `{text, toast?}` (if `toast` string is set, a success toast with that text shows on success) |
+| `copy-to-clipboard` | DiffFile Alpine/PHP, ReviewPage PHP, comment-display, comments-drawer, branch-explorer | layout `<body>` Alpine `@window` | `{text, toast?}` (if `toast` string is set, a success toast with that text shows on success) |
 | `file-reviewed-changed` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{id, reviewed}` |
 | `collapse-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |

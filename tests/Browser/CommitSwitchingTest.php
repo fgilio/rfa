@@ -164,7 +164,7 @@ test('escape in branch explorer filter clears input before closing panel', funct
 
     $page->page()->locator('button:has(span:text("main"))')->click();
 
-    $filterInput = $page->page()->getByPlaceholder('Filter branch');
+    $filterInput = $page->page()->getByPlaceholder('Filter branches...');
     $filterInput->waitFor();
     $page->page()->locator('text=Add greet function')->waitFor();
 
@@ -172,7 +172,7 @@ test('escape in branch explorer filter clears input before closing panel', funct
     $filterInput->press('Escape');
 
     expect($filterInput->inputValue())->toBe('');
-    expect($page->script("document.activeElement?.getAttribute('placeholder')"))->not->toBe('Filter branch');
+    expect($page->script("document.activeElement?.getAttribute('placeholder')"))->not->toBe('Filter branches...');
     expect($filterInput->isVisible())->toBeTrue();
 
     $page->page()->locator('body')->press('Escape');

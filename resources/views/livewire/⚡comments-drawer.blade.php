@@ -109,6 +109,11 @@ class extends Component
     x-effect="if (open && !$store.overlays.is('comments-drawer')) close()"
     class="relative"
 >
+    {{-- Plain :aria-expanded / x-bind:aria-expanded on a Flux component is
+         pre-compiled by Flux's blaze pass as a PHP expression and blows up
+         server-side. The trigger doesn't strictly need a reactive
+         aria-expanded — a static aria-haspopup is sufficient for screen
+         readers to announce that this button opens a dialog. --}}
     <flux:tooltip content="All comments · ⌘J">
         <flux:button
             variant="ghost"
@@ -116,6 +121,7 @@ class extends Component
             icon="chat-bubble-left-right"
             icon:variant="outline"
             aria-label="All comments in this repo"
+            aria-haspopup="dialog"
             x-on:click="toggle()"
         >
             @if($this->totalCount > 0)
@@ -175,7 +181,7 @@ class extends Component
                                     <span>{{ match($c['origin_ref']) { 'working' => 'WD', 'external' => 'EXT', default => Str::limit($c['origin_ref'], 7, '') } }}</span>
                                 @endif
                                 @if(! empty($c['start_line']))
-                                    <span>&middot;</span>
+                                    <span aria-hidden="true">&middot;</span>
                                     <span>L{{ $c['start_line'] }}@if(! empty($c['end_line']) && $c['end_line'] !== $c['start_line'])-L{{ $c['end_line'] }}@endif</span>
                                 @endif
                                 <div class="ml-auto flex items-center gap-1">

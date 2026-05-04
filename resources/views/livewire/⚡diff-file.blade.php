@@ -48,6 +48,20 @@ new class extends Component {
 
     private ?DiffTarget $cachedTarget = null;
 
+    public function placeholder(): string
+    {
+        return <<<'HTML'
+<div class="group">
+    <div class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5 h-10">
+        <span class="size-3.5 rounded bg-gh-muted/20"></span>
+        <span class="h-3 w-3 rounded-sm bg-gh-muted/20"></span>
+        <span class="h-3 flex-1 max-w-md rounded bg-gh-muted/15"></span>
+        <span class="h-3 w-14 rounded bg-gh-muted/15"></span>
+    </div>
+</div>
+HTML;
+    }
+
     public function hydrate(): void
     {
         $cached = Cache::get($this->diffCacheKey());
@@ -92,7 +106,13 @@ new class extends Component {
         );
 
         if ($text !== null) {
-            $this->dispatch('copy-to-clipboard', text: $text);
+            $toast = match ($kind) {
+                'diff' => 'Copied diff',
+                'original' => 'Copied original',
+                'new' => 'Copied new',
+                default => 'Copied',
+            };
+            $this->dispatch('copy-to-clipboard', text: $text, toast: $toast);
         }
     }
 
@@ -239,6 +259,7 @@ new class extends Component {
     @expand-file.window="if ($event.detail.id === fileId) { autoExpandedForComment = false; collapsed = false }"
     @reset-reviewed-files.window="reviewed = false; collapsed = false"
     @reviewed-files-reverted.window="if ($event.detail.fileIds?.includes(fileId)) { reviewed = false }"
+    @comment-form-opened.window="closeEmptyFormFromAnotherFile($event.detail.fileId)"
     {{-- Sync from external mark/un-mark (e.g. sidebar file-list button). Self-dispatched
          events from this component's own checkbox are no-ops since reviewed is already
          in the same state. Only flips collapsed on mark — un-mark leaves it alone so it
@@ -357,18 +378,14 @@ new class extends Component {
                 @endif
             </div>
         @elseif($diffData === null)
-            {{-- Loading state: trigger lazy load via x-intersect --}}
+            {{-- One spinner for both the pre-request setTimeout window and the
+                 in-flight request, so the visual doesn't swap mid-load. --}}
             <div
                 x-intersect.once="setTimeout(() => $wire.loadFileDiff(), {{ $loadDelay }})"
                 class="px-4 py-8 text-center"
             >
-                <div wire:loading wire:target="loadFileDiff">
-                    <flux:icon icon="arrow-path" variant="outline" class="animate-spin inline-block text-gh-muted mr-1" />
-                    <flux:text variant="subtle" size="sm" inline>Loading diff...</flux:text>
-                </div>
-                <div wire:loading.remove wire:target="loadFileDiff">
-                    <flux:text variant="subtle" size="sm">Waiting to load...</flux:text>
-                </div>
+                <flux:icon icon="arrow-path" variant="outline" class="animate-spin inline-block text-gh-muted mr-1" />
+                <flux:text variant="subtle" size="sm" inline>Loading diff...</flux:text>
             </div>
         @elseif($diffData['tooLarge'] ?? false)
             <div class="px-4 py-8 text-center">

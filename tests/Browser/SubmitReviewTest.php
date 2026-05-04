@@ -8,7 +8,7 @@ beforeEach(function () {
 
 test('submit button disabled when no comments and no global comment', function () {
     $this->visit($this->projectUrl())
-        ->assertButtonDisabled('Submit Review');
+        ->assertButtonDisabled('Submit review');
 });
 
 test('submit button enables after adding a comment', function () {
@@ -18,7 +18,7 @@ test('submit button enables after adding a comment', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Review comment');
     $page->press('Save');
 
-    $page->assertButtonEnabled('Submit Review');
+    $page->assertButtonEnabled('Submit review');
 });
 
 test('submitting shows success state with review submitted', function () {
@@ -28,7 +28,8 @@ test('submitting shows success state with review submitted', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Looks good');
     $page->press('Save');
 
-    $page->pressAndWaitFor('Submit Review', 3);
+    $page->assertButtonEnabled('Submit review');
+    $page->page()->getByRole('button', ['name' => 'Submit review'])->click();
 
     $page->assertSee('Review submitted');
 });
@@ -37,8 +38,8 @@ test('submitting with only global comment works', function () {
     $page = $this->visit($this->projectUrl());
 
     $page->page()->getByPlaceholder('Overall review comment', false)->fill('Overall LGTM');
-    $page->assertButtonEnabled('Submit Review');
-    $page->pressAndWaitFor('Submit Review', 3);
+    $page->assertButtonEnabled('Submit review');
+    $page->pressAndWaitFor('Submit review', 3);
 
     $page->assertSee('Review submitted');
 });
@@ -49,7 +50,9 @@ test('export creates rfa directory with md file on disk', function () {
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Export test comment');
     $page->press('Save');
-    $page->pressAndWaitFor('Submit Review', 3);
+
+    $page->assertButtonEnabled('Submit review');
+    $page->pressAndWaitFor('Submit review', 3);
 
     $page->assertSee('Review submitted');
 
