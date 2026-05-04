@@ -257,6 +257,7 @@ HTML;
     @collapse-all-files.window="autoExpandedForComment = false; collapsed = true"
     @expand-all-files.window="autoExpandedForComment = false; collapsed = false"
     @expand-file.window="if ($event.detail.id === fileId) { autoExpandedForComment = false; collapsed = false }"
+    @unfold-for-comment.window="if ($event.detail.fileId === fileId) { foldedHeadings = {} }"
     @reset-reviewed-files.window="reviewed = false; collapsed = false"
     @reviewed-files-reverted.window="if ($event.detail.fileIds?.includes(fileId)) { reviewed = false }"
     @comment-form-opened.window="closeEmptyFormFromAnotherFile($event.detail.fileId)"
@@ -286,7 +287,7 @@ HTML;
             </template>
             @foreach($fileComments as $comment)
                 @if($comment['side'] === DiffSide::File->value)
-                    <div x-data x-show="editingCommentId !== '{{ $comment['id'] }}'">
+                    <div id="comment-{{ $comment['id'] }}" x-data x-show="editingCommentId !== '{{ $comment['id'] }}'">
                         <x-comment-display :comment="$comment" border-class="border-b" />
                     </div>
                 @endif
@@ -303,7 +304,7 @@ HTML;
         @endphp
         @if($unplacedComments->isNotEmpty())
             @foreach($unplacedComments as $comment)
-                <div x-data x-show="editingCommentId !== '{{ $comment['id'] }}'">
+                <div id="comment-{{ $comment['id'] }}" x-data x-show="editingCommentId !== '{{ $comment['id'] }}'">
                     @if(! empty($comment['lineSnippet']))
                         <div class="border-b border-gh-border bg-gh-surface/40 px-4 py-2">
                             <div class="text-[10px] font-display uppercase tracking-brutal text-gh-muted mb-1">

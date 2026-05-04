@@ -202,6 +202,8 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `discard-file` | DiffFile Alpine `$dispatch` | ReviewPage `#[On]` | `{fileId}` |
 | `fingerprint-reset` | ReviewPage PHP dispatch | change-polling Alpine `@window` | none |
 | `open-remote-menu` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{target: 'file'\|'line', fileId, filePath, oldPath, status, side?, start?, end?, clientX, clientY}` |
+| `scroll-to-comment` | comments-drawer Alpine `$dispatch` | ReviewPage Alpine `@window` | `{commentId, filePath}` |
+| `unfold-for-comment` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | `{fileId}` |
 
 ### Known Debt
 

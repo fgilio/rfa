@@ -83,7 +83,7 @@
 @endif
 
 @foreach($lineComments as $comment)
-    <div class="diff-fullspan" x-data x-show="editingCommentId !== '{{ $comment['id'] }}'@if($ancestorJs) && !isLineFolded({{ $ancestorJs }})@endif">
+    <div id="comment-{{ $comment['id'] }}" class="diff-fullspan" x-data x-show="editingCommentId !== '{{ $comment['id'] }}'@if($ancestorJs) && !isLineFolded({{ $ancestorJs }})@endif">
         <x-comment-display :comment="$comment" border-class="border-y" />
     </div>
 @endforeach

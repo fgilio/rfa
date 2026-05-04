@@ -45,12 +45,15 @@
     }
 
     function createDiffFile({ fileId, filePath, oldPath = null, status = 'modified', isReviewed, singleFile = false }) {
+        const pending = window.__rfaPendingExpandFiles;
+        const wantsExpand = pending && pending.has(fileId);
+        if (wantsExpand) pending.delete(fileId);
         return {
             fileId,
             filePath,
             oldPath,
             status,
-            collapsed: singleFile ? false : (Alpine.store('settings')?.collapseAll || isReviewed),
+            collapsed: wantsExpand ? false : (singleFile ? false : (Alpine.store('settings')?.collapseAll || isReviewed)),
             reviewed: isReviewed,
 
             // Comment form state

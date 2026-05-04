@@ -1330,8 +1330,44 @@ new #[Layout('layouts.app')] class extends Component
             this.activeFile = id;
             this.$dispatch('expand-file', { id });
             document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+        scrollToComment(commentId, filePath) {
+            const file = this.sourceFileEntries.find(f => f.path === filePath);
+            if (!file) {
+                Flux.toast({ text: 'Comment is on a file not in this diff', variant: 'warning' });
+                return;
+            }
+            if (!this.fileMatchesFilter(file.path, file.id)) {
+                this.fileFilter = '';
+                this.hideReviewed = false;
+            }
+            (window.__rfaPendingExpandFiles ??= new Set()).add(file.id);
+            this.scrollToFile(file.id);
+            clearTimeout(this.commentScrollPollId);
+            const target = 'comment-' + commentId;
+            const start = performance.now();
+            const tryScroll = () => {
+                if (!this.$el?.isConnected) return;
+                {{-- Re-dispatch every tick: the diff-file may be lazy and hydrate after the first dispatch, --}}
+                {{-- in which case its listeners weren't yet registered to receive the initial expand-file. --}}
+                this.$dispatch('expand-file', { id: file.id });
+                this.$dispatch('unfold-for-comment', { fileId: file.id });
+                const el = document.getElementById(target);
+                if (el && el.offsetParent !== null) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+                if (performance.now() - start < 4000) {
+                    this.commentScrollPollId = setTimeout(tryScroll, 100);
+                }
+            };
+            tryScroll();
+        },
+        destroy() {
+            clearTimeout(this.commentScrollPollId);
         }
     }"
+    @scroll-to-comment.window="scrollToComment($event.detail.commentId, $event.detail.filePath)"
     @file-reviewed-changed.window="reviewedFiles[$event.detail.id] = $event.detail.reviewed"
     @reset-reviewed-files.window="reviewedFiles = {}"
     @reviewed-files-reverted.window="($event.detail.fileIds || []).forEach(id => { reviewedFiles[id] = false })"
