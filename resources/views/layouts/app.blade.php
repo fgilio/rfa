@@ -282,6 +282,7 @@
     </div>
 
     <livewire:keepalive />
+    <livewire:quit-confirmation />
     {{ $slot }}
     @fluxScripts
 </body>

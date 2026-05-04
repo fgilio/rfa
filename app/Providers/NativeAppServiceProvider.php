@@ -169,7 +169,14 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                 Menu::separator(),
                 Menu::hide(),
                 Menu::separator(),
-                Menu::quit(),
+                // Replaces Menu::quit() (a native role) so Cmd+Q routes through
+                // MenuItemClicked → the quit-confirmation Livewire component,
+                // which gates the press behind a hold-to-quit overlay. Native
+                // role bypasses both PHP and the renderer (see
+                // electron-plugin/.../helper/index.ts role branch).
+                Menu::label(__('Quit').' '.config('app.name'))
+                    ->id('quit-rfa')
+                    ->hotkey('CmdOrCtrl+Q'),
             )->label(config('app.name')),
             Menu::make(
                 Menu::label('Add Single Repository...')

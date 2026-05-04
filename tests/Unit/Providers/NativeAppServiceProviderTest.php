@@ -85,6 +85,24 @@ test('the View submenu declares the show-context menu item with the cmd-shift-k 
         ->toContain("->hotkey('CmdOrCtrl+Shift+K')");
 });
 
+test('the Quit menu item is a labeled hotkey, not the native role', function () {
+    // Native Menu::quit() compiles to {role: 'quit'} and bypasses both PHP
+    // listeners and the renderer broadcast (electron-plugin's helper does
+    // not call notifyLaravel for role items). We need MenuItemClicked to
+    // fire so the hold-to-quit overlay can intercept the press.
+    $source = file_get_contents((new ReflectionClass(NativeAppServiceProvider::class))->getFileName());
+
+    expect($source)
+        ->toContain("->id('quit-rfa')")
+        ->toContain("->hotkey('CmdOrCtrl+Q')");
+
+    // Strip comments and re-check for the role call so the explanatory
+    // comment that mentions Menu::quit() does not pass the assertion.
+    $stripped = preg_replace('!//.*?$|/\*.*?\*/!ms', '', $source);
+
+    expect($stripped)->not->toContain('Menu::quit()');
+});
+
 // -- Inbox parser --
 
 test('two-line inbox with context mode routes to context-page', function () {
