@@ -425,6 +425,7 @@ new #[Layout('layouts.app')] class extends Component
         scrollToContextFile(id) {
             const el = document.getElementById(id);
             if (!el) return;
+            $dispatch('expand-file', { id });
             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }"
