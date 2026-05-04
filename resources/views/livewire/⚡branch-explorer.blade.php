@@ -304,7 +304,7 @@ new class extends Component {
                     </div>
 
                     {{-- Commits list --}}
-                    <div class="overflow-y-auto flex-1">
+                    <div class="overflow-y-auto flex-1" x-ref="commitList">
                         {{-- "Since {base}" shortcut: a single click fills the
                              multi-select with every commit in base..HEAD plus
                              working tree, so the user can trim before applying. --}}

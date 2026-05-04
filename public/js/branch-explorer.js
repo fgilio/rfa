@@ -225,6 +225,7 @@
                 await this.loadSelectedBranch();
                 this._rehydrateSelectionFromActiveView();
                 await this.$nextTick();
+                this._scrollActiveCommitIntoView();
                 this.$refs.searchInput?.focus();
             },
 
@@ -437,6 +438,21 @@
                 this.workingTreeSelected = false;
                 const slice = this._hashesInRange(from, tip);
                 this.selectedHashes = slice.length ? slice : [tip];
+            },
+
+            /**
+             * Scroll the commit row that anchors the current view into the
+             * picker so reopening doesn't strand the user at the top. For
+             * /c and /r the anchor is `activeCommitHash`; for /rw it's the
+             * base sha, so the bottom of the "Since X" range is visible.
+             */
+            _scrollActiveCommitIntoView() {
+                if (this.selectedBranch !== this.currentBranch) return;
+                const anchor = this.activeCommitHash
+                    ?? (this.activeDiffFrom !== 'HEAD' ? this.activeDiffFrom : null);
+                if (anchor === null) return;
+                const row = this.$refs.commitList?.querySelector(`[data-commit-hash="${anchor}"]`);
+                row?.scrollIntoView({ block: 'center' });
             },
 
             /** Loaded commits in `(fromSha, toSha]`, newest-first. `toSha === null` means HEAD (index 0). */

@@ -432,6 +432,62 @@ describe('_rehydrateSelectionFromActiveView', () => {
     });
 });
 
+describe('_scrollActiveCommitIntoView', () => {
+    function makeWithList({ activeCommitHash = null, activeDiffFrom = 'HEAD', branch = 'main' } = {}) {
+        const a = createBranchExplorer({
+            currentBranch: 'main',
+            activeCommitHash,
+            activeDiffFrom,
+            projectSlug: 'p',
+            branches: { local: [], remote: [] },
+        });
+        a.selectedBranch = branch;
+        const rows = new Map();
+        const make = (hash) => ({ scrollIntoView: vi.fn(), getAttribute: () => hash });
+        for (const c of commits) rows.set(c.hash, make(c.hash));
+        a.$refs = {
+            commitList: {
+                querySelector: (sel) => {
+                    const m = sel.match(/^\[data-commit-hash="(.+)"\]$/);
+                    return m ? rows.get(m[1]) ?? null : null;
+                },
+            },
+        };
+        return { a, rows };
+    }
+
+    it('does nothing when the picker is not on the current branch', () => {
+        const { a, rows } = makeWithList({ branch: 'feature/x', activeCommitHash: 'aaa1' });
+        a._scrollActiveCommitIntoView();
+        expect(rows.get('aaa1').scrollIntoView).not.toHaveBeenCalled();
+    });
+
+    it('scrolls to the active commit for /c and /r views', () => {
+        const { a, rows } = makeWithList({ activeCommitHash: 'ddd4', activeDiffFrom: 'HEAD' });
+        a._scrollActiveCommitIntoView();
+        expect(rows.get('ddd4').scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+    });
+
+    it('scrolls to the base sha for /rw views (so the bottom of the range is visible)', () => {
+        const { a, rows } = makeWithList({ activeCommitHash: null, activeDiffFrom: 'ccc3' });
+        a._scrollActiveCommitIntoView();
+        expect(rows.get('ccc3').scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+    });
+
+    it('does nothing for working-tree-only views', () => {
+        const { a, rows } = makeWithList({ activeCommitHash: null, activeDiffFrom: 'HEAD' });
+        a._scrollActiveCommitIntoView();
+        for (const row of rows.values()) {
+            expect(row.scrollIntoView).not.toHaveBeenCalled();
+        }
+    });
+
+    it('is a noop when the anchor commit is not in the loaded list', () => {
+        const { a } = makeWithList({ activeCommitHash: 'unknown', activeDiffFrom: 'HEAD' });
+        expect(() => a._scrollActiveCommitIntoView()).not.toThrow();
+    });
+});
+
 describe('install', () => {
     afterEach(() => {
         delete window.Alpine;
