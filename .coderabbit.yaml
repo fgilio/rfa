@@ -19,7 +19,6 @@ reviews:
     ignore_title_keywords:
       - WIP
       - wip
-      - "chore(release)"
 
   path_filters:
     - "!vendor/**"
@@ -56,12 +55,23 @@ reviews:
         Livewire SFC components. Thin UI adapters delegating to Actions.
         Prefer server-side logic over Alpine/JS.
 
+    - path: "app/Models/**/*.php"
+      instructions: >
+        Eloquent persistence only — minimal, no business logic. Casts go in
+        a casts() method (not a $casts property).
+
+    - path: "app/DTOs/**/*.php"
+      instructions: >
+        Immutable data containers carrying data between layers. No behavior
+        beyond construction/accessors.
+
     - path: "app/**/*.php"
       instructions: >
         Use the Storage facade for user-generated/external file operations.
-        Casts go in a casts() method on models. Use Laravel collections over
-        foreach/for. Use PHP 8 constructor property promotion and explicit
-        return type declarations.
+        Use Laravel collections over foreach/for. Use PHP 8 constructor
+        property promotion and explicit return type declarations. No
+        external resources (CDNs, Google Fonts) — assets must be served
+        locally (enforced by arch test).
 
     - path: "tests/**/*.php"
       instructions: >
@@ -94,7 +104,6 @@ knowledge_base:
     filePatterns:
       - "CLAUDE.md"
       - ".github/CLAUDE.md"
-      - "AGENTS.md"
 
 chat:
   auto_reply: true
