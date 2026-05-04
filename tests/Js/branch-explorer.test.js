@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import branchExplorer from '../../public/js/branch-explorer.js';
 
-const { decideSelection, isSinceBaseExactly, createBranchExplorer, install } = branchExplorer;
+const { BranchBaseState, decideSelection, isSinceBaseExactly, createBranchExplorer, install } = branchExplorer;
 
 /** Minimal factory wrapper for tests that exercise the Alpine state machine
  *  directly. Provides a stub `$wire` that the production code reads from. */
@@ -151,7 +151,7 @@ describe('decideSelection — working tree + commits', () => {
             workingTreeSelected: true,
             projectSlug: slug,
             sinceBase: {
-                state: 'ready',
+                state: BranchBaseState.Ready,
                 baseSha: '1234567890abcdef1234567890abcdef12345678',
                 hashesInRange: ['aaa1', 'bbb2', 'ccc3'],
             },
@@ -168,7 +168,7 @@ describe('decideSelection — working tree + commits', () => {
             workingTreeSelected: true,
             projectSlug: slug,
             sinceBase: {
-                state: 'ready',
+                state: BranchBaseState.Ready,
                 baseSha: '1234567890abcdef1234567890abcdef12345678',
                 hashesInRange: ['aaa1', 'bbb2', 'ccc3'],
             },
@@ -376,7 +376,7 @@ describe('_rehydrateSelectionFromActiveView', () => {
         const a = makeFor({
             activeDiffFrom: 'base-sha',
             commits,
-            branchBase: { state: 'ready', baseSha: 'base-sha', hashesInRange: ['aaa1', 'bbb2'] },
+            branchBase: { state: BranchBaseState.Ready, baseSha: 'base-sha', hashesInRange: ['aaa1', 'bbb2'] },
         });
         a._rehydrateSelectionFromActiveView();
 
@@ -388,7 +388,7 @@ describe('_rehydrateSelectionFromActiveView', () => {
         const a = makeFor({
             activeDiffFrom: 'ccc3',
             commits,
-            branchBase: { state: 'ready', baseSha: 'other', hashesInRange: [] },
+            branchBase: { state: BranchBaseState.Ready, baseSha: 'other', hashesInRange: [] },
         });
         a._rehydrateSelectionFromActiveView();
 

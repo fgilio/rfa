@@ -8,6 +8,15 @@
         api.autoInstall(root);
     }
 })(typeof window !== 'undefined' ? window : null, function () {
+    // Mirrors App\Enums\BranchBaseState. Keep values in sync with the PHP enum.
+    const BranchBaseState = Object.freeze({
+        Ready: 'ready',
+        NotConfigured: 'not_configured',
+        UpToDate: 'up_to_date',
+        MissingRef: 'missing_ref',
+        OnBaseBranch: 'on_base_branch',
+    });
+
     /**
      * @param {object} input
      * @param {Array<{hash: string}>} input.commits  newest-first; index 0 = tip.
@@ -22,7 +31,7 @@
         if (!hasAnySelection) return { kind: 'noop' };
 
         if (
-            sinceBase?.state === 'ready'
+            sinceBase?.state === BranchBaseState.Ready
             && sinceBase.baseSha
             && isSinceBaseExactly({ selectedHashes, workingTreeSelected, hashesInRange: sinceBase.hashesInRange })
         ) {
@@ -152,12 +161,12 @@
                 if (this.selectedBranch !== currentBranch) return false;
                 const base = this.$wire.branchBase;
                 if (!base) return false;
-                return base.state !== 'on_base_branch';
+                return base.state !== BranchBaseState.OnBaseBranch;
             },
 
             get sinceBaseSelected() {
                 const base = this.$wire.branchBase;
-                if (!base || base.state !== 'ready') return false;
+                if (!base || base.state !== BranchBaseState.Ready) return false;
                 return isSinceBaseExactly({
                     selectedHashes: this.selectedHashes,
                     workingTreeSelected: this.workingTreeSelected,
@@ -419,7 +428,7 @@
                 if (tip === null) {
                     this.workingTreeSelected = true;
                     const base = this.$wire.branchBase;
-                    this.selectedHashes = (base?.state === 'ready' && base.baseSha === from)
+                    this.selectedHashes = (base?.state === BranchBaseState.Ready && base.baseSha === from)
                         ? [...base.hashesInRange]
                         : this._hashesInRange(from, null);
                     return;
@@ -470,7 +479,7 @@
              */
             selectSinceBase() {
                 const base = this.$wire.branchBase;
-                if (!base || base.state !== 'ready') return;
+                if (!base || base.state !== BranchBaseState.Ready) return;
 
                 if (this.sinceBaseSelected) {
                     this.clearSelection();
@@ -579,5 +588,5 @@
         }
     }
 
-    return { decideSelection, isSinceBaseExactly, violatesTipAnchor, createBranchExplorer, install, autoInstall };
+    return { BranchBaseState, decideSelection, isSinceBaseExactly, violatesTipAnchor, createBranchExplorer, install, autoInstall };
 });
