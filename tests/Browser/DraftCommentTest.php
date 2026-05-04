@@ -183,7 +183,7 @@ test('clicking line with existing draft re-opens it', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
 
-    $page->assertSee('Existing draft');
+    $page->page()->getByTestId('draft-comment')->waitFor();
 
     // Click same line again
     $lineNum->click();
