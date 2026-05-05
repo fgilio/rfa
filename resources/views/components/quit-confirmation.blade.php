@@ -1,43 +1,9 @@
-<?php
-
-use App\Actions\QuitAppAction;
-use Livewire\Attributes\On;
-use Livewire\Component;
-
-new class extends Component
-{
-    /**
-     * Cmd+Q (and clicks on the rebuilt "Quit RFA" menu item) reach the
-     * renderer through MenuItemClicked broadcast. We bounce the event back
-     * out as a browser-level dispatch so the Alpine overlay - which owns
-     * the hold timer and key tracking - can react without a server hop.
-     */
-    #[On('native:Native\\Desktop\\Events\\Menu\\MenuItemClicked')]
-    public function handleMenuItemClicked(array $item): void
-    {
-        if (($item['id'] ?? null) !== 'quit-rfa') {
-            return;
-        }
-
-        $this->dispatch('quit-prompt-show');
-        $this->skipRender();
-    }
-
-    /**
-     * Confirmed quit. The overlay calls this only after the hold threshold
-     * was met *and* the user released Cmd or Q (Chrome's "wait for keyup"
-     * pattern - quitting while keys are still down causes macOS to forward
-     * the keystroke to the next foreground app and chain-quit it).
-     */
-    public function quit(QuitAppAction $action): void
-    {
-        $action->handle();
-        $this->skipRender();
-    }
-};
-
-?>
-
+{{--
+    OrbStack-style hold-to-quit overlay. Pure Blade + Alpine — keeping it out
+    of Livewire so the layout doesn't pay a per-page child-component mount.
+    Confirmation routes to the `keepalive` Livewire component via a global
+    Livewire event; that component owns the App::quit() seam.
+--}}
 <div
     x-data="{
         visible: false,
@@ -82,7 +48,7 @@ new class extends Component
             this.clearTimers();
             this.visible = false;
             this.armed = false;
-            $wire.quit();
+            window.Livewire.dispatch('quit-now');
         },
         onKeyup(event) {
             if (! this.visible) { return; }
