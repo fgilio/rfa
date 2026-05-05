@@ -35,15 +35,15 @@ class CommentExporter
 
         return [
             'md' => $path,
-            'clipboard' => $this->clipboardText($kind, $basename),
+            'clipboard' => $this->clipboardText($kind, $path),
         ];
     }
 
-    private function clipboardText(CommentExportKind $kind, string $basename): string
+    private function clipboardText(CommentExportKind $kind, string $path): string
     {
         return match ($kind) {
-            CommentExportKind::ContextFile => "improve the agent context files based on my comments in @.rfa/{$basename}.md",
-            CommentExportKind::Review => "address my comments on these changes in @.rfa/{$basename}.md",
+            CommentExportKind::ContextFile => "improve the agent context files based on my comments in {$path}",
+            CommentExportKind::Review => "address my comments on these changes in {$path}",
         };
     }
 }

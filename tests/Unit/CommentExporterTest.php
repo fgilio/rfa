@@ -53,7 +53,9 @@ test('exports Markdown with file grouping', function () {
 test('returns clipboard text', function () {
     $result = $this->exporter->export($this->tmpDir, [], 'test');
 
-    expect($result['clipboard'])->toMatch('/^address my comments on these changes in @\.rfa\/\d{8}_\d{6}_comments_.*\.md$/');
+    $expectedPrefix = 'address my comments on these changes in '.$this->tmpDir.'/.rfa/';
+    expect($result['clipboard'])->toStartWith($expectedPrefix)
+        ->and(substr($result['clipboard'], strlen($expectedPrefix)))->toMatch('/^\d{8}_\d{6}_comments_[a-zA-Z0-9]{8}\.md$/');
 });
 
 test('creates .rfa directory if missing', function () {
@@ -145,7 +147,7 @@ test('default review kind keeps the existing intro and clipboard text', function
     $md = File::get($result['md']);
     expect($md)->toContain('# Code Review Comments');
     expect($md)->not->toContain('# Agent Context Feedback');
-    expect($result['clipboard'])->toMatch('/^address my comments on these changes in @\.rfa\//');
+    expect($result['clipboard'])->toStartWith('address my comments on these changes in '.$this->tmpDir.'/.rfa/');
 });
 
 test('context-file kind swaps intro, outro and clipboard prose', function () {
@@ -161,7 +163,7 @@ test('context-file kind swaps intro, outro and clipboard prose', function () {
     expect($md)->toContain('## `CLAUDE.md`');
     expect($md)->toContain('tighten this');
 
-    expect($result['clipboard'])->toMatch('/^improve the agent context files based on my comments in @\.rfa\//');
+    expect($result['clipboard'])->toStartWith('improve the agent context files based on my comments in '.$this->tmpDir.'/.rfa/');
 });
 
 test('handles an empty comment body without truncating later comments', function () {
