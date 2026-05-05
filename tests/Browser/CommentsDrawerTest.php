@@ -41,6 +41,41 @@ test('opening the drawer lists the comment body with its file path', function ()
     $page->assertSee('hello.php');
 });
 
+test('clicking a comment in the drawer closes it and scrolls the diff to that comment', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    $page->page()->getByTestId('diff-line-number')->first()->click();
+    $page->page()->getByPlaceholder('Write a comment', false)->fill('jump-to-me');
+    $page->press('Save');
+    $page->assertSee('jump-to-me');
+
+    $page->page()->getByLabel('All comments · ⌘J')->click();
+    $page->page()->getByPlaceholder('Filter comments...')->waitFor();
+
+    $page->page()->locator('[data-testid="overlay-panel-comments-drawer"]')
+        ->getByText('jump-to-me')->click();
+
+    $page->page()->locator('[data-testid="overlay-panel-comments-drawer"]')
+        ->waitFor(['state' => 'hidden']);
+});
+
+test('clicking the copy button on a drawer row does not navigate away', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    $page->page()->getByTestId('diff-line-number')->first()->click();
+    $page->page()->getByPlaceholder('Write a comment', false)->fill('stay-put');
+    $page->press('Save');
+    $page->assertSee('stay-put');
+
+    $page->page()->getByLabel('All comments · ⌘J')->click();
+    $page->page()->getByPlaceholder('Filter comments...')->waitFor();
+
+    $page->page()->locator('[data-testid="overlay-panel-comments-drawer"]')
+        ->getByLabel('Copy comment')->first()->click();
+
+    expect($page->page()->locator('[data-testid="overlay-panel-comments-drawer"]')->isVisible())->toBeTrue();
+});
+
 test('the drawer filter narrows the visible comments', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 

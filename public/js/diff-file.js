@@ -45,12 +45,15 @@
     }
 
     function createDiffFile({ fileId, filePath, oldPath = null, status = 'modified', isReviewed, singleFile = false }) {
+        const pending = window.__rfaPendingExpandFiles;
+        const wantsExpand = pending && pending.has(fileId);
+        if (wantsExpand) pending.delete(fileId);
         return {
             fileId,
             filePath,
             oldPath,
             status,
-            collapsed: singleFile ? false : (Alpine.store('settings')?.collapseAll || isReviewed),
+            collapsed: wantsExpand ? false : (singleFile ? false : (Alpine.store('settings')?.collapseAll || isReviewed)),
             reviewed: isReviewed,
 
             // Comment form state
@@ -122,7 +125,16 @@
             },
 
             focusCommentInput() {
+                this.$dispatch('comment-form-opened', { fileId: this.fileId });
                 this.$nextTick(() => { this.$refs.commentInput?.focus(); });
+            },
+
+            closeEmptyFormFromAnotherFile(openedFileId) {
+                if (openedFileId === this.fileId || !this.showForm || this.editingCommentId || this.formBody.trim() !== '') {
+                    return;
+                }
+
+                this.cancelForm();
             },
 
             handleLineMousedown(lineNum, side, event) {
@@ -197,23 +209,15 @@
 
             endDrag() {
                 if (!this.isDragging) return;
-                this._stopScrollLoop();
-                if (this._onDragPointerMove) {
-                    window.removeEventListener('pointermove', this._onDragPointerMove);
-                    this._onDragPointerMove = null;
-                }
-                if (this._onDragWindowBlur) {
-                    window.removeEventListener('blur', this._onDragWindowBlur);
-                    this._onDragWindowBlur = null;
-                }
+                this.stopDragTracking();
                 this._cachedFileHeader = null;
-                this.isDragging = false;
                 this.showForm = true;
                 this.lastClickedLine = this.formEndLine;
                 this.focusCommentInput();
             },
 
             cancelForm() {
+                this.stopDragTracking();
                 this.showForm = false;
                 this.formBody = '';
                 this.formLine = null;
@@ -226,6 +230,19 @@
                     this.collapsed = true;
                     this.$nextTick(() => { this.$refs.fileCommentBtn?.focus(); });
                 }
+            },
+
+            stopDragTracking() {
+                this._stopScrollLoop();
+                if (this._onDragPointerMove) {
+                    window.removeEventListener('pointermove', this._onDragPointerMove);
+                    this._onDragPointerMove = null;
+                }
+                if (this._onDragWindowBlur) {
+                    window.removeEventListener('blur', this._onDragWindowBlur);
+                    this._onDragWindowBlur = null;
+                }
+                this.isDragging = false;
             },
 
             handleEscape() {

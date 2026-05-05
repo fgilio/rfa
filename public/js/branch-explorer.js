@@ -8,6 +8,15 @@
         api.autoInstall(root);
     }
 })(typeof window !== 'undefined' ? window : null, function () {
+    // Mirrors App\Enums\BranchBaseState. Keep values in sync with the PHP enum.
+    const BranchBaseState = Object.freeze({
+        Ready: 'ready',
+        NotConfigured: 'not_configured',
+        UpToDate: 'up_to_date',
+        MissingRef: 'missing_ref',
+        OnBaseBranch: 'on_base_branch',
+    });
+
     /**
      * @param {object} input
      * @param {Array<{hash: string}>} input.commits  newest-first; index 0 = tip.
@@ -22,7 +31,7 @@
         if (!hasAnySelection) return { kind: 'noop' };
 
         if (
-            sinceBase?.state === 'ready'
+            sinceBase?.state === BranchBaseState.Ready
             && sinceBase.baseSha
             && isSinceBaseExactly({ selectedHashes, workingTreeSelected, hashesInRange: sinceBase.hashesInRange })
         ) {
@@ -152,12 +161,12 @@
                 if (this.selectedBranch !== currentBranch) return false;
                 const base = this.$wire.branchBase;
                 if (!base) return false;
-                return base.state !== 'on_base_branch';
+                return base.state !== BranchBaseState.OnBaseBranch;
             },
 
             get sinceBaseSelected() {
                 const base = this.$wire.branchBase;
-                if (!base || base.state !== 'ready') return false;
+                if (!base || base.state !== BranchBaseState.Ready) return false;
                 return isSinceBaseExactly({
                     selectedHashes: this.selectedHashes,
                     workingTreeSelected: this.workingTreeSelected,
@@ -181,6 +190,12 @@
                 return parts.join(' + ') || 'nothing';
             },
 
+            get loadedCommitsSummary() {
+                const n = this.$wire.commits?.length || 0;
+                const noun = (n === 1 && !this.$wire.hasMore) ? 'commit' : 'commits';
+                return `${n}${this.$wire.hasMore ? '+' : ''} ${noun}`;
+            },
+
             _filterBranches(key) {
                 const list = this.allBranches[key] || [];
                 if (this.search === '') return list;
@@ -196,7 +211,6 @@
                 this.open = true;
                 this.search = '';
                 this.selectedIndex = 0;
-                this.clearSelection();
                 Alpine.store('overlays').open('branch-explorer');
                 // Resolve base info before loading commits so the commit-load
                 // can extend its window to cover all base..HEAD hashes when the
@@ -208,8 +222,10 @@
                 this.allBranches = this.$wire.branches;
                 const currentIdx = this.allFiltered.findIndex(b => b.name === this.selectedBranch);
                 if (currentIdx >= 0) this.selectedIndex = currentIdx;
-                this.loadSelectedBranch();
+                await this.loadSelectedBranch();
+                this._rehydrateSelectionFromActiveView();
                 await this.$nextTick();
+                this._scrollActiveCommitIntoView();
                 this.$refs.searchInput?.focus();
             },
 
@@ -291,7 +307,7 @@
             },
 
             copyHash(hash) {
-                navigator.clipboard.writeText(hash).catch(() => {});
+                this.$dispatch('copy-to-clipboard', { text: hash, toast: 'Copied ' + hash.slice(0, 7) });
             },
 
             openRemoteContext(event, type, params, label) {
@@ -394,6 +410,61 @@
             },
 
             /**
+             * Mirror the page's current diff target into the picker's
+             * multi-select shape. Only meaningful on the current branch -
+             * activeDiffFrom/activeCommitHash are HEAD-relative.
+             */
+            _rehydrateSelectionFromActiveView() {
+                if (this.selectedBranch !== this.currentBranch) return;
+
+                const from = this.activeDiffFrom;
+                const tip = this.activeCommitHash;
+
+                if (tip === null && from === 'HEAD') {
+                    this.workingTreeSelected = true;
+                    this.selectedHashes = [];
+                    return;
+                }
+
+                if (tip === null) {
+                    this.workingTreeSelected = true;
+                    const base = this.$wire.branchBase;
+                    this.selectedHashes = (base?.state === BranchBaseState.Ready && base.baseSha === from)
+                        ? [...base.hashesInRange]
+                        : this._hashesInRange(from, null);
+                    return;
+                }
+
+                this.workingTreeSelected = false;
+                const slice = this._hashesInRange(from, tip);
+                this.selectedHashes = slice.length ? slice : [tip];
+            },
+
+            /**
+             * Scroll the commit row that anchors the current view into the
+             * picker so reopening doesn't strand the user at the top. For
+             * /c and /r the anchor is `activeCommitHash`; for /rw it's the
+             * base sha, so the bottom of the "Since X" range is visible.
+             */
+            _scrollActiveCommitIntoView() {
+                if (this.selectedBranch !== this.currentBranch) return;
+                const anchor = this.activeCommitHash
+                    ?? (this.activeDiffFrom !== 'HEAD' ? this.activeDiffFrom : null);
+                if (anchor === null) return;
+                const row = this.$refs.commitList?.querySelector(`[data-commit-hash="${anchor}"]`);
+                row?.scrollIntoView({ block: 'center' });
+            },
+
+            /** Loaded commits in `(fromSha, toSha]`, newest-first. `toSha === null` means HEAD (index 0). */
+            _hashesInRange(fromSha, toSha) {
+                const commits = this.$wire.commits || [];
+                const fromIdx = commits.findIndex(c => c.hash === fromSha);
+                const tipIdx = toSha === null ? 0 : commits.findIndex(c => c.hash === toSha);
+                if (tipIdx < 0 || fromIdx < 0 || fromIdx <= tipIdx) return [];
+                return commits.slice(tipIdx, fromIdx).map(c => c.hash);
+            },
+
+            /**
              * Auto-fix the tip-anchor invariant after the user's last action,
              * so e.g. unticking the tip while WT is selected silently unticks
              * WT (with a toast) instead of blocking on Apply. Quietly fixing
@@ -424,7 +495,7 @@
              */
             selectSinceBase() {
                 const base = this.$wire.branchBase;
-                if (!base || base.state !== 'ready') return;
+                if (!base || base.state !== BranchBaseState.Ready) return;
 
                 if (this.sinceBaseSelected) {
                     this.clearSelection();
@@ -533,5 +604,5 @@
         }
     }
 
-    return { decideSelection, isSinceBaseExactly, violatesTipAnchor, createBranchExplorer, install, autoInstall };
+    return { BranchBaseState, decideSelection, isSinceBaseExactly, violatesTipAnchor, createBranchExplorer, install, autoInstall };
 });

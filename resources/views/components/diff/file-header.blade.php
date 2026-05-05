@@ -24,6 +24,7 @@
          @click="toggleCollapse($event)"
          class="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer">
         <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'"
+                :aria-expanded="!collapsed"
                 class="text-gh-muted hover:text-gh-text transition-colors">
             <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
             <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
@@ -44,12 +45,13 @@
     <div class="flex items-center gap-2 text-xs shrink-0 font-mono">
         <div class="flex items-center gap-0.5 opacity-30 group-hover:opacity-100 transition-opacity">
             <flux:button
-                tooltip="Copy file name"
+                tooltip="Copy file path"
+                aria-label="Copy file path"
                 icon="square-2-stack"
                 icon:variant="outline"
                 variant="ghost"
                 size="sm"
-                @click="$dispatch('copy-to-clipboard', { text: filePath })"
+                @click="$dispatch('copy-to-clipboard', { text: filePath, toast: 'Copied path' })"
             />
 
             @if($showContentCopy)
@@ -72,6 +74,7 @@
             @if($diffTo === null && ($file['status'] ?? '') !== 'commented')
                 <flux:button
                     tooltip="Discard changes"
+                    aria-label="Discard changes"
                     icon="arrow-uturn-left"
                     icon:variant="outline"
                     variant="ghost"

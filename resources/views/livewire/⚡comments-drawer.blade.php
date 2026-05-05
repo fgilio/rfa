@@ -103,12 +103,21 @@ class extends Component
             if (Alpine.store('overlays').is('comments-drawer')) Alpine.store('overlays').close();
         },
         toggle() { this.open ? this.close() : this.openPanel(); },
+        select(commentId, filePath) {
+            this.$dispatch('scroll-to-comment', { commentId, filePath });
+            this.close();
+        },
     }"
     x-init="$store.keymap.register('⌘J', () => toggle())"
     @keydown.window="if (open && $event.key === 'Escape') { $event.preventDefault(); close(); return; }"
     x-effect="if (open && !$store.overlays.is('comments-drawer')) close()"
     class="relative"
 >
+    {{-- Plain :aria-expanded / x-bind:aria-expanded on a Flux component is
+         pre-compiled by Flux's blaze pass as a PHP expression and blows up
+         server-side. The trigger doesn't strictly need a reactive
+         aria-expanded — a static aria-haspopup is sufficient for screen
+         readers to announce that this button opens a dialog. --}}
     <flux:tooltip content="All comments · ⌘J">
         <flux:button
             variant="ghost"
@@ -116,6 +125,7 @@ class extends Component
             icon="chat-bubble-left-right"
             icon:variant="outline"
             aria-label="All comments in this repo"
+            aria-haspopup="dialog"
             x-on:click="toggle()"
         >
             @if($this->totalCount > 0)
@@ -169,13 +179,20 @@ class extends Component
                         <x-file-path :path="$filePath" />
                     </div>
                     @foreach($comments as $c)
-                        <div class="group px-4 py-2.5 border-t border-gh-border/30 text-xs">
+                        <div
+                            class="group px-4 py-2.5 border-t border-gh-border/30 text-xs cursor-pointer hover:bg-gh-surface/40 focus-visible:bg-gh-surface/60 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gh-accent focus-visible:-outline-offset-1"
+                            role="button"
+                            tabindex="0"
+                            x-on:click="select(@js($c['id']), @js($c['file_path']))"
+                            x-on:keydown.enter.prevent="select(@js($c['id']), @js($c['file_path']))"
+                            x-on:keydown.space.prevent="select(@js($c['id']), @js($c['file_path']))"
+                        >
                             <div class="flex items-center gap-2 text-[10px] font-mono text-gh-muted mb-1">
                                 @if(! empty($c['origin_ref']))
                                     <span>{{ match($c['origin_ref']) { 'working' => 'WD', 'external' => 'EXT', default => Str::limit($c['origin_ref'], 7, '') } }}</span>
                                 @endif
                                 @if(! empty($c['start_line']))
-                                    <span>&middot;</span>
+                                    <span aria-hidden="true">&middot;</span>
                                     <span>L{{ $c['start_line'] }}@if(! empty($c['end_line']) && $c['end_line'] !== $c['start_line'])-L{{ $c['end_line'] }}@endif</span>
                                 @endif
                                 <div class="ml-auto flex items-center gap-1">
@@ -191,7 +208,9 @@ class extends Component
                                             variant="ghost"
                                             size="xs"
                                             aria-label="Copy comment"
-                                            x-on:click="$dispatch('copy-to-clipboard', { text: @js($c['body']), toast: 'Copied' })"
+                                            x-on:click.stop="$dispatch('copy-to-clipboard', { text: @js($c['body']), toast: 'Copied' })"
+                                            x-on:keydown.enter.stop
+                                            x-on:keydown.space.stop
                                             class="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity hover:!text-gh-accent"
                                         />
                                     </flux:tooltip>

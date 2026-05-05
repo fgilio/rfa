@@ -66,6 +66,10 @@
 
     <div
         data-testid="sidebar-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        title="Drag to resize · double-click to reset"
         class="group/resize hidden lg:flex sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-0 cursor-col-resize items-center justify-center z-10 shrink-0"
         style="padding: 0 6px; margin: 0 -6px;"
         @mousedown="startResize($event)"

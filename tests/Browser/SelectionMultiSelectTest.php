@@ -48,8 +48,11 @@ test('clicking Apply with a multi-commit selection navigates to a range URL', fu
 
     // Driving the Alpine state directly keeps the test independent of
     // visibility / hover / click-bubbling quirks between local and CI.
+    // openPanel() auto-rehydrates workingTreeSelected from the active view
+    // (project URL = working tree), so untick it before asserting on the
+    // pure multi-commit range path.
     $page->script(sprintf(
-        '(() => { const root = document.querySelector("[x-data*=branchExplorer]"); const data = Alpine.$data(root); data.selectedHashes = %s; data.applySelection(); })()',
+        '(() => { const root = document.querySelector("[x-data*=branchExplorer]"); const data = Alpine.$data(root); data.workingTreeSelected = false; data.selectedHashes = %s; data.applySelection(); })()',
         json_encode([$this->commitHashes[2], $this->commitHashes[1]]),
     ));
 

@@ -425,8 +425,13 @@ new #[Layout('layouts.app')] class extends Component
         scrollToContextFile(id) {
             const el = document.getElementById(id);
             if (!el) return;
+            $dispatch('expand-file', { id });
             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+        },
+        init() {
+            $store.keymap.register('⌘R', () => $wire.refresh(), { allowInEditable: true });
+            $store.keymap.register('⌘⇧R', () => window.location.reload(), { allowInEditable: true });
+        },
     }"
     class="min-h-screen flex flex-col"
 >
@@ -458,6 +463,9 @@ new #[Layout('layouts.app')] class extends Component
                     icon:variant="outline"
                     aria-label="Re-scan"
                     wire:click="refresh"
+                    wire:loading.attr="disabled"
+                    wire:target="refresh"
+                    wire:loading.class="animate-spin"
                 />
             </flux:tooltip>
         </div>

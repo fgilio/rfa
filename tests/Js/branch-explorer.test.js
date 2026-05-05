@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import branchExplorer from '../../public/js/branch-explorer.js';
 
-const { decideSelection, isSinceBaseExactly, createBranchExplorer, install } = branchExplorer;
+const { BranchBaseState, decideSelection, isSinceBaseExactly, createBranchExplorer, install } = branchExplorer;
 
 /** Minimal factory wrapper for tests that exercise the Alpine state machine
  *  directly. Provides a stub `$wire` that the production code reads from. */
@@ -151,7 +151,7 @@ describe('decideSelection — working tree + commits', () => {
             workingTreeSelected: true,
             projectSlug: slug,
             sinceBase: {
-                state: 'ready',
+                state: BranchBaseState.Ready,
                 baseSha: '1234567890abcdef1234567890abcdef12345678',
                 hashesInRange: ['aaa1', 'bbb2', 'ccc3'],
             },
@@ -168,7 +168,7 @@ describe('decideSelection — working tree + commits', () => {
             workingTreeSelected: true,
             projectSlug: slug,
             sinceBase: {
-                state: 'ready',
+                state: BranchBaseState.Ready,
                 baseSha: '1234567890abcdef1234567890abcdef12345678',
                 hashesInRange: ['aaa1', 'bbb2', 'ccc3'],
             },
@@ -339,6 +339,152 @@ describe('working-tree tip anchor', () => {
 
         expect(toast).not.toHaveBeenCalled();
         expect(a.workingTreeSelected).toBe(true);
+    });
+});
+
+describe('_rehydrateSelectionFromActiveView', () => {
+    function makeFor({ activeDiffFrom = 'HEAD', activeCommitHash = null, branch = 'main', commits = [], branchBase = null } = {}) {
+        const a = createBranchExplorer({
+            currentBranch: 'main',
+            activeCommitHash,
+            activeDiffFrom,
+            projectSlug: 'p',
+            branches: { local: [], remote: [] },
+        });
+        a.$wire = { commits, branchBase };
+        a.selectedBranch = branch;
+        return a;
+    }
+
+    it('does nothing when the picker is not on the current branch', () => {
+        const a = makeFor({ branch: 'feature/x', activeCommitHash: 'aaa1' });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.selectedHashes).toEqual([]);
+        expect(a.workingTreeSelected).toBe(false);
+    });
+
+    it('selects working tree only when viewing /p/{slug}', () => {
+        const a = makeFor();
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual([]);
+    });
+
+    it('selects WT + base..HEAD hashes from branchBase when viewing /rw/{baseSha}', () => {
+        const a = makeFor({
+            activeDiffFrom: 'base-sha',
+            commits,
+            branchBase: { state: BranchBaseState.Ready, baseSha: 'base-sha', hashesInRange: ['aaa1', 'bbb2'] },
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual(['aaa1', 'bbb2']);
+    });
+
+    it('falls back to slicing loaded commits for /rw/{sha} when sha is not the configured base', () => {
+        const a = makeFor({
+            activeDiffFrom: 'ccc3',
+            commits,
+            branchBase: { state: BranchBaseState.Ready, baseSha: 'other', hashesInRange: [] },
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual(['aaa1', 'bbb2']);
+    });
+
+    it('selects just the tip for a single commit view (/c/{hash})', () => {
+        const a = makeFor({
+            activeCommitHash: 'bbb2',
+            activeDiffFrom: 'ccc3', // parent of bbb2 in this fixture
+            commits,
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.selectedHashes).toEqual(['bbb2']);
+    });
+
+    it('selects every commit in (from, to] for an explicit range view (/r/{from}..{to})', () => {
+        const a = makeFor({
+            activeCommitHash: 'aaa1',
+            activeDiffFrom: 'ddd4',
+            commits,
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.selectedHashes).toEqual(['aaa1', 'bbb2', 'ccc3']);
+    });
+
+    it('falls back to [tip] when the range endpoints are not in the loaded commits', () => {
+        const a = makeFor({
+            activeCommitHash: 'unknown-tip',
+            activeDiffFrom: 'unknown-from',
+            commits,
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.selectedHashes).toEqual(['unknown-tip']);
+    });
+});
+
+describe('_scrollActiveCommitIntoView', () => {
+    function makeWithList({ activeCommitHash = null, activeDiffFrom = 'HEAD', branch = 'main' } = {}) {
+        const a = createBranchExplorer({
+            currentBranch: 'main',
+            activeCommitHash,
+            activeDiffFrom,
+            projectSlug: 'p',
+            branches: { local: [], remote: [] },
+        });
+        a.selectedBranch = branch;
+        const rows = new Map();
+        const make = (hash) => ({ scrollIntoView: vi.fn(), getAttribute: () => hash });
+        for (const c of commits) rows.set(c.hash, make(c.hash));
+        a.$refs = {
+            commitList: {
+                querySelector: (sel) => {
+                    const m = sel.match(/^\[data-commit-hash="(.+)"\]$/);
+                    return m ? rows.get(m[1]) ?? null : null;
+                },
+            },
+        };
+        return { a, rows };
+    }
+
+    it('does nothing when the picker is not on the current branch', () => {
+        const { a, rows } = makeWithList({ branch: 'feature/x', activeCommitHash: 'aaa1' });
+        a._scrollActiveCommitIntoView();
+        expect(rows.get('aaa1').scrollIntoView).not.toHaveBeenCalled();
+    });
+
+    it('scrolls to the active commit for /c and /r views', () => {
+        const { a, rows } = makeWithList({ activeCommitHash: 'ddd4', activeDiffFrom: 'HEAD' });
+        a._scrollActiveCommitIntoView();
+        expect(rows.get('ddd4').scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+    });
+
+    it('scrolls to the base sha for /rw views (so the bottom of the range is visible)', () => {
+        const { a, rows } = makeWithList({ activeCommitHash: null, activeDiffFrom: 'ccc3' });
+        a._scrollActiveCommitIntoView();
+        expect(rows.get('ccc3').scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+    });
+
+    it('does nothing for working-tree-only views', () => {
+        const { a, rows } = makeWithList({ activeCommitHash: null, activeDiffFrom: 'HEAD' });
+        a._scrollActiveCommitIntoView();
+        for (const row of rows.values()) {
+            expect(row.scrollIntoView).not.toHaveBeenCalled();
+        }
+    });
+
+    it('is a noop when the anchor commit is not in the loaded list', () => {
+        const { a } = makeWithList({ activeCommitHash: 'unknown', activeDiffFrom: 'HEAD' });
+        expect(() => a._scrollActiveCommitIntoView()).not.toThrow();
     });
 });
 

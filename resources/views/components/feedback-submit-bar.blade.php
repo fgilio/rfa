@@ -2,7 +2,7 @@
     'submitted' => false,
     'exportResult' => null,
     'submittedHeading' => 'Review submitted',
-    'submitLabel' => 'Submit Review',
+    'submitLabel' => 'Submit review',
     'submitAction' => 'submitReview',
     'newRoundLabel' => 'Start a new review',
     'newRoundAction' => 'startNewReview',
@@ -102,6 +102,8 @@
                 <flux:button
                     variant="primary"
                     @click="if (draftCount > 0 && !confirm(`You have ${draftCount} draft comment${draftCount === 1 ? '' : 's'} that won't be included. Submit anyway?`)) return; $wire.{{ $submitAction }}()"
+                    wire:loading.attr="disabled"
+                    wire:target="{{ $submitAction }}"
                     x-bind:disabled="commentCount === 0 && !hasGlobal"
                 >
                     {{ $submitLabel }}

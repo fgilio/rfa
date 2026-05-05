@@ -364,8 +364,17 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
+        $previousCount = count($this->externalPaths);
         $updated = app(LinkExternalPathAction::class)->handle($this->projectId, $picked);
         if ($updated === null) {
+            Flux::toast(variant: 'danger', text: 'Could not link folder: '.basename($picked));
+            $this->skipRender();
+
+            return;
+        }
+
+        if (count($updated) === $previousCount) {
+            Flux::toast(text: basename($picked).' is already linked');
             $this->skipRender();
 
             return;
@@ -373,10 +382,13 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->externalPaths = $updated;
         $this->reloadAfterExternalPathsChange();
+        Flux::toast(variant: 'success', text: 'Linked '.basename($picked));
     }
 
     public function removeExternalPath(int $index): void
     {
+        $removed = $this->externalPaths[$index]['label'] ?? null;
+
         $updated = app(UnlinkExternalPathAction::class)->handle($this->projectId, $index);
         if ($updated === null) {
             $this->skipRender();
@@ -386,6 +398,10 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->externalPaths = $updated;
         $this->reloadAfterExternalPathsChange();
+
+        if ($removed !== null) {
+            Flux::toast(text: 'Unlinked '.$removed);
+        }
     }
 
     private function reloadAfterExternalPathsChange(): void
@@ -821,7 +837,7 @@ new #[Layout('layouts.app')] class extends Component
             );
         } catch (\Throwable $e) {
             $message = $e instanceof GitCommandException ? $e->stderr : $e->getMessage();
-            Flux::toast(variant: 'danger', text: 'Discard failed: '.$message);
+            Flux::toast(variant: 'danger', text: 'Discard failed for '.basename($file['path']).': '.$message);
             $this->skipRender();
 
             return;
@@ -855,7 +871,8 @@ new #[Layout('layouts.app')] class extends Component
         try {
             $comments = app(RestoreDiscardedFileAction::class)->handle($trashId, $this->repoPath, $this->projectId);
         } catch (\Throwable $e) {
-            Flux::toast(variant: 'danger', text: 'Restore failed');
+            $message = $e instanceof GitCommandException ? $e->stderr : $e->getMessage();
+            Flux::toast(variant: 'danger', text: 'Restore failed: '.$message);
             $this->skipRender();
 
             return;
@@ -1154,6 +1171,10 @@ new #[Layout('layouts.app')] class extends Component
 };
 ?>
 
+@assets
+<script src="/js/diff-file.js"></script>
+@endassets
+
 <div
     data-testid="review-component"
     x-data="{
@@ -1309,17 +1330,48 @@ new #[Layout('layouts.app')] class extends Component
             this.activeFile = id;
             this.$dispatch('expand-file', { id });
             document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+        scrollToComment(commentId, filePath) {
+            const file = this.sourceFileEntries.find(f => f.path === filePath);
+            if (!file) {
+                Flux.toast({ text: 'Comment is on a file not in this diff', variant: 'warning' });
+                return;
+            }
+            if (!this.fileMatchesFilter(file.path, file.id)) {
+                this.fileFilter = '';
+                this.hideReviewed = false;
+            }
+            (window.__rfaPendingExpandFiles ??= new Set()).add(file.id);
+            this.scrollToFile(file.id);
+            clearTimeout(this.commentScrollPollId);
+            const target = 'comment-' + commentId;
+            const start = performance.now();
+            const tryScroll = () => {
+                if (!this.$el?.isConnected) return;
+                {{-- Re-dispatch every tick: the diff-file may be lazy and hydrate after the first dispatch, --}}
+                {{-- in which case its listeners weren't yet registered to receive the initial expand-file. --}}
+                this.$dispatch('expand-file', { id: file.id });
+                this.$dispatch('unfold-for-comment', { fileId: file.id });
+                const el = document.getElementById(target);
+                if (el && el.offsetParent !== null) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+                if (performance.now() - start < 4000) {
+                    this.commentScrollPollId = setTimeout(tryScroll, 100);
+                }
+            };
+            tryScroll();
+        },
+        destroy() {
+            clearTimeout(this.commentScrollPollId);
         }
     }"
+    @scroll-to-comment.window="scrollToComment($event.detail.commentId, $event.detail.filePath)"
     @file-reviewed-changed.window="reviewedFiles[$event.detail.id] = $event.detail.reviewed"
     @reset-reviewed-files.window="reviewedFiles = {}"
     @reviewed-files-reverted.window="($event.detail.fileIds || []).forEach(id => { reviewedFiles[id] = false })"
     @open-remote-menu.window="showRemoteMenu($event)"
-    @copy-to-clipboard.window="
-        navigator.clipboard.writeText($event.detail.text).then(() => {
-            if ($event.detail.toast) Flux.toast({ text: $event.detail.toast, variant: 'success' });
-        }).catch(() => {});
-    "
     @keydown.window="
         if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {
             if ($event.key === 'Escape' && !$event.target.closest('[data-comment-form]')) { fileFilter = ''; $event.target.blur(); $event.preventDefault(); }
@@ -1443,11 +1495,13 @@ new #[Layout('layouts.app')] class extends Component
                 <div x-show="reviewedCount > 0" x-cloak class="grid place-items-center">
                     <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
                         tooltip="Hide reviewed"
+                        aria-label="Hide reviewed"
                         class="col-start-1 row-start-1"
                         @click="hideReviewed = true"
                         x-show="!hideReviewed" />
                     <flux:button variant="ghost" size="sm" icon="eye" icon:variant="outline"
                         tooltip="Show all files"
+                        aria-label="Show all files"
                         class="col-start-1 row-start-1"
                         @click="hideReviewed = false; $wire.clearRecentlyReviewed()"
                         x-show="hideReviewed" x-cloak />
@@ -1633,10 +1687,13 @@ new #[Layout('layouts.app')] class extends Component
                                     icon="plus"
                                     icon:variant="outline"
                                     wire:click="addExternalPath"
+                                    wire:loading.attr="disabled"
+                                    wire:target="addExternalPath"
                                     data-testid="external-path-add"
                                     class="w-full"
                                 >
-                                    Link folder…
+                                    <span wire:loading.remove wire:target="addExternalPath">Link folder…</span>
+                                    <span wire:loading wire:target="addExternalPath">Opening…</span>
                                 </flux:button>
                             </div>
                         </flux:menu>
@@ -1660,7 +1717,7 @@ new #[Layout('layouts.app')] class extends Component
         />
 
         @if($divergenceState === DivergenceState::Diverged)
-            <div class="px-5 py-3 border-b border-gh-border" data-testid="divergence-banner-diverged">
+            <div class="px-5 py-3 border-b border-gh-border" role="status" aria-live="polite" data-testid="divergence-banner-diverged">
                 <flux:callout icon="arrow-path" variant="warning" inline>
                     <flux:callout.heading>Repo switched to <span class="font-mono">{{ $divergenceContext['currentBranch'] }}</span></flux:callout.heading>
                     <flux:callout.text>Still reviewing <span class="font-mono">{{ $divergenceContext['target'] }}</span>.</flux:callout.text>
@@ -1675,7 +1732,7 @@ new #[Layout('layouts.app')] class extends Component
                 </flux:callout>
             </div>
         @elseif($divergenceState === DivergenceState::Detached)
-            <div class="px-5 py-3 border-b border-gh-border" data-testid="divergence-banner-detached">
+            <div class="px-5 py-3 border-b border-gh-border" role="status" aria-live="polite" data-testid="divergence-banner-detached">
                 <flux:callout icon="information-circle" variant="secondary" inline>
                     <flux:callout.heading>Repo detached at <span class="font-mono">{{ $divergenceContext['shortSha'] }}</span></flux:callout.heading>
                     <flux:callout.text>Still reviewing <span class="font-mono">{{ $divergenceContext['target'] }}</span>.</flux:callout.text>
@@ -1685,7 +1742,7 @@ new #[Layout('layouts.app')] class extends Component
                 </flux:callout>
             </div>
         @elseif($divergenceState === DivergenceState::MissingTarget)
-            <div class="px-5 py-3 border-b border-gh-border" data-testid="divergence-banner-missing">
+            <div class="px-5 py-3 border-b border-gh-border" role="alert" aria-live="assertive" data-testid="divergence-banner-missing">
                 <flux:callout icon="exclamation-triangle" variant="danger" inline>
                     <flux:callout.heading>Review target <span class="font-mono">{{ $divergenceContext['target'] }}</span> no longer exists</flux:callout.heading>
                     <x-slot name="actions">
@@ -1760,7 +1817,8 @@ new #[Layout('layouts.app')] class extends Component
                             <button type="button"
                                 @click="$wire.clearRecentlyReviewed()"
                                 class="text-[10px] uppercase tracking-wider text-gh-muted hover:text-gh-text transition-colors"
-                                title="Clear recently reviewed list">Clear</button>
+                                title="Clear recently reviewed list"
+                                aria-label="Clear recently reviewed list">Clear</button>
                         </div>
                         <template x-for="id in $wire.recentlyReviewedIds" :key="id">
                             <div
@@ -1900,6 +1958,7 @@ new #[Layout('layouts.app')] class extends Component
                                 <span class="font-mono text-xs text-gh-muted truncate flex-1" title="{{ $trashed['file_path'] }}">{{ basename($trashed['file_path']) }}</span>
                                 <span class="text-[10px] text-gh-muted tabular-nums" x-text="remaining"></span>
                                 <button @click="$wire.restoreDiscardedFile({{ $trashed['id'] }})" title="Restore"
+                                    aria-label="Restore discarded file"
                                     class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-green hover:text-green-400 shrink-0">
                                     <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
                                 </button>
@@ -1917,9 +1976,9 @@ new #[Layout('layouts.app')] class extends Component
         </x-slot:sidebar>
 
             @if($gitError)
-                <div class="flex items-center justify-center h-[60vh]">
+                <div class="flex items-center justify-center h-[60vh]" role="alert" aria-live="assertive">
                     <div class="text-center max-w-lg">
-                        <p class="rfa-logo text-3xl text-red-400/30 mb-4">!</p>
+                        <p class="rfa-logo text-3xl text-red-400/30 mb-4" aria-hidden="true">!</p>
                         <h2 class="font-semibold tracking-brutal text-lg mb-2">Git error</h2>
                         <p class="font-mono text-xs text-gh-muted leading-relaxed">{{ $gitError }}</p>
                     </div>
@@ -1927,7 +1986,7 @@ new #[Layout('layouts.app')] class extends Component
             @elseif(empty($files))
                 <div class="flex items-center justify-center h-[60vh]">
                     <div class="text-center">
-                        <p class="rfa-logo text-5xl text-gh-muted/20 mb-6">rfa</p>
+                        <p class="rfa-logo text-5xl text-gh-muted/20 mb-6" aria-hidden="true">rfa</p>
                         @if($this->isCommitMode())
                             <h2 class="font-semibold tracking-brutal text-lg mb-2">No file changes in this commit</h2>
                             <p class="text-sm text-gh-muted">This commit has no diff (empty or merge commit)</p>
@@ -1943,12 +2002,15 @@ new #[Layout('layouts.app')] class extends Component
                     @foreach($reviewPairs as $pair)
                         <div id="{{ $pair['id'] }}" class="border-b border-gh-border" x-data="{ collapsed: true }">
                             <div class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
-                                <button @click="collapsed = !collapsed" class="text-gh-muted hover:text-gh-text transition-colors">
+                                <button @click="collapsed = !collapsed"
+                                    :aria-label="collapsed ? 'Expand review' : 'Collapse review'"
+                                    :aria-expanded="!collapsed"
+                                    class="text-gh-muted hover:text-gh-text transition-colors">
                                     <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
                                     <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
                                 </button>
                                 <span class="text-[10px] font-mono font-medium text-purple-500 dark:text-purple-400 shrink-0">R</span>
-                                <span class="font-mono text-sm truncate">{{ $pair['displayName'] }}</span>
+                                <span class="font-mono text-sm truncate" title="{{ $pair['displayName'] }}">{{ $pair['displayName'] }}</span>
                                 <span class="text-[10px] font-mono text-gh-muted">.md</span>
                                 <span class="ml-auto">
                                     <x-arm-commit-button
@@ -1960,6 +2022,7 @@ new #[Layout('layouts.app')] class extends Component
                             </div>
                             <div x-show="!collapsed" x-collapse.duration.150ms>
                                 <livewire:diff-file
+                                    lazy
                                     :key="$pair['mdFile']['id']"
                                     :file="$pair['mdFile']"
                                     :load-delay="0"
@@ -1985,6 +2048,7 @@ new #[Layout('layouts.app')] class extends Component
                          x-collapse.duration.200ms
                          :class="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}') ? 'opacity-100' : 'opacity-0'">
                         <livewire:diff-file
+                            lazy
                             :key="$file['id']"
                             :file="$file"
                             :load-delay="(int) (floor($loop->index / 15) * 100)"

@@ -8,7 +8,7 @@ test('branch-explorer panel shows a Working tree row at the top of the commit li
     $page = $this->visit($this->projectUrl());
 
     $page->page()->getByLabel('Open selection drawer')->click();
-    $page->page()->getByPlaceholder('Filter branch')->waitFor();
+    $page->page()->getByPlaceholder('Filter branches...')->waitFor();
 
     $row = $page->page()->getByTestId('working-tree-row');
     $row->waitFor();

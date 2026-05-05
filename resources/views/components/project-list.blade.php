@@ -96,12 +96,12 @@
                         <span @class([
                             'font-semibold tracking-brutal text-sm truncate',
                             'text-gh-link' => $isCurrent,
-                        ])>{{ $project['name'] }}</span>
+                        ]) title="{{ $project['name'] }}">{{ $project['name'] }}</span>
                         @if($project['is_worktree'])
                             <flux:badge size="sm" color="yellow">worktree</flux:badge>
                         @endif
                         @if($project['branch'])
-                            <span class="text-[11px] font-mono text-gh-muted px-1.5 py-0.5 rounded border border-gh-border shrink-0 truncate max-w-[140px]">{{ $project['branch'] }}</span>
+                            <span class="text-[11px] font-mono text-gh-muted px-1.5 py-0.5 rounded border border-gh-border shrink-0 truncate max-w-[140px]" title="{{ $project['branch'] }}">{{ $project['branch'] }}</span>
                         @endif
                     </div>
                     <div class="flex items-center gap-2 shrink-0 text-xs font-mono">
@@ -115,7 +115,7 @@
                             <span class="text-gh-green" x-text="'+' + (status?.additions || 0)"></span>
                             <span class="text-gh-red" x-text="'-' + (status?.deletions || 0)"></span>
                         </span>
-                        <span class="text-gh-muted/70">{{ $project['last_active_ago'] }}</span>
+                        <span class="text-gh-muted/70" title="{{ $project['last_active_at'] }}">{{ $project['last_active_ago'] }}</span>
                         <flux:button
                             variant="ghost"
                             size="xs"

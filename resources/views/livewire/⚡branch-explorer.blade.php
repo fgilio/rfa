@@ -179,7 +179,7 @@ new class extends Component {
                             x-model.debounce.100ms="search"
                             @input="onSearchChange()"
                             @keydown.escape.stop="handleSearchEscape($event)"
-                            placeholder="Filter branch"
+                            placeholder="Filter branches..."
                             icon="magnifying-glass"
                             icon:variant="outline"
                             size="sm"
@@ -209,6 +209,7 @@ new class extends Component {
                                             class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors cursor-pointer"
                                             :class="selectedIndex === i ? 'bg-gh-text/10 text-gh-text font-medium' : 'text-gh-muted hover:bg-gh-border/30 hover:text-gh-text'"
                                             :data-selected="selectedIndex === i"
+                                            :title="branch.name"
                                         >
                                             <flux:icon icon="check" variant="outline" class="shrink-0" x-show="branch.isCurrent" x-cloak />
                                             <span class="shrink-0 w-3" x-show="!branch.isCurrent"></span>
@@ -239,6 +240,7 @@ new class extends Component {
                                             class="w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors cursor-pointer"
                                             :class="selectedIndex === (filteredLocal.length + j) ? 'bg-gh-text/10 text-gh-text font-medium' : 'text-gh-muted hover:bg-gh-border/30 hover:text-gh-text'"
                                             :data-selected="selectedIndex === (filteredLocal.length + j)"
+                                            :title="branch.name"
                                         >
                                             <span class="shrink-0 w-3"></span>
                                             <span class="truncate" x-text="branch.name"></span>
@@ -262,7 +264,7 @@ new class extends Component {
                     {{-- Commits header --}}
                     <div class="px-4 py-2.5 border-b border-gh-border flex items-center gap-2 shrink-0">
                         <flux:icon icon="clock" variant="outline" class="text-gh-muted" />
-                        <span class="text-xs font-semibold tracking-brutal text-gh-text truncate" x-text="selectedBranch || 'Select a branch'"></span>
+                        <span class="text-xs font-semibold tracking-brutal text-gh-text truncate" x-text="selectedBranch || 'Select a branch'" :title="selectedBranch"></span>
                         <span class="text-xs font-mono text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + ($wire.hasMore ? '+' : '') + ')'"></span>
 
                         <template x-if="hasAnySelection">
@@ -302,7 +304,7 @@ new class extends Component {
                     </div>
 
                     {{-- Commits list --}}
-                    <div class="overflow-y-auto flex-1">
+                    <div class="overflow-y-auto flex-1" x-ref="commitList">
                         {{-- "Since {base}" shortcut: a single click fills the
                              multi-select with every commit in base..HEAD plus
                              working tree, so the user can trim before applying. --}}
@@ -466,11 +468,11 @@ new class extends Component {
                                         </template>
                                     </button>
                                     <div class="min-w-0 flex-1">
-                                        <div data-testid="commit-message" class="text-xs text-gh-text truncate font-medium tracking-tight" x-text="commit.message"></div>
+                                        <div data-testid="commit-message" class="text-xs text-gh-text truncate font-medium tracking-tight" x-text="commit.message" :title="commit.message"></div>
                                         <div class="flex items-center gap-2 mt-0.5">
                                             <span class="text-[10px] font-mono text-gh-muted" x-text="commit.author"></span>
-                                            <span class="text-[10px] text-gh-muted">&middot;</span>
-                                            <span class="text-[10px] font-mono text-gh-muted" x-text="commit.relativeDate"></span>
+                                            <span class="text-[10px] text-gh-muted" aria-hidden="true">&middot;</span>
+                                            <span class="text-[10px] font-mono text-gh-muted" x-text="commit.relativeDate" :title="commit.date"></span>
                                         </div>
                                     </div>
 
@@ -503,7 +505,7 @@ new class extends Component {
 
         <x-overlay-footer>
             <x-slot:meta>
-                <span x-text="($wire.commits?.length || 0) + ($wire.hasMore ? '+' : '') + ' commits'"></span>
+                <span x-text="loadedCommitsSummary"></span>
             </x-slot:meta>
         </x-overlay-footer>
     </x-overlay-panel>
