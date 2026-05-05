@@ -9,7 +9,7 @@
     }
 })(typeof window !== 'undefined' ? window : null, function () {
     const DEFAULT_THRESHOLD_MS = 1500;
-    const DEFAULT_AUTO_DISMISS_MS = 4000;
+    const DEFAULT_AUTO_DISMISS_MS = 2000;
     const DEFAULT_REPEAT_SUPPRESSION_MS = 500;
 
     function createElement(document, tag, attributes = {}, text = null) {
@@ -47,7 +47,7 @@
         panel.appendChild(createElement(document, 'div', {
             class: 'font-mono text-lg font-semibold text-gh-text',
             'aria-hidden': 'true',
-        }, 'Cmd+Q'));
+        }, 'Quiting'));
 
         panel.appendChild(createElement(document, 'div', {
             class: 'font-display text-base font-semibold tracking-brutal text-gh-text whitespace-nowrap',
