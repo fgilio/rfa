@@ -103,7 +103,7 @@ test('copy button click does not collapse file', function () {
 
     $page->assertSee("'debug'");
 
-    $page->page()->getByLabel('Copy file path')->first()->click();
+    $page->page()->getByTestId('file-header-copy-path-trigger')->first()->click();
 
     // Wait past the collapse animation duration (150ms)
     usleep(300_000);
@@ -120,7 +120,7 @@ test('copy file path button dispatches copy event', function () {
         window.addEventListener('copy-to-clipboard', e => window.__copiedText = e.detail.text);
     ");
 
-    $page->page()->getByLabel('Copy file path')->first()->click();
+    $page->page()->getByTestId('file-header-copy-path-trigger')->first()->click();
 
     $result = $page->script('window.__copiedText');
     expect($result)->not->toBeNull();
@@ -233,7 +233,7 @@ test('clicking delete x removes a comment', function () {
     $page->assertDontSee('Delete me');
 });
 
-test('sidebar copy file names dispatches newline-joined basenames', function () {
+test('sidebar copy paths trigger left-click copies relative paths', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
     $page->script("
@@ -242,6 +242,23 @@ test('sidebar copy file names dispatches newline-joined basenames', function () 
     ");
 
     $page->page()->getByTestId('sidebar-copy-paths-trigger')->click();
+
+    $result = $page->script('window.__copiedText');
+    expect($result)->not->toBeNull();
+    $lines = explode("\n", $result);
+    expect($lines)->toContain('hello.php')->toContain('utils.php')->toContain('config.php');
+    expect(count($lines))->toBe(3);
+});
+
+test('sidebar copy paths right-click opens menu with file-name option', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    $page->script("
+        window.__copiedText = null;
+        window.addEventListener('copy-to-clipboard', e => window.__copiedText = e.detail.text);
+    ");
+
+    $page->page()->getByTestId('sidebar-copy-paths-trigger')->click(['button' => 'right']);
     $page->page()->getByRole('menuitem', ['name' => 'Copy file names'])->first()->click();
 
     $result = $page->script('window.__copiedText');
@@ -251,7 +268,7 @@ test('sidebar copy file names dispatches newline-joined basenames', function () 
     expect(count($lines))->toBe(3);
 });
 
-test('status strip copy relative paths dispatches relative paths', function () {
+test('status strip copy paths trigger left-click copies relative paths', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
     $page->script("
@@ -260,7 +277,6 @@ test('status strip copy relative paths dispatches relative paths', function () {
     ");
 
     $page->page()->getByTestId('status-strip-copy-paths-trigger')->click();
-    $page->page()->getByRole('menuitem', ['name' => 'Copy relative paths'])->first()->click();
 
     $result = $page->script('window.__copiedText');
     expect($result)->not->toBeNull();
@@ -268,7 +284,7 @@ test('status strip copy relative paths dispatches relative paths', function () {
     expect($lines)->toContain('hello.php')->toContain('utils.php')->toContain('config.php');
 });
 
-test('copy full paths prepends repo path to each entry', function () {
+test('right-click copy full paths prepends repo path to each entry', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
     $page->script("
@@ -276,7 +292,7 @@ test('copy full paths prepends repo path to each entry', function () {
         window.addEventListener('copy-to-clipboard', e => window.__copiedText = e.detail.text);
     ");
 
-    $page->page()->getByTestId('sidebar-copy-paths-trigger')->click();
+    $page->page()->getByTestId('sidebar-copy-paths-trigger')->click(['button' => 'right']);
     $page->page()->getByRole('menuitem', ['name' => 'Copy full paths'])->first()->click();
 
     $result = $page->script('window.__copiedText');

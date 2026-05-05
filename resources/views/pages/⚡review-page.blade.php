@@ -1793,7 +1793,7 @@ new #[Layout('layouts.app')] class extends Component
                 <div class="flex items-center justify-between mb-3">
                     <span class="section-label text-gh-muted">Files</span>
                     @if(count($sourceFiles) > 0)
-                        <x-copy-paths-menu testid-prefix="sidebar-copy-paths" />
+                        <x-copy-paths-button testid-prefix="sidebar-copy-paths" />
                     @endif
                 </div>
                 <flux:input
