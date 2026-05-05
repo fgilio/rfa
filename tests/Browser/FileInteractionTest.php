@@ -245,9 +245,7 @@ test('sidebar copy paths trigger left-click copies relative paths', function () 
 
     $result = $page->script('window.__copiedText');
     expect($result)->not->toBeNull();
-    $lines = explode("\n", $result);
-    expect($lines)->toContain('hello.php')->toContain('utils.php')->toContain('config.php');
-    expect(count($lines))->toBe(3);
+    expect(explode("\n", $result))->toEqualCanonicalizing(['hello.php', 'utils.php', 'config.php']);
 });
 
 test('sidebar copy paths right-click opens menu with file-name option', function () {
@@ -263,9 +261,7 @@ test('sidebar copy paths right-click opens menu with file-name option', function
 
     $result = $page->script('window.__copiedText');
     expect($result)->not->toBeNull();
-    $lines = explode("\n", $result);
-    expect($lines)->toContain('hello.php')->toContain('utils.php')->toContain('config.php');
-    expect(count($lines))->toBe(3);
+    expect(explode("\n", $result))->toEqualCanonicalizing(['hello.php', 'utils.php', 'config.php']);
 });
 
 test('status strip copy paths trigger left-click copies relative paths', function () {
@@ -280,8 +276,7 @@ test('status strip copy paths trigger left-click copies relative paths', functio
 
     $result = $page->script('window.__copiedText');
     expect($result)->not->toBeNull();
-    $lines = explode("\n", $result);
-    expect($lines)->toContain('hello.php')->toContain('utils.php')->toContain('config.php');
+    expect(explode("\n", $result))->toEqualCanonicalizing(['hello.php', 'utils.php', 'config.php']);
 });
 
 test('right-click copy full paths prepends repo path to each entry', function () {

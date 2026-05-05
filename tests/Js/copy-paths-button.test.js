@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import copyPathsButton from '../../public/js/copy-paths-button.js';
 
 const { copyPathsButton: factory, LONG_PRESS_MS } = copyPathsButton;
@@ -44,6 +44,10 @@ describe('copyPathsButton — bulk mode', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         component = attach(bulkScope(), 'bulk');
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     it('left-click copies relative paths joined by newlines', () => {

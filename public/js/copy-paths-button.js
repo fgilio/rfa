@@ -1,22 +1,12 @@
-// Alpine factory for the unified <x-copy-paths-button> affordance.
+// Alpine factory for <x-copy-paths-button>.
 //
-// Left-click            → copy relative path(s), toast, no menu.
-// Right-click / 400ms   → open the 3-option menu (file names / relative / full).
+// Left-click           → copy relative path(s) + toast.
+// Right-click / 400ms  → open the 3-option menu (name / relative / full).
 //
 // Modes:
-//   - 'single' — single fixed path passed via init param.
-//   - 'bulk'   — derives the visible-files list from the parent ⚡review-page
-//                Alpine root (`sourceFileEntries`, `fileMatchesFilter`,
-//                `pathBase`, `buildFullPath`, `visibleFileCount`). Inheritance
-//                is automatic; the factory just calls them via `this`.
-//
-// We intercept the click in the capture phase on a small wrapper around the
-// trigger so Flux's "click toggles" listener (which it adds to the trigger
-// button in <ui-dropdown>'s boot) never sees a primary-action click. The
-// wrapper is *inside* the dropdown so menu-item clicks (siblings of the
-// wrapper) propagate to Flux normally. We open the menu ourselves on
-// long-press / right-click via the overlay's `_popoverable.setState(true)` —
-// `<ui-dropdown>` doesn't expose its own open()/close().
+//   - 'single' — fixed path via init param.
+//   - 'bulk'   — inherits sourceFileEntries / fileMatchesFilter / pathBase /
+//                buildFullPath / visibleFileCount from the ⚡review-page root.
 (function (root, factory) {
     const api = factory();
     if (typeof module !== 'undefined' && module.exports) {
