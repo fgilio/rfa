@@ -10,6 +10,7 @@
 })(typeof window !== 'undefined' ? window : null, function () {
     const DEFAULT_THRESHOLD_MS = 1500;
     const DEFAULT_AUTO_DISMISS_MS = 4000;
+    const DEFAULT_REPEAT_SUPPRESSION_MS = 500;
 
     function createElement(document, tag, attributes = {}, text = null) {
         const element = document.createElement(tag);
@@ -63,12 +64,14 @@
         livewire = null,
         thresholdMs = DEFAULT_THRESHOLD_MS,
         autoDismissMs = DEFAULT_AUTO_DISMISS_MS,
+        repeatSuppressionMs = DEFAULT_REPEAT_SUPPRESSION_MS,
     }) {
         let visible = false;
         let armed = false;
         let holdTimer = null;
         let dismissTimer = null;
         let overlay = null;
+        let suppressUntil = 0;
 
         function clearTimers() {
             if (holdTimer) {
@@ -106,20 +109,35 @@
             armed = false;
         }
 
+        function suppressRepeats() {
+            suppressUntil = window.Date.now() + repeatSuppressionMs;
+        }
+
         function cancel() {
             clearTimers();
             hide();
+            suppressRepeats();
         }
 
         function commit() {
             clearTimers();
             hide();
+            suppressRepeats();
 
             (livewire ?? window.Livewire)?.dispatch?.('quit-now');
         }
 
         function show() {
+            if (!visible && window.Date.now() < suppressUntil) {
+                return;
+            }
+
             ensureOverlay().hidden = false;
+
+            if (visible) {
+                return;
+            }
+
             visible = true;
             armed = false;
             clearTimers();

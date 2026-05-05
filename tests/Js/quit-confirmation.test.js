@@ -17,6 +17,7 @@ describe('createQuitConfirmation', () => {
             livewire,
             thresholdMs: 1500,
             autoDismissMs: 4000,
+            repeatSuppressionMs: 500,
         });
         controller.attach();
     });
@@ -43,6 +44,42 @@ describe('createQuitConfirmation', () => {
 
         expect(controller.isVisible()).toBe(false);
         expect(livewire.dispatch).toHaveBeenCalledWith('quit-now');
+    });
+
+    it('does not restart the hold threshold when the native accelerator repeats', () => {
+        controller.show();
+        vi.advanceTimersByTime(1000);
+
+        controller.show();
+        vi.advanceTimersByTime(500);
+
+        expect(controller.isArmed()).toBe(true);
+    });
+
+    it('ignores queued repeat prompts immediately after an early release', () => {
+        controller.show();
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: 'q' }));
+
+        controller.show();
+
+        expect(controller.isVisible()).toBe(false);
+        expect(livewire.dispatch).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(500);
+        controller.show();
+
+        expect(controller.isVisible()).toBe(true);
+    });
+
+    it('ignores queued repeat prompts immediately after committing quit', () => {
+        controller.show();
+        vi.advanceTimersByTime(1500);
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Meta' }));
+
+        controller.show();
+
+        expect(controller.isVisible()).toBe(false);
+        expect(livewire.dispatch).toHaveBeenCalledTimes(1);
     });
 
     it('dismisses an unarmed prompt after the auto-dismiss timeout', () => {
@@ -73,7 +110,6 @@ describe('createQuitConfirmation', () => {
         controller.show();
         const overlay = document.querySelector('[role="alertdialog"]');
         document.body.innerHTML = '';
-        controller.cancel();
 
         controller.show();
 
