@@ -177,6 +177,7 @@ class ExternalFilesService
             );
 
             $size = $file->getSize();
+            $mtime = $file->getMTime();
 
             $entries[] = new FileListEntry(
                 path: self::MOUNT_PREFIX.'/'.$config['label'].'/'.$relative,
@@ -186,12 +187,14 @@ class ExternalFilesService
                 deletions: 0,
                 isBinary: false,
                 isUntracked: false,
-                lastModified: Carbon::createFromTimestamp($file->getMTime())->diffForHumans(short: true),
+                lastModified: Carbon::createFromTimestamp($mtime)->diffForHumans(short: true),
                 isSymlink: false,
                 symlinkTarget: null,
                 fileSize: Number::fileSize($size, precision: 1),
                 isExternal: true,
                 externalAbsolutePath: $absolutePath,
+                mtime: $mtime,
+                byteSize: $size,
             );
         }
 

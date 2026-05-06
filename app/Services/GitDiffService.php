@@ -99,6 +99,8 @@ class GitDiffService
                     ? $this->symlinkTarget($repoPath.'/'.$path)
                     : null;
 
+                $isWorkingDir = $target->isWorkingDirectory();
+
                 return new FileListEntry(
                     path: $path,
                     status: $status,
@@ -107,10 +109,12 @@ class GitDiffService
                     deletions: $stats['deletions'],
                     isBinary: $isBinary,
                     isUntracked: false,
-                    lastModified: $target->isWorkingDirectory() ? $this->getLastModified($repoPath, $path) : null,
+                    lastModified: $isWorkingDir ? $this->getLastModified($repoPath, $path) : null,
                     isSymlink: $symlinkTarget !== null,
                     symlinkTarget: $symlinkTarget,
-                    fileSize: $target->isWorkingDirectory() ? $this->getHumanFileSize($repoPath, $path) : null,
+                    fileSize: $isWorkingDir ? $this->getHumanFileSize($repoPath, $path) : null,
+                    mtime: $isWorkingDir ? $this->getRawMtime($repoPath, $path) : null,
+                    byteSize: $isWorkingDir ? $this->getRawByteSize($repoPath, $path) : null,
                 );
             })
             ->values()
@@ -169,6 +173,8 @@ class GitDiffService
                             isUntracked: true,
                             lastModified: $this->getLastModified($repoPath, $file),
                             fileSize: $this->getHumanFileSize($repoPath, $file),
+                            mtime: $this->getRawMtime($repoPath, $file),
+                            byteSize: $this->getRawByteSize($repoPath, $file),
                         );
 
                         continue;
@@ -186,6 +192,8 @@ class GitDiffService
                         isBinary: false,
                         isUntracked: true,
                         lastModified: $this->getLastModified($repoPath, $file),
+                        mtime: $this->getRawMtime($repoPath, $file),
+                        byteSize: $this->getRawByteSize($repoPath, $file),
                     );
                 }
             }
@@ -393,6 +401,20 @@ class GitDiffService
         }
 
         return Number::fileSize(File::size($fullPath), precision: 1);
+    }
+
+    private function getRawMtime(string $repoPath, string $path): ?int
+    {
+        $fullPath = $repoPath.'/'.$path;
+
+        return File::isFile($fullPath) ? File::lastModified($fullPath) : null;
+    }
+
+    private function getRawByteSize(string $repoPath, string $path): ?int
+    {
+        $fullPath = $repoPath.'/'.$path;
+
+        return File::isFile($fullPath) ? File::size($fullPath) : null;
     }
 
     private function symlinkTarget(string $fullPath): ?string
