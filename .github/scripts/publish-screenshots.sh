@@ -75,7 +75,8 @@ BODY_FILE="$(mktemp)"
     echo ""
     echo "_Updated for [\`${HEAD_SHA:0:7}\`](https://github.com/${REPO}/pull/${PR_NUMBER}/commits/${HEAD_SHA})._"
     echo ""
-    for png in $(ls "${STAGE}" | sort); do
+    while IFS= read -r -d '' png_path; do
+        png="$(basename "${png_path}")"
         name="${png%.png}"
         url="https://raw.githubusercontent.com/${REPO}/${BRANCH}/${SUBPATH}/${png}"
         echo "<details open><summary><code>${name}</code></summary>"
@@ -84,7 +85,7 @@ BODY_FILE="$(mktemp)"
         echo ""
         echo "</details>"
         echo ""
-    done
+    done < <(find "${STAGE}" -maxdepth 1 -type f -name '*.png' -print0 | sort -z)
 } > "${BODY_FILE}"
 
 # Find an existing sticky comment by marker.

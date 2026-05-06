@@ -122,6 +122,18 @@ describe('copyPathsButton — bulk mode', () => {
         component.visibleFileCount = 5;
         expect(component.primaryLabel).toBe('Copy 5 relative paths');
     });
+
+    it('menu labels singularise when visibleFileCount === 1 and pluralise + show count when > 1', () => {
+        component.visibleFileCount = 1;
+        expect(component.nameLabel).toBe('Copy file name');
+        expect(component.relativeLabel).toBe('Copy relative path');
+        expect(component.fullLabel).toBe('Copy full path');
+
+        component.visibleFileCount = 3;
+        expect(component.nameLabel).toBe('Copy 3 file names');
+        expect(component.relativeLabel).toBe('Copy 3 relative paths');
+        expect(component.fullLabel).toBe('Copy 3 full paths');
+    });
 });
 
 describe('copyPathsButton — single mode', () => {
@@ -185,5 +197,12 @@ describe('copyPathsButton — single mode', () => {
     it('primaryLabel ignores visibleFileCount', () => {
         const c = attach(bulkScope({ visibleFileCount: 99 }), 'single', 'src/widget.ts');
         expect(c.primaryLabel).toBe('Copy relative path');
+    });
+
+    it('menu labels stay singular regardless of visibleFileCount on the parent scope', () => {
+        const c = attach(bulkScope({ visibleFileCount: 99 }), 'single', 'src/widget.ts');
+        expect(c.nameLabel).toBe('Copy file name');
+        expect(c.relativeLabel).toBe('Copy relative path');
+        expect(c.fullLabel).toBe('Copy full path');
     });
 });

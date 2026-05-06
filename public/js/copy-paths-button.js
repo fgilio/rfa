@@ -38,10 +38,14 @@
                     .map((f) => f.path);
             },
 
-            get primaryLabel() {
+            _label(noun) {
                 const c = this._mode === 'single' ? 1 : this.visibleFileCount;
-                return c <= 1 ? 'Copy relative path' : `Copy ${c} relative paths`;
+                return c <= 1 ? `Copy ${noun}` : `Copy ${c} ${noun}s`;
             },
+            get nameLabel() { return this._label('file name'); },
+            get relativeLabel() { return this._label('relative path'); },
+            get fullLabel() { return this._label('full path'); },
+            get primaryLabel() { return this.relativeLabel; },
 
             copyAs(kind) {
                 const paths = this.paths();

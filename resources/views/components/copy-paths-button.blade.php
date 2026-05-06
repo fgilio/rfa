@@ -31,6 +31,8 @@
     <flux:dropdown position="bottom" align="end" x-ref="dropdown">
         <div class="contents"
             @contextmenu.prevent.stop="openMenu()"
+            @keydown.shift.f10.prevent.stop="openMenu()"
+            @keydown.context-menu.prevent.stop="openMenu()"
             @click.capture.stop="onClick($event)"
             @mousedown="onMouseDown($event)"
             @mouseup="cancelLongPress()"
@@ -41,19 +43,19 @@
                     data-testid="{{ $testidPrefix }}-trigger" />
                 <flux:tooltip.content>
                     <span class="block" x-text="primaryLabel"></span>
-                    <span class="block opacity-60">Right-click for options</span>
+                    <span class="block opacity-60">Right-click or Shift+F10 for options</span>
                 </flux:tooltip.content>
             </flux:tooltip>
         </div>
         <flux:menu>
             <flux:menu.item icon="document" icon:variant="outline" @click="copyAs('name')">
-                Copy file names
+                <span x-text="nameLabel">Copy file name</span>
             </flux:menu.item>
             <flux:menu.item icon="document-duplicate" icon:variant="outline" @click="copyAs('relative')">
-                Copy relative paths
+                <span x-text="relativeLabel">Copy relative path</span>
             </flux:menu.item>
             <flux:menu.item icon="link" icon:variant="outline" @click="copyAs('full')">
-                Copy full paths
+                <span x-text="fullLabel">Copy full path</span>
             </flux:menu.item>
         </flux:menu>
     </flux:dropdown>

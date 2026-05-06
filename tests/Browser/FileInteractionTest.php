@@ -257,7 +257,7 @@ test('sidebar copy paths right-click opens menu with file-name option', function
     ");
 
     $page->page()->getByTestId('sidebar-copy-paths-trigger')->click(['button' => 'right']);
-    $page->page()->getByRole('menuitem', ['name' => 'Copy file names'])->first()->click();
+    $page->page()->getByRole('menuitem', ['name' => 'Copy 3 file names'])->first()->click();
 
     $result = $page->script('window.__copiedText');
     expect($result)->not->toBeNull();
@@ -288,7 +288,7 @@ test('right-click copy full paths prepends repo path to each entry', function ()
     ");
 
     $page->page()->getByTestId('sidebar-copy-paths-trigger')->click(['button' => 'right']);
-    $page->page()->getByRole('menuitem', ['name' => 'Copy full paths'])->first()->click();
+    $page->page()->getByRole('menuitem', ['name' => 'Copy 3 full paths'])->first()->click();
 
     $result = $page->script('window.__copiedText');
     expect($result)->not->toBeNull();
