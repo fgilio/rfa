@@ -123,17 +123,8 @@ test('softRefresh preserves activeFileId across the call', function () {
     expect($component->get('activeFileId'))->toBe('abc123');
 });
 
-/**
- * Regression: after mount, `divergenceChecked` is true, so an unchanged
- * divergence poll inside softRefresh would latch `skipRender()` onto the
- * response. If files also changed, the toast fires but the Blade never
- * morphs and the UI stays stale until a hard reload. softRefresh must
- * still render when `changedCount > 0`, even with stable divergence.
- */
-test('softRefresh with file changes renders the new file list despite stable divergence', function () {
+test('softRefresh renders the new file list when files change', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
-
-    expect($component->get('divergenceChecked'))->toBeTrue();
 
     $this->fileListFake->files = [
         ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 5, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T00:00:00Z', 'fileSize' => '100', 'mtime' => 1714000000, 'byteSize' => 100],
@@ -145,24 +136,36 @@ test('softRefresh with file changes renders the new file list despite stable div
         ->assertSee('src/NewlyAdded.php');
 });
 
-test('softRefresh with no file changes and stable divergence skips the render', function () {
+/**
+ * Contract: softRefresh always renders, even when nothing visible changed.
+ * The previous implementation called `skipRender()` based on a
+ * fingerprint heuristic; that was the root cause of the 1commit+WC
+ * stale-diff bug, because a fingerprint false-negative latched the
+ * response into a no-op morph and children never re-hydrated from the
+ * (already-cleared) cache. softRefresh is user-initiated (⌘R or click),
+ * so the cost of an idempotent render is acceptable; the cost of a
+ * silently stale UI is not.
+ */
+test('softRefresh always renders even when no files changed', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
 
-    $component->call('softRefresh');
+    $component->call('softRefresh')
+        ->assertDispatched('refresh-completed', changedCount: 0);
 
-    expect($component->effects['html'] ?? null)->toBeNull();
+    expect($component->effects['html'] ?? null)->not->toBeNull();
 });
 
 /**
- * Regression: in 1commit+WC mode, an in-place WC edit can leave numstat
- * additions/deletions unchanged (the line was already counted by the
- * pinned commit), and the human-readable `lastModified` / `fileSize`
- * strings can bucket identically across two rapid refreshes. softRefresh
- * must still detect the edit via raw mtime / byte size — otherwise it
- * latches `skipRender()` and the diff stays stale despite the cache
- * being cleared upstream.
+ * Toast accuracy regression: in 1commit+WC and Since-base modes an
+ * in-place WC edit can leave numstat additions/deletions unchanged (the
+ * line was already counted by some pinned commit) and the human-readable
+ * `lastModified` / `fileSize` strings can bucket identically across two
+ * rapid refreshes. The fingerprint must still detect the edit via raw
+ * mtime / byte size — otherwise the toast says "Up to date" while the
+ * diff did, in fact, change. (The render itself no longer depends on
+ * this signal, but the toast text does.)
  */
-test('softRefresh detects in-place WC edits via raw mtime even when status/additions/lastModified are stable', function () {
+test('softRefresh changedCount catches in-place edits via raw mtime when status/additions/lastModified are stable', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
 
     // Same id, status, additions, deletions, and human-readable

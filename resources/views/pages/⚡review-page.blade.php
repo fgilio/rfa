@@ -436,12 +436,21 @@ new #[Layout('layouts.app')] class extends Component
         }
     }
 
+    /**
+     * User-initiated refresh (⌘R, click the refresh affordance, head-advance
+     * auto-refresh). Always re-renders. We compute `changedCount` for the
+     * "Up to date" / "N files updated" toast, but we do NOT use it to gate
+     * rendering: the cost of a needless morph on cmd+r is bounded; the cost
+     * of a false negative is silently stale UI. The cache-invalidation done
+     * by `rehydrateForTarget` only takes effect when children rehydrate,
+     * which requires a render.
+     */
     public function softRefresh(): void
     {
         $before = $this->fileFingerprints($this->files);
 
         $this->rehydrateForTarget();
-        $divergenceChanged = $this->refreshDivergenceState();
+        $this->refreshDivergenceState();
 
         $after = $this->fileFingerprints($this->files);
         $changedCount = count(array_diff_assoc($after, $before))
@@ -449,25 +458,20 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->dispatch('fingerprint-reset');
         $this->dispatch('refresh-completed', changedCount: $changedCount);
-
-        if ($changedCount === 0 && ! $divergenceChanged) {
-            $this->skipRender();
-        }
     }
 
     /**
-     * Per-file change signature for softRefresh's skipRender heuristic.
+     * Per-file change signature used to compute `changedCount` for the
+     * post-refresh toast ("Up to date" vs "N files updated"). It does NOT
+     * gate rendering — see `softRefresh`.
      *
-     * Uses raw mtime + byte size — not the human-readable `lastModified` /
-     * `fileSize` strings, because those bucket aggressively (`diffForHumans`
-     * short-form rounds to whole seconds against an ever-advancing "now",
-     * `Number::fileSize` rounds to a precision-1 unit). With those, two
-     * rapid in-place WC edits of the same byte count produce identical
-     * fingerprints — softRefresh thinks nothing changed, latches
-     * skipRender, and the diff stays stale despite the cache being cleared
-     * upstream. `additions/deletions` from numstat are also too coarse on
-     * their own in 1commit+WC mode: an in-place edit on a line already
-     * modified by the pinned commit doesn't change either count.
+     * Uses raw mtime + byte size (not the human-readable `lastModified` /
+     * `fileSize` strings), because those bucket aggressively
+     * (`diffForHumans` short-form rounds to whole seconds against an
+     * ever-advancing "now"; `Number::fileSize` rounds to a precision-1
+     * unit) and `additions/deletions` from numstat are also too coarse on
+     * their own — in 1commit+WC and Since-base modes an in-place edit on
+     * a line already changed by some pinned commit moves neither count.
      *
      * @param  array<int, array<string, mixed>>  $files
      * @return array<string, string>

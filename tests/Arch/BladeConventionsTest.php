@@ -110,3 +110,27 @@ test('alpine event names do not collide with blade directives', function () {
     }
     expect($violations)->toBeEmpty();
 });
+
+/**
+ * Pins the design intent of the review-page softRefresh fingerprint:
+ * change-detection must use the raw `mtime` / `byteSize` fields, not
+ * the formatted `lastModified` / `fileSize` strings. The latter bucket
+ * (`diffForHumans` short-form, `Number::fileSize` precision-1) and
+ * caused the 1commit+WC stale-diff bug. If a future refactor reverts
+ * the keys, this test fires before the toast count silently degrades.
+ */
+test('review-page fileFingerprints uses raw mtime and byteSize, not formatted strings', function () {
+    $page = dirname(__DIR__, 2).'/resources/views/pages/⚡review-page.blade.php';
+    $content = file_get_contents($page);
+
+    if (! preg_match('/private function fileFingerprints\([^)]*\): array\s*\{(.*?)^    \}/sm', $content, $m)) {
+        test()->fail('Could not locate fileFingerprints method body');
+    }
+
+    $body = $m[1];
+
+    expect($body)->toContain("'mtime'");
+    expect($body)->toContain("'byteSize'");
+    expect($body)->not->toContain("'lastModified'");
+    expect($body)->not->toContain("'fileSize'");
+});

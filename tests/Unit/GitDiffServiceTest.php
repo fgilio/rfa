@@ -178,6 +178,103 @@ test('getFileList returns empty for clean repo', function () {
     expect($entries)->toBeEmpty();
 });
 
+// -- mtime / byteSize fingerprint fields --
+
+/**
+ * Producer-side regression for the 1commit+WC / Since-base stale-diff
+ * bug: the review page's softRefresh fingerprint depends on `mtime` and
+ * `byteSize` being populated from the live filesystem in working-tree
+ * mode. If `getFileList` ever stops setting them, the toast count
+ * silently degrades to "always zero" and the bug is back.
+ */
+test('getFileList populates raw mtime and byteSize for working-tree entries', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "v1\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+    File::put($this->tmpDir.'/hello.txt', "v2 longer\n");
+
+    $entries = $this->service->getFileList($this->tmpDir);
+
+    expect($entries)->toHaveCount(1);
+    $entry = $entries[0];
+    expect($entry->mtime)->toBe(File::lastModified($this->tmpDir.'/hello.txt'));
+    expect($entry->byteSize)->toBe(File::size($this->tmpDir.'/hello.txt'));
+});
+
+test('getFileList populates raw mtime and byteSize for untracked text entries', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/seed.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+    File::put($this->tmpDir.'/new.txt', "fresh\n");
+
+    $entries = $this->service->getFileList($this->tmpDir);
+
+    expect($entries)->toHaveCount(1);
+    $entry = $entries[0];
+    expect($entry->isUntracked)->toBeTrue();
+    expect($entry->mtime)->toBe(File::lastModified($this->tmpDir.'/new.txt'));
+    expect($entry->byteSize)->toBe(File::size($this->tmpDir.'/new.txt'));
+});
+
+test('getFileList mtime advances after rewriting a working-tree file', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "before\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/hello.txt', "edit-1\n");
+    clearstatcache(true, $this->tmpDir.'/hello.txt');
+    $first = $this->service->getFileList($this->tmpDir)[0];
+
+    // Bump mtime explicitly so the test isn't a same-second flake.
+    touch($this->tmpDir.'/hello.txt', $first->mtime + 5);
+    File::put($this->tmpDir.'/hello.txt', "edit-2\n");
+    touch($this->tmpDir.'/hello.txt', $first->mtime + 5);
+    clearstatcache(true, $this->tmpDir.'/hello.txt');
+    $second = $this->service->getFileList($this->tmpDir)[0];
+
+    expect($second->mtime)->toBeGreaterThan($first->mtime);
+});
+
+/**
+ * 1commit+WC and Since-base are both `rangeToWorking` targets. Same
+ * branch as plain WT for `isWorkingDirectory()`, so mtime/byteSize must
+ * still be populated — the fix relies on this.
+ */
+test('getFileList populates mtime/byteSize in rangeToWorking (1commit+WC / Since-base) mode', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "v1\n");
+    $this->commitTestRepo($this->tmpDir, 'c1');
+    File::put($this->tmpDir.'/file.txt', "v2\n");
+    $this->commitTestRepo($this->tmpDir, 'c2');
+    File::put($this->tmpDir.'/file.txt', "v3 wc\n");
+
+    $entries = $this->service->getFileList(
+        $this->tmpDir,
+        target: DiffTarget::rangeToWorking('HEAD~1'),
+    );
+
+    expect($entries)->toHaveCount(1);
+    expect($entries[0]->mtime)->toBe(File::lastModified($this->tmpDir.'/file.txt'));
+    expect($entries[0]->byteSize)->toBe(File::size($this->tmpDir.'/file.txt'));
+});
+
+test('getFileList leaves mtime/byteSize null for immutable (commit-to-commit) targets', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "v1\n");
+    $this->commitTestRepo($this->tmpDir, 'c1');
+    File::put($this->tmpDir.'/file.txt', "v2\n");
+    $this->commitTestRepo($this->tmpDir, 'c2');
+
+    $entries = $this->service->getFileList(
+        $this->tmpDir,
+        target: DiffTarget::range('HEAD~1', 'HEAD'),
+    );
+
+    expect($entries)->toHaveCount(1);
+    expect($entries[0]->mtime)->toBeNull();
+    expect($entries[0]->byteSize)->toBeNull();
+});
+
 // -- getFileDiff tests --
 
 test('getFileDiff returns raw diff for tracked file', function () {
