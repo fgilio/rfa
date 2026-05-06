@@ -23,6 +23,12 @@ class FileListEntry
         public readonly ?string $fileSize = null,
         public readonly bool $isExternal = false,
         public readonly ?string $externalAbsolutePath = null,
+        // Raw mtime + byte size used by the review page's softRefresh
+        // change-detection. Kept separate from the human-readable
+        // `lastModified` / `fileSize` because those bucket aggressively
+        // (e.g. `diffForHumans` short-form) and miss rapid in-place edits.
+        public readonly ?int $mtime = null,
+        public readonly ?int $byteSize = null,
     ) {}
 
     public static function idForPath(string $path): string
@@ -61,6 +67,8 @@ class FileListEntry
             'fileSize' => $this->fileSize,
             'isExternal' => $this->isExternal,
             'externalAbsolutePath' => $this->externalAbsolutePath,
+            'mtime' => $this->mtime,
+            'byteSize' => $this->byteSize,
         ];
     }
 }

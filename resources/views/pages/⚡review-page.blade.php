@@ -456,6 +456,19 @@ new #[Layout('layouts.app')] class extends Component
     }
 
     /**
+     * Per-file change signature for softRefresh's skipRender heuristic.
+     *
+     * Uses raw mtime + byte size — not the human-readable `lastModified` /
+     * `fileSize` strings, because those bucket aggressively (`diffForHumans`
+     * short-form rounds to whole seconds against an ever-advancing "now",
+     * `Number::fileSize` rounds to a precision-1 unit). With those, two
+     * rapid in-place WC edits of the same byte count produce identical
+     * fingerprints — softRefresh thinks nothing changed, latches
+     * skipRender, and the diff stays stale despite the cache being cleared
+     * upstream. `additions/deletions` from numstat are also too coarse on
+     * their own in 1commit+WC mode: an in-place edit on a line already
+     * modified by the pinned commit doesn't change either count.
+     *
      * @param  array<int, array<string, mixed>>  $files
      * @return array<string, string>
      */
@@ -468,8 +481,8 @@ new #[Layout('layouts.app')] class extends Component
                     $f['status'] ?? '',
                     $f['additions'] ?? 0,
                     $f['deletions'] ?? 0,
-                    $f['lastModified'] ?? '',
-                    $f['fileSize'] ?? '',
+                    $f['mtime'] ?? '',
+                    $f['byteSize'] ?? '',
                 ),
             ])
             ->all();

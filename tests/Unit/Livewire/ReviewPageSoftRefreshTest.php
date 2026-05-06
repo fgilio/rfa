@@ -43,7 +43,7 @@ beforeEach(function () {
     {
         /** @var array<int, array<string, mixed>> */
         public array $files = [
-            ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 5, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T00:00:00Z', 'fileSize' => '100'],
+            ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 5, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T00:00:00Z', 'fileSize' => '100', 'mtime' => 1714000000, 'byteSize' => 100],
         ];
 
         public int $callCount = 0;
@@ -105,8 +105,8 @@ test('softRefresh reports changedCount when files differ', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
 
     $this->fileListFake->files = [
-        ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 7, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T01:00:00Z', 'fileSize' => '120'],
-        ['id' => 'def456', 'path' => 'src/Bar.php', 'status' => 'added', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T01:00:00Z', 'fileSize' => '200'],
+        ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 7, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T01:00:00Z', 'fileSize' => '120', 'mtime' => 1714000100, 'byteSize' => 120],
+        ['id' => 'def456', 'path' => 'src/Bar.php', 'status' => 'added', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T01:00:00Z', 'fileSize' => '200', 'mtime' => 1714000100, 'byteSize' => 200],
     ];
 
     $component->call('softRefresh')
@@ -136,8 +136,8 @@ test('softRefresh with file changes renders the new file list despite stable div
     expect($component->get('divergenceChecked'))->toBeTrue();
 
     $this->fileListFake->files = [
-        ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 5, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T00:00:00Z', 'fileSize' => '100'],
-        ['id' => 'def456', 'path' => 'src/NewlyAdded.php', 'status' => 'added', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T01:00:00Z', 'fileSize' => '200'],
+        ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 5, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T00:00:00Z', 'fileSize' => '100', 'mtime' => 1714000000, 'byteSize' => 100],
+        ['id' => 'def456', 'path' => 'src/NewlyAdded.php', 'status' => 'added', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T01:00:00Z', 'fileSize' => '200', 'mtime' => 1714000100, 'byteSize' => 200],
     ];
 
     $component->call('softRefresh')
@@ -153,14 +153,39 @@ test('softRefresh with no file changes and stable divergence skips the render', 
     expect($component->effects['html'] ?? null)->toBeNull();
 });
 
+/**
+ * Regression: in 1commit+WC mode, an in-place WC edit can leave numstat
+ * additions/deletions unchanged (the line was already counted by the
+ * pinned commit), and the human-readable `lastModified` / `fileSize`
+ * strings can bucket identically across two rapid refreshes. softRefresh
+ * must still detect the edit via raw mtime / byte size — otherwise it
+ * latches `skipRender()` and the diff stays stale despite the cache
+ * being cleared upstream.
+ */
+test('softRefresh detects in-place WC edits via raw mtime even when status/additions/lastModified are stable', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
+
+    // Same id, status, additions, deletions, and human-readable
+    // lastModified/fileSize as the mount fixture — only the raw mtime
+    // bumps, simulating an in-place edit between two refreshes.
+    $this->fileListFake->files = [
+        ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 5, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T00:00:00Z', 'fileSize' => '100', 'mtime' => 1714000042, 'byteSize' => 100],
+    ];
+
+    $component->call('softRefresh')
+        ->assertDispatched('refresh-completed', changedCount: 1);
+
+    expect($component->effects['html'] ?? null)->not->toBeNull();
+});
+
 test('head-advanced-on-branch triggers softRefresh and dispatches refresh-completed', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
 
     // Simulate a new commit landing on the branch the user is reviewing —
     // the file list now reflects post-commit state.
     $this->fileListFake->files = [
-        ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 12, 'deletions' => 3, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T02:00:00Z', 'fileSize' => '150'],
-        ['id' => 'new789', 'path' => 'src/JustCommitted.php', 'status' => 'added', 'oldPath' => null, 'additions' => 20, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T02:00:00Z', 'fileSize' => '300'],
+        ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 12, 'deletions' => 3, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T02:00:00Z', 'fileSize' => '150', 'mtime' => 1714000200, 'byteSize' => 150],
+        ['id' => 'new789', 'path' => 'src/JustCommitted.php', 'status' => 'added', 'oldPath' => null, 'additions' => 20, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T02:00:00Z', 'fileSize' => '300', 'mtime' => 1714000200, 'byteSize' => 300],
     ];
 
     $component->call('refreshAfterHeadAdvance')
