@@ -129,8 +129,9 @@ test('review-page fileFingerprints uses raw mtime and byteSize, not formatted st
 
     $body = $m[1];
 
-    expect($body)->toContain("'mtime'");
-    expect($body)->toContain("'byteSize'");
-    expect($body)->not->toContain("'lastModified'");
-    expect($body)->not->toContain("'fileSize'");
+    expect($body)
+        ->toContain("'mtime'")
+        ->toContain("'byteSize'")
+        ->not->toContain("'lastModified'")
+        ->not->toContain("'fileSize'");
 });

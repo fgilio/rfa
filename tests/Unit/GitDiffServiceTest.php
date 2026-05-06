@@ -225,8 +225,7 @@ test('getFileList mtime advances after rewriting a working-tree file', function 
     clearstatcache(true, $this->tmpDir.'/hello.txt');
     $first = $this->service->getFileList($this->tmpDir)[0];
 
-    // Bump mtime explicitly so the test isn't a same-second flake.
-    touch($this->tmpDir.'/hello.txt', $first->mtime + 5);
+    // Write, then pin mtime so the assertion isn't a same-second flake.
     File::put($this->tmpDir.'/hello.txt', "edit-2\n");
     touch($this->tmpDir.'/hello.txt', $first->mtime + 5);
     clearstatcache(true, $this->tmpDir.'/hello.txt');
