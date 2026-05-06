@@ -1,0 +1,76 @@
+name: Screenshots
+
+on:
+  pull_request:
+    branches: [main]
+
+# One run per PR. New pushes cancel the in-flight run so we don't race two
+# publishers against the `screenshots` branch.
+concurrency:
+  group: screenshots-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write       # push to the `screenshots` orphan branch
+  pull-requests: write  # update the sticky PR comment
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    # Skip for fork PRs: GITHUB_TOKEN is read-only there, so neither the push
+    # nor the comment update can succeed.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      PHP_VERSION: '8.4'
+      NODE_VERSION: '20'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup-php-composer
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v5
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.ImageVersion }}-${{ steps.playwright-version.outputs.version }}-chromium
+
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        name: Install Chromium + OS deps
+        run: npx playwright install chromium --with-deps
+
+      - run: cp .env.example .env
+      - run: php artisan key:generate
+
+      - name: Capture screenshots
+        run: composer test:screenshots
+
+      - name: Publish to screenshots branch and update sticky comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash .github/scripts/publish-screenshots.sh
+
+      - name: Upload screenshots as artifact (fallback)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ github.event.pull_request.number }}
+          path: tests/Browser/Screenshots/*.png
+          if-no-files-found: ignore
+          retention-days: 7
