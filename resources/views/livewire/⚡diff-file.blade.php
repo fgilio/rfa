@@ -277,6 +277,7 @@ HTML;
         :diff-data="$diffData"
         :has-remote="$hasRemote"
         :diff-to="$diffTo"
+        :repo-path="$repoPath"
     />
 
     {{-- File body --}}

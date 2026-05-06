@@ -183,12 +183,32 @@ test('clicking line with existing draft re-opens it', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
 
+    // Wait for the draft to land in both server-rendered HTML *and* the
+    // client-side $wire proxy. The badge shows after the server morph; the
+    // mousedown handler reads $wire.fileComments synchronously to find the
+    // existing draft, so we also need the wire-property sync to have
+    // happened. networkidle covers the Livewire round-trip end-to-end.
     $page->page()->getByTestId('draft-comment')->waitFor();
+    $page->waitForEvent('networkidle');
 
     // Click same line again
     $lineNum->click();
 
-    expect($page->page()->getByPlaceholder('Write a comment', false)->inputValue())->toBe('Existing draft');
+    // inputValue() is a one-shot read (Pest's waitForFunction wrapper is
+    // also single-shot, see Csrf419RecoveryTest), so poll from PHP until
+    // the textarea is hydrated.
+    $input = $page->page()->getByPlaceholder('Write a comment', false);
+    $input->waitFor(['state' => 'visible']);
+    $deadline = microtime(true) + 5.0;
+    do {
+        $value = $input->inputValue();
+        if ($value !== '') {
+            break;
+        }
+        usleep(50_000);
+    } while (microtime(true) < $deadline);
+
+    expect($value)->toBe('Existing draft');
 });
 
 // -- File-level drafts --

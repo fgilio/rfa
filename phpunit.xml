@@ -23,6 +23,9 @@
         <testsuite name="Browser">
             <directory>tests/Browser</directory>
         </testsuite>
+        <testsuite name="Screenshots">
+            <directory>tests/Screenshots</directory>
+        </testsuite>
         <testsuite name="Performance">
             <directory>tests/Performance</directory>
         </testsuite>

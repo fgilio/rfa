@@ -7,7 +7,7 @@ use Tests\Helpers\InteractsWithTestRepositories;
 use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, Browsable::class, CreatesTestRepo::class)
-    ->in('Browser');
+    ->in('Browser', 'Screenshots');
 
 uses(TestCase::class, LazilyRefreshDatabase::class)
     ->in('Performance');

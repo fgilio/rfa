@@ -29,7 +29,7 @@
             </div>
         </div>
         @if(count($sourceFiles) > 0)
-            <x-copy-paths-menu testid-prefix="status-strip-copy-paths" />
+            <x-copy-paths-button testid-prefix="status-strip-copy-paths" />
         @endif
     </div>
 </div>
