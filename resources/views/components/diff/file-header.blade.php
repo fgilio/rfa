@@ -6,6 +6,7 @@
     'diffData' => null,
     'hasRemote' => false,
     'diffTo' => null,
+    'repoPath' => '',
 ])
 
 @php
@@ -48,6 +49,7 @@
                 mode="single"
                 size="sm"
                 :path="$file['path']"
+                :repo-path="$repoPath"
                 testid-prefix="file-header-copy-path"
             />
 

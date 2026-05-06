@@ -1,6 +1,7 @@
 @props([
     'mode' => 'bulk',
     'path' => null,
+    'repoPath' => '',
     'testidPrefix' => null,
     'size' => 'xs',
 ])
@@ -11,11 +12,13 @@
      Right-click / 400ms hold → open menu with name / relative / full options
 
      Modes:
-       - 'single' — copies one path; requires :path. Always visible.
+       - 'single' — copies one path; requires :path. Pass :repo-path so
+                    "Copy full paths" works on pages without the ⚡review-page
+                    Alpine root.
        - 'bulk'   — copies the currently filter-visible files. Inherits
-                    `sourceFileEntries`, `fileMatchesFilter`, `pathBase`,
-                    `buildFullPath` from the ⚡review-page Alpine root.
-                    Hidden when nothing matches the filter.
+                    `sourceFileEntries`, `fileMatchesFilter`, `visibleFileCount`,
+                    `repoPath` from the ⚡review-page Alpine root. Hidden when
+                    nothing matches the filter.
 
      The gesture wrapper sits *inside* `<flux:dropdown>` and wraps only the
      trigger. Menu items are siblings of the wrapper, so menu-item clicks do
@@ -23,7 +26,7 @@
 --}}
 <div data-testid="{{ $testidPrefix }}"
     @if ($mode === 'bulk') x-show="visibleFileCount > 0" x-cloak @endif
-    x-data="copyPathsButton({ mode: @js($mode), singlePath: @js($path) })"
+    x-data="copyPathsButton({ mode: @js($mode), singlePath: @js($path), repoPath: @js($repoPath) })"
     class="inline-flex">
     <flux:dropdown position="bottom" align="end" x-ref="dropdown">
         <div class="contents"

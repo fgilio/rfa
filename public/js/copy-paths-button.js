@@ -4,9 +4,12 @@
 // Right-click / 400ms  → open the 3-option menu (name / relative / full).
 //
 // Modes:
-//   - 'single' — fixed path via init param.
-//   - 'bulk'   — inherits sourceFileEntries / fileMatchesFilter / pathBase /
-//                buildFullPath / visibleFileCount from the ⚡review-page root.
+//   - 'single' — fixed path via init param. Self-contained: takes its own
+//                repoPath so it works on pages without the ⚡review-page root
+//                (e.g. ⚡context-page, which doesn't expose pathBase /
+//                buildFullPath).
+//   - 'bulk'   — inherits sourceFileEntries / fileMatchesFilter /
+//                visibleFileCount / repoPath from the ⚡review-page root.
 (function (root, factory) {
     const api = factory();
     if (typeof module !== 'undefined' && module.exports) {
@@ -18,10 +21,11 @@
     const LONG_PRESS_MS = 400;
     const KIND_LABEL = { name: 'file name', relative: 'relative path', full: 'full path' };
 
-    function copyPathsButton({ mode = 'bulk', singlePath = '' } = {}) {
+    function copyPathsButton({ mode = 'bulk', singlePath = '', repoPath = '' } = {}) {
         return {
             _mode: mode,
             _singlePath: singlePath,
+            _repoPath: repoPath,
             _longPressTimer: null,
             _suppressClick: false,
 
@@ -42,9 +46,13 @@
             copyAs(kind) {
                 const paths = this.paths();
                 if (paths.length === 0) return;
+                const repo = (this._repoPath || this.repoPath || '').replace(/\/+$/, '');
                 const lines = paths.map((p) => {
-                    if (kind === 'name') return this.pathBase(p);
-                    if (kind === 'full') return this.buildFullPath(p);
+                    if (kind === 'name') {
+                        const i = p.lastIndexOf('/');
+                        return i >= 0 ? p.slice(i + 1) : p;
+                    }
+                    if (kind === 'full') return repo ? `${repo}/${p}` : p;
                     return p;
                 });
                 const label = KIND_LABEL[kind] || 'path';
@@ -102,6 +110,8 @@
     }
 
     function autoInstall(root) {
+        if (root.__copyPathsButtonAttached) return;
+        root.__copyPathsButtonAttached = true;
         const init = () => root.Alpine.data('copyPathsButton', copyPathsButton);
         root.Alpine ? init() : root.document.addEventListener('alpine:init', init);
     }

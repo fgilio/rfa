@@ -19,8 +19,7 @@ function bulkScope(extra = {}) {
         ],
         fileMatchesFilter: () => true,
         visibleFileCount: 3,
-        pathBase: (p) => p.split('/').pop(),
-        buildFullPath: (p) => `/repo/${p}`,
+        repoPath: '/repo',
         $dispatch: (name, detail) => dispatched.push({ name, detail }),
         $refs: { dropdown },
         ...extra,
@@ -29,11 +28,11 @@ function bulkScope(extra = {}) {
     };
 }
 
-function attach(scope, mode = 'bulk', singlePath = '') {
+function attach(scope, mode = 'bulk', singlePath = '', repoPath = '') {
     // Object.assign would evaluate `get primaryLabel()` once on the factory's
     // return value (where the parent-scope props don't exist) and copy the
     // resulting string. Use descriptors so the getter stays a getter.
-    const f = factory({ mode, singlePath });
+    const f = factory({ mode, singlePath, repoPath });
     Object.defineProperties(scope, Object.getOwnPropertyDescriptors(f));
     return scope;
 }
@@ -126,8 +125,22 @@ describe('copyPathsButton — bulk mode', () => {
 });
 
 describe('copyPathsButton — single mode', () => {
+    function singleScope() {
+        const dispatched = [];
+        const setState = vi.fn();
+        const dropdown = { lastElementChild: { _popoverable: { setState } } };
+        // No sourceFileEntries / fileMatchesFilter / repoPath — single mode
+        // must work on pages without the ⚡review-page Alpine root.
+        return {
+            $dispatch: (name, detail) => dispatched.push({ name, detail }),
+            $refs: { dropdown },
+            _dispatched: dispatched,
+            _opened: setState,
+        };
+    }
+
     it('left-click copies the single path with a singular toast', () => {
-        const c = attach(bulkScope(), 'single', 'src/widget.ts');
+        const c = attach(singleScope(), 'single', 'src/widget.ts', '/repo');
 
         c.onClick({ button: 0 });
 
@@ -135,13 +148,38 @@ describe('copyPathsButton — single mode', () => {
         expect(c._dispatched[0].detail.toast).toBe('Copied relative path');
     });
 
-    it('copyAs("full") uses the parent buildFullPath for one path', () => {
-        const c = attach(bulkScope(), 'single', 'src/widget.ts');
+    it('copyAs("full") prefixes with the init-param repoPath without parent helpers', () => {
+        const c = attach(singleScope(), 'single', 'src/widget.ts', '/repo');
 
         c.copyAs('full');
 
         expect(c._dispatched[0].detail.text).toBe('/repo/src/widget.ts');
         expect(c._dispatched[0].detail.toast).toBe('Copied full path');
+    });
+
+    it('copyAs("name") emits the basename without parent helpers', () => {
+        const c = attach(singleScope(), 'single', 'src/widget.ts', '/repo');
+
+        c.copyAs('name');
+
+        expect(c._dispatched[0].detail.text).toBe('widget.ts');
+        expect(c._dispatched[0].detail.toast).toBe('Copied file name');
+    });
+
+    it('copyAs("full") with no repoPath falls through to the relative path', () => {
+        const c = attach(singleScope(), 'single', 'src/widget.ts', '');
+
+        c.copyAs('full');
+
+        expect(c._dispatched[0].detail.text).toBe('src/widget.ts');
+    });
+
+    it('trailing slashes on repoPath are normalized', () => {
+        const c = attach(singleScope(), 'single', 'src/widget.ts', '/repo///');
+
+        c.copyAs('full');
+
+        expect(c._dispatched[0].detail.text).toBe('/repo/src/widget.ts');
     });
 
     it('primaryLabel ignores visibleFileCount', () => {
