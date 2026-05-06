@@ -183,15 +183,20 @@ test('clicking line with existing draft re-opens it', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
 
+    // Wait for the draft to land in both server-rendered HTML *and* the
+    // client-side $wire proxy. The badge shows after the server morph; the
+    // mousedown handler reads $wire.fileComments synchronously to find the
+    // existing draft, so we also need the wire-property sync to have
+    // happened. networkidle covers the Livewire round-trip end-to-end.
     $page->page()->getByTestId('draft-comment')->waitFor();
+    $page->waitForEvent('networkidle');
 
     // Click same line again
     $lineNum->click();
 
-    // The textarea remounts on click but its `formBody` x-model is hydrated
-    // by the round-trip that returns the existing draft body. inputValue() is
-    // a one-shot read (Pest's waitForFunction wrapper is also single-shot,
-    // see Csrf419RecoveryTest), so we poll from PHP until Livewire fills it.
+    // inputValue() is a one-shot read (Pest's waitForFunction wrapper is
+    // also single-shot, see Csrf419RecoveryTest), so poll from PHP until
+    // the textarea is hydrated.
     $input = $page->page()->getByPlaceholder('Write a comment', false);
     $input->waitFor(['state' => 'visible']);
     $deadline = microtime(true) + 5.0;
