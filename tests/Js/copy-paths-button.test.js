@@ -1,16 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import copyPathsButton from '../../public/js/copy-paths-button.js';
 
-const { copyPathsButton: factory, LONG_PRESS_MS } = copyPathsButton;
+const { copyPathsButton: factory } = copyPathsButton;
 
 function bulkScope(extra = {}) {
     const dispatched = [];
-    const setState = vi.fn();
-    // Stand in for `<ui-dropdown>`. The overlay is its lastElementChild and
-    // exposes `_popoverable.setState(true|false)` once Flux has booted.
-    const dropdown = {
-        lastElementChild: { _popoverable: { setState } },
-    };
     return {
         sourceFileEntries: [
             { id: 'a', path: 'app/Foo.php' },
@@ -21,10 +15,8 @@ function bulkScope(extra = {}) {
         visibleFileCount: 3,
         repoPath: '/repo',
         $dispatch: (name, detail) => dispatched.push({ name, detail }),
-        $refs: { dropdown },
         ...extra,
         _dispatched: dispatched,
-        _opened: setState,
     };
 }
 
@@ -41,12 +33,7 @@ describe('copyPathsButton — bulk mode', () => {
     let component;
 
     beforeEach(() => {
-        vi.useFakeTimers();
         component = attach(bulkScope(), 'bulk');
-    });
-
-    afterEach(() => {
-        vi.useRealTimers();
     });
 
     it('left-click copies relative paths joined by newlines', () => {
@@ -76,45 +63,6 @@ describe('copyPathsButton — bulk mode', () => {
         expect(component._dispatched[0].detail.toast).toBe('Copied 3 full paths');
     });
 
-    it('long-press past 400ms opens the menu and suppresses the trailing click', () => {
-        component.onMouseDown({ button: 0 });
-        vi.advanceTimersByTime(LONG_PRESS_MS);
-
-        expect(component._opened).toHaveBeenCalledOnce();
-        expect(component._suppressClick).toBe(true);
-
-        component.onClick({ button: 0 });
-
-        expect(component._dispatched).toHaveLength(0);
-        expect(component._suppressClick).toBe(false);
-    });
-
-    it('quick mousedown+mouseup cancels the long-press timer', () => {
-        component.onMouseDown({ button: 0 });
-        vi.advanceTimersByTime(100);
-        component.cancelLongPress();
-        vi.advanceTimersByTime(LONG_PRESS_MS);
-
-        expect(component._opened).not.toHaveBeenCalled();
-        expect(component._suppressClick).toBe(false);
-    });
-
-    it('mouseleave during a hold cancels the timer', () => {
-        component.onMouseDown({ button: 0 });
-        vi.advanceTimersByTime(200);
-        component.cancelLongPress();
-        vi.advanceTimersByTime(500);
-
-        expect(component._opened).not.toHaveBeenCalled();
-    });
-
-    it('non-left mouse buttons do not start the long-press timer', () => {
-        component.onMouseDown({ button: 2 });
-        vi.advanceTimersByTime(LONG_PRESS_MS * 2);
-
-        expect(component._opened).not.toHaveBeenCalled();
-    });
-
     it('primaryLabel pluralises by visibleFileCount', () => {
         component.visibleFileCount = 1;
         expect(component.primaryLabel).toBe('Copy relative path');
@@ -139,15 +87,11 @@ describe('copyPathsButton — bulk mode', () => {
 describe('copyPathsButton — single mode', () => {
     function singleScope() {
         const dispatched = [];
-        const setState = vi.fn();
-        const dropdown = { lastElementChild: { _popoverable: { setState } } };
         // No sourceFileEntries / fileMatchesFilter / repoPath — single mode
         // must work on pages without the ⚡review-page Alpine root.
         return {
             $dispatch: (name, detail) => dispatched.push({ name, detail }),
-            $refs: { dropdown },
             _dispatched: dispatched,
-            _opened: setState,
         };
     }
 

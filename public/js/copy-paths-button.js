@@ -1,7 +1,7 @@
 // Alpine factory for <x-copy-paths-button>.
 //
-// Left-click           → copy relative path(s) + toast.
-// Right-click / 400ms  → open the 3-option menu (name / relative / full).
+// Left-click              → copy relative path(s) + toast.
+// Right-click / Shift+F10 → open the 3-option menu (name / relative / full).
 //
 // Modes:
 //   - 'single' — fixed path via init param. Self-contained: takes its own
@@ -18,7 +18,6 @@
         api.autoInstall(root);
     }
 })(typeof window !== 'undefined' ? window : null, function () {
-    const LONG_PRESS_MS = 400;
     const KIND_LABEL = { name: 'file name', relative: 'relative path', full: 'full path' };
 
     function copyPathsButton({ mode = 'bulk', singlePath = '', repoPath = '' } = {}) {
@@ -26,8 +25,6 @@
             _mode: mode,
             _singlePath: singlePath,
             _repoPath: repoPath,
-            _longPressTimer: null,
-            _suppressClick: false,
 
             paths() {
                 if (this._mode === 'single') {
@@ -70,25 +67,8 @@
             },
 
             onClick(event) {
-                if (this._suppressClick) {
-                    this._suppressClick = false;
-                    return;
-                }
                 if (event.button !== undefined && event.button !== 0) return;
                 this.copyAs('relative');
-            },
-
-            onMouseDown(event) {
-                if (event.button !== 0) return;
-                clearTimeout(this._longPressTimer);
-                this._longPressTimer = setTimeout(() => {
-                    this._suppressClick = true;
-                    this.openMenu();
-                }, LONG_PRESS_MS);
-            },
-
-            cancelLongPress() {
-                clearTimeout(this._longPressTimer);
             },
 
             openMenu() {
@@ -120,5 +100,5 @@
         root.Alpine ? init() : root.document.addEventListener('alpine:init', init);
     }
 
-    return { copyPathsButton, autoInstall, LONG_PRESS_MS };
+    return { copyPathsButton, autoInstall };
 });

@@ -8,8 +8,8 @@
 
 {{-- Unified copy-paths affordance.
 
-     Left-click             → copy relative path(s) immediately + toast
-     Right-click / 400ms hold → open menu with name / relative / full options
+     Left-click              → copy relative path(s) immediately + toast
+     Right-click / Shift+F10 → open menu with name / relative / full options
 
      Modes:
        - 'single' — copies one path; requires :path. Pass :repo-path so
@@ -20,9 +20,11 @@
                     `repoPath` from the ⚡review-page Alpine root. Hidden when
                     nothing matches the filter.
 
-     The gesture wrapper sits *inside* `<flux:dropdown>` and wraps only the
-     trigger. Menu items are siblings of the wrapper, so menu-item clicks do
-     not pass through `@click.capture` and reach Flux normally.
+     Left-click on the trigger should copy directly, not toggle the dropdown
+     (Flux's default for any trigger inside `<flux:dropdown>`). The wrapper
+     intercepts the click via `@click.capture.stop` before Flux sees it, and
+     wraps only the trigger — menu items are siblings, so their clicks aren't
+     captured and reach Flux normally.
 --}}
 <div data-testid="{{ $testidPrefix }}"
     @if ($mode === 'bulk') x-show="visibleFileCount > 0" x-cloak @endif
@@ -33,10 +35,7 @@
             @contextmenu.prevent.stop="openMenu()"
             @keydown.shift.f10.prevent.stop="openMenu()"
             @keydown.context-menu.prevent.stop="openMenu()"
-            @click.capture.stop="onClick($event)"
-            @mousedown="onMouseDown($event)"
-            @mouseup="cancelLongPress()"
-            @mouseleave="cancelLongPress()">
+            @click.capture.stop="onClick($event)">
             <flux:tooltip>
                 <flux:button variant="ghost" size="{{ $size }}" icon="square-2-stack" icon:variant="outline"
                     aria-label="{{ $mode === 'single' ? 'Copy file path' : 'Copy paths' }}"
