@@ -188,7 +188,22 @@ test('clicking line with existing draft re-opens it', function () {
     // Click same line again
     $lineNum->click();
 
-    expect($page->page()->getByPlaceholder('Write a comment', false)->inputValue())->toBe('Existing draft');
+    // The textarea remounts on click but its `formBody` x-model is hydrated
+    // by the round-trip that returns the existing draft body. inputValue() is
+    // a one-shot read (Pest's waitForFunction wrapper is also single-shot,
+    // see Csrf419RecoveryTest), so we poll from PHP until Livewire fills it.
+    $input = $page->page()->getByPlaceholder('Write a comment', false);
+    $input->waitFor(['state' => 'visible']);
+    $deadline = microtime(true) + 5.0;
+    do {
+        $value = $input->inputValue();
+        if ($value !== '') {
+            break;
+        }
+        usleep(50_000);
+    } while (microtime(true) < $deadline);
+
+    expect($value)->toBe('Existing draft');
 });
 
 // -- File-level drafts --
