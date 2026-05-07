@@ -37,6 +37,7 @@ use App\Enums\GitRef;
 use App\Enums\LastViewKind;
 use App\Enums\LastViewMode;
 use App\Exceptions\GitCommandException;
+use App\Listeners\HandleMenuItemClicked;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
@@ -166,7 +167,7 @@ new #[Layout('layouts.app')] class extends Component
 
         app(ResolveStartupRouteAction::class)->rememberLastOpened($slug);
 
-        Cache::put('rfa.active-project-id', $this->projectId, now()->addDay());
+        Cache::put(HandleMenuItemClicked::ACTIVE_PROJECT_CACHE_KEY, $this->projectId, now()->addDay());
 
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title("rfa - {$this->projectName}");

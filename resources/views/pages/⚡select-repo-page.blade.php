@@ -4,6 +4,7 @@ use App\Actions\ListProjectsAction;
 use App\Actions\RemoveProjectAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Concerns\InteractsWithRemoteLinks;
+use App\Listeners\HandleMenuItemClicked;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
@@ -36,7 +37,7 @@ new #[Layout('layouts.app')] class extends Component
 
         // Without this, ⌘⇧K from the repo picker would ambush the user with
         // the last project they had open via the menu-handler's cache lookup.
-        Cache::forget('rfa.active-project-id');
+        Cache::forget(HandleMenuItemClicked::ACTIVE_PROJECT_CACHE_KEY);
 
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title('rfa');
