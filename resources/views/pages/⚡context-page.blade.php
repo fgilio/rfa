@@ -222,7 +222,7 @@ new #[Layout('layouts.app')] class extends Component
             // the actual file). Log the named reason for diagnostics
             // and treat the action as a no-op so the page never
             // crashes on a bad screen state.
-            \Illuminate\Support\Facades\Log::debug('Context comment payload rejected', [
+            \Illuminate\Support\Facades\Log::warning('context.comment.rejected', [
                 'reason' => $e->reason->value,
                 'fileId' => $fileId,
                 'side' => $side,
