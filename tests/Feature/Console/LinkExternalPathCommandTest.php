@@ -39,7 +39,20 @@ test('fails cleanly when the project cannot be found', function () {
         ->assertFailed();
 });
 
-test('fails cleanly when the path is not a directory', function () {
+test('fails cleanly when the path is neither a file nor a directory', function () {
     $this->artisan('rfa:link-path', ['project' => 'demo', 'path' => '/this/path/does/not/exist'])
         ->assertFailed();
+});
+
+test('links a single file', function () {
+    $file = $this->extDir.'/plan.md';
+    file_put_contents($file, "# plan\n");
+
+    $this->artisan('rfa:link-path', ['project' => 'demo', 'path' => $file])
+        ->assertSuccessful();
+
+    $stored = $this->project->fresh()->external_paths;
+    expect($stored)->toHaveCount(1);
+    expect($stored[0]['path'])->toBe(realpath($file));
+    expect($stored[0]['label'])->toBe('plan.md');
 });

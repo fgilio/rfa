@@ -165,3 +165,58 @@ test('buildDiff returns null for files larger than the configured cap', function
 test('buildDiff returns empty string when the file no longer exists on disk', function () {
     expect($this->service->buildDiff($this->extDir.'/missing.md', 'external/notes/missing.md'))->toBe('');
 });
+
+// -- single-file configs --
+
+test('mounts a single-file config as one entry at external/<label> with no subpath', function () {
+    $file = $this->extDir.'/plan.md';
+    File::put($file, "# plan\n");
+
+    $entries = $this->service->getEntries([['label' => 'plan.md', 'path' => $file]]);
+
+    expect($entries)->toHaveCount(1);
+    expect($entries[0]->path)->toBe('external/plan.md');
+    expect($entries[0]->isExternal)->toBeTrue();
+    expect($entries[0]->externalAbsolutePath)->toBe(realpath($file));
+});
+
+test('resolveAbsolutePath round-trips a single-file mount back to its on-disk file', function () {
+    $file = $this->extDir.'/plan.md';
+    File::put($file, "# plan\n");
+    $configs = [['label' => 'plan.md', 'path' => $file]];
+
+    expect($this->service->resolveAbsolutePath($configs, 'external/plan.md'))->toBe(realpath($file));
+});
+
+test('resolveAbsolutePath returns null when a single-file mount is queried with a child path', function () {
+    $file = $this->extDir.'/plan.md';
+    File::put($file, "# plan\n");
+    $configs = [['label' => 'plan.md', 'path' => $file]];
+
+    expect($this->service->resolveAbsolutePath($configs, 'external/plan.md/anything'))->toBeNull();
+});
+
+test('surfaces a single-file binary as a binary entry rather than dropping it', function () {
+    $bin = $this->extDir.'/blob.bin';
+    file_put_contents($bin, "ok\0bytes\0here\n");
+
+    $entries = $this->service->getEntries([['label' => 'blob.bin', 'path' => $bin]]);
+
+    expect($entries)->toHaveCount(1);
+    expect($entries[0]->isBinary)->toBeTrue();
+    expect($entries[0]->additions)->toBe(0);
+});
+
+test('directory and single-file configs coexist on the same project', function () {
+    $file = $this->createTempDirectory('rfa_ext_file_').'/plan.md';
+    File::put($file, "# plan\n");
+
+    $entries = $this->service->getEntries([
+        ['label' => 'notes', 'path' => $this->extDir],
+        ['label' => 'plan.md', 'path' => $file],
+    ]);
+
+    $paths = collect($entries)->pluck('path')->all();
+    expect($paths)->toContain('external/notes/note.md');
+    expect($paths)->toContain('external/plan.md');
+});
