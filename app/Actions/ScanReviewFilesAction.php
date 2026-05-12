@@ -33,7 +33,7 @@ final readonly class ScanReviewFilesAction
                 continue;
             }
 
-            $pairs[$basename] = $this->buildFileEntry($relativePath, $file->getSize());
+            $pairs[$basename] = $this->buildFileEntry($relativePath, $file->getSize(), $file->getMTime());
         }
 
         return collect($pairs)
@@ -49,7 +49,7 @@ final readonly class ScanReviewFilesAction
     }
 
     /** @return array<string, mixed> */
-    private function buildFileEntry(string $path, int|false $size): array
+    private function buildFileEntry(string $path, int|false $size, int|false $mtime): array
     {
         return (new FileListEntry(
             path: $path,
@@ -60,6 +60,8 @@ final readonly class ScanReviewFilesAction
             isBinary: false,
             isUntracked: true,
             fileSize: $size !== false ? $this->formatFileSize($size) : null,
+            mtime: $mtime !== false ? $mtime : null,
+            byteSize: $size !== false ? $size : null,
         ))->toArray();
     }
 

@@ -39,6 +39,8 @@ use App\Enums\LastViewMode;
 use App\Exceptions\GitCommandException;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
@@ -117,6 +119,9 @@ new #[Layout('layouts.app')] class extends Component
 
     #[Locked]
     public ?string $diffTo = null;
+
+    #[Locked]
+    public int $diffRefreshToken = 0;
 
     /** True when the active rangeToWorking diff equals `default_base_branch..HEAD..working`. */
     #[Locked]
@@ -337,6 +342,7 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $this->groupFiles();
+        $this->diffRefreshToken++;
     }
 
     public function updatedDefaultBaseBranch(): void
@@ -458,17 +464,55 @@ new #[Layout('layouts.app')] class extends Component
      */
     public function softRefresh(): void
     {
+        Context::flush();
+
+        $startedAt = microtime(true);
+        $outcome = 'completed';
         $before = $this->fileFingerprints($this->files);
+        $after = $before;
+        $changedCount = 0;
+        $changedFileIds = [];
 
-        $this->rehydrateForTarget();
-        $this->refreshDivergenceState();
+        try {
+            $this->rehydrateForTarget();
+            $this->refreshDivergenceState();
 
-        $after = $this->fileFingerprints($this->files);
-        $changedCount = count(array_diff_assoc($after, $before))
-            + count(array_diff_key($before, $after));
+            $after = $this->fileFingerprints($this->files);
+            $changedCount = count(array_diff_assoc($after, $before))
+                + count(array_diff_key($before, $after));
+            $changedFileIds = array_values(array_unique([
+                ...array_keys(array_diff_assoc($after, $before)),
+                ...array_keys(array_diff_key($before, $after)),
+            ]));
 
-        $this->dispatch('fingerprint-reset');
-        $this->dispatch('refresh-completed', changedCount: $changedCount);
+            $this->dispatch('fingerprint-reset');
+            $this->dispatch('refresh-completed', changedCount: $changedCount);
+        } catch (\Throwable $e) {
+            $outcome = 'error';
+            Context::add('rfa.error', $e->getMessage());
+            Context::add('rfa.error_class', $e::class);
+
+            throw $e;
+        } finally {
+            Context::add('rfa.project_id', $this->projectId);
+            Context::add('rfa.project_slug', $this->projectSlug);
+            Context::add('rfa.target', $this->buildDiffTarget()->contextKey());
+            Context::add('rfa.is_since_base_view', $this->isSinceBaseView);
+            Context::add('rfa.file_count_before', count($before));
+            Context::add('rfa.diff_refresh_token', $this->diffRefreshToken);
+            Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
+            Context::add('rfa.outcome', $outcome);
+
+            if ($outcome === 'completed') {
+                Context::add('rfa.file_count_after', count($after));
+                Context::add('rfa.changed_count', $changedCount);
+                Context::add('rfa.changed_file_ids', array_slice($changedFileIds, 0, 20));
+                Context::add('rfa.changed_file_ids_count', count($changedFileIds));
+                Context::add('rfa.changed_file_ids_truncated', count($changedFileIds) > 20);
+            }
+
+            Log::info('review.refreshed');
+        }
     }
 
     /**
@@ -490,17 +534,21 @@ new #[Layout('layouts.app')] class extends Component
     private function fileFingerprints(array $files): array
     {
         return collect($files)
-            ->mapWithKeys(fn (array $f) => [
-                (string) $f['id'] => sprintf(
-                    '%s|%s|%s|%s|%s',
-                    $f['status'] ?? '',
-                    $f['additions'] ?? 0,
-                    $f['deletions'] ?? 0,
-                    $f['mtime'] ?? '',
-                    $f['byteSize'] ?? '',
-                ),
-            ])
+            ->mapWithKeys(fn (array $file) => [(string) $file['id'] => $this->fileFingerprint($file)])
             ->all();
+    }
+
+    /** @param  array<string, mixed>  $file */
+    private function fileFingerprint(array $file): string
+    {
+        return sprintf(
+            '%s|%s|%s|%s|%s',
+            $file['status'] ?? '',
+            $file['additions'] ?? 0,
+            $file['deletions'] ?? 0,
+            $file['mtime'] ?? '',
+            $file['byteSize'] ?? '',
+        );
     }
 
     // endregion: Initialization & Diff Context
@@ -1145,12 +1193,38 @@ new #[Layout('layouts.app')] class extends Component
 
     private function groupFiles(): void
     {
-        $this->sourceFiles = app(GroupReviewFilesAction::class)->handle($this->files);
+        $this->sourceFiles = $this->withRefreshFingerprints(
+            app(GroupReviewFilesAction::class)->handle($this->files)
+        );
     }
 
     private function scanReviewFiles(): void
     {
-        $this->reviewPairs = app(ScanReviewFilesAction::class)->handle($this->repoPath);
+        $this->reviewPairs = collect(app(ScanReviewFilesAction::class)->handle($this->repoPath))
+            ->map(function (array $pair): array {
+                if (isset($pair['mdFile']) && is_array($pair['mdFile'])) {
+                    $pair['mdFile']['refreshFingerprint'] = $this->fileFingerprint($pair['mdFile']);
+                }
+
+                return $pair;
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $files
+     * @return array<int, array<string, mixed>>
+     */
+    private function withRefreshFingerprints(array $files): array
+    {
+        return collect($files)
+            ->map(function (array $file): array {
+                $file['refreshFingerprint'] = $this->fileFingerprint($file);
+
+                return $file;
+            })
+            ->all();
     }
 
     private function dispatchFileComments(string $fileId): void
@@ -1205,6 +1279,7 @@ new #[Layout('layouts.app')] class extends Component
 
 <div
     data-testid="review-component"
+    data-diff-refresh-token="{{ $diffRefreshToken }}"
     x-data="{
         pendingSaves: 0,
         init() {
@@ -2051,7 +2126,7 @@ new #[Layout('layouts.app')] class extends Component
                             <div x-show="!collapsed" x-collapse.duration.150ms>
                                 <livewire:diff-file
                                     lazy
-                                    :key="$pair['mdFile']['id']"
+                                    :key="$pair['mdFile']['id'].'-'.$pair['mdFile']['refreshFingerprint']"
                                     :file="$pair['mdFile']"
                                     :load-delay="0"
                                     :file-comments="$this->groupedComments[$pair['mdFile']['id']] ?? []"
@@ -2077,7 +2152,7 @@ new #[Layout('layouts.app')] class extends Component
                          :class="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}') ? 'opacity-100' : 'opacity-0'">
                         <livewire:diff-file
                             lazy
-                            :key="$file['id']"
+                            :key="$file['id'].'-'.$file['refreshFingerprint']"
                             :file="$file"
                             :load-delay="(int) (floor($loop->index / 15) * 100)"
                             :file-comments="$this->groupedComments[$file['id']] ?? []"
