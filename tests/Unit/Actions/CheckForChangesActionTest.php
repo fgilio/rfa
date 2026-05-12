@@ -42,6 +42,34 @@ test('returns same fingerprint for unchanged repo', function () {
     expect($first['count'])->toBe($second['count']);
 });
 
+test('returns different fingerprint when an already modified tracked file changes again', function () {
+    File::put($this->tmpDir.'/file.txt', "changed once\n");
+
+    $action = new CheckForChangesAction(new GitDiffService(new GitProcessService, new IgnoreService));
+    $first = $action->handle($this->tmpDir);
+
+    File::put($this->tmpDir.'/file.txt', "changed twice\n");
+    $second = $action->handle($this->tmpDir);
+
+    expect($second['fingerprint'])->not->toBe($first['fingerprint']);
+    expect($first['count'])->toBe(1);
+    expect($second['count'])->toBe(1);
+});
+
+test('returns different fingerprint when an already untracked file changes again', function () {
+    File::put($this->tmpDir.'/note.md', "draft one\n");
+
+    $action = new CheckForChangesAction(new GitDiffService(new GitProcessService, new IgnoreService));
+    $first = $action->handle($this->tmpDir);
+
+    File::put($this->tmpDir.'/note.md', "draft two\n");
+    $second = $action->handle($this->tmpDir);
+
+    expect($second['fingerprint'])->not->toBe($first['fingerprint']);
+    expect($first['count'])->toBe(1);
+    expect($second['count'])->toBe(1);
+});
+
 test('returns different fingerprint and count after file modification', function () {
     $action = new CheckForChangesAction(new GitDiffService(new GitProcessService, new IgnoreService));
     $before = $action->handle($this->tmpDir);
