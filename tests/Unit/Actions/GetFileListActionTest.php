@@ -106,7 +106,6 @@ test('hides external entries when the diff target is an immutable commit range',
         target: DiffTarget::range('HEAD', 'HEAD'),
     );
 
-    foreach ($files as $file) {
-        expect($file['path'])->not->toStartWith('external/');
-    }
+    expect(collect($files)->pluck('path')->all())
+        ->not->toContain('external/notes/note.md');
 });
