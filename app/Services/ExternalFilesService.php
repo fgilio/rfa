@@ -73,7 +73,7 @@ class ExternalFilesService
                     continue;
                 }
 
-                return File::isFile($config['root']) ? $config['root'] : null;
+                return $config['root'];
             }
 
             $prefix = $config['label'].'/';
@@ -141,9 +141,7 @@ class ExternalFilesService
     private function entriesForConfig(array $config): array
     {
         if ($config['is_file']) {
-            $entry = $this->entryForFile($config);
-
-            return $entry === null ? [] : [$entry];
+            return [$this->entryForFile($config)];
         }
 
         $root = $config['root'];
@@ -192,25 +190,13 @@ class ExternalFilesService
                 ltrim(substr($absolutePath, strlen($root)), DIRECTORY_SEPARATOR),
             );
 
-            $size = $file->getSize();
-            $mtime = $file->getMTime();
-
-            $entries[] = new FileListEntry(
-                path: self::MOUNT_PREFIX.'/'.$config['label'].'/'.$relative,
-                status: 'added',
-                oldPath: null,
+            $entries[] = $this->buildFileListEntry(
+                mountPath: self::MOUNT_PREFIX.'/'.$config['label'].'/'.$relative,
+                absolutePath: $absolutePath,
                 additions: $additions,
-                deletions: 0,
                 isBinary: false,
-                isUntracked: false,
-                lastModified: Carbon::createFromTimestamp($mtime)->diffForHumans(short: true),
-                isSymlink: false,
-                symlinkTarget: null,
-                fileSize: Number::fileSize($size, precision: 1),
-                isExternal: true,
-                externalAbsolutePath: $absolutePath,
-                mtime: $mtime,
-                byteSize: $size,
+                size: $file->getSize(),
+                mtime: $file->getMTime(),
             );
         }
 
@@ -257,13 +243,9 @@ class ExternalFilesService
     /**
      * @param  array{label: string, root: string, is_file: bool}  $config
      */
-    private function entryForFile(array $config): ?FileListEntry
+    private function entryForFile(array $config): FileListEntry
     {
         $absolutePath = $config['root'];
-
-        if (! is_file($absolutePath)) {
-            return null;
-        }
 
         // Single-file mounts are explicit user choices — surface binaries (with
         // a header-only diff) rather than silently dropping them the way folder
@@ -272,14 +254,30 @@ class ExternalFilesService
         $isBinary = $additions === null;
 
         $info = new SplFileInfo($absolutePath);
-        $size = $info->getSize();
-        $mtime = $info->getMTime();
 
+        return $this->buildFileListEntry(
+            mountPath: self::MOUNT_PREFIX.'/'.$config['label'],
+            absolutePath: $absolutePath,
+            additions: $isBinary ? 0 : $additions,
+            isBinary: $isBinary,
+            size: $info->getSize(),
+            mtime: $info->getMTime(),
+        );
+    }
+
+    private function buildFileListEntry(
+        string $mountPath,
+        string $absolutePath,
+        int $additions,
+        bool $isBinary,
+        int $size,
+        int $mtime,
+    ): FileListEntry {
         return new FileListEntry(
-            path: self::MOUNT_PREFIX.'/'.$config['label'],
+            path: $mountPath,
             status: 'added',
             oldPath: null,
-            additions: $isBinary ? 0 : $additions,
+            additions: $additions,
             deletions: 0,
             isBinary: $isBinary,
             isUntracked: false,
