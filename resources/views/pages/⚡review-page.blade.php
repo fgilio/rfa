@@ -353,10 +353,21 @@ new #[Layout('layouts.app')] class extends Component
 
     public function addExternalPath(): void
     {
-        $picked = app(\Native\Desktop\Dialog::class)
-            ->title('Link External Folder')
-            ->folders()
-            ->open();
+        $this->pickAndLinkExternalPath(isFile: false);
+    }
+
+    public function addExternalFile(): void
+    {
+        $this->pickAndLinkExternalPath(isFile: true);
+    }
+
+    private function pickAndLinkExternalPath(bool $isFile): void
+    {
+        $kind = $isFile ? 'file' : 'folder';
+
+        $dialog = app(\Native\Desktop\Dialog::class)
+            ->title($isFile ? 'Link External File' : 'Link External Folder');
+        $picked = ($isFile ? $dialog->files() : $dialog->folders())->open();
 
         if (! is_string($picked) || $picked === '') {
             $this->skipRender();
@@ -367,7 +378,7 @@ new #[Layout('layouts.app')] class extends Component
         $previousCount = count($this->externalPaths);
         $updated = app(LinkExternalPathAction::class)->handle($this->projectId, $picked);
         if ($updated === null) {
-            Flux::toast(variant: 'danger', text: 'Could not link folder: '.basename($picked));
+            Flux::toast(variant: 'danger', text: "Could not link {$kind}: ".basename($picked));
             $this->skipRender();
 
             return;
@@ -1657,7 +1668,7 @@ new #[Layout('layouts.app')] class extends Component
                                     Linked external paths
                                 </label>
                                 <p class="text-[10px] font-mono text-gh-muted/80 leading-snug">
-                                    Folders outside the repo that show up as commentable files (e.g. design notes from external tools).
+                                    Folders or single files outside the repo that show up as commentable files (e.g. design notes, a Claude Code plan).
                                 </p>
                                 @if(count($externalPaths) > 0)
                                     <ul class="space-y-1" data-testid="external-paths-list">
@@ -1682,20 +1693,36 @@ new #[Layout('layouts.app')] class extends Component
                                         @endforeach
                                     </ul>
                                 @endif
-                                <flux:button
-                                    size="xs"
-                                    variant="ghost"
-                                    icon="plus"
-                                    icon:variant="outline"
-                                    wire:click="addExternalPath"
-                                    wire:loading.attr="disabled"
-                                    wire:target="addExternalPath"
-                                    data-testid="external-path-add"
-                                    class="w-full"
-                                >
-                                    <span wire:loading.remove wire:target="addExternalPath">Link folder…</span>
-                                    <span wire:loading wire:target="addExternalPath">Opening…</span>
-                                </flux:button>
+                                <div class="flex gap-1">
+                                    <flux:button
+                                        size="xs"
+                                        variant="ghost"
+                                        icon="folder-plus"
+                                        icon:variant="outline"
+                                        wire:click="addExternalPath"
+                                        wire:loading.attr="disabled"
+                                        wire:target="addExternalPath"
+                                        data-testid="external-path-add"
+                                        class="flex-1"
+                                    >
+                                        <span wire:loading.remove wire:target="addExternalPath">Link folder…</span>
+                                        <span wire:loading wire:target="addExternalPath">Opening…</span>
+                                    </flux:button>
+                                    <flux:button
+                                        size="xs"
+                                        variant="ghost"
+                                        icon="document-plus"
+                                        icon:variant="outline"
+                                        wire:click="addExternalFile"
+                                        wire:loading.attr="disabled"
+                                        wire:target="addExternalFile"
+                                        data-testid="external-file-add"
+                                        class="flex-1"
+                                    >
+                                        <span wire:loading.remove wire:target="addExternalFile">Link file…</span>
+                                        <span wire:loading wire:target="addExternalFile">Opening…</span>
+                                    </flux:button>
+                                </div>
                             </div>
                         </flux:menu>
                     </flux:dropdown>

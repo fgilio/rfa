@@ -9,9 +9,9 @@ use Illuminate\Console\Command;
 
 class LinkExternalPathCommand extends Command
 {
-    protected $signature = 'rfa:link-path {project : Project slug, name, or id} {path : Absolute directory path to link} {--label= : Optional display label (defaults to directory basename)}';
+    protected $signature = 'rfa:link-path {project : Project slug, name, or id} {path : Absolute path to a directory or single file to link} {--label= : Optional display label (defaults to the path basename)}';
 
-    protected $description = 'Link an external directory to a project so its files appear in review as commentable entries';
+    protected $description = 'Link an external directory or single file to a project so it appears in review as a commentable entry';
 
     public function handle(LinkExternalPathAction $action): int
     {
@@ -22,7 +22,7 @@ class LinkExternalPathCommand extends Command
         $updated = $action->handleByReference($reference, $path, is_string($label) ? $label : null);
 
         if ($updated === null) {
-            $this->error("Could not link path: project {$reference} not found, or path {$path} is not a directory.");
+            $this->error("Could not link path: project {$reference} not found, or path {$path} is not a file or directory.");
 
             return self::FAILURE;
         }

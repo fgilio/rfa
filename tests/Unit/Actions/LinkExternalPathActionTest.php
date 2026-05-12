@@ -22,8 +22,31 @@ test('returns null when the project does not exist', function () {
     expect($this->action->handle(99_999, $this->extDir))->toBeNull();
 });
 
-test('returns null when the path is not a directory', function () {
+test('returns null when the path is neither a file nor a directory', function () {
     expect($this->action->handle($this->project->id, '/this/path/is/not/real'))->toBeNull();
+});
+
+test('links a single file with the file basename as default label', function () {
+    $file = $this->extDir.'/plan.md';
+    file_put_contents($file, "# plan\n");
+
+    $updated = $this->action->handle($this->project->id, $file);
+
+    expect($updated)->not->toBeNull();
+    expect($updated)->toHaveCount(1);
+    expect($updated[0]['label'])->toBe('plan.md');
+    expect($updated[0]['path'])->toBe(realpath($file));
+});
+
+test('is idempotent when the same file is linked twice', function () {
+    $file = $this->extDir.'/plan.md';
+    file_put_contents($file, "# plan\n");
+
+    $first = $this->action->handle($this->project->id, $file);
+    $second = $this->action->handle($this->project->id, $file);
+
+    expect($first)->toEqual($second);
+    expect($this->project->fresh()->external_paths)->toHaveCount(1);
 });
 
 test('appends a new external path with a default label of the directory basename', function () {

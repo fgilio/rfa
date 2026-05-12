@@ -29,9 +29,11 @@ class ExternalFilesService
     ) {}
 
     /**
-     * Build synthetic FileListEntry rows for every configured external directory.
-     * Each file is mounted under `external/<label>/<relative>` so the synthetic
-     * path stays stable across sessions and yields the same file id.
+     * Build synthetic FileListEntry rows for every configured external path.
+     * Directory configs are walked and each file mounted under
+     * `external/<label>/<relative>`. Single-file configs produce one entry at
+     * `external/<label>`. The synthetic path stays stable across sessions and
+     * yields the same file id.
      *
      * @param  array<int, mixed>  $rawConfigs  Raw rows from `Project::external_paths`.
      * @return list<FileListEntry>
@@ -66,6 +68,14 @@ class ExternalFilesService
         $remainder = substr($mountPath, strlen(self::MOUNT_PREFIX) + 1);
 
         foreach ($configs as $config) {
+            if ($config['is_file']) {
+                if ($remainder !== $config['label']) {
+                    continue;
+                }
+
+                return File::isFile($config['root']) ? $config['root'] : null;
+            }
+
             $prefix = $config['label'].'/';
 
             if (! str_starts_with($remainder, $prefix)) {
@@ -125,11 +135,17 @@ class ExternalFilesService
     }
 
     /**
-     * @param  array{label: string, root: string}  $config
+     * @param  array{label: string, root: string, is_file: bool}  $config
      * @return list<FileListEntry>
      */
     private function entriesForConfig(array $config): array
     {
+        if ($config['is_file']) {
+            $entry = $this->entryForFile($config);
+
+            return $entry === null ? [] : [$entry];
+        }
+
         $root = $config['root'];
 
         if (! is_dir($root)) {
@@ -204,28 +220,78 @@ class ExternalFilesService
     }
 
     /**
-     * Resolve normalized rows to absolute roots ready for filesystem walking.
-     * Drops rows whose path no longer exists. Stored labels are used as-is
+     * Resolve normalized rows to absolute roots ready for filesystem walking
+     * (directories) or direct mounting (single files). Drops rows whose path
+     * no longer exists or has changed type. Stored labels are used as-is
      * (only sanitized) — disambiguation happens at link time so unlinking a
      * sibling never renames a surviving mount.
      *
      * @param  array<int, mixed>  $raw
-     * @return list<array{label: string, root: string}>
+     * @return list<array{label: string, root: string, is_file: bool}>
      */
     private function resolvedConfigs(array $raw): array
     {
         return collect($this->normalizeForStorage($raw))
             ->map(function (array $row): ?array {
                 $root = realpath($row['path']);
-                if ($root === false || ! is_dir($root)) {
+                if ($root === false) {
                     return null;
                 }
 
-                return ['label' => $this->sanitizeLabel($row['label']), 'root' => $root];
+                $isFile = is_file($root);
+                if (! $isFile && ! is_dir($root)) {
+                    return null;
+                }
+
+                return [
+                    'label' => $this->sanitizeLabel($row['label']),
+                    'root' => $root,
+                    'is_file' => $isFile,
+                ];
             })
             ->filter()
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  array{label: string, root: string, is_file: bool}  $config
+     */
+    private function entryForFile(array $config): ?FileListEntry
+    {
+        $absolutePath = $config['root'];
+
+        if (! is_file($absolutePath)) {
+            return null;
+        }
+
+        // Single-file mounts are explicit user choices — surface binaries (with
+        // a header-only diff) rather than silently dropping them the way folder
+        // walks do.
+        $additions = $this->streamCountLines($absolutePath);
+        $isBinary = $additions === null;
+
+        $info = new SplFileInfo($absolutePath);
+        $size = $info->getSize();
+        $mtime = $info->getMTime();
+
+        return new FileListEntry(
+            path: self::MOUNT_PREFIX.'/'.$config['label'],
+            status: 'added',
+            oldPath: null,
+            additions: $isBinary ? 0 : $additions,
+            deletions: 0,
+            isBinary: $isBinary,
+            isUntracked: false,
+            lastModified: Carbon::createFromTimestamp($mtime)->diffForHumans(short: true),
+            isSymlink: false,
+            symlinkTarget: null,
+            fileSize: Number::fileSize($size, precision: 1),
+            isExternal: true,
+            externalAbsolutePath: $absolutePath,
+            mtime: $mtime,
+            byteSize: $size,
+        );
     }
 
     /**
