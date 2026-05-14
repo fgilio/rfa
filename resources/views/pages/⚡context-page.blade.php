@@ -10,6 +10,7 @@ use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveProjectAction;
 use App\DTOs\AgentContextFile;
 use App\Enums\LastViewMode;
+use App\Listeners\HandleMenuItemClicked;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -74,7 +75,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->projectBranch = $project['branch'] ?? '';
         $this->hasRemote = ! empty($project['remote_url']);
 
-        Cache::put('rfa.active-project-id', $this->projectId, now()->addDay());
+        Cache::put(HandleMenuItemClicked::ACTIVE_PROJECT_CACHE_KEY, $this->projectId, now()->addDay());
 
         $projectId = $this->projectId;
         $repoPath = $this->repoPath;

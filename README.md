@@ -77,7 +77,7 @@ Always excluded: `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`,
 
 ## Development
 
-Prerequisites: PHP 8.3+, Composer, Node.js 22+, git.
+Prerequisites: PHP 8.4+, Composer, Node.js 22+, git.
 
 ```bash
 composer install
@@ -97,7 +97,7 @@ composer test        # Pest
 
 ## Tech Stack
 
-Laravel 12, Livewire 4, Flux UI, Alpine.js, Tailwind CSS, NativePHP Desktop (Electron).
+Laravel 13, Livewire 4, Flux UI, Alpine.js, Tailwind CSS, NativePHP Desktop (Electron).
 
 ## License
 

@@ -15,6 +15,13 @@ use Native\Desktop\Facades\Window;
 
 final readonly class HandleMenuItemClicked
 {
+    /**
+     * Cross-process channel: the renderer page's mount() writes the active
+     * project id here so the main-process menu listener can resolve which
+     * project the user is on when "Show Context" fires.
+     */
+    public const string ACTIVE_PROJECT_CACHE_KEY = 'rfa.active-project-id';
+
     public function handle(MenuItemClicked $event): void
     {
         $id = $event->item['id'] ?? null;
@@ -64,7 +71,7 @@ final readonly class HandleMenuItemClicked
      */
     private function handleShowContext(): void
     {
-        $cachedId = Cache::get('rfa.active-project-id');
+        $cachedId = Cache::get(self::ACTIVE_PROJECT_CACHE_KEY);
         $project = is_int($cachedId) ? app(ResolveProjectByIdAction::class)->handle($cachedId) : null;
 
         if (! $project) {
