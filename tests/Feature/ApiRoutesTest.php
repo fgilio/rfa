@@ -53,6 +53,60 @@ test('changes route returns 404 for missing project', function () {
     $this->getJson('/api/changes/999')->assertNotFound();
 });
 
+// -- /api/diagnostics/browser --
+
+test('diagnostics route accepts validated browser samples', function () {
+    $diagnosticsDir = sys_get_temp_dir().'/rfa-route-diagnostics-test-'.getmypid().'-'.uniqid('', true);
+    $diagnosticsPath = $diagnosticsDir.'/diagnostics.jsonl';
+
+    config([
+        'rfa.diagnostics.enabled' => true,
+        'rfa.diagnostics.path' => $diagnosticsPath,
+    ]);
+
+    $this->postJson('/api/diagnostics/browser', [
+        'reason' => 'heartbeat',
+        'url' => 'http://127.0.0.1:8100/p/acme/context?token=secret',
+        'hidden' => false,
+        'focused' => true,
+        'includeProcessSnapshot' => false,
+        'viewport' => ['width' => 1280, 'height' => 720, 'devicePixelRatio' => 2],
+        'dom' => ['nodes' => 100, 'livewireComponents' => 4],
+    ])->assertNoContent();
+
+    $entry = json_decode(trim((string) file_get_contents($diagnosticsPath)), true);
+
+    expect($entry['event'])->toBe('browser.sample')
+        ->and($entry['context']['path'])->toBe('/p/{project}/context')
+        ->and($entry['context']['dom']['nodes'])->toBe(100);
+
+    foreach (glob($diagnosticsPath.'*') ?: [] as $path) {
+        @unlink($path);
+    }
+
+    @rmdir($diagnosticsDir);
+});
+
+test('diagnostics route rejects unknown browser sample fields', function () {
+    config(['rfa.diagnostics.enabled' => true]);
+
+    $this->postJson('/api/diagnostics/browser', [
+        'reason' => 'heartbeat',
+        'dom' => ['nodes' => 100, 'ignored' => 'rejected'],
+    ])->assertUnprocessable();
+});
+
+test('diagnostics route rejects oversized browser samples', function () {
+    config([
+        'rfa.diagnostics.enabled' => true,
+        'rfa.diagnostics.max_browser_payload_bytes' => 128,
+    ]);
+
+    $this->postJson('/api/diagnostics/browser', [
+        'reason' => str_repeat('x', 512),
+    ])->assertStatus(413);
+});
+
 // -- /api/image --
 
 test('image route returns 404 when image not found', function () {

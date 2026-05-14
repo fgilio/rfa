@@ -15,6 +15,7 @@ use App\Actions\IsSinceBaseViewAction;
 use App\Actions\LinkExternalPathAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\PersistProjectViewAction;
+use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\ResolveRangeAction;
@@ -225,6 +226,17 @@ new #[Layout('layouts.app')] class extends Component
         $this->checkHeadDivergence();
 
         $this->persistCurrentView($hash, $from, $to, $ref, $baseRef, $rangeFromWorking);
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('page.review.mounted', [
+            'project_id' => $this->projectId,
+            'project_slug' => $this->projectSlug,
+            'repo_hash' => hash('xxh128', $this->repoPath),
+            'target' => $this->buildDiffTarget()->contextKey(),
+            'is_since_base_view' => $this->isSinceBaseView,
+            'file_count' => count($this->files),
+            'source_file_count' => count($this->sourceFiles),
+            'comment_count' => count($this->comments),
+        ]);
     }
 
     /**
@@ -512,6 +524,16 @@ new #[Layout('layouts.app')] class extends Component
             }
 
             Log::info('review.refreshed');
+            app(RecordRuntimeDiagnosticAction::class)->handle('review.refreshed', [
+                'project_id' => $this->projectId,
+                'project_slug' => $this->projectSlug,
+                'target' => $this->buildDiffTarget()->contextKey(),
+                'outcome' => $outcome,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                'file_count_before' => count($before),
+                'file_count_after' => $outcome === 'completed' ? count($after) : null,
+                'changed_count' => $outcome === 'completed' ? $changedCount : null,
+            ]);
         }
     }
 

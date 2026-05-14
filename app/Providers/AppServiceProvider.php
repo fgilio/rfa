@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Services\GitFileContentService;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Blaze\Blaze;
 
@@ -29,6 +32,9 @@ class AppServiceProvider extends ServiceProvider
 
         Blade::if('native', fn () => (bool) config('nativephp-internal.running'));
         Blade::if('browser', fn () => ! config('nativephp-internal.running'));
+
+        RateLimiter::for('diagnostics', fn (Request $request): Limit => Limit::perMinute(120)
+            ->by($request->ip() ?: 'local'));
 
         Blaze::optimize()->in(resource_path('views/components'));
     }

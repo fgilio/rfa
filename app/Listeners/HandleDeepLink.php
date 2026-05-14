@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Listeners;
 
 use App\Actions\OpenProjectFromPathAction;
+use App\Actions\RecordRuntimeDiagnosticAction;
 use Native\Desktop\Events\App\OpenedFromURL;
 use Native\Desktop\Facades\Window;
 
@@ -25,6 +26,11 @@ final readonly class HandleDeepLink
             return;
         }
 
+        app(RecordRuntimeDiagnosticAction::class)->handle('deeplink.received', [
+            'mode' => is_string($query['mode'] ?? null) ? $query['mode'] : null,
+            'path_hash' => hash('xxh128', $path),
+        ]);
+
         $project = app(OpenProjectFromPathAction::class)->handle($path);
 
         if (! $project) {
@@ -34,6 +40,12 @@ final readonly class HandleDeepLink
         // Fail open on junk mode values: anything that isn't 'context' lands
         // on review-page rather than failing the whole open.
         $routeName = (($query['mode'] ?? null) === 'context') ? 'context-page' : 'review-page';
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('deeplink.opened', [
+            'route' => $routeName,
+            'project_id' => $project->id,
+            'project_slug' => $project->slug,
+        ]);
 
         Window::get('main')->url(route($routeName, ['slug' => $project->slug]));
     }

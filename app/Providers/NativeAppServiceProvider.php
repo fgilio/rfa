@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Actions\OpenProjectFromPathAction;
+use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\ZoomWindowAction;
 use App\Console\Benchmark\BenchmarkIsolation;
@@ -52,6 +53,14 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         $this->createMenu();
         $this->createWindow();
         $this->processInbox();
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('app.boot', [
+            'native' => (bool) config('nativephp-internal.running'),
+            'debug' => (bool) config('app.debug'),
+            'version' => config('nativephp.version'),
+            'sapi' => PHP_SAPI,
+            'entry' => basename((string) ($_SERVER['argv'][0] ?? 'unknown')),
+        ]);
     }
 
     private function registerNativeEventListeners(): void
@@ -62,6 +71,10 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         Event::listen(WindowBlurred::class, UnregisterZoomGlobalShortcuts::class);
         Event::listen(ZoomShortcutPressed::class, HandleZoomShortcutPressed::class);
         Event::listen(WindowClosed::class, function (WindowClosed $event) {
+            app(RecordRuntimeDiagnosticAction::class)->handle('window.closed', [
+                'id' => $event->id,
+            ]);
+
             if ($event->id === 'main') {
                 UnregisterZoomGlobalShortcuts::unregister();
                 App::quit();
@@ -266,6 +279,13 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         }
 
         Window::get('main')->url(route($routeName, ['slug' => $project->slug]));
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('inbox.opened', [
+            'route' => $routeName,
+            'project_id' => $project->id,
+            'project_slug' => $project->slug,
+            'path_hash' => hash('xxh128', $path),
+        ]);
     }
 
     /**

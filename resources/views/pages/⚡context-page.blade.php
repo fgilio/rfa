@@ -6,6 +6,7 @@ use App\Actions\DiscoverAgentContextFilesAction;
 use App\Actions\ExportContextFeedbackAction;
 use App\Actions\LoadContextCommentsAction;
 use App\Actions\PersistProjectViewAction;
+use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveProjectAction;
 use App\DTOs\AgentContextFile;
 use App\Enums\LastViewMode;
@@ -95,12 +96,27 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->refreshContextFiles();
         $this->reloadComments();
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('page.context.mounted', [
+            'project_id' => $this->projectId,
+            'project_slug' => $this->projectSlug,
+            'repo_hash' => hash('xxh128', $this->repoPath),
+            'context_file_count' => count($this->contextFiles),
+            'comment_count' => count($this->comments),
+        ]);
     }
 
     public function refresh(): void
     {
         $this->refreshContextFiles();
         $this->reloadComments();
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('page.context.refreshed', [
+            'project_id' => $this->projectId,
+            'project_slug' => $this->projectSlug,
+            'context_file_count' => count($this->contextFiles),
+            'comment_count' => count($this->comments),
+        ]);
     }
 
     private function refreshContextFiles(): void
