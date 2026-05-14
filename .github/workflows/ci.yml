@@ -219,7 +219,7 @@ jobs:
           php artisan key:generate
           touch database/database.sqlite
           php artisan migrate:fresh --force
-          php artisan rfa:benchmark-perf --compare=/tmp/rfa-perf-baseline.json --max-regression=5 --min-absolute-ms=10
+          php artisan rfa:benchmark-perf --compare=/tmp/rfa-perf-baseline.json --max-regression=5 --min-absolute-ms=10 --max-memory-regression=10 --min-absolute-memory-mb=3 --max-retained-memory-regression=10 --min-absolute-retained-memory-mb=3
       - if: github.event_name != 'pull_request'
         name: Report benchmark on main
-        run: php artisan rfa:benchmark-perf --compare=/tmp/rfa-perf-baseline.json --max-regression=5
+        run: php artisan rfa:benchmark-perf --compare=/tmp/rfa-perf-baseline.json --max-regression=5 --max-memory-regression=10 --min-absolute-memory-mb=3 --max-retained-memory-regression=10 --min-absolute-retained-memory-mb=3

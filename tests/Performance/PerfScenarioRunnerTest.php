@@ -21,7 +21,9 @@ test('benchmark runner reports all representative scenarios', function () {
 test('benchmark runner returns positive timings', function () {
     $results = app(PerfScenarioRunner::class)->measureAll(rounds: 1, warmupRounds: 0);
 
-    foreach ($results as $scenario => $milliseconds) {
-        expect($milliseconds, $scenario)->toBeFloat()->toBeGreaterThan(0);
+    foreach ($results as $scenario => $measurement) {
+        expect($measurement['median_ms'], $scenario)->toBeFloat()->toBeGreaterThan(0)
+            ->and($measurement['median_peak_mb'], $scenario)->toBeFloat()->toBeGreaterThanOrEqual(0)
+            ->and($measurement['median_retained_mb'], $scenario)->toBeFloat();
     }
 });
