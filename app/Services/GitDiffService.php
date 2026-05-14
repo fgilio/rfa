@@ -241,6 +241,11 @@ class GitDiffService
             return ! $this->ignoreService->isPathExcluded(substr($line, 2), $excludes);
         });
 
+        $lines = array_map(
+            fn (string $line): string => $this->withWorkingTreeFileFingerprint($repoPath, $line),
+            $lines,
+        );
+
         sort($lines);
 
         return [
@@ -259,7 +264,42 @@ class GitDiffService
 
         $fullPath = $repoPath.'/'.$path;
 
-        return File::isFile($fullPath) ? hash_file('xxh128', $fullPath) : '';
+        if (! File::isFile($fullPath)) {
+            return '';
+        }
+
+        $fingerprint = hash_file('xxh128', $fullPath);
+
+        return is_string($fingerprint) ? $fingerprint : '';
+    }
+
+    private function withWorkingTreeFileFingerprint(string $repoPath, string $line): string
+    {
+        $path = $this->statusLineWorkingTreePath($line);
+
+        if ($path === null) {
+            return $line;
+        }
+
+        $fingerprint = $this->fileDiffFingerprint($repoPath, $path);
+
+        return $fingerprint === '' ? $line : "{$line}\t{$fingerprint}";
+    }
+
+    private function statusLineWorkingTreePath(string $line): ?string
+    {
+        $parts = preg_split('/\t/', $line);
+        $status = $parts[0] ?? '';
+
+        if ($status === '' || $status === 'D') {
+            return null;
+        }
+
+        if (str_starts_with($status, 'R') || str_starts_with($status, 'C')) {
+            return $parts[2] ?? null;
+        }
+
+        return $parts[1] ?? null;
     }
 
     public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null): ?string

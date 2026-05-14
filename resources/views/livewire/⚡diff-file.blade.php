@@ -3,6 +3,7 @@
 use App\Actions\ExpandDiffGapAction;
 use App\Actions\GetFileCopyContentAction;
 use App\Actions\LoadFileDiffAction;
+use App\Actions\RecordRuntimeDiagnosticAction;
 use App\DTOs\DiffTarget;
 use App\Enums\DiffSide;
 use App\Support\DiffCacheKey;
@@ -92,6 +93,8 @@ HTML;
         );
 
         $this->ensureCommentedLinesVisible();
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('diff.loaded', $this->diagnosticContext($this->diffData));
     }
 
     public function copyContent(string $kind): void
@@ -131,6 +134,8 @@ HTML;
             oldPath: $this->file['oldPath'] ?? null,
             externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
         );
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('diff.context_expanded', $this->diagnosticContext($this->diffData));
     }
 
     public function expandGap(int $hunkIndex, ?int $lineCount = null): void
@@ -167,6 +172,53 @@ HTML;
         }
 
         Cache::put($this->diffCacheKey(), $this->diffData, now()->addHours($this->buildDiffTarget()->cacheTtlHours()));
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('diff.gap_expanded', $this->diagnosticContext($this->diffData) + [
+            'hunk_index' => $hunkIndex,
+            'line_count' => $lineCount,
+        ]);
+    }
+
+    /** @param array<string, mixed>|null $diffData */
+    private function diagnosticContext(?array $diffData): array
+    {
+        $lineCount = 0;
+        $lineContentBytes = 0;
+
+        foreach (($diffData['hunks'] ?? []) as $hunk) {
+            if (is_array($hunk) && isset($hunk['lines']) && is_array($hunk['lines'])) {
+                $lineCount += count($hunk['lines']);
+
+                foreach ($hunk['lines'] as $line) {
+                    if (! is_array($line)) {
+                        continue;
+                    }
+
+                    $lineContentBytes += $this->diagnosticStringBytes($line['content'] ?? null);
+                    $lineContentBytes += $this->diagnosticStringBytes($line['highlightedContent'] ?? null);
+                }
+            }
+        }
+
+        return [
+            'project_id' => $this->projectId,
+            'file_id' => $this->file['id'] ?? null,
+            'path_hash' => isset($this->file['path']) ? hash('xxh128', (string) $this->file['path']) : null,
+            'extension' => isset($this->file['path']) ? pathinfo((string) $this->file['path'], PATHINFO_EXTENSION) : '',
+            'status' => ($this->file['isUntracked'] ?? false) ? 'added' : ($this->file['status'] ?? 'modified'),
+            'target' => $this->buildDiffTarget()->contextKey(),
+            'too_large' => (bool) ($diffData['tooLarge'] ?? false),
+            'binary' => (bool) ($diffData['isBinary'] ?? false),
+            'hunk_count' => count($diffData['hunks'] ?? []),
+            'diff_line_count' => $lineCount,
+            'comment_count' => count($this->fileComments),
+            'line_content_bytes' => $lineContentBytes,
+        ];
+    }
+
+    private function diagnosticStringBytes(mixed $value): int
+    {
+        return is_string($value) ? strlen($value) : 0;
     }
 
     private function ensureCommentedLinesVisible(): void
@@ -243,6 +295,7 @@ HTML;
 
 {{-- Single file diff rendering --}}
 <div
+    data-rfa-diff-file
     x-data="diffFile({
         fileId: @js($file['id']),
         filePath: @js($file['path']),
@@ -252,6 +305,7 @@ HTML;
         singleFile: @js($singleFile ?? false),
     })"
     :data-file-id="fileId"
+    :data-collapsed="collapsed ? 'true' : 'false'"
     @mouseup.window="endDrag()"
     @comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"
     @collapse-all-files.window="autoExpandedForComment = false; collapsed = true"

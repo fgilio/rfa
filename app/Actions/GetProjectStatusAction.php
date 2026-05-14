@@ -24,7 +24,11 @@ final readonly class GetProjectStatusAction
         try {
             $entries = $this->gitDiffService->getFileList($repoPath, $globalGitignorePath);
         } catch (GitCommandException $e) {
-            Log::warning('Failed to get project status', ['repoPath' => $repoPath, 'stderr' => $e->stderr]);
+            Log::warning('project.status.failed', [
+                'reason' => 'project_status_failed',
+                'repoPath' => $repoPath,
+                'stderr' => $e->stderr,
+            ]);
 
             return ['dirty' => false, 'fileCount' => 0, 'additions' => 0, 'deletions' => 0];
         }

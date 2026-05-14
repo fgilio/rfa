@@ -25,7 +25,11 @@ final readonly class OpenProjectFromPathAction
         try {
             return $this->register->handle($realPath);
         } catch (\RuntimeException $e) {
-            Log::warning('Failed to register project from path', ['path' => $path, 'error' => $e->getMessage()]);
+            Log::warning('project.registration.failed', [
+                'reason' => 'project_registration_failed',
+                'path' => $path,
+                'error' => $e->getMessage(),
+            ]);
 
             return null;
         }

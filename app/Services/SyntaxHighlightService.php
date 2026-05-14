@@ -180,7 +180,10 @@ class SyntaxHighlightService
 
             return $result;
         } catch (\Throwable $e) {
-            Log::warning('Syntax highlighting failed', ['error' => $e->getMessage()]);
+            Log::warning('syntax.highlighting.failed', [
+                'reason' => 'syntax_highlighting_failed',
+                'error' => $e->getMessage(),
+            ]);
 
             return [];
         }

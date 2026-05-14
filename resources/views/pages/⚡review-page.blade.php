@@ -15,6 +15,7 @@ use App\Actions\IsSinceBaseViewAction;
 use App\Actions\LinkExternalPathAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\PersistProjectViewAction;
+use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\ResolveRangeAction;
@@ -40,6 +41,8 @@ use App\Exceptions\GitCommandException;
 use App\Listeners\HandleMenuItemClicked;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
@@ -118,6 +121,9 @@ new #[Layout('layouts.app')] class extends Component
 
     #[Locked]
     public ?string $diffTo = null;
+
+    #[Locked]
+    public int $diffRefreshToken = 0;
 
     /** True when the active rangeToWorking diff equals `default_base_branch..HEAD..working`. */
     #[Locked]
@@ -221,6 +227,17 @@ new #[Layout('layouts.app')] class extends Component
         $this->checkHeadDivergence();
 
         $this->persistCurrentView($hash, $from, $to, $ref, $baseRef, $rangeFromWorking);
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('page.review.mounted', [
+            'project_id' => $this->projectId,
+            'project_slug' => $this->projectSlug,
+            'repo_hash' => hash('xxh128', $this->repoPath),
+            'target' => $this->buildDiffTarget()->contextKey(),
+            'is_since_base_view' => $this->isSinceBaseView,
+            'file_count' => count($this->files),
+            'source_file_count' => count($this->sourceFiles),
+            'comment_count' => count($this->comments),
+        ]);
     }
 
     /**
@@ -338,6 +355,7 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $this->groupFiles();
+        $this->diffRefreshToken++;
     }
 
     public function updatedDefaultBaseBranch(): void
@@ -354,10 +372,21 @@ new #[Layout('layouts.app')] class extends Component
 
     public function addExternalPath(): void
     {
-        $picked = app(\Native\Desktop\Dialog::class)
-            ->title('Link External Folder')
-            ->folders()
-            ->open();
+        $this->pickAndLinkExternalPath(isFile: false);
+    }
+
+    public function addExternalFile(): void
+    {
+        $this->pickAndLinkExternalPath(isFile: true);
+    }
+
+    private function pickAndLinkExternalPath(bool $isFile): void
+    {
+        $kind = $isFile ? 'file' : 'folder';
+
+        $dialog = app(\Native\Desktop\Dialog::class)
+            ->title($isFile ? 'Link External File' : 'Link External Folder');
+        $picked = ($isFile ? $dialog->files() : $dialog->folders())->open();
 
         if (! is_string($picked) || $picked === '') {
             $this->skipRender();
@@ -368,7 +397,7 @@ new #[Layout('layouts.app')] class extends Component
         $previousCount = count($this->externalPaths);
         $updated = app(LinkExternalPathAction::class)->handle($this->projectId, $picked);
         if ($updated === null) {
-            Flux::toast(variant: 'danger', text: 'Could not link folder: '.basename($picked));
+            Flux::toast(variant: 'danger', text: "Could not link {$kind}: ".basename($picked));
             $this->skipRender();
 
             return;
@@ -448,17 +477,65 @@ new #[Layout('layouts.app')] class extends Component
      */
     public function softRefresh(): void
     {
+        Context::flush();
+
+        $startedAt = microtime(true);
+        $outcome = 'completed';
         $before = $this->fileFingerprints($this->files);
+        $after = $before;
+        $changedCount = 0;
+        $changedFileIds = [];
 
-        $this->rehydrateForTarget();
-        $this->refreshDivergenceState();
+        try {
+            $this->rehydrateForTarget();
+            $this->refreshDivergenceState();
 
-        $after = $this->fileFingerprints($this->files);
-        $changedCount = count(array_diff_assoc($after, $before))
-            + count(array_diff_key($before, $after));
+            $after = $this->fileFingerprints($this->files);
+            $changedCount = count(array_diff_assoc($after, $before))
+                + count(array_diff_key($before, $after));
+            $changedFileIds = array_values(array_unique([
+                ...array_keys(array_diff_assoc($after, $before)),
+                ...array_keys(array_diff_key($before, $after)),
+            ]));
 
-        $this->dispatch('fingerprint-reset');
-        $this->dispatch('refresh-completed', changedCount: $changedCount);
+            $this->dispatch('fingerprint-reset');
+            $this->dispatch('refresh-completed', changedCount: $changedCount);
+        } catch (\Throwable $e) {
+            $outcome = 'error';
+            Context::add('rfa.error', $e->getMessage());
+            Context::add('rfa.error_class', $e::class);
+
+            throw $e;
+        } finally {
+            Context::add('rfa.project_id', $this->projectId);
+            Context::add('rfa.project_slug', $this->projectSlug);
+            Context::add('rfa.target', $this->buildDiffTarget()->contextKey());
+            Context::add('rfa.is_since_base_view', $this->isSinceBaseView);
+            Context::add('rfa.file_count_before', count($before));
+            Context::add('rfa.diff_refresh_token', $this->diffRefreshToken);
+            Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
+            Context::add('rfa.outcome', $outcome);
+
+            if ($outcome === 'completed') {
+                Context::add('rfa.file_count_after', count($after));
+                Context::add('rfa.changed_count', $changedCount);
+                Context::add('rfa.changed_file_ids', array_slice($changedFileIds, 0, 20));
+                Context::add('rfa.changed_file_ids_count', count($changedFileIds));
+                Context::add('rfa.changed_file_ids_truncated', count($changedFileIds) > 20);
+            }
+
+            Log::info('review.refreshed');
+            app(RecordRuntimeDiagnosticAction::class)->handle('review.refreshed', [
+                'project_id' => $this->projectId,
+                'project_slug' => $this->projectSlug,
+                'target' => $this->buildDiffTarget()->contextKey(),
+                'outcome' => $outcome,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                'file_count_before' => count($before),
+                'file_count_after' => $outcome === 'completed' ? count($after) : null,
+                'changed_count' => $outcome === 'completed' ? $changedCount : null,
+            ]);
+        }
     }
 
     /**
@@ -480,17 +557,21 @@ new #[Layout('layouts.app')] class extends Component
     private function fileFingerprints(array $files): array
     {
         return collect($files)
-            ->mapWithKeys(fn (array $f) => [
-                (string) $f['id'] => sprintf(
-                    '%s|%s|%s|%s|%s',
-                    $f['status'] ?? '',
-                    $f['additions'] ?? 0,
-                    $f['deletions'] ?? 0,
-                    $f['mtime'] ?? '',
-                    $f['byteSize'] ?? '',
-                ),
-            ])
+            ->mapWithKeys(fn (array $file) => [(string) $file['id'] => $this->fileFingerprint($file)])
             ->all();
+    }
+
+    /** @param  array<string, mixed>  $file */
+    private function fileFingerprint(array $file): string
+    {
+        return sprintf(
+            '%s|%s|%s|%s|%s',
+            $file['status'] ?? '',
+            $file['additions'] ?? 0,
+            $file['deletions'] ?? 0,
+            $file['mtime'] ?? '',
+            $file['byteSize'] ?? '',
+        );
     }
 
     // endregion: Initialization & Diff Context
@@ -1135,12 +1216,38 @@ new #[Layout('layouts.app')] class extends Component
 
     private function groupFiles(): void
     {
-        $this->sourceFiles = app(GroupReviewFilesAction::class)->handle($this->files);
+        $this->sourceFiles = $this->withRefreshFingerprints(
+            app(GroupReviewFilesAction::class)->handle($this->files)
+        );
     }
 
     private function scanReviewFiles(): void
     {
-        $this->reviewPairs = app(ScanReviewFilesAction::class)->handle($this->repoPath);
+        $this->reviewPairs = collect(app(ScanReviewFilesAction::class)->handle($this->repoPath))
+            ->map(function (array $pair): array {
+                if (isset($pair['mdFile']) && is_array($pair['mdFile'])) {
+                    $pair['mdFile']['refreshFingerprint'] = $this->fileFingerprint($pair['mdFile']);
+                }
+
+                return $pair;
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $files
+     * @return array<int, array<string, mixed>>
+     */
+    private function withRefreshFingerprints(array $files): array
+    {
+        return collect($files)
+            ->map(function (array $file): array {
+                $file['refreshFingerprint'] = $this->fileFingerprint($file);
+
+                return $file;
+            })
+            ->all();
     }
 
     private function dispatchFileComments(string $fileId): void
@@ -1195,6 +1302,7 @@ new #[Layout('layouts.app')] class extends Component
 
 <div
     data-testid="review-component"
+    data-diff-refresh-token="{{ $diffRefreshToken }}"
     x-data="{
         pendingSaves: 0,
         init() {
@@ -1658,7 +1766,7 @@ new #[Layout('layouts.app')] class extends Component
                                     Linked external paths
                                 </label>
                                 <p class="text-[10px] font-mono text-gh-muted/80 leading-snug">
-                                    Folders outside the repo that show up as commentable files (e.g. design notes from external tools).
+                                    Folders or single files outside the repo that show up as commentable files (e.g. design notes, a Claude Code plan).
                                 </p>
                                 @if(count($externalPaths) > 0)
                                     <ul class="space-y-1" data-testid="external-paths-list">
@@ -1683,20 +1791,36 @@ new #[Layout('layouts.app')] class extends Component
                                         @endforeach
                                     </ul>
                                 @endif
-                                <flux:button
-                                    size="xs"
-                                    variant="ghost"
-                                    icon="plus"
-                                    icon:variant="outline"
-                                    wire:click="addExternalPath"
-                                    wire:loading.attr="disabled"
-                                    wire:target="addExternalPath"
-                                    data-testid="external-path-add"
-                                    class="w-full"
-                                >
-                                    <span wire:loading.remove wire:target="addExternalPath">Link folder…</span>
-                                    <span wire:loading wire:target="addExternalPath">Opening…</span>
-                                </flux:button>
+                                <div class="flex gap-1">
+                                    <flux:button
+                                        size="xs"
+                                        variant="ghost"
+                                        icon="folder-plus"
+                                        icon:variant="outline"
+                                        wire:click="addExternalPath"
+                                        wire:loading.attr="disabled"
+                                        wire:target="addExternalPath"
+                                        data-testid="external-path-add"
+                                        class="flex-1"
+                                    >
+                                        <span wire:loading.remove wire:target="addExternalPath">Link folder…</span>
+                                        <span wire:loading wire:target="addExternalPath">Opening…</span>
+                                    </flux:button>
+                                    <flux:button
+                                        size="xs"
+                                        variant="ghost"
+                                        icon="document-plus"
+                                        icon:variant="outline"
+                                        wire:click="addExternalFile"
+                                        wire:loading.attr="disabled"
+                                        wire:target="addExternalFile"
+                                        data-testid="external-file-add"
+                                        class="flex-1"
+                                    >
+                                        <span wire:loading.remove wire:target="addExternalFile">Link file…</span>
+                                        <span wire:loading wire:target="addExternalFile">Opening…</span>
+                                    </flux:button>
+                                </div>
                             </div>
                         </flux:menu>
                     </flux:dropdown>
@@ -2025,7 +2149,7 @@ new #[Layout('layouts.app')] class extends Component
                             <div x-show="!collapsed" x-collapse.duration.150ms>
                                 <livewire:diff-file
                                     lazy
-                                    :key="$pair['mdFile']['id']"
+                                    :key="$pair['mdFile']['id'].'-'.$pair['mdFile']['refreshFingerprint']"
                                     :file="$pair['mdFile']"
                                     :load-delay="0"
                                     :file-comments="$this->groupedComments[$pair['mdFile']['id']] ?? []"
@@ -2051,7 +2175,7 @@ new #[Layout('layouts.app')] class extends Component
                          :class="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}') ? 'opacity-100' : 'opacity-0'">
                         <livewire:diff-file
                             lazy
-                            :key="$file['id']"
+                            :key="$file['id'].'-'.$file['refreshFingerprint']"
                             :file="$file"
                             :load-delay="(int) (floor($loop->index / 15) * 100)"
                             :file-comments="$this->groupedComments[$file['id']] ?? []"

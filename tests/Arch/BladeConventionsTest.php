@@ -123,8 +123,8 @@ test('review-page fileFingerprints uses raw mtime and byteSize, not formatted st
     $page = dirname(__DIR__, 2).'/resources/views/pages/⚡review-page.blade.php';
     $content = file_get_contents($page);
 
-    if (! preg_match('/private function fileFingerprints\([^)]*\): array\s*\{(.*?)^    \}/sm', $content, $m)) {
-        test()->fail('Could not locate fileFingerprints method body');
+    if (! preg_match('/private function fileFingerprint\([^)]*\): string\s*\{(.*?)^    \}/sm', $content, $m)) {
+        test()->fail('Could not locate fileFingerprint method body');
     }
 
     $body = $m[1];
@@ -134,4 +134,18 @@ test('review-page fileFingerprints uses raw mtime and byteSize, not formatted st
         ->toContain("'byteSize'")
         ->not->toContain("'lastModified'")
         ->not->toContain("'fileSize'");
+});
+
+test('review-page diff-file keys include per-file refresh fingerprints', function () {
+    $page = dirname(__DIR__, 2).'/resources/views/pages/⚡review-page.blade.php';
+    $content = file_get_contents($page);
+    $totalDiffFiles = substr_count($content, '<livewire:diff-file');
+
+    preg_match_all('/<livewire:diff-file\b.*?\/>/s', $content, $matches);
+
+    expect($matches[0])->toHaveCount($totalDiffFiles);
+
+    foreach ($matches[0] as $tag) {
+        expect($tag)->toContain('refreshFingerprint');
+    }
 });

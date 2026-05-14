@@ -22,7 +22,11 @@ class GitMetadataService
         try {
             $raw = trim($this->git->run($repoPath, ['config', '--global', 'core.excludesFile']));
         } catch (GitCommandException $e) {
-            Log::warning('Failed to resolve global excludes file', ['repo' => $repoPath, 'error' => $e->getMessage()]);
+            Log::warning('git.excludes_file.resolve_failed', [
+                'reason' => 'global_excludes_file_resolve_failed',
+                'repo' => $repoPath,
+                'error' => $e->getMessage(),
+            ]);
 
             return null;
         }
@@ -145,7 +149,13 @@ class GitMetadataService
         try {
             return $this->git->run($repoPath, ['show', $ref.':'.$path]);
         } catch (GitCommandException $e) {
-            Log::warning('Failed to read file content from git', ['repo' => $repoPath, 'ref' => $ref, 'path' => $path, 'error' => $e->getMessage()]);
+            Log::warning('git.file_content.read_failed', [
+                'reason' => 'file_content_read_failed',
+                'repo' => $repoPath,
+                'ref' => $ref,
+                'path' => $path,
+                'error' => $e->getMessage(),
+            ]);
 
             return null;
         }
@@ -162,7 +172,12 @@ class GitMetadataService
 
             return $resolved !== '' ? $resolved : null;
         } catch (GitCommandException $e) {
-            Log::warning('Failed to resolve git ref', ['repo' => $repoPath, 'ref' => $ref, 'error' => $e->getMessage()]);
+            Log::warning('git.ref.resolve_failed', [
+                'reason' => 'git_ref_resolve_failed',
+                'repo' => $repoPath,
+                'ref' => $ref,
+                'error' => $e->getMessage(),
+            ]);
 
             return null;
         }
@@ -176,7 +191,12 @@ class GitMetadataService
 
             return $output !== '' ? explode("\n", $output) : [];
         } catch (GitCommandException $e) {
-            Log::warning('Failed to get commit parents', ['repo' => $repoPath, 'hash' => $hash, 'error' => $e->getMessage()]);
+            Log::warning('git.commit_parents.read_failed', [
+                'reason' => 'commit_parents_read_failed',
+                'repo' => $repoPath,
+                'hash' => $hash,
+                'error' => $e->getMessage(),
+            ]);
 
             return [];
         }
@@ -195,7 +215,12 @@ class GitMetadataService
         try {
             $line = trim($this->git->run($repoPath, ['rev-list', '--parents', '-n', '1', $ref]));
         } catch (GitCommandException $e) {
-            Log::warning('Failed to check root commit', ['repo' => $repoPath, 'ref' => $ref, 'error' => $e->getMessage()]);
+            Log::warning('git.root_commit.check_failed', [
+                'reason' => 'root_commit_check_failed',
+                'repo' => $repoPath,
+                'ref' => $ref,
+                'error' => $e->getMessage(),
+            ]);
 
             return false;
         }
@@ -235,7 +260,12 @@ class GitMetadataService
 
             return $output !== '' ? $output : null;
         } catch (GitCommandException $e) {
-            Log::warning('Failed to get child commit', ['repo' => $repoPath, 'hash' => $hash, 'error' => $e->getMessage()]);
+            Log::warning('git.child_commit.read_failed', [
+                'reason' => 'child_commit_read_failed',
+                'repo' => $repoPath,
+                'hash' => $hash,
+                'error' => $e->getMessage(),
+            ]);
 
             return null;
         }
@@ -301,7 +331,11 @@ class GitMetadataService
         try {
             $output = $this->git->run($repoPath, $args);
         } catch (GitCommandException $e) {
-            Log::warning('Failed to get commit log', ['repo' => $repoPath, 'error' => $e->getMessage()]);
+            Log::warning('git.commit_log.read_failed', [
+                'reason' => 'commit_log_read_failed',
+                'repo' => $repoPath,
+                'error' => $e->getMessage(),
+            ]);
 
             return [];
         }

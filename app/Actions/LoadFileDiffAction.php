@@ -41,7 +41,11 @@ final readonly class LoadFileDiffAction
                     ? $this->externalFilesService->buildDiff($externalAbsolutePath, $path)
                     : $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, contextLines: $contextLines, target: $target, oldPath: $oldPath);
             } catch (GitCommandException $e) {
-                Log::warning('Git diff failed', ['path' => $path, 'stderr' => $e->stderr]);
+                Log::warning('git.diff.failed', [
+                    'reason' => 'diff_process_failed',
+                    'path' => $path,
+                    'stderr' => $e->stderr,
+                ]);
 
                 return FileDiff::emptyArray($path, 'modified', tooLarge: false)
                     + ['error' => 'Failed to load diff for this file.', 'syntaxStyles' => '', 'headingsAnnotated' => true];

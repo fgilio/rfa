@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Listeners;
 
 use App\Actions\OpenRepositoryDialogAction;
+use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveProjectByIdAction;
 use App\Actions\ScanDirectoryDialogAction;
 use Illuminate\Support\Facades\Cache;
@@ -24,6 +25,10 @@ final readonly class HandleMenuItemClicked
     public function handle(MenuItemClicked $event): void
     {
         $id = $event->item['id'] ?? null;
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('menu.clicked', [
+            'id' => $id,
+        ]);
 
         match ($id) {
             'open-repo' => $this->handleOpenRepo(),
@@ -50,6 +55,11 @@ final readonly class HandleMenuItemClicked
         $project = app(OpenRepositoryDialogAction::class)->handle();
 
         if ($project) {
+            app(RecordRuntimeDiagnosticAction::class)->handle('menu.open_repo.completed', [
+                'project_id' => $project->id,
+                'project_slug' => $project->slug,
+            ]);
+
             Window::get('main')->url(route('review-page', ['slug' => $project->slug]));
         }
     }
@@ -69,6 +79,12 @@ final readonly class HandleMenuItemClicked
         }
 
         if ($project) {
+            app(RecordRuntimeDiagnosticAction::class)->handle('menu.show_context.completed', [
+                'project_id' => $project->id,
+                'project_slug' => $project->slug,
+                'used_cached_project' => is_int($cachedId),
+            ]);
+
             Window::get('main')->url(route('context-page', ['slug' => $project->slug]));
         }
     }

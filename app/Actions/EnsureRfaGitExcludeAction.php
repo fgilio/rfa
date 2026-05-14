@@ -49,7 +49,8 @@ final readonly class EnsureRfaGitExcludeAction
 
             File::append($excludePath, $line."\n");
         } catch (\Throwable $e) {
-            Log::warning('Failed to add .rfa/ to git exclude', [
+            Log::warning('git.exclude.append_failed', [
+                'reason' => 'exclude_append_failed',
                 'repo' => $repoPath,
                 'error' => $e->getMessage(),
             ]);
@@ -72,7 +73,8 @@ final readonly class EnsureRfaGitExcludeAction
 
             return $path;
         } catch (\Throwable $e) {
-            Log::warning('Failed to resolve git exclude path', [
+            Log::warning('git.exclude.resolve_failed', [
+                'reason' => 'exclude_path_resolve_failed',
                 'repo' => $repoPath,
                 'error' => $e->getMessage(),
             ]);

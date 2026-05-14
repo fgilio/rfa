@@ -10,6 +10,8 @@ use App\DTOs\DiffTarget;
 use App\Models\Project;
 use App\Services\GitFileContentService;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\Log;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -93,12 +95,14 @@ test('softRefresh re-reads file list and dispatches refresh-completed with zero 
     $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
 
     $callsAfterMount = $this->fileListFake->callCount;
+    $tokenAfterMount = $component->get('diffRefreshToken');
 
     $component->call('softRefresh')
         ->assertDispatched('fingerprint-reset')
         ->assertDispatched('refresh-completed', changedCount: 0);
 
     expect($this->fileListFake->callCount)->toBeGreaterThan($callsAfterMount);
+    expect($component->get('diffRefreshToken'))->toBe($tokenAfterMount + 1);
 });
 
 test('softRefresh reports changedCount when files differ', function () {
@@ -112,6 +116,28 @@ test('softRefresh reports changedCount when files differ', function () {
     $component->call('softRefresh')
         ->assertDispatched('fingerprint-reset')
         ->assertDispatched('refresh-completed', changedCount: 2);
+});
+
+test('softRefresh keeps unchanged file refresh fingerprints stable', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
+    $fingerprintAfterMount = $component->get('sourceFiles')[0]['refreshFingerprint'];
+
+    $component->call('softRefresh');
+
+    expect($component->get('sourceFiles')[0]['refreshFingerprint'])->toBe($fingerprintAfterMount);
+});
+
+test('softRefresh updates changed file refresh fingerprints', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
+    $fingerprintAfterMount = $component->get('sourceFiles')[0]['refreshFingerprint'];
+
+    $this->fileListFake->files = [
+        ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 5, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false, 'lastModified' => '2026-04-24T00:00:00Z', 'fileSize' => '100', 'mtime' => 1714000042, 'byteSize' => 100],
+    ];
+
+    $component->call('softRefresh');
+
+    expect($component->get('sourceFiles')[0]['refreshFingerprint'])->not->toBe($fingerprintAfterMount);
 });
 
 test('softRefresh preserves activeFileId across the call', function () {
@@ -153,6 +179,60 @@ test('softRefresh always renders even when no files changed', function () {
         ->assertDispatched('refresh-completed', changedCount: 0);
 
     expect($component->effects['html'] ?? null)->not->toBeNull();
+});
+
+test('softRefresh exposes the diff refresh token in rendered markup', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
+
+    $component->call('softRefresh');
+
+    $token = $component->get('diffRefreshToken');
+
+    $component->assertSeeHtml('data-diff-refresh-token="'.$token.'"');
+});
+
+test('softRefresh logs a canonical refresh event', function () {
+    Log::spy();
+
+    Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test'])
+        ->call('softRefresh');
+
+    Log::shouldHaveReceived('info')
+        ->with('review.refreshed')
+        ->once();
+
+    expect(Context::get('rfa.outcome'))->toBe('completed')
+        ->and(Context::get('rfa.project_slug'))->toBe('soft-refresh-test')
+        ->and(Context::get('rfa.target'))->toBe('HEAD..working')
+        ->and(Context::get('rfa.changed_file_ids_count'))->toBe(0)
+        ->and(Context::get('rfa.changed_file_ids_truncated'))->toBeFalse();
+});
+
+test('softRefresh logs error outcome when refresh fails', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test']);
+
+    app()->bind(SessionStateAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, ?DiffTarget $target = null): array
+        {
+            throw new RuntimeException('Refresh failed');
+        }
+
+        public function saveGlobalNote(string $repoPath, string $globalComment, ?int $projectId = null): void {}
+    });
+
+    Log::spy();
+
+    expect(fn () => $component->call('softRefresh'))->toThrow(RuntimeException::class);
+
+    Log::shouldHaveReceived('info')
+        ->with('review.refreshed')
+        ->once();
+
+    expect(Context::get('rfa.outcome'))->toBe('error')
+        ->and(Context::get('rfa.error_class'))->toBe(RuntimeException::class)
+        ->and(Context::get('rfa.file_count_after'))->toBeNull()
+        ->and(Context::get('rfa.changed_count'))->toBeNull();
 });
 
 /**

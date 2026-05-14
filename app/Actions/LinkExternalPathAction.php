@@ -14,10 +14,11 @@ final readonly class LinkExternalPathAction
     ) {}
 
     /**
-     * Append an external directory link to a project. Idempotent on the
-     * canonical path: the same directory is never linked twice. Returns the
-     * project's updated `external_paths` value, or null if the project does
-     * not exist or the path is not a directory.
+     * Append an external path link to a project. The path may be a directory
+     * (whose contents are walked) or a single file (mounted as one entry).
+     * Idempotent on the canonical path: the same path is never linked twice.
+     * Returns the project's updated `external_paths` value, or null if the
+     * project does not exist or the path is neither a file nor a directory.
      *
      * @return list<array{label: string, path: string}>|null
      */
@@ -53,7 +54,7 @@ final readonly class LinkExternalPathAction
         }
 
         $real = realpath($path);
-        if ($real === false || ! is_dir($real)) {
+        if ($real === false || (! is_dir($real) && ! is_file($real))) {
             return null;
         }
 

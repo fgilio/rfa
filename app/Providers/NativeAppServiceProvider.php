@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Actions\OpenProjectFromPathAction;
+use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\ZoomWindowAction;
 use App\Console\Benchmark\BenchmarkIsolation;
@@ -16,6 +17,7 @@ use App\Listeners\RegisterZoomGlobalShortcuts;
 use App\Listeners\UnregisterZoomGlobalShortcuts;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -51,6 +53,14 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         $this->createMenu();
         $this->createWindow();
         $this->processInbox();
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('app.boot', [
+            'native' => (bool) config('nativephp-internal.running'),
+            'debug' => (bool) config('app.debug'),
+            'version' => config('nativephp.version'),
+            'sapi' => PHP_SAPI,
+            'entry' => basename((string) ($_SERVER['argv'][0] ?? 'unknown')),
+        ]);
     }
 
     private function registerNativeEventListeners(): void
@@ -61,6 +71,10 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         Event::listen(WindowBlurred::class, UnregisterZoomGlobalShortcuts::class);
         Event::listen(ZoomShortcutPressed::class, HandleZoomShortcutPressed::class);
         Event::listen(WindowClosed::class, function (WindowClosed $event) {
+            app(RecordRuntimeDiagnosticAction::class)->handle('window.closed', [
+                'id' => $event->id,
+            ]);
+
             if ($event->id === 'main') {
                 UnregisterZoomGlobalShortcuts::unregister();
                 App::quit();
@@ -76,7 +90,10 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         });
 
         Event::listen(UpdateAvailable::class, function (UpdateAvailable $event) {
-            Log::info('Update available', ['version' => $event->version]);
+            Context::flush();
+            Context::add('rfa.update_version', $event->version);
+            Context::add('rfa.outcome', 'completed');
+            Log::info('updater.available');
 
             $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
             Cache::put('native-update-state', [
@@ -108,7 +125,10 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         });
 
         Event::listen(UpdateDownloaded::class, function (UpdateDownloaded $event) {
-            Log::info('Update downloaded', ['version' => $event->version]);
+            Context::flush();
+            Context::add('rfa.update_version', $event->version);
+            Context::add('rfa.outcome', 'completed');
+            Log::info('updater.downloaded');
 
             $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
             Cache::put('native-update-state', [
@@ -125,7 +145,14 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         });
 
         Event::listen(UpdateError::class, function (UpdateError $event) {
-            Log::error('Auto-update error', ['message' => $event->message, 'stack' => $event->stack]);
+            Context::flush();
+            Context::add('rfa.outcome', 'error');
+            Context::add('rfa.reason', 'updater_error');
+            Log::error('updater.failed', [
+                'reason' => 'updater_error',
+                'message' => $event->message,
+                'stack' => $event->stack,
+            ]);
             Cache::put('native-update-state', ['status' => 'error'], now()->addMinutes(5));
             Notification::new()
                 ->title('Update Error')
@@ -252,6 +279,13 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         }
 
         Window::get('main')->url(route($routeName, ['slug' => $project->slug]));
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('inbox.opened', [
+            'route' => $routeName,
+            'project_id' => $project->id,
+            'project_slug' => $project->slug,
+            'path_hash' => hash('xxh128', $path),
+        ]);
     }
 
     /**

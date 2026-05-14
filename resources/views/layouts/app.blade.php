@@ -3,9 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>rfa - Code Review</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png">
+    <script>
+        window.rfaDiagnosticsConfig = {
+            enabled: @js((bool) config('rfa.diagnostics.enabled')),
+            endpoint: '/api/diagnostics/browser',
+            sampleIntervalMs: @js((int) config('rfa.diagnostics.browser_sample_interval_ms')),
+            processSampleIntervalMs: @js((int) config('rfa.diagnostics.process_sample_interval_ms')),
+        };
+    </script>
+    <script src="/js/runtime-diagnostics.js"></script>
     <script src="/js/tailwind.js"></script>
     <script src="/js/settings-store.js"></script>
     <script src="/js/overlays-store.js"></script>

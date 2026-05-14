@@ -79,8 +79,12 @@ final readonly class ResolveBranchBaseAction
                 'log', '--format=%H', $from.'..'.$to,
             ]);
         } catch (GitCommandException $e) {
-            Log::warning('Failed to list commits in range', [
-                'repo' => $repoPath, 'from' => $from, 'to' => $to, 'error' => $e->getMessage(),
+            Log::warning('git.commit_range.list_failed', [
+                'reason' => 'commit_range_list_failed',
+                'repo' => $repoPath,
+                'from' => $from,
+                'to' => $to,
+                'error' => $e->getMessage(),
             ]);
 
             return [];

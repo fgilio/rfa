@@ -114,3 +114,61 @@ test('benchmark command does not delete app projects or review sessions', functi
     expect(ReviewSession::query()->count())->toBe(1);
     expect(ReviewSession::query()->value('global_comment'))->toBe('Keep this session');
 });
+
+test('benchmark command json includes speed and memory metrics', function () {
+    Artisan::call('rfa:benchmark-perf', [
+        '--json' => true,
+        '--samples' => 1,
+        '--warmup-samples' => 0,
+        '--rounds' => 1,
+        '--warmup-rounds' => 0,
+    ]);
+
+    $report = json_decode(Artisan::output(), true);
+    $firstResult = collect($report['results'])->first();
+
+    expect($firstResult)->toHaveKeys([
+        'median_ms',
+        'samples_ms',
+        'median_peak_mb',
+        'samples_peak_mb',
+        'median_retained_mb',
+        'samples_retained_mb',
+    ])
+        ->and($report['config'])->toHaveKeys(['max_regression', 'max_memory_regression', 'max_retained_memory_regression'])
+        ->and($firstResult['median_ms'])->toBeNumeric()->toBeGreaterThan(0)
+        ->and($firstResult['median_peak_mb'])->toBeNumeric()->toBeGreaterThanOrEqual(0);
+});
+
+test('benchmark compare fails retained memory regressions', function () {
+    $snapshotPath = tempnam(sys_get_temp_dir(), 'rfa-perf-snapshot-');
+
+    if ($snapshotPath === false) {
+        throw new RuntimeException('Unable to allocate benchmark snapshot path.');
+    }
+
+    file_put_contents($snapshotPath, json_encode([
+        'generated_at' => now()->toIso8601String(),
+        'results' => [
+            'diff-small' => [
+                'median_ms' => 1_000_000.0,
+                'median_peak_mb' => 1_000_000.0,
+                'median_retained_mb' => 1.0,
+            ],
+        ],
+    ], JSON_THROW_ON_ERROR));
+
+    $this->artisan('rfa:benchmark-perf', [
+        '--compare' => $snapshotPath,
+        '--samples' => 1,
+        '--warmup-samples' => 0,
+        '--rounds' => 1,
+        '--warmup-rounds' => 0,
+        '--max-regression' => 1_000_000,
+        '--max-memory-regression' => 1_000_000,
+        '--max-retained-memory-regression' => -1_000,
+        '--min-absolute-retained-memory-mb' => -1_000,
+    ])->assertExitCode(1);
+
+    @unlink($snapshotPath);
+});

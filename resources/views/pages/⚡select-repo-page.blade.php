@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\ListProjectsAction;
+use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\RemoveProjectAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Concerns\InteractsWithRemoteLinks;
@@ -42,6 +43,12 @@ new #[Layout('layouts.app')] class extends Component
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title('rfa');
         }
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('page.select_repo.mounted', [
+            'total_projects' => $this->totalProjects,
+            'match_count' => $this->matchCount,
+            'sort_by' => $this->sortBy,
+        ]);
     }
 
     public function updatedSearch(): void

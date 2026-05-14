@@ -30,14 +30,21 @@ final class PerfScenarioRunner
     ) {}
 
     /**
-     * @return array<string, float>
+     * @return array<string, array{median_ms: float, median_peak_mb: float, median_retained_mb: float}>
      */
     public function measureAll(int $rounds = 7, int $warmupRounds = 2): array
     {
         $results = [];
+        $diagnosticsEnabled = config('rfa.diagnostics.enabled');
 
-        foreach ($this->scenarios() as $name => $scenario) {
-            $results[$name] = $this->measureScenario($scenario, $rounds, $warmupRounds);
+        config(['rfa.diagnostics.enabled' => false]);
+
+        try {
+            foreach ($this->scenarios() as $name => $scenario) {
+                $results[$name] = $this->measureScenario($scenario, $rounds, $warmupRounds);
+            }
+        } finally {
+            config(['rfa.diagnostics.enabled' => $diagnosticsEnabled]);
         }
 
         return $results;
@@ -52,61 +59,123 @@ final class PerfScenarioRunner
     }
 
     /**
-     * @return array<string, callable(): float>
+     * @return array<string, callable(): void>
      */
     private function scenarios(): array
     {
         return [
-            'diff-small' => fn (): float => $this->measureDiffFileRender(
-                DiffFixtureFactory::fileEntry('src/Small.php', 'modified', 2, 1),
-                DiffFixtureFactory::diffData(hunks: 1, linesPerHunk: 10, path: 'src/Small.php'),
-            ),
-            'diff-large' => fn (): float => $this->measureDiffFileRender(
-                DiffFixtureFactory::fileEntry('src/Large.php', 'modified', 60, 40),
-                DiffFixtureFactory::diffData(hunks: 5, linesPerHunk: 60, path: 'src/Large.php'),
-            ),
-            'diff-with-comments' => function (): float {
+            'diff-small' => function (): void {
+                $this->renderDiffFile(
+                    DiffFixtureFactory::fileEntry('src/Small.php', 'modified', 2, 1),
+                    DiffFixtureFactory::diffData(hunks: 1, linesPerHunk: 10, path: 'src/Small.php'),
+                );
+            },
+            'diff-large' => function (): void {
+                $this->renderDiffFile(
+                    DiffFixtureFactory::fileEntry('src/Large.php', 'modified', 60, 40),
+                    DiffFixtureFactory::diffData(hunks: 5, linesPerHunk: 60, path: 'src/Large.php'),
+                );
+            },
+            'diff-with-comments' => function (): void {
                 $file = DiffFixtureFactory::fileEntry('src/Commented.php', 'modified', 15, 8);
 
-                return $this->measureDiffFileRender(
+                $this->renderDiffFile(
                     $file,
                     DiffFixtureFactory::diffData(hunks: 2, linesPerHunk: 30, path: 'src/Commented.php'),
                     DiffFixtureFactory::comments($file['id'], 10),
                 );
             },
-            'review-page-20-files' => fn (): float => $this->measureReviewPageRender(20),
-            'review-page-50-files' => fn (): float => $this->measureReviewPageRender(50),
-            'review-page-100-files' => fn (): float => $this->measureReviewPageRender(100),
-            'flux-500-mixed' => fn (): float => $this->measureBladeRender(
-                '@for($i = 0; $i < $count; $i++) <flux:badge size="sm">Badge {{ $i }}</flux:badge> <flux:icon name="check" variant="mini" /> <flux:text>Text {{ $i }}</flux:text> @endfor',
-                ['count' => 500],
-            ),
-            'flux-2000-mixed' => fn (): float => $this->measureBladeRender(
-                '@for($i = 0; $i < $count; $i++) <flux:badge size="sm">Badge {{ $i }}</flux:badge> <flux:icon name="check" variant="mini" /> <flux:text>Text {{ $i }}</flux:text> @endfor',
-                ['count' => 2000],
-            ),
-            'flux-500-nested' => fn (): float => $this->measureBladeRender(
-                '@for($i = 0; $i < $count; $i++) <flux:tooltip content="Tooltip {{ $i }}"><flux:button size="sm"><flux:icon name="star" variant="mini" /> Action {{ $i }}</flux:button></flux:tooltip> @endfor',
-                ['count' => 500],
-            ),
+            'review-page-20-files' => function (): void {
+                $this->renderReviewPage(20);
+            },
+            'review-page-50-files' => function (): void {
+                $this->renderReviewPage(50);
+            },
+            'review-page-100-files' => function (): void {
+                $this->renderReviewPage(100);
+            },
+            'flux-500-mixed' => function (): void {
+                $this->renderBlade(
+                    '@for($i = 0; $i < $count; $i++) <flux:badge size="sm">Badge {{ $i }}</flux:badge> <flux:icon name="check" variant="mini" /> <flux:text>Text {{ $i }}</flux:text> @endfor',
+                    ['count' => 500],
+                );
+            },
+            'flux-2000-mixed' => function (): void {
+                $this->renderBlade(
+                    '@for($i = 0; $i < $count; $i++) <flux:badge size="sm">Badge {{ $i }}</flux:badge> <flux:icon name="check" variant="mini" /> <flux:text>Text {{ $i }}</flux:text> @endfor',
+                    ['count' => 2000],
+                );
+            },
+            'flux-500-nested' => function (): void {
+                $this->renderBlade(
+                    '@for($i = 0; $i < $count; $i++) <flux:tooltip content="Tooltip {{ $i }}"><flux:button size="sm"><flux:icon name="star" variant="mini" /> Action {{ $i }}</flux:button></flux:tooltip> @endfor',
+                    ['count' => 500],
+                );
+            },
         ];
     }
 
-    private function measureScenario(callable $scenario, int $rounds, int $warmupRounds): float
+    /**
+     * @param  callable(): void  $scenario
+     * @return array{median_ms: float, median_peak_mb: float, median_retained_mb: float}
+     */
+    private function measureScenario(callable $scenario, int $rounds, int $warmupRounds): array
     {
         for ($i = 0; $i < $warmupRounds; $i++) {
             $scenario();
         }
 
-        $measurements = [];
+        $milliseconds = [];
+        $peakMegabytes = [];
+        $retainedMegabytes = [];
 
         for ($i = 0; $i < $rounds; $i++) {
-            $measurements[] = $scenario();
+            $measurement = $this->measureRound($scenario);
+
+            $milliseconds[] = $measurement['ms'];
+            $peakMegabytes[] = $measurement['peak_mb'];
+            $retainedMegabytes[] = $measurement['retained_mb'];
         }
 
-        return PerfBenchmarkStatistics::median(
-            PerfBenchmarkStatistics::filterOutliers($measurements)
-        );
+        return [
+            'median_ms' => round(PerfBenchmarkStatistics::median(
+                PerfBenchmarkStatistics::filterOutliers($milliseconds),
+            ), 3),
+            'median_peak_mb' => round(PerfBenchmarkStatistics::median(
+                PerfBenchmarkStatistics::filterOutliers($peakMegabytes),
+            ), 3),
+            'median_retained_mb' => round(PerfBenchmarkStatistics::median(
+                PerfBenchmarkStatistics::filterOutliers($retainedMegabytes),
+            ), 3),
+        ];
+    }
+
+    /**
+     * @param  callable(): void  $scenario
+     * @return array{ms: float, peak_mb: float, retained_mb: float}
+     */
+    private function measureRound(callable $scenario): array
+    {
+        gc_collect_cycles();
+
+        if (function_exists('memory_reset_peak_usage')) {
+            memory_reset_peak_usage();
+        }
+
+        $startingMemory = memory_get_usage(true);
+        $startedAt = hrtime(true);
+
+        $scenario();
+
+        $durationMs = (hrtime(true) - $startedAt) / 1_000_000;
+        $peakMemory = max(0, memory_get_peak_usage(true) - $startingMemory);
+        $retainedMemory = memory_get_usage(true) - $startingMemory;
+
+        return [
+            'ms' => round($durationMs, 3),
+            'peak_mb' => round($peakMemory / 1024 / 1024, 3),
+            'retained_mb' => round($retainedMemory / 1024 / 1024, 3),
+        ];
     }
 
     /**
@@ -114,7 +183,7 @@ final class PerfScenarioRunner
      * @param  DiffData  $diffData
      * @param  list<CommentData>  $comments
      */
-    private function measureDiffFileRender(array $file, array $diffData, array $comments = []): float
+    private function renderDiffFile(array $file, array $diffData, array $comments = []): void
     {
         $this->resetState();
 
@@ -149,8 +218,6 @@ final class PerfScenarioRunner
         $cacheKey = DiffCacheKey::for($project->id, $file['id']);
         Cache::put($cacheKey, $diffData, 3600);
 
-        $start = hrtime(true);
-
         // Mount-only renders the loading skeleton; `loadFileDiff` triggers the actual diff-grid + syntax-highlight work.
         Livewire::test('diff-file', [
             'file' => $file,
@@ -158,11 +225,9 @@ final class PerfScenarioRunner
             'projectId' => $project->id,
             'fileComments' => $comments,
         ])->call('loadFileDiff');
-
-        return (hrtime(true) - $start) / 1_000_000;
     }
 
-    private function measureReviewPageRender(int $fileCount): float
+    private function renderReviewPage(int $fileCount): void
     {
         $this->resetState();
 
@@ -236,22 +301,15 @@ final class PerfScenarioRunner
             }
         });
 
-        $start = hrtime(true);
-
         Livewire::test('pages::review-page', ['slug' => 'perf-review']);
-
-        return (hrtime(true) - $start) / 1_000_000;
     }
 
     /** @param  array<string, int>  $data */
-    private function measureBladeRender(string $template, array $data): float
+    private function renderBlade(string $template, array $data): void
     {
         $this->resetState();
 
-        $start = hrtime(true);
         Blade::render($template, $data);
-
-        return (hrtime(true) - $start) / 1_000_000;
     }
 
     private function resetState(): void
