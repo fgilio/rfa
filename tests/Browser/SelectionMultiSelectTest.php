@@ -72,6 +72,26 @@ test('clicking Apply with a multi-commit selection navigates to a range URL', fu
         ->toContain($this->commitHashes[1]);
 });
 
+test('shift-clicking a commit after WT is selected forms a WT + commits[0..N] range', function () {
+    // Opening on the working-tree URL auto-rehydrates WT as selected, so the
+    // subsequent shift+click must extend WT + commits[0..N] without the user
+    // re-ticking WT first.
+    $page = $this->visitAndLoad($this->projectUrl());
+    $page->page()->getByLabel('Open selection drawer')->click();
+    $page->page()->getByText('Add greet function')->waitFor();
+
+    // Sanity: the selection badge shows "WT" on its own when only the working
+    // tree is ticked (see `selectionBadge` getter in branch-explorer.js).
+    $page->page()->getByText('WT', true)->waitFor();
+
+    $target = commitRow($page, 'Add greet function'); // bottom commit in the fixture
+    $target->hover();
+    $target->getByTestId('commit-select-toggle')->click(['modifiers' => ['Shift']]);
+
+    // 3-commit fixture; shift-click on the oldest pulls all three + WT.
+    $page->page()->getByText('WT+3')->waitFor();
+});
+
 test('clearing the selection removes the selected chip', function () {
     $page = $this->visitAndLoad($this->projectUrl());
     $page->page()->getByLabel('Open selection drawer')->click();

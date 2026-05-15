@@ -18,6 +18,7 @@ function makeAlpine({ commits = [], branchBase = null, currentBranch = 'main' } 
 }
 
 const noopEvent = () => ({ stopPropagation: () => {}, shiftKey: false });
+const shiftEvent = () => ({ stopPropagation: () => {}, shiftKey: true });
 
 // Newest-first commit list. Index 0 = tip.
 const commits = [
@@ -26,6 +27,27 @@ const commits = [
     { hash: 'ccc3' }, // 2
     { hash: 'ddd4' }, // 3 = oldest
 ];
+
+// Shorter, semantically-named fixture for state-machine tests that don't
+// care about specific shas.
+const shortCommits = [
+    { hash: 'tip' }, // 0 = newest
+    { hash: 'mid' }, // 1
+    { hash: 'old' }, // 2 = oldest
+];
+
+function makeForView({ activeDiffFrom = 'HEAD', activeCommitHash = null, branch = 'main', commits = [], branchBase = null } = {}) {
+    const a = createBranchExplorer({
+        currentBranch: 'main',
+        activeCommitHash,
+        activeDiffFrom,
+        projectSlug: 'p',
+        branches: { local: [], remote: [] },
+    });
+    a.$wire = { commits, branchBase };
+    a.selectedBranch = branch;
+    return a;
+}
 
 const slug = 'myproj';
 
@@ -265,18 +287,12 @@ describe('isSinceBaseExactly', () => {
 });
 
 describe('working-tree tip anchor', () => {
-    const commits = [
-        { hash: 'tip' }, // 0 = newest
-        { hash: 'mid' }, // 1
-        { hash: 'old' }, // 2 = oldest
-    ];
-
     afterEach(() => {
         delete window.Flux;
     });
 
     it('auto-unticks working tree when the tip commit is unticked', () => {
-        const a = makeAlpine({ commits });
+        const a = makeAlpine({ commits: shortCommits });
         a.workingTreeSelected = true;
         a.selectedHashes = ['tip', 'mid', 'old'];
 
@@ -287,7 +303,7 @@ describe('working-tree tip anchor', () => {
     });
 
     it('keeps working tree selected when a non-tip commit is unticked', () => {
-        const a = makeAlpine({ commits });
+        const a = makeAlpine({ commits: shortCommits });
         a.workingTreeSelected = true;
         a.selectedHashes = ['tip', 'mid', 'old'];
 
@@ -298,7 +314,7 @@ describe('working-tree tip anchor', () => {
     });
 
     it('does not affect a working-tree-only selection', () => {
-        const a = makeAlpine({ commits });
+        const a = makeAlpine({ commits: shortCommits });
         a.workingTreeSelected = true;
         a.selectedHashes = [];
 
@@ -315,7 +331,7 @@ describe('working-tree tip anchor', () => {
         const toast = vi.fn();
         window.Flux = { toast };
 
-        const a = makeAlpine({ commits });
+        const a = makeAlpine({ commits: shortCommits });
         a.workingTreeSelected = true;
         a.selectedHashes = ['tip', 'mid'];
 
@@ -330,7 +346,7 @@ describe('working-tree tip anchor', () => {
         const toast = vi.fn();
         window.Flux = { toast };
 
-        const a = makeAlpine({ commits });
+        const a = makeAlpine({ commits: shortCommits });
         a.workingTreeSelected = true;
         a.selectedHashes = ['tip'];
 
@@ -342,22 +358,247 @@ describe('working-tree tip anchor', () => {
     });
 });
 
-describe('_rehydrateSelectionFromActiveView', () => {
-    function makeFor({ activeDiffFrom = 'HEAD', activeCommitHash = null, branch = 'main', commits = [], branchBase = null } = {}) {
-        const a = createBranchExplorer({
-            currentBranch: 'main',
-            activeCommitHash,
-            activeDiffFrom,
-            projectSlug: 'p',
-            branches: { local: [], remote: [] },
-        });
-        a.$wire = { commits, branchBase };
-        a.selectedBranch = branch;
-        return a;
-    }
+describe('shift+click range — WT-then-commit ordering', () => {
+    afterEach(() => {
+        delete window.Flux;
+    });
 
+    it('WT-first then shift+click commit N selects WT + commits[0..N]', () => {
+        const a = makeAlpine({ commits: shortCommits });
+
+        a.toggleWorkingTreeSelection(noopEvent());
+        a.toggleSelection('mid', 1, shiftEvent());
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual(['tip', 'mid']);
+    });
+
+    it('WT-first then shift+click the tip selects WT + [tip]', () => {
+        const a = makeAlpine({ commits: shortCommits });
+
+        a.toggleWorkingTreeSelection(noopEvent());
+        a.toggleSelection('tip', 0, shiftEvent());
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual(['tip']);
+    });
+
+    it('WT-first then shift+click the oldest selects WT + every commit', () => {
+        const a = makeAlpine({ commits: shortCommits });
+
+        a.toggleWorkingTreeSelection(noopEvent());
+        a.toggleSelection('old', 2, shiftEvent());
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual(['tip', 'mid', 'old']);
+    });
+
+    it('does not trigger WT auto-untick - the range always includes the tip', () => {
+        const toast = vi.fn();
+        window.Flux = { toast };
+
+        const a = makeAlpine({ commits: shortCommits });
+        a.toggleWorkingTreeSelection(noopEvent());
+        a.toggleSelection('old', 2, shiftEvent());
+
+        // _enforceWorkingTreeTipAnchor is not called from the shift branch,
+        // but even if it were, the range commits[0..2] includes the tip so
+        // the invariant holds. Either way: no toast, WT stays.
+        expect(toast).not.toHaveBeenCalled();
+        expect(a.workingTreeSelected).toBe(true);
+    });
+
+    it('keeps WT as the anchor across consecutive shift+clicks', () => {
+        const a = makeAlpine({ commits: shortCommits });
+
+        a.toggleWorkingTreeSelection(noopEvent());
+        a.toggleSelection('mid', 1, shiftEvent());
+        // Second shift+click on a closer commit should still range from WT,
+        // not from `mid`. Anchor must not have moved.
+        a.toggleSelection('old', 2, shiftEvent());
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual(['tip', 'mid', 'old']);
+        expect(a.lastSelectionAnchorIsWT).toBe(true);
+        expect(a.lastSelectionIndex).toBe(-1);
+    });
+
+    it('preserves WT-anchor selection when re-shifting backwards (Set merge keeps prior hashes)', () => {
+        const a = makeAlpine({ commits: shortCommits });
+
+        a.toggleWorkingTreeSelection(noopEvent());
+        a.toggleSelection('old', 2, shiftEvent());
+        // Re-shift to a closer commit: range shrinks, but Set merge means
+        // selection only grows. Matches existing commit-anchor behavior.
+        a.toggleSelection('mid', 1, shiftEvent());
+
+        expect(a.selectedHashes).toEqual(['tip', 'mid', 'old']);
+    });
+
+    it('plain click on a commit after WT clears the WT anchor', () => {
+        const a = makeAlpine({ commits: shortCommits });
+
+        a.toggleWorkingTreeSelection(noopEvent());
+        // Plain (non-shift) click on a commit advances the anchor to that
+        // commit. Subsequent shift+click must use the commit anchor, not WT.
+        a.toggleSelection('mid', 1, noopEvent());
+        a.toggleSelection('old', 2, shiftEvent());
+
+        expect(a.lastSelectionAnchorIsWT).toBe(false);
+        expect(a.lastSelectionIndex).toBe(1);
+        // Range mid..old, NOT WT + commits[0..2]:
+        expect(a.selectedHashes.sort()).toEqual(['mid', 'old']);
+    });
+
+    it('unticking WT (single click) keeps WT as the anchor, so shift+click re-ticks WT', () => {
+        const a = makeAlpine({ commits: shortCommits });
+
+        a.toggleWorkingTreeSelection(noopEvent()); // tick WT
+        a.toggleWorkingTreeSelection(noopEvent()); // untick WT
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.lastSelectionAnchorIsWT).toBe(true);
+
+        // Shift+click commit after untick: WT anchor still active, so range
+        // re-ticks WT and extends. Mirrors commit-side "untick B, shift+click
+        // C re-ticks B and adds C".
+        a.toggleSelection('mid', 1, shiftEvent());
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual(['tip', 'mid']);
+    });
+});
+
+describe('shift+click range — commit-then-WT ordering (regression)', () => {
+    it('commit anchor + shift+click WT extends from WT through commits[0..lastIdx]', () => {
+        const a = makeAlpine({ commits: shortCommits });
+
+        a.toggleSelection('mid', 1, noopEvent()); // anchor = idx 1
+        a.toggleWorkingTreeSelection(shiftEvent());
+
+        expect(a.workingTreeSelected).toBe(true);
+        // Range from WT down through idx 1 = [tip, mid].
+        expect(a.selectedHashes.sort()).toEqual(['mid', 'tip']);
+    });
+
+    it('commit anchor takes precedence over WT-anchor flag when shift+click WT fires', () => {
+        const a = makeAlpine({ commits: shortCommits });
+
+        // Click WT (sets WT anchor), then plain-click commit (clears WT anchor,
+        // sets commit anchor), then shift+click WT.
+        a.toggleWorkingTreeSelection(noopEvent());
+        a.toggleSelection('mid', 1, noopEvent());
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.lastSelectionAnchorIsWT).toBe(false);
+        expect(a.lastSelectionIndex).toBe(1);
+
+        a.toggleWorkingTreeSelection(shiftEvent());
+
+        // Should use commit anchor (idx 1), pulling in tip..mid + WT.
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes.sort()).toEqual(['mid', 'tip']);
+    });
+});
+
+describe('shift+click anchor — clear/since-base/rehydrate resets', () => {
+    it('clearSelection wipes the WT anchor', () => {
+        const a = makeAlpine({ commits: shortCommits });
+        a.toggleWorkingTreeSelection(noopEvent());
+        expect(a.lastSelectionAnchorIsWT).toBe(true);
+
+        a.clearSelection();
+
+        expect(a.lastSelectionAnchorIsWT).toBe(false);
+        expect(a.lastSelectionIndex).toBe(-1);
+    });
+
+    it('selectSinceBase does NOT seed WT as the anchor', () => {
+        const branchBase = {
+            state: BranchBaseState.Ready,
+            baseSha: 'base',
+            hashesInRange: ['tip', 'mid'],
+        };
+        const a = makeAlpine({ commits: shortCommits, branchBase });
+
+        a.selectSinceBase();
+
+        // Bulk action, not a user click on WT. A subsequent shift+click on a
+        // commit should NOT extend a WT range from a stale bulk-fill.
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.lastSelectionAnchorIsWT).toBe(false);
+        expect(a.lastSelectionIndex).toBe(-1);
+    });
+
+    it('after selectSinceBase, shift+click commit is a noop (no anchor to extend from)', () => {
+        const branchBase = {
+            state: BranchBaseState.Ready,
+            baseSha: 'base',
+            hashesInRange: ['tip', 'mid'],
+        };
+        const a = makeAlpine({ commits: shortCommits, branchBase });
+
+        a.selectSinceBase();
+        // No anchor: shift branch short-circuits to single-toggle.
+        a.toggleSelection('old', 2, shiftEvent());
+
+        // 'old' was added as a single toggle; WT got auto-unticked because the
+        // tip-anchor invariant fires for the single-toggle branch.
+        expect(a.selectedHashes.sort()).toEqual(['mid', 'old', 'tip']);
+        expect(a.lastSelectionAnchorIsWT).toBe(false);
+        expect(a.lastSelectionIndex).toBe(2);
+    });
+});
+
+describe('shift+click after rehydrate', () => {
+    it('rehydrate on a WT-only view seeds WT as the shift anchor', () => {
+        const a = makeForView({ commits });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.lastSelectionAnchorIsWT).toBe(true);
+
+        a.toggleSelection('bbb2', 1, shiftEvent());
+
+        expect(a.selectedHashes).toEqual(['aaa1', 'bbb2']);
+        expect(a.workingTreeSelected).toBe(true);
+    });
+
+    it('rehydrate on a /rw view seeds WT as the shift anchor and preserves the existing selection', () => {
+        const a = makeForView({
+            activeDiffFrom: 'ccc3',
+            commits,
+            branchBase: { state: BranchBaseState.Ready, baseSha: 'other', hashesInRange: [] },
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual(['aaa1', 'bbb2']);
+        expect(a.lastSelectionAnchorIsWT).toBe(true);
+
+        // Shift+click on a commit further down merges new hashes into the
+        // existing rehydrated selection (Set semantics).
+        a.toggleSelection('ccc3', 2, shiftEvent());
+
+        expect(a.selectedHashes.sort()).toEqual(['aaa1', 'bbb2', 'ccc3']);
+        expect(a.workingTreeSelected).toBe(true);
+    });
+
+    it('rehydrate on a commit view does NOT seed WT as anchor', () => {
+        const a = makeForView({
+            activeCommitHash: 'bbb2',
+            activeDiffFrom: 'ccc3',
+            commits,
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.lastSelectionAnchorIsWT).toBe(false);
+        expect(a.lastSelectionIndex).toBe(-1);
+    });
+});
+
+describe('_rehydrateSelectionFromActiveView', () => {
     it('does nothing when the picker is not on the current branch', () => {
-        const a = makeFor({ branch: 'feature/x', activeCommitHash: 'aaa1' });
+        const a = makeForView({ branch: 'feature/x', activeCommitHash: 'aaa1' });
         a._rehydrateSelectionFromActiveView();
 
         expect(a.selectedHashes).toEqual([]);
@@ -365,7 +606,7 @@ describe('_rehydrateSelectionFromActiveView', () => {
     });
 
     it('selects working tree only when viewing /p/{slug}', () => {
-        const a = makeFor();
+        const a = makeForView();
         a._rehydrateSelectionFromActiveView();
 
         expect(a.workingTreeSelected).toBe(true);
@@ -373,7 +614,7 @@ describe('_rehydrateSelectionFromActiveView', () => {
     });
 
     it('selects WT + base..HEAD hashes from branchBase when viewing /rw/{baseSha}', () => {
-        const a = makeFor({
+        const a = makeForView({
             activeDiffFrom: 'base-sha',
             commits,
             branchBase: { state: BranchBaseState.Ready, baseSha: 'base-sha', hashesInRange: ['aaa1', 'bbb2'] },
@@ -385,7 +626,7 @@ describe('_rehydrateSelectionFromActiveView', () => {
     });
 
     it('falls back to slicing loaded commits for /rw/{sha} when sha is not the configured base', () => {
-        const a = makeFor({
+        const a = makeForView({
             activeDiffFrom: 'ccc3',
             commits,
             branchBase: { state: BranchBaseState.Ready, baseSha: 'other', hashesInRange: [] },
@@ -397,7 +638,7 @@ describe('_rehydrateSelectionFromActiveView', () => {
     });
 
     it('selects just the tip for a single commit view (/c/{hash})', () => {
-        const a = makeFor({
+        const a = makeForView({
             activeCommitHash: 'bbb2',
             activeDiffFrom: 'ccc3', // parent of bbb2 in this fixture
             commits,
@@ -409,7 +650,7 @@ describe('_rehydrateSelectionFromActiveView', () => {
     });
 
     it('selects every commit in (from, to] for an explicit range view (/r/{from}..{to})', () => {
-        const a = makeFor({
+        const a = makeForView({
             activeCommitHash: 'aaa1',
             activeDiffFrom: 'ddd4',
             commits,
@@ -421,7 +662,7 @@ describe('_rehydrateSelectionFromActiveView', () => {
     });
 
     it('falls back to [tip] when the range endpoints are not in the loaded commits', () => {
-        const a = makeFor({
+        const a = makeForView({
             activeCommitHash: 'unknown-tip',
             activeDiffFrom: 'unknown-from',
             commits,

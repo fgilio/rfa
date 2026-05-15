@@ -139,7 +139,14 @@
             projectSlug,
             selectedHashes: [],
             workingTreeSelected: false,
+            // Shift-click anchor. At most one is active at a time:
+            // `lastSelectionIndex >= 0` -> commit at that index; or
+            // `lastSelectionAnchorIsWT` -> the working-tree row. Both can be
+            // inactive (after init, `clearSelection`, `selectSinceBase`, or
+            // commit-view rehydrate); never both active. Every non-shift click
+            // resets whichever isn't being set.
             lastSelectionIndex: -1,
+            lastSelectionAnchorIsWT: false,
             _loadId: 0, // Stale-response guard: incremented before each async load, checked after
 
             get isWorkingTreeActive() {
@@ -366,14 +373,20 @@
             toggleSelection(hash, idx, event) {
                 event.stopPropagation();
 
-                if (event.shiftKey && this.lastSelectionIndex >= 0) {
-                    const start = Math.min(this.lastSelectionIndex, idx);
-                    const end = Math.max(this.lastSelectionIndex, idx);
-                    const rangeHashes = this.$wire.commits.slice(start, end + 1).map(c => c.hash);
-                    const merged = new Set(this.selectedHashes);
-                    rangeHashes.forEach(h => merged.add(h));
-                    this.selectedHashes = [...merged];
-                    return;
+                if (event.shiftKey) {
+                    if (this.lastSelectionAnchorIsWT) {
+                        this._mergeRangeIntoSelection(0, idx);
+                        this.workingTreeSelected = true;
+                        return;
+                    }
+
+                    if (this.lastSelectionIndex >= 0) {
+                        this._mergeRangeIntoSelection(
+                            Math.min(this.lastSelectionIndex, idx),
+                            Math.max(this.lastSelectionIndex, idx),
+                        );
+                        return;
+                    }
                 }
 
                 const i = this.selectedHashes.indexOf(hash);
@@ -383,30 +396,41 @@
                     this.selectedHashes.push(hash);
                 }
                 this.lastSelectionIndex = idx;
+                this.lastSelectionAnchorIsWT = false;
                 this._enforceWorkingTreeTipAnchor();
             },
 
             toggleWorkingTreeSelection(event) {
                 event.stopPropagation();
 
-                // Shift-click with a prior commit selection extends the range from the
-                // working tree down through commit index [0..lastSelectionIndex].
-                if (event.shiftKey && this.lastSelectionIndex >= 0) {
-                    const rangeHashes = this.$wire.commits.slice(0, this.lastSelectionIndex + 1).map(c => c.hash);
-                    const merged = new Set(this.selectedHashes);
-                    rangeHashes.forEach(h => merged.add(h));
-                    this.selectedHashes = [...merged];
+                if (event.shiftKey && this.lastSelectionIndex >= 0 && !this.lastSelectionAnchorIsWT) {
+                    this._mergeRangeIntoSelection(0, this.lastSelectionIndex);
                     this.workingTreeSelected = true;
                     return;
                 }
 
                 this.workingTreeSelected = !this.workingTreeSelected;
+                // Single-click on WT seeds it as the shift anchor regardless
+                // of the resulting tick state, mirroring commit-side toggle.
+                this.lastSelectionAnchorIsWT = true;
+                this.lastSelectionIndex = -1;
+            },
+
+            /** Merge `commits[startIdx..endIdx]` (inclusive) hashes into `selectedHashes`. */
+            _mergeRangeIntoSelection(startIdx, endIdx) {
+                const commits = this.$wire.commits;
+                const merged = new Set(this.selectedHashes);
+                for (let i = startIdx; i <= endIdx; i++) {
+                    merged.add(commits[i].hash);
+                }
+                this.selectedHashes = [...merged];
             },
 
             clearSelection() {
                 this.selectedHashes = [];
                 this.workingTreeSelected = false;
                 this.lastSelectionIndex = -1;
+                this.lastSelectionAnchorIsWT = false;
             },
 
             /**
@@ -423,6 +447,8 @@
                 if (tip === null && from === 'HEAD') {
                     this.workingTreeSelected = true;
                     this.selectedHashes = [];
+                    this.lastSelectionAnchorIsWT = true;
+                    this.lastSelectionIndex = -1;
                     return;
                 }
 
@@ -432,12 +458,16 @@
                     this.selectedHashes = (base?.state === BranchBaseState.Ready && base.baseSha === from)
                         ? [...base.hashesInRange]
                         : this._hashesInRange(from, null);
+                    this.lastSelectionAnchorIsWT = true;
+                    this.lastSelectionIndex = -1;
                     return;
                 }
 
                 this.workingTreeSelected = false;
                 const slice = this._hashesInRange(from, tip);
                 this.selectedHashes = slice.length ? slice : [tip];
+                this.lastSelectionAnchorIsWT = false;
+                this.lastSelectionIndex = -1;
             },
 
             /**
@@ -504,9 +534,10 @@
 
                 this.selectedHashes = [...base.hashesInRange];
                 this.workingTreeSelected = true;
-                // Reset shift-click anchor so a subsequent shift-click on a
-                // commit doesn't extend from a stale index.
+                // since-base is a bulk action, not a user click on WT - it
+                // doesn't seed WT (or any commit) as the shift anchor.
                 this.lastSelectionIndex = -1;
+                this.lastSelectionAnchorIsWT = false;
             },
 
             // Press-and-hold on a commit's checkbox, then drag across rows to extend
@@ -548,6 +579,7 @@
                     window.removeEventListener('blur', onBlur);
                     if (!moved) return;
                     this.lastSelectionIndex = idx;
+                    this.lastSelectionAnchorIsWT = false;
                     if (!swallowClick) return;
                     // Whichever element mouseup landed on, its click fires next.
                     // Swallow it so we don't navigate into a commit or re-toggle.
