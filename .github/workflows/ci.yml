@@ -57,6 +57,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
       - run: npm ci --prefer-offline --no-audit --no-fund
+      - run: npm run build
       - run: npm test
 
   # Core suite is sharded for wall-clock speed while preserving one required
@@ -117,6 +118,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
       - run: npm ci --prefer-offline --no-audit --no-fund
+      - run: npm run build
       - name: Get Playwright version
         id: playwright-version
         run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"

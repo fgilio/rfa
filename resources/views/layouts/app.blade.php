@@ -7,6 +7,7 @@
     <title>rfa - Code Review</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png">
+    <link rel="stylesheet" href="/build/app.css">
     <script>
         window.rfaDiagnosticsConfig = {
             enabled: @js((bool) config('rfa.diagnostics.enabled')),
@@ -16,54 +17,12 @@
         };
     </script>
     <script src="/js/runtime-diagnostics.js"></script>
-    <script src="/js/tailwind.js"></script>
     <script src="/js/settings-store.js"></script>
     <script src="/js/overlays-store.js"></script>
     <script src="/js/keymap-store.js"></script>
     <script src="/js/page-search.js"></script>
     <script src="/js/session-recovery.js"></script>
     <script src="/js/smart-poll.js"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        gh: {
-                            bg: 'rgb(var(--gh-bg) / <alpha-value>)',
-                            surface: 'rgb(var(--gh-surface) / <alpha-value>)',
-                            border: 'rgb(var(--gh-border) / <alpha-value>)',
-                            text: 'rgb(var(--gh-text) / <alpha-value>)',
-                            muted: 'rgb(var(--gh-muted) / <alpha-value>)',
-                            accent: 'rgb(var(--gh-accent) / <alpha-value>)',
-                            link: 'rgb(var(--gh-link) / <alpha-value>)',
-                            green: 'rgb(var(--gh-green) / <alpha-value>)',
-                            red: 'rgb(var(--gh-red) / <alpha-value>)',
-                            draft: 'rgb(var(--gh-draft) / <alpha-value>)',
-                            attention: 'rgb(var(--gh-attention) / <alpha-value>)',
-                            'kind-claude': 'rgb(var(--gh-kind-claude) / <alpha-value>)',
-                            'kind-agents': 'rgb(var(--gh-kind-agents) / <alpha-value>)',
-                            'add-bg': 'var(--gh-add-bg)',
-                            'add-line': 'var(--gh-add-line)',
-                            'del-bg': 'var(--gh-del-bg)',
-                            'del-line': 'var(--gh-del-line)',
-                            'hunk-bg': 'var(--gh-hunk-bg)',
-                            'hover-bg': 'var(--gh-hover-bg)',
-                            'selected-bg': 'var(--gh-selected-bg)',
-                        }
-                    },
-                    fontFamily: {
-                        display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
-                        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'SF Mono', 'Menlo', 'Consolas', 'Liberation Mono', 'monospace'],
-                    },
-                    letterSpacing: {
-                        'brutal': '-0.04em',
-                        'brutal-tight': '-0.06em',
-                    }
-                }
-            }
-        }
-    </script>
     <style>
         @font-face {
             font-family: 'Space Grotesk';

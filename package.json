@@ -1,12 +1,17 @@
 {
     "private": true,
     "scripts": {
+        "build": "npm run css:build",
+        "css:build": "tailwindcss -i ./resources/css/app.css -o ./public/build/app.css --minify",
+        "css:watch": "tailwindcss -i ./resources/css/app.css -o ./public/build/app.css --watch",
         "test": "vitest run",
         "test:watch": "vitest"
     },
     "devDependencies": {
+        "@tailwindcss/cli": "^4.3.0",
         "happy-dom": "^20.9.0",
         "playwright": "^1.59.1",
+        "tailwindcss": "^4.3.0",
         "vitest": "^4.1.5"
     }
 }

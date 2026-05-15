@@ -47,12 +47,15 @@
     "scripts": {
         "setup": [
             "composer install",
+            "npm install",
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate",
+            "npm run css:build",
             "@php artisan migrate --force"
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
+            "npm run css:build",
             "php artisan serve"
         ],
         "lint": "./vendor/bin/pint",
@@ -91,6 +94,7 @@
         ],
         "native:dev": [
             "Composer\\Config::disableProcessTimeout",
+            "npm run css:build",
             "php artisan native:run --no-interaction"
         ]
     },

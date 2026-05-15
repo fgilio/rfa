@@ -34,3 +34,12 @@ test('no external resources in blade templates', function () {
 
     expect($violations)->toBeEmpty();
 });
+
+test('app layout uses compiled tailwind css instead of the browser runtime', function () {
+    $layout = file_get_contents(dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php');
+
+    expect($layout)
+        ->toContain('href="/build/app.css"')
+        ->not->toContain('/js/tailwind.js')
+        ->not->toContain('tailwind.config');
+});

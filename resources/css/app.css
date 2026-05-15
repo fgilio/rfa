@@ -1,13 +1,38 @@
 @import 'tailwindcss';
+@import '../../vendor/livewire/flux/dist/flux.css';
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
 @source '../**/*.js';
 
-@theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+@theme inline {
+    --color-gh-bg: rgb(var(--gh-bg));
+    --color-gh-surface: rgb(var(--gh-surface));
+    --color-gh-border: rgb(var(--gh-border));
+    --color-gh-text: rgb(var(--gh-text));
+    --color-gh-muted: rgb(var(--gh-muted));
+    --color-gh-accent: rgb(var(--gh-accent));
+    --color-gh-link: rgb(var(--gh-link));
+    --color-gh-green: rgb(var(--gh-green));
+    --color-gh-red: rgb(var(--gh-red));
+    --color-gh-draft: rgb(var(--gh-draft));
+    --color-gh-attention: rgb(var(--gh-attention));
+    --color-gh-kind-claude: rgb(var(--gh-kind-claude));
+    --color-gh-kind-agents: rgb(var(--gh-kind-agents));
+    --color-gh-add-bg: var(--gh-add-bg);
+    --color-gh-add-line: var(--gh-add-line);
+    --color-gh-del-bg: var(--gh-del-bg);
+    --color-gh-del-line: var(--gh-del-line);
+    --color-gh-hunk-bg: var(--gh-hunk-bg);
+    --color-gh-hover-bg: var(--gh-hover-bg);
+    --color-gh-selected-bg: var(--gh-selected-bg);
+    --font-display: 'Space Grotesk', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --tracking-brutal: -0.04em;
+    --tracking-brutal-tight: -0.06em;
 }
 
 * {
