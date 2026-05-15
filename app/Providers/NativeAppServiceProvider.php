@@ -13,8 +13,8 @@ use App\Events\ZoomShortcutPressed;
 use App\Listeners\HandleDeepLink;
 use App\Listeners\HandleMenuItemClicked;
 use App\Listeners\HandleZoomShortcutPressed;
-use App\Listeners\RegisterZoomGlobalShortcuts;
-use App\Listeners\UnregisterZoomGlobalShortcuts;
+use App\Listeners\RegisterNativeGlobalShortcuts;
+use App\Listeners\UnregisterNativeGlobalShortcuts;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
@@ -67,8 +67,8 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     {
         Event::listen(MenuItemClicked::class, HandleMenuItemClicked::class);
         Event::listen(OpenedFromURL::class, HandleDeepLink::class);
-        Event::listen(WindowFocused::class, RegisterZoomGlobalShortcuts::class);
-        Event::listen(WindowBlurred::class, UnregisterZoomGlobalShortcuts::class);
+        Event::listen(WindowFocused::class, RegisterNativeGlobalShortcuts::class);
+        Event::listen(WindowBlurred::class, UnregisterNativeGlobalShortcuts::class);
         Event::listen(ZoomShortcutPressed::class, HandleZoomShortcutPressed::class);
         Event::listen(WindowClosed::class, function (WindowClosed $event) {
             app(RecordRuntimeDiagnosticAction::class)->handle('window.closed', [
@@ -76,7 +76,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ]);
 
             if ($event->id === 'main') {
-                UnregisterZoomGlobalShortcuts::unregister();
+                UnregisterNativeGlobalShortcuts::unregister();
                 App::quit();
             }
         });
@@ -208,18 +208,16 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                     ->icon(resource_path('icons/scan-folderTemplate.png')),
             )->label('File'),
             Menu::edit(),
-            // Custom View submenu that intentionally omits `reload` and uses
-            // plain id'd labels (no role, no accelerator) for the zoom items:
+            // Custom View submenu that intentionally omits `reload`.
+            // App-level keyboard commands live in NativeShortcutRegistry:
             //
             //   - viewMenu would bind ⌘R to Electron's built-in reload, and
             //     NativePHP's menu helper strips custom accelerators from role
-            //     items so the binding can't be retargeted (⌘R is owned by the
-            //     review page's keymap store).
+            //     items so the binding cannot be retargeted.
             //   - The zoom roles' `webContentsMethod` is registered as a macOS
             //     menu accelerator on Electron 38, but the keystroke fails to
-            //     fire it - only mouse clicks do (electron/electron#19559,
-            //     #15496). Setting explicit menu accelerators doesn't help.
-            //     Keyboard zoom is owned by focus-scoped global shortcuts.
+            //     fire it. Only mouse clicks do (electron/electron#19559,
+            //     #15496). Explicit menu accelerators do not help.
             Menu::make(
                 Menu::label('Show Context Files...')
                     ->id('show-context')

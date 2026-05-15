@@ -37,6 +37,8 @@ use App\Enums\DivergenceState;
 use App\Enums\GitRef;
 use App\Enums\LastViewKind;
 use App\Enums\LastViewMode;
+use App\Events\HardReloadShortcutPressed;
+use App\Events\RefreshShortcutPressed;
 use App\Exceptions\GitCommandException;
 use App\Listeners\HandleMenuItemClicked;
 use App\Support\DiffCacheKey;
@@ -536,6 +538,18 @@ new #[Layout('layouts.app')] class extends Component
                 'changed_count' => $outcome === 'completed' ? $changedCount : null,
             ]);
         }
+    }
+
+    #[On('native:App\\Events\\RefreshShortcutPressed')]
+    public function handleNativeRefreshShortcut(string $key = RefreshShortcutPressed::KEY): void
+    {
+        $this->softRefresh();
+    }
+
+    #[On('native:App\\Events\\HardReloadShortcutPressed')]
+    public function handleNativeHardReloadShortcut(string $key = HardReloadShortcutPressed::KEY): void
+    {
+        $this->dispatch('hard-reload-requested');
     }
 
     /**
@@ -1303,6 +1317,13 @@ new #[Layout('layouts.app')] class extends Component
 <div
     data-testid="review-component"
     data-diff-refresh-token="{{ $diffRefreshToken }}"
+    @refresh-completed.window="
+        const n = $event.detail?.changedCount ?? 0;
+        Flux.toast({
+            text: n === 0 ? 'Up to date' : (n === 1 ? '1 file updated' : `${n} files updated`),
+            variant: n === 0 ? 'info' : 'success',
+        });
+    "
     x-data="{
         pendingSaves: 0,
         init() {
@@ -1686,21 +1707,16 @@ new #[Layout('layouts.app')] class extends Component
                                 getInterval: () => window.smartPoll.isFocused(document) ? 60000 : (document.hidden ? null : 300000),
                                 onTick: () => this.check(),
                             });
+                            @browser
                             $store.keymap.register('⌘R', () => this.softRefresh(), { allowInEditable: true });
                             $store.keymap.register('⌘⇧R', () => this.hardReload(), { allowInEditable: true });
+                            @endbrowser
                         },
                         destroy() {
                             if (this.stopPoll) this.stopPoll();
                         },
                     }"
                     @fingerprint-reset.window="fingerprint = null; hasChanges = false; currentCount = 0; check();"
-                    @refresh-completed.window="
-                        const n = $event.detail?.changedCount ?? 0;
-                        Flux.toast({
-                            text: n === 0 ? 'Up to date' : (n === 1 ? '1 file updated' : `${n} files updated`),
-                            variant: n === 0 ? 'info' : 'success',
-                        });
-                    "
                     class="relative flex items-center">
                         <flux:tooltip>
                             <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"

@@ -7,6 +7,8 @@ use App\Actions\ResolveProjectAction;
 use App\Actions\SessionStateAction;
 use App\DTOs\CurrentHeadResult;
 use App\DTOs\DiffTarget;
+use App\Events\HardReloadShortcutPressed;
+use App\Events\RefreshShortcutPressed;
 use App\Models\Project;
 use App\Services\GitFileContentService;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -103,6 +105,18 @@ test('softRefresh re-reads file list and dispatches refresh-completed with zero 
 
     expect($this->fileListFake->callCount)->toBeGreaterThan($callsAfterMount);
     expect($component->get('diffRefreshToken'))->toBe($tokenAfterMount + 1);
+});
+
+test('native refresh shortcut routes through softRefresh', function () {
+    Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test'])
+        ->dispatch('native:App\\Events\\RefreshShortcutPressed', RefreshShortcutPressed::KEY)
+        ->assertDispatched('refresh-completed', changedCount: 0);
+});
+
+test('native hard reload shortcut requests a browser reload', function () {
+    Livewire::test('pages::review-page', ['slug' => 'soft-refresh-test'])
+        ->dispatch('native:App\\Events\\HardReloadShortcutPressed', HardReloadShortcutPressed::KEY)
+        ->assertDispatched('hard-reload-requested');
 });
 
 test('softRefresh reports changedCount when files differ', function () {

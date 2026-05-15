@@ -3,11 +3,14 @@
 declare(strict_types=1);
 
 use App\Actions\ZoomWindowAction;
+use App\Events\HardReloadShortcutPressed;
+use App\Events\RefreshShortcutPressed;
 use App\Events\ZoomShortcutPressed;
 use App\Listeners\HandleZoomShortcutPressed;
-use App\Listeners\RegisterZoomGlobalShortcuts;
-use App\Listeners\UnregisterZoomGlobalShortcuts;
+use App\Listeners\RegisterNativeGlobalShortcuts;
+use App\Listeners\UnregisterNativeGlobalShortcuts;
 use App\Providers\NativeAppServiceProvider;
+use App\Support\NativeShortcutRegistry;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Native\Desktop\Contracts\WindowManager;
@@ -23,7 +26,7 @@ beforeEach(function () {
     Cache::forget(ZoomWindowAction::CACHE_KEY);
 });
 
-test('native provider registers the zoom shortcut listeners', function () {
+test('native provider registers the app-level shortcut listeners', function () {
     $provider = new ReflectionClass(NativeAppServiceProvider::class);
     $registerNativeEventListeners = $provider->getMethod('registerNativeEventListeners');
     $registerNativeEventListeners->setAccessible(true);
@@ -32,50 +35,56 @@ test('native provider registers the zoom shortcut listeners', function () {
 
     Event::fake();
 
-    Event::assertListening(WindowFocused::class, RegisterZoomGlobalShortcuts::class);
-    Event::assertListening(WindowBlurred::class, UnregisterZoomGlobalShortcuts::class);
+    Event::assertListening(WindowFocused::class, RegisterNativeGlobalShortcuts::class);
+    Event::assertListening(WindowBlurred::class, UnregisterNativeGlobalShortcuts::class);
     Event::assertListening(ZoomShortcutPressed::class, HandleZoomShortcutPressed::class);
 });
 
-test('main window focus registers zoom keys as global shortcuts', function () {
+test('main window focus registers native shortcuts', function () {
     $shortcut = GlobalShortcut::fake();
 
-    app(RegisterZoomGlobalShortcuts::class)->handle(new WindowFocused('main'));
+    app(RegisterNativeGlobalShortcuts::class)->handle(new WindowFocused('main'));
 
-    expect($shortcut->keys)->toBe(ZoomShortcutPressed::keys())
-        ->and($shortcut->events)->toBe([
-            ZoomShortcutPressed::class,
-            ZoomShortcutPressed::class,
-            ZoomShortcutPressed::class,
-            ZoomShortcutPressed::class,
-        ]);
+    expect($shortcut->keys)->toBe(NativeShortcutRegistry::keys())
+        ->and($shortcut->events)->toBe(array_column(NativeShortcutRegistry::all(), 'event'));
 
-    $shortcut->assertRegisteredCount(4);
+    $shortcut->assertRegisteredCount(count(NativeShortcutRegistry::all()));
 });
 
-test('other window focus does not register zoom shortcuts', function () {
+test('other window focus does not register native shortcuts', function () {
     $shortcut = GlobalShortcut::fake();
 
-    app(RegisterZoomGlobalShortcuts::class)->handle(new WindowFocused('secondary'));
+    app(RegisterNativeGlobalShortcuts::class)->handle(new WindowFocused('secondary'));
 
     $shortcut->assertRegisteredCount(0);
 });
 
-test('main window blur unregisters zoom keys as global shortcuts', function () {
+test('main window blur unregisters native shortcuts', function () {
     $shortcut = GlobalShortcut::fake();
 
-    app(UnregisterZoomGlobalShortcuts::class)->handle(new WindowBlurred('main'));
+    app(UnregisterNativeGlobalShortcuts::class)->handle(new WindowBlurred('main'));
 
-    expect($shortcut->keys)->toBe(ZoomShortcutPressed::keys());
-    $shortcut->assertUnregisteredCount(4);
+    expect($shortcut->keys)->toBe(NativeShortcutRegistry::keys());
+    $shortcut->assertUnregisteredCount(count(NativeShortcutRegistry::keys()));
 });
 
-test('other window blur does not unregister zoom shortcuts', function () {
+test('other window blur does not unregister native shortcuts', function () {
     $shortcut = GlobalShortcut::fake();
 
-    app(UnregisterZoomGlobalShortcuts::class)->handle(new WindowBlurred('secondary'));
+    app(UnregisterNativeGlobalShortcuts::class)->handle(new WindowBlurred('secondary'));
 
     $shortcut->assertUnregisteredCount(0);
+});
+
+test('native registry includes refresh and hard reload shortcuts', function () {
+    expect(NativeShortcutRegistry::all())->toContain(
+        ['key' => RefreshShortcutPressed::KEY, 'event' => RefreshShortcutPressed::class],
+        ['key' => HardReloadShortcutPressed::KEY, 'event' => HardReloadShortcutPressed::class],
+    );
+});
+
+test('native registry shortcut keys are unique', function () {
+    expect(NativeShortcutRegistry::keys())->toBe(array_values(array_unique(NativeShortcutRegistry::keys())));
 });
 
 test('zoom in shortcut increases the current window zoom', function () {

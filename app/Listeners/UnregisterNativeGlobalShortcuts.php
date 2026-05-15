@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Listeners;
 
-use App\Events\ZoomShortcutPressed;
+use App\Support\NativeShortcutRegistry;
 use Native\Desktop\Events\Windows\WindowBlurred;
 use Native\Desktop\Facades\GlobalShortcut;
 
-final readonly class UnregisterZoomGlobalShortcuts
+final readonly class UnregisterNativeGlobalShortcuts
 {
     public function handle(WindowBlurred $event): void
     {
@@ -21,7 +21,7 @@ final readonly class UnregisterZoomGlobalShortcuts
 
     public static function unregister(): void
     {
-        collect(ZoomShortcutPressed::keys())->each(function (string $key): void {
+        collect(NativeShortcutRegistry::keys())->each(function (string $key): void {
             GlobalShortcut::key($key)->unregister();
         });
     }

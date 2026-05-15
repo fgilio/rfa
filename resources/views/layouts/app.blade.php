@@ -266,6 +266,7 @@
 </head>
 <body class="bg-gh-bg text-gh-text min-h-screen font-display text-sm antialiased"
     x-data
+    @hard-reload-requested.window="window.location.reload()"
     @copy-to-clipboard.window="
         navigator.clipboard.writeText($event.detail.text).then(() => {
             if ($event.detail.toast) Flux.toast({ text: $event.detail.toast, variant: 'success' });
@@ -308,6 +309,13 @@
 
     <livewire:keepalive />
     {{ $slot }}
+    <script>
+        document.addEventListener('livewire:init', () => {
+            window.Livewire.on('native:App\\Events\\HardReloadShortcutPressed', () => {
+                window.location.reload();
+            });
+        });
+    </script>
     @fluxScripts
 </body>
 </html>

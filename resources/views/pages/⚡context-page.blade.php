@@ -10,6 +10,8 @@ use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveProjectAction;
 use App\DTOs\AgentContextFile;
 use App\Enums\LastViewMode;
+use App\Events\HardReloadShortcutPressed;
+use App\Events\RefreshShortcutPressed;
 use App\Listeners\HandleMenuItemClicked;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
@@ -118,6 +120,18 @@ new #[Layout('layouts.app')] class extends Component
             'context_file_count' => count($this->contextFiles),
             'comment_count' => count($this->comments),
         ]);
+    }
+
+    #[On('native:App\\Events\\RefreshShortcutPressed')]
+    public function handleNativeRefreshShortcut(string $key = RefreshShortcutPressed::KEY): void
+    {
+        $this->refresh();
+    }
+
+    #[On('native:App\\Events\\HardReloadShortcutPressed')]
+    public function handleNativeHardReloadShortcut(string $key = HardReloadShortcutPressed::KEY): void
+    {
+        $this->dispatch('hard-reload-requested');
     }
 
     private function refreshContextFiles(): void
@@ -446,8 +460,10 @@ new #[Layout('layouts.app')] class extends Component
             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         },
         init() {
+            @browser
             $store.keymap.register('⌘R', () => $wire.refresh(), { allowInEditable: true });
             $store.keymap.register('⌘⇧R', () => window.location.reload(), { allowInEditable: true });
+            @endbrowser
         },
     }"
     class="min-h-screen flex flex-col"

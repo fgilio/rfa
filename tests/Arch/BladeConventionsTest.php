@@ -56,6 +56,15 @@ test('app layout includes keepalive component', function () {
     expect($content)->toContain('<livewire:keepalive');
 });
 
+test('app layout reloads directly on native hard reload shortcut', function () {
+    $layout = dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php';
+    $content = file_get_contents($layout);
+
+    expect($content)
+        ->toContain("window.Livewire.on('native:App\\\\Events\\\\HardReloadShortcutPressed'")
+        ->toContain('window.location.reload()');
+});
+
 test('keepalive component uses wire:poll.keep-alive', function () {
     $component = dirname(__DIR__, 2).'/resources/views/livewire/keepalive.blade.php';
     $content = file_get_contents($component);

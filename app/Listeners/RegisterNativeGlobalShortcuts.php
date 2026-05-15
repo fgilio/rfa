@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Listeners;
 
-use App\Events\ZoomShortcutPressed;
+use App\Support\NativeShortcutRegistry;
 use Native\Desktop\Events\Windows\WindowFocused;
 use Native\Desktop\Facades\GlobalShortcut;
 
-final readonly class RegisterZoomGlobalShortcuts
+final readonly class RegisterNativeGlobalShortcuts
 {
     public function handle(WindowFocused $event): void
     {
@@ -16,9 +16,9 @@ final readonly class RegisterZoomGlobalShortcuts
             return;
         }
 
-        collect(ZoomShortcutPressed::keys())->each(function (string $key): void {
-            GlobalShortcut::key($key)
-                ->event(ZoomShortcutPressed::class)
+        collect(NativeShortcutRegistry::all())->each(function (array $shortcut): void {
+            GlobalShortcut::key($shortcut['key'])
+                ->event($shortcut['event'])
                 ->register();
         });
     }

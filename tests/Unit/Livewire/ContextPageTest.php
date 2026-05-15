@@ -3,6 +3,8 @@
 use App\Actions\DiscoverAgentContextFilesAction;
 use App\Actions\LoadContextCommentsAction;
 use App\Actions\ResolveProjectAction;
+use App\Events\HardReloadShortcutPressed;
+use App\Events\RefreshShortcutPressed;
 use App\Models\Comment;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -33,13 +35,19 @@ beforeEach(function () {
         }
     });
 
-    app()->bind(DiscoverAgentContextFilesAction::class, fn () => new class
+    $this->contextFileDiscoveryFake = new class
     {
+        public int $callCount = 0;
+
         public function handle(string $repoPath): array
         {
+            $this->callCount++;
+
             return [];
         }
-    });
+    };
+
+    app()->instance(DiscoverAgentContextFilesAction::class, $this->contextFileDiscoveryFake);
 
     app()->bind(LoadContextCommentsAction::class, fn () => new class
     {
@@ -56,6 +64,19 @@ test('mount writes the project id to the active-project-id cache key', function 
     Livewire::test('pages::context-page', ['slug' => 'test-project']);
 
     expect(Cache::get('rfa.active-project-id'))->toBe($this->project->id);
+});
+
+test('native refresh shortcut refreshes context files', function () {
+    Livewire::test('pages::context-page', ['slug' => 'test-project'])
+        ->dispatch('native:App\\Events\\RefreshShortcutPressed', RefreshShortcutPressed::KEY);
+
+    expect($this->contextFileDiscoveryFake->callCount)->toBe(2);
+});
+
+test('native hard reload shortcut requests a browser reload from context page', function () {
+    Livewire::test('pages::context-page', ['slug' => 'test-project'])
+        ->dispatch('native:App\\Events\\HardReloadShortcutPressed', HardReloadShortcutPressed::KEY)
+        ->assertDispatched('hard-reload-requested');
 });
 
 test('startNewFeedback clears the submitted, exportResult, and globalComment fields', fn () => Livewire::test('pages::context-page', ['slug' => 'test-project'])
