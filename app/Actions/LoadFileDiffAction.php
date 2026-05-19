@@ -15,6 +15,7 @@ use App\Services\MarkdownRegionService;
 use App\Services\MarkdownTableAlignerService;
 use App\Services\SyntaxHighlightService;
 use App\Support\DiffCacheKey;
+use App\Support\LogSanitizer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -44,7 +45,7 @@ final readonly class LoadFileDiffAction
                 Log::warning('git.diff.failed', [
                     'reason' => 'diff_process_failed',
                     'path' => $path,
-                    'stderr' => $e->stderr,
+                    'stderr_summary' => LogSanitizer::summarize($e->stderr),
                 ]);
 
                 return FileDiff::emptyArray($path, 'modified', tooLarge: false)

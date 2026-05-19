@@ -8,6 +8,7 @@ use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
 use App\Enums\LineType;
 use App\Support\GrammarMap;
+use App\Support\LogSanitizer;
 use Illuminate\Support\Facades\Log;
 use Phiki\Grammar\Grammar;
 use Phiki\Phiki;
@@ -182,7 +183,8 @@ class SyntaxHighlightService
         } catch (\Throwable $e) {
             Log::warning('syntax.highlighting.failed', [
                 'reason' => 'syntax_highlighting_failed',
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
+                'error_summary' => LogSanitizer::summarize($e->getMessage()),
             ]);
 
             return [];

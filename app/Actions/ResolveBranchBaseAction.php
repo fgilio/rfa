@@ -8,6 +8,7 @@ use App\DTOs\BranchBaseResult;
 use App\Exceptions\GitCommandException;
 use App\Services\GitMetadataService;
 use App\Services\GitProcessService;
+use App\Support\LogSanitizer;
 use Illuminate\Support\Facades\Log;
 
 final readonly class ResolveBranchBaseAction
@@ -81,10 +82,11 @@ final readonly class ResolveBranchBaseAction
         } catch (GitCommandException $e) {
             Log::warning('git.commit_range.list_failed', [
                 'reason' => 'commit_range_list_failed',
-                'repo' => $repoPath,
+                'repo_hash' => LogSanitizer::hashPath($repoPath),
                 'from' => $from,
                 'to' => $to,
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
+                'stderr_summary' => LogSanitizer::summarize($e->stderr),
             ]);
 
             return [];

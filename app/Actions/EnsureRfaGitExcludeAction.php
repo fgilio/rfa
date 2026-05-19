@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Services\GitProcessService;
+use App\Support\LogSanitizer;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 
@@ -51,8 +52,9 @@ final readonly class EnsureRfaGitExcludeAction
         } catch (\Throwable $e) {
             Log::warning('git.exclude.append_failed', [
                 'reason' => 'exclude_append_failed',
-                'repo' => $repoPath,
-                'error' => $e->getMessage(),
+                'repo_hash' => LogSanitizer::hashPath($repoPath),
+                'error_class' => $e::class,
+                'error_summary' => LogSanitizer::summarize($e->getMessage()),
             ]);
         }
     }
@@ -75,8 +77,9 @@ final readonly class EnsureRfaGitExcludeAction
         } catch (\Throwable $e) {
             Log::warning('git.exclude.resolve_failed', [
                 'reason' => 'exclude_path_resolve_failed',
-                'repo' => $repoPath,
-                'error' => $e->getMessage(),
+                'repo_hash' => LogSanitizer::hashPath($repoPath),
+                'error_class' => $e::class,
+                'error_summary' => LogSanitizer::summarize($e->getMessage()),
             ]);
 
             return null;

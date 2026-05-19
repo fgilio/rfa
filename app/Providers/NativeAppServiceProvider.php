@@ -15,6 +15,7 @@ use App\Listeners\HandleMenuItemClicked;
 use App\Listeners\HandleZoomShortcutPressed;
 use App\Listeners\RegisterNativeGlobalShortcuts;
 use App\Listeners\UnregisterNativeGlobalShortcuts;
+use App\Support\LogSanitizer;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
@@ -91,8 +92,10 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
         Event::listen(UpdateAvailable::class, function (UpdateAvailable $event) {
             Context::flush();
+            $startedAt = microtime(true);
             Context::add('rfa.update_version', $event->version);
             Context::add('rfa.outcome', 'completed');
+            Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
             Log::info('updater.available');
 
             $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
@@ -117,6 +120,13 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         });
 
         Event::listen(UpdateNotAvailable::class, function () {
+            Context::flush();
+            $startedAt = microtime(true);
+            Context::add('rfa.outcome', 'completed');
+            Context::add('rfa.reason', 'no_update');
+            Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
+            Log::info('updater.up_to_date');
+
             Cache::put('native-update-state', ['status' => 'up-to-date'], now()->addSeconds(10));
             Notification::new()
                 ->title('No Updates')
@@ -126,8 +136,10 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
         Event::listen(UpdateDownloaded::class, function (UpdateDownloaded $event) {
             Context::flush();
+            $startedAt = microtime(true);
             Context::add('rfa.update_version', $event->version);
             Context::add('rfa.outcome', 'completed');
+            Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
             Log::info('updater.downloaded');
 
             $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
@@ -146,13 +158,13 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
         Event::listen(UpdateError::class, function (UpdateError $event) {
             Context::flush();
+            $startedAt = microtime(true);
             Context::add('rfa.outcome', 'error');
             Context::add('rfa.reason', 'updater_error');
-            Log::error('updater.failed', [
-                'reason' => 'updater_error',
-                'message' => $event->message,
-                'stack' => $event->stack,
-            ]);
+            Context::add('rfa.message_summary', LogSanitizer::summarize((string) $event->message));
+            Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
+            Log::info('updater.failed');
+
             Cache::put('native-update-state', ['status' => 'error'], now()->addMinutes(5));
             Notification::new()
                 ->title('Update Error')

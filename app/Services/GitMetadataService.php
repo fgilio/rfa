@@ -8,6 +8,7 @@ use App\DTOs\BranchEntry;
 use App\DTOs\CommitEntry;
 use App\Enums\GitRef;
 use App\Exceptions\GitCommandException;
+use App\Support\LogSanitizer;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 
@@ -24,8 +25,9 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.excludes_file.resolve_failed', [
                 'reason' => 'global_excludes_file_resolve_failed',
-                'repo' => $repoPath,
-                'error' => $e->getMessage(),
+                'repo_hash' => LogSanitizer::hashPath($repoPath),
+                'error_class' => $e::class,
+                'stderr_summary' => LogSanitizer::summarize($e->stderr),
             ]);
 
             return null;
@@ -151,10 +153,11 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.file_content.read_failed', [
                 'reason' => 'file_content_read_failed',
-                'repo' => $repoPath,
+                'repo_hash' => LogSanitizer::hashPath($repoPath),
                 'ref' => $ref,
                 'path' => $path,
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
+                'stderr_summary' => LogSanitizer::summarize($e->stderr),
             ]);
 
             return null;
@@ -174,9 +177,10 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.ref.resolve_failed', [
                 'reason' => 'git_ref_resolve_failed',
-                'repo' => $repoPath,
+                'repo_hash' => LogSanitizer::hashPath($repoPath),
                 'ref' => $ref,
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
+                'stderr_summary' => LogSanitizer::summarize($e->stderr),
             ]);
 
             return null;
@@ -193,9 +197,10 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.commit_parents.read_failed', [
                 'reason' => 'commit_parents_read_failed',
-                'repo' => $repoPath,
+                'repo_hash' => LogSanitizer::hashPath($repoPath),
                 'hash' => $hash,
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
+                'stderr_summary' => LogSanitizer::summarize($e->stderr),
             ]);
 
             return [];
@@ -217,9 +222,10 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.root_commit.check_failed', [
                 'reason' => 'root_commit_check_failed',
-                'repo' => $repoPath,
+                'repo_hash' => LogSanitizer::hashPath($repoPath),
                 'ref' => $ref,
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
+                'stderr_summary' => LogSanitizer::summarize($e->stderr),
             ]);
 
             return false;
@@ -262,9 +268,10 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.child_commit.read_failed', [
                 'reason' => 'child_commit_read_failed',
-                'repo' => $repoPath,
+                'repo_hash' => LogSanitizer::hashPath($repoPath),
                 'hash' => $hash,
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
+                'stderr_summary' => LogSanitizer::summarize($e->stderr),
             ]);
 
             return null;
@@ -333,8 +340,9 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.commit_log.read_failed', [
                 'reason' => 'commit_log_read_failed',
-                'repo' => $repoPath,
-                'error' => $e->getMessage(),
+                'repo_hash' => LogSanitizer::hashPath($repoPath),
+                'error_class' => $e::class,
+                'stderr_summary' => LogSanitizer::summarize($e->stderr),
             ]);
 
             return [];
