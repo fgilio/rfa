@@ -931,7 +931,7 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $file = collect($this->files)->firstWhere('id', $fileId);
-        if (! $file || $file['status'] === 'commented') {
+        if (! $file || $file['status'] === 'commented' || ($file['isExternal'] ?? false)) {
             return;
         }
 
@@ -2058,7 +2058,7 @@ new #[Layout('layouts.app')] class extends Component
                             </flux:tooltip.content>
                         </flux:tooltip>
                         <span class="shrink-0 size-3.5 flex items-center justify-center">
-                            @if(! $this->isCommitMode() && $file['status'] !== 'commented')
+                            @if(! $this->isCommitMode() && $file['status'] !== 'commented' && ! ($file['isExternal'] ?? false))
                                 <flux:tooltip content="Discard changes">
                                     <button
                                         class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text data-loading:pointer-events-none data-loading:opacity-50"

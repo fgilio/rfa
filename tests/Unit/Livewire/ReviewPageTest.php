@@ -477,6 +477,34 @@ test('discardFileChanges includes comment count in undo message', function () {
     );
 });
 
+test('discardFileChanges is a no-op for external files', function () {
+    $externalFiles = [
+        ['id' => 'ext789', 'path' => 'external/notes/draft.md', 'status' => 'added', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false, 'isExternal' => true, 'externalAbsolutePath' => '/tmp/notes/draft.md'],
+    ];
+
+    app()->bind(GetFileListAction::class, fn () => new class($externalFiles)
+    {
+        public function __construct(private array $files) {}
+
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        {
+            return $this->files;
+        }
+    });
+
+    app()->bind(DiscardFileChangesAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, string $path, string $status, int $projectId, ?string $oldPath = null, bool $isUntracked = false, bool $isSymlink = false, array $comments = []): TrashedFile
+        {
+            throw new RuntimeException('DiscardFileChangesAction should not be called for external files');
+        }
+    });
+
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('discard-file', fileId: 'ext789')
+        ->assertNotDispatched('undo-available');
+});
+
 test('mount writes the project id to the active-project-id cache key for the menu handler', function () {
     Cache::forget('rfa.active-project-id');
 
