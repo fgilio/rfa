@@ -492,24 +492,17 @@ test('discardFileChanges is a no-op for external files', function () {
         }
     });
 
-    $actionCalled = false;
-    app()->bind(DiscardFileChangesAction::class, fn () => new class($actionCalled)
+    app()->bind(DiscardFileChangesAction::class, fn () => new class
     {
-        public function __construct(public bool &$called) {}
-
         public function handle(string $repoPath, string $path, string $status, int $projectId, ?string $oldPath = null, bool $isUntracked = false, bool $isSymlink = false, array $comments = []): TrashedFile
         {
-            $this->called = true;
-
             throw new RuntimeException('DiscardFileChangesAction should not be called for external files');
         }
     });
 
-    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
-        ->dispatch('discard-file', fileId: 'ext789');
-
-    expect($actionCalled)->toBeFalse();
-    $component->assertNotDispatched('undo-available');
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('discard-file', fileId: 'ext789')
+        ->assertNotDispatched('undo-available');
 });
 
 test('mount writes the project id to the active-project-id cache key for the menu handler', function () {
