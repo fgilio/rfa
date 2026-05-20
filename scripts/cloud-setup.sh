@@ -96,9 +96,30 @@ install_node_dependencies() {
   fi
 
   # npm install is intentional here: it heals stale cached node_modules without
-  # the full wipe that npm ci performs on every cloud session.
+  # the full wipe that npm ci performs on every cloud session. The trade-off
+  # is that npm may rewrite the lockfile when the running npm version
+  # normalizes fields differently than the version that generated it
+  # (e.g. `libc` on platform-specific optional deps). Snapshot beforehand
+  # and revert that drift so the working tree stays clean — but only when
+  # the lockfile was already clean, so we don't clobber a real user change.
+  local lockfile_was_clean=0
+  if [ -f package-lock.json ] \
+    && git -C "$(pwd)" diff --quiet -- package-lock.json 2>/dev/null \
+    && git -C "$(pwd)" diff --cached --quiet -- package-lock.json 2>/dev/null; then
+    lockfile_was_clean=1
+    cp package-lock.json package-lock.json.predrift
+  fi
+
   log "Installing npm dependencies..."
   npm install --no-audit --no-fund
+
+  if [ "$lockfile_was_clean" = "1" ] && [ -f package-lock.json.predrift ]; then
+    if ! cmp -s package-lock.json package-lock.json.predrift; then
+      mv package-lock.json.predrift package-lock.json
+    else
+      rm -f package-lock.json.predrift
+    fi
+  fi
 }
 
 install_playwright_browser() {
