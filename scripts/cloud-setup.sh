@@ -101,11 +101,12 @@ install_node_dependencies() {
   # normalizes fields differently than the version that generated it
   # (e.g. `libc` on platform-specific optional deps). Snapshot beforehand
   # and revert that drift so the working tree stays clean — but only when
-  # the lockfile was already clean, so we don't clobber a real user change.
+  # both files were already clean, so an in-progress package.json edit can
+  # still produce a matching lockfile update.
   local lockfile_was_clean=0
   if [ -f package-lock.json ] \
-    && git -C "$(pwd)" diff --quiet -- package-lock.json 2>/dev/null \
-    && git -C "$(pwd)" diff --cached --quiet -- package-lock.json 2>/dev/null; then
+    && git -C "$(pwd)" diff --quiet -- package.json package-lock.json 2>/dev/null \
+    && git -C "$(pwd)" diff --cached --quiet -- package.json package-lock.json 2>/dev/null; then
     lockfile_was_clean=1
     cp package-lock.json package-lock.json.predrift
   fi
