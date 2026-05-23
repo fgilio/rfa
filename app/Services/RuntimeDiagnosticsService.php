@@ -299,7 +299,13 @@ final class RuntimeDiagnosticsService
             return null;
         }
 
-        return $this->shortString(parse_url($url, PHP_URL_PATH) ?: $url, 256);
+        $path = parse_url($url, PHP_URL_PATH);
+
+        if (! is_string($path) || ! str_starts_with($path, '/')) {
+            return null;
+        }
+
+        return $this->shortString($path, 256);
     }
 
     private function bytesToMegabytes(int|float $bytes): float

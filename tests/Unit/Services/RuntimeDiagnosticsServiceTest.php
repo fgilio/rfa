@@ -85,6 +85,18 @@ test('browser sample records useful counters without query strings', function ()
         ->and($entry['context']['viewport']['width'])->toBe(1280);
 });
 
+test('browser sample drops urls without a path', function () {
+    app(RuntimeDiagnosticsService::class)->recordBrowserSample([
+        'reason' => 'heartbeat',
+        'url' => '?token=secret',
+    ]);
+
+    $entry = json_decode(trim((string) file_get_contents($this->diagnosticsPath)), true);
+
+    expect($entry['context']['path'])->toBeNull()
+        ->and($entry['context']['path_hash'])->toBeNull();
+});
+
 test('breadcrumb substitutes invalid utf8 without throwing', function () {
     app(RuntimeDiagnosticsService::class)->breadcrumb('diff.loaded', [
         'path' => "bad-\xB1-byte.php",
