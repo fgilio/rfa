@@ -38,10 +38,24 @@ test('passes through a normal <hash>^ from when the hash has a parent', function
         ->and($target->to())->toBeNull();
 });
 
+test('resolves a short parent-suffixed from ref to a full hash', function () {
+    $target = $this->action->handle($this->tmpDir, substr($this->childSha, 0, 7).'^');
+
+    expect($target->from())->toBe($this->childSha.'^')
+        ->and($target->to())->toBeNull();
+});
+
 test('passes through a plain sha from unchanged', function () {
     $target = $this->action->handle($this->tmpDir, $this->rootSha);
 
     expect($target->from())->toBe($this->rootSha)
         ->and($target->to())->toBeNull()
         ->and($target->isWorkingDirectory())->toBeTrue();
+});
+
+test('resolves a plain short from ref to a full hash', function () {
+    $target = $this->action->handle($this->tmpDir, substr($this->rootSha, 0, 7));
+
+    expect($target->from())->toBe($this->rootSha)
+        ->and($target->to())->toBeNull();
 });

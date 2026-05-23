@@ -92,6 +92,15 @@ test('shift-clicking a commit after WT is selected forms a WT + commits[0..N] ra
     $page->page()->getByText('WT+3')->waitFor();
 });
 
+test('range-to-working caret URL rehydrates WT and selected commits in the drawer', function () {
+    $fromRef = rawurlencode($this->commitHashes[1].'^');
+    $page = $this->visitAndLoad($this->projectUrl().'/rw/'.$fromRef);
+
+    $page->page()->getByLabel('Open selection drawer')->click();
+
+    $page->page()->getByText('WT+2')->waitFor();
+});
+
 test('clearing the selection removes the selected chip', function () {
     $page = $this->visitAndLoad($this->projectUrl());
     $page->page()->getByLabel('Open selection drawer')->click();

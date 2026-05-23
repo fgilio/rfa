@@ -15,7 +15,7 @@ final readonly class ResolveRangeToWorkingAction
 
     public function handle(string $repoPath, string $from): DiffTarget
     {
-        $effectiveFrom = $from;
+        $effectiveFrom = $this->gitMetadataService->resolveRefExpression($repoPath, $from);
 
         // Root commits have no parent, so `<root>^` is not a valid revision.
         // Match ResolveRangeAction and diff against git's empty tree so the

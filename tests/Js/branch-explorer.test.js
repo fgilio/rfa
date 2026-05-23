@@ -28,6 +28,13 @@ const commits = [
     { hash: 'ddd4' }, // 3 = oldest
 ];
 
+const longCommits = [
+    { hash: 'aaa1000000000000000000000000000000000000' },
+    { hash: 'bbb2000000000000000000000000000000000000' },
+    { hash: 'ccc3000000000000000000000000000000000000' },
+    { hash: 'ddd4000000000000000000000000000000000000' },
+];
+
 // Shorter, semantically-named fixture for state-machine tests that don't
 // care about specific shas.
 const shortCommits = [
@@ -625,6 +632,51 @@ describe('_rehydrateSelectionFromActiveView', () => {
         expect(a.selectedHashes).toEqual(['aaa1', 'bbb2']);
     });
 
+    it('selects WT + commits through a parent-suffixed from ref', () => {
+        const a = makeForView({
+            activeDiffFrom: longCommits[1].hash + '^',
+            commits: longCommits,
+            branchBase: { state: BranchBaseState.Ready, baseSha: 'other', hashesInRange: [] },
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual([
+            longCommits[0].hash,
+            longCommits[1].hash,
+        ]);
+    });
+
+    it('selects WT + commits through a parent-suffixed short from ref', () => {
+        const a = makeForView({
+            activeDiffFrom: 'bbb2^',
+            commits: longCommits,
+            branchBase: { state: BranchBaseState.Ready, baseSha: 'other', hashesInRange: [] },
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual([
+            longCommits[0].hash,
+            longCommits[1].hash,
+        ]);
+    });
+
+    it('selects WT + commits after a unique short base ref', () => {
+        const a = makeForView({
+            activeDiffFrom: 'ccc3',
+            commits: longCommits,
+            branchBase: { state: BranchBaseState.Ready, baseSha: 'other', hashesInRange: [] },
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.selectedHashes).toEqual([
+            longCommits[0].hash,
+            longCommits[1].hash,
+        ]);
+    });
+
     it('falls back to slicing loaded commits for /rw/{sha} when sha is not the configured base', () => {
         const a = makeForView({
             activeDiffFrom: 'ccc3',
@@ -649,6 +701,18 @@ describe('_rehydrateSelectionFromActiveView', () => {
         expect(a.selectedHashes).toEqual(['bbb2']);
     });
 
+    it('selects a single commit view when the active commit is a unique short ref', () => {
+        const a = makeForView({
+            activeCommitHash: 'bbb2',
+            activeDiffFrom: 'ccc3',
+            commits: longCommits,
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.selectedHashes).toEqual([longCommits[1].hash]);
+    });
+
     it('selects every commit in (from, to] for an explicit range view (/r/{from}..{to})', () => {
         const a = makeForView({
             activeCommitHash: 'aaa1',
@@ -659,6 +723,49 @@ describe('_rehydrateSelectionFromActiveView', () => {
 
         expect(a.workingTreeSelected).toBe(false);
         expect(a.selectedHashes).toEqual(['aaa1', 'bbb2', 'ccc3']);
+    });
+
+    it('selects every commit in a short explicit range', () => {
+        const a = makeForView({
+            activeCommitHash: 'bbb2',
+            activeDiffFrom: 'ddd4',
+            commits: longCommits,
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.selectedHashes).toEqual([
+            longCommits[1].hash,
+            longCommits[2].hash,
+        ]);
+    });
+
+    it('includes the boundary commit when an explicit range uses a parent-suffixed from ref', () => {
+        const a = makeForView({
+            activeCommitHash: 'aaa1',
+            activeDiffFrom: 'ccc3^',
+            commits: longCommits,
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.selectedHashes).toEqual([
+            longCommits[0].hash,
+            longCommits[1].hash,
+            longCommits[2].hash,
+        ]);
+    });
+
+    it('selects every loaded commit when the range starts at the empty tree', () => {
+        const a = makeForView({
+            activeCommitHash: longCommits[0].hash,
+            activeDiffFrom: '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+            commits: longCommits,
+        });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.selectedHashes).toEqual(longCommits.map(commit => commit.hash));
     });
 
     it('falls back to [tip] when the range endpoints are not in the loaded commits', () => {
@@ -674,7 +781,7 @@ describe('_rehydrateSelectionFromActiveView', () => {
 });
 
 describe('_scrollActiveCommitIntoView', () => {
-    function makeWithList({ activeCommitHash = null, activeDiffFrom = 'HEAD', branch = 'main' } = {}) {
+    function makeWithList({ activeCommitHash = null, activeDiffFrom = 'HEAD', branch = 'main', commitList = commits } = {}) {
         const a = createBranchExplorer({
             currentBranch: 'main',
             activeCommitHash,
@@ -683,9 +790,10 @@ describe('_scrollActiveCommitIntoView', () => {
             branches: { local: [], remote: [] },
         });
         a.selectedBranch = branch;
+        a.$wire = { commits: commitList };
         const rows = new Map();
         const make = (hash) => ({ scrollIntoView: vi.fn(), getAttribute: () => hash });
-        for (const c of commits) rows.set(c.hash, make(c.hash));
+        for (const c of commitList) rows.set(c.hash, make(c.hash));
         a.$refs = {
             commitList: {
                 querySelector: (sel) => {
@@ -709,10 +817,26 @@ describe('_scrollActiveCommitIntoView', () => {
         expect(rows.get('ddd4').scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
     });
 
+    it('scrolls to the active commit when the active ref is short', () => {
+        const { a, rows } = makeWithList({ activeCommitHash: 'ddd4', commitList: longCommits });
+        a._scrollActiveCommitIntoView();
+        expect(rows.get(longCommits[3].hash).scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+    });
+
     it('scrolls to the base sha for /rw views (so the bottom of the range is visible)', () => {
         const { a, rows } = makeWithList({ activeCommitHash: null, activeDiffFrom: 'ccc3' });
         a._scrollActiveCommitIntoView();
         expect(rows.get('ccc3').scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+    });
+
+    it('scrolls to the boundary commit for /rw parent-suffixed views', () => {
+        const { a, rows } = makeWithList({
+            activeCommitHash: null,
+            activeDiffFrom: 'ccc3^',
+            commitList: longCommits,
+        });
+        a._scrollActiveCommitIntoView();
+        expect(rows.get(longCommits[2].hash).scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
     });
 
     it('does nothing for working-tree-only views', () => {
@@ -726,6 +850,26 @@ describe('_scrollActiveCommitIntoView', () => {
     it('is a noop when the anchor commit is not in the loaded list', () => {
         const { a } = makeWithList({ activeCommitHash: 'unknown', activeDiffFrom: 'HEAD' });
         expect(() => a._scrollActiveCommitIntoView()).not.toThrow();
+    });
+});
+
+describe('isActiveCommit', () => {
+    it('matches full refs and unique short refs', () => {
+        const a = makeForView({ activeCommitHash: 'bbb2', commits: longCommits });
+
+        expect(a.isActiveCommit(longCommits[0].hash)).toBe(false);
+        expect(a.isActiveCommit(longCommits[1].hash)).toBe(true);
+    });
+
+    it('does not match ambiguous short refs', () => {
+        const ambiguousCommits = [
+            { hash: 'abcd000000000000000000000000000000000000' },
+            { hash: 'abcd111111111111111111111111111111111111' },
+        ];
+        const a = makeForView({ activeCommitHash: 'abcd', commits: ambiguousCommits });
+
+        expect(a.isActiveCommit(ambiguousCommits[0].hash)).toBe(false);
+        expect(a.isActiveCommit(ambiguousCommits[1].hash)).toBe(false);
     });
 });
 

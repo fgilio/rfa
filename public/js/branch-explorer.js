@@ -126,6 +126,32 @@
         return !selectedHashes.includes(tip.hash);
     }
 
+    const EMPTY_TREE_HASH = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
+    function splitParentRef(ref) {
+        const value = String(ref || '');
+        const isParentRef = value.endsWith('^');
+
+        return {
+            value: isParentRef ? value.slice(0, -1) : value,
+            isParentRef,
+        };
+    }
+
+    function commitIndexByRef(commits, ref) {
+        const { value } = splitParentRef(ref);
+        if (!value) return -1;
+
+        const exact = commits.findIndex(c => c.hash === value);
+        if (exact >= 0) return exact;
+
+        const matches = commits
+            .map((commit, index) => commit.hash.startsWith(value) ? index : -1)
+            .filter(index => index >= 0);
+
+        return matches.length === 1 ? matches[0] : -1;
+    }
+
     function createBranchExplorer({ currentBranch, activeCommitHash, activeDiffFrom, projectSlug, branches }) {
         return {
             open: false,
@@ -370,6 +396,12 @@
                 return this.selectedHashes.includes(hash);
             },
 
+            isActiveCommit(hash) {
+                const activeIndex = commitIndexByRef(this.$wire.commits || [], this.activeCommitHash);
+
+                return activeIndex >= 0 && this.$wire.commits[activeIndex]?.hash === hash;
+            },
+
             toggleSelection(hash, idx, event) {
                 event.stopPropagation();
 
@@ -481,17 +513,31 @@
                 const anchor = this.activeCommitHash
                     ?? (this.activeDiffFrom !== 'HEAD' ? this.activeDiffFrom : null);
                 if (anchor === null) return;
-                const row = this.$refs.commitList?.querySelector(`[data-commit-hash="${anchor}"]`);
+                const anchorIndex = commitIndexByRef(this.$wire.commits || [], anchor);
+                const anchorHash = this.$wire.commits?.[anchorIndex]?.hash;
+                if (!anchorHash) return;
+                const row = this.$refs.commitList?.querySelector(`[data-commit-hash="${anchorHash}"]`);
                 row?.scrollIntoView({ block: 'center' });
             },
 
-            /** Loaded commits in `(fromSha, toSha]`, newest-first. `toSha === null` means HEAD (index 0). */
-            _hashesInRange(fromSha, toSha) {
+            /** Loaded commits in `(fromRef, toRef]`, newest-first. `toRef === null` means HEAD (index 0). */
+            _hashesInRange(fromRef, toRef) {
                 const commits = this.$wire.commits || [];
-                const fromIdx = commits.findIndex(c => c.hash === fromSha);
-                const tipIdx = toSha === null ? 0 : commits.findIndex(c => c.hash === toSha);
-                if (tipIdx < 0 || fromIdx < 0 || fromIdx <= tipIdx) return [];
-                return commits.slice(tipIdx, fromIdx).map(c => c.hash);
+                const tipIdx = toRef === null ? 0 : commitIndexByRef(commits, toRef);
+                if (tipIdx < 0) return [];
+
+                if (fromRef === EMPTY_TREE_HASH) {
+                    return commits.slice(tipIdx).map(c => c.hash);
+                }
+
+                const from = splitParentRef(fromRef);
+                const fromIdx = commitIndexByRef(commits, from.value);
+                if (fromIdx < 0) return [];
+
+                const endExclusive = from.isParentRef ? fromIdx + 1 : fromIdx;
+                if (endExclusive <= tipIdx) return [];
+
+                return commits.slice(tipIdx, endExclusive).map(c => c.hash);
             },
 
             /**

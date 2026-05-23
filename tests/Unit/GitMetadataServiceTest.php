@@ -120,6 +120,26 @@ test('resolveRef returns null for ref starting with dash', function () {
     expect($this->service->resolveRef($this->tmpDir, '--exec=bad'))->toBeNull();
 });
 
+test('resolveRefExpression expands short refs and preserves parent suffixes', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    $fullHash = $this->service->resolveRef($this->tmpDir, 'HEAD');
+    $shortHash = substr($fullHash, 0, 7);
+
+    expect($this->service->resolveRefExpression($this->tmpDir, $shortHash))->toBe($fullHash)
+        ->and($this->service->resolveRefExpression($this->tmpDir, $shortHash.'^'))->toBe($fullHash.'^');
+});
+
+test('resolveRefExpression leaves unresolvable refs unchanged', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    expect($this->service->resolveRefExpression($this->tmpDir, 'missing-ref^'))->toBe('missing-ref^');
+});
+
 // -- getCommitParents tests --
 
 test('getCommitParents returns parent hashes for a commit', function () {

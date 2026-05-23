@@ -181,6 +181,15 @@ class GitMetadataService
         }
     }
 
+    public function resolveRefExpression(string $repoPath, string $ref): string
+    {
+        $isParentRef = str_ends_with($ref, '^');
+        $baseRef = $isParentRef ? substr($ref, 0, -1) : $ref;
+        $resolved = $baseRef !== '' ? $this->resolveRef($repoPath, $baseRef) : null;
+
+        return ($resolved ?? $baseRef).($isParentRef ? '^' : '');
+    }
+
     /** @return string[] */
     public function getCommitParents(string $repoPath, string $hash): array
     {

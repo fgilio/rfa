@@ -158,3 +158,12 @@ test('review-page diff-file keys include per-file refresh fingerprints', functio
         expect($tag)->toContain('refreshFingerprint');
     }
 });
+
+test('branch explorer active commit state uses ref-aware matching', function () {
+    $component = dirname(__DIR__, 2).'/resources/views/livewire/⚡branch-explorer.blade.php';
+    $content = file_get_contents($component);
+
+    expect($content)
+        ->toContain('isActiveCommit(commit.hash)')
+        ->not->toContain('activeCommitHash === commit.hash');
+});

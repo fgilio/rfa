@@ -38,6 +38,17 @@ test('passes through a normal <hash>^ base when the hash has a parent', function
         ->and($target->to())->toBe($this->childSha);
 });
 
+test('resolves short to and parent-suffixed from refs to full hashes', function () {
+    $target = $this->action->handle(
+        $this->tmpDir,
+        substr($this->childSha, 0, 7).'^',
+        substr($this->childSha, 0, 7),
+    );
+
+    expect($target->from())->toBe($this->childSha.'^')
+        ->and($target->to())->toBe($this->childSha);
+});
+
 test('derives base as <to>^ when from is null and applies the fallback', function () {
     $target = $this->action->handle($this->tmpDir, null, $this->rootSha);
 
@@ -47,6 +58,13 @@ test('derives base as <to>^ when from is null and applies the fallback', functio
 
 test('passes through a plain SHA base unchanged', function () {
     $target = $this->action->handle($this->tmpDir, $this->rootSha, $this->childSha);
+
+    expect($target->from())->toBe($this->rootSha)
+        ->and($target->to())->toBe($this->childSha);
+});
+
+test('resolves a plain short base to a full hash', function () {
+    $target = $this->action->handle($this->tmpDir, substr($this->rootSha, 0, 7), substr($this->childSha, 0, 7));
 
     expect($target->from())->toBe($this->rootSha)
         ->and($target->to())->toBe($this->childSha);

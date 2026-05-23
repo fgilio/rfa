@@ -15,7 +15,8 @@ final readonly class ResolveRangeAction
 
     public function handle(string $repoPath, ?string $from, string $to): DiffTarget
     {
-        $effectiveFrom = $from ?? $to.'^';
+        $effectiveTo = $this->gitMetadataService->resolveRefExpression($repoPath, $to);
+        $effectiveFrom = $this->gitMetadataService->resolveRefExpression($repoPath, $from ?? $to.'^');
 
         // Root commits have no parent, so `<root>^` is not a valid revision.
         // Match the industry convention (GitHub, GitLab, GitLens, ...) and diff
@@ -25,6 +26,6 @@ final readonly class ResolveRangeAction
             $effectiveFrom = DiffTarget::EMPTY_TREE_HASH;
         }
 
-        return DiffTarget::fromRefs($effectiveFrom, $to);
+        return DiffTarget::fromRefs($effectiveFrom, $effectiveTo);
     }
 }

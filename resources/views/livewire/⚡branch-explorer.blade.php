@@ -447,7 +447,7 @@ new class extends Component {
                                 class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
                                 @click="viewCommit(commit.hash)"
                                 :class="{
-                                    'bg-gh-text/5 border-l-2 border-l-gh-text': activeCommitHash === commit.hash,
+                                    'bg-gh-text/5 border-l-2 border-l-gh-text': isActiveCommit(commit.hash),
                                     'bg-gh-link/5 border-l-2 border-l-gh-link': isSelected(commit.hash),
                                 }"
                             >
