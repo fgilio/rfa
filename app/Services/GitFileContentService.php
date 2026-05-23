@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Enums\GitRef;
-use App\Exceptions\GitCommandException;
 
 class GitFileContentService
 {
@@ -80,10 +79,10 @@ class GitFileContentService
             return $content === false ? null : $content;
         }
 
-        try {
-            return $this->gitProcessService->run($repoPath, ['show', $ref.':'.$path]);
-        } catch (GitCommandException) {
-            return null;
-        }
+        return rescue(
+            fn (): string => $this->gitProcessService->run($repoPath, ['show', $ref.':'.$path]),
+            rescue: null,
+            report: false,
+        );
     }
 }

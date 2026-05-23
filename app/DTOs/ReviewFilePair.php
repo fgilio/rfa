@@ -57,11 +57,11 @@ class ReviewFilePair
             return null;
         }
 
-        try {
-            return Carbon::createFromFormat('Ymd_His', $m[1].'_'.$m[2]);
-        } catch (\Exception) {
-            return null;
-        }
+        return rescue(
+            fn (): ?Carbon => Carbon::createFromFormat('Ymd_His', $m[1].'_'.$m[2]) ?: null,
+            rescue: null,
+            report: false,
+        );
     }
 
     /** @return array<string, mixed> */

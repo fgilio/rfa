@@ -6,7 +6,6 @@ namespace App\Actions;
 
 use App\Enums\LastViewKind;
 use App\Enums\LastViewMode;
-use App\Exceptions\GitCommandException;
 use App\Models\Project;
 use App\Models\ReviewSession;
 use App\Services\GitMetadataService;
@@ -102,13 +101,13 @@ final readonly class ResolveProjectEntryUrlAction
             return null;
         }
 
-        try {
-            $headSha = $this->gitMetadataService->getHeadSha($project->path);
-        } catch (GitCommandException) {
-            return null;
-        }
+        $headSha = rescue(
+            fn (): string => $this->gitMetadataService->getHeadSha($project->path),
+            rescue: null,
+            report: false,
+        );
 
-        if ($headSha === $mergeBase) {
+        if ($headSha === null || $headSha === $mergeBase) {
             return null;
         }
 

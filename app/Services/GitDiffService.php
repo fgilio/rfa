@@ -393,9 +393,13 @@ class GitDiffService
             return $this->countLinesInFile($repoPath.'/'.$path);
         }
 
-        try {
-            $content = $this->git->run($repoPath, ['show', $target->to().':'.$path]);
-        } catch (\Throwable) {
+        $content = rescue(
+            fn (): string => $this->git->run($repoPath, ['show', $target->to().':'.$path]),
+            rescue: null,
+            report: false,
+        );
+
+        if ($content === null) {
             return null;
         }
 

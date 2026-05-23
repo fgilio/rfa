@@ -6,7 +6,6 @@ namespace App\Services;
 
 use App\DTOs\AgentContextFile;
 use App\Enums\AgentContextFileKind;
-use App\Exceptions\GitCommandException;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Process\Process;
@@ -79,9 +78,13 @@ class AgentContextFileScannerService
             'AGENTS.md',
         ];
 
-        try {
-            $output = $this->git->run($repoPath, $args);
-        } catch (GitCommandException) {
+        $output = rescue(
+            fn (): string => $this->git->run($repoPath, $args),
+            rescue: null,
+            report: false,
+        );
+
+        if ($output === null) {
             return [];
         }
 
@@ -275,12 +278,16 @@ class AgentContextFileScannerService
      */
     private function resolveGitDates(string $repoPath, array $relPaths): array
     {
-        try {
-            $output = $this->git->run($repoPath, [
+        $output = rescue(
+            fn (): string => $this->git->run($repoPath, [
                 'log', '-z', '--format=COMMIT %aI', '--name-only',
                 '--', ...$relPaths,
-            ]);
-        } catch (GitCommandException) {
+            ]),
+            rescue: null,
+            report: false,
+        );
+
+        if ($output === null) {
             return [];
         }
 

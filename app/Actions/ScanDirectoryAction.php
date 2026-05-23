@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\ScanDirectoryResult;
-use App\Exceptions\GitCommandException;
 use App\Models\Project;
 use App\Services\GitMetadataService;
 use Illuminate\Support\Facades\File;
@@ -32,11 +31,11 @@ final readonly class ScanDirectoryAction
         foreach ($children as $child) {
             $childReal = (string) realpath($child);
 
-            try {
-                $topLevel = $this->git->getTopLevel($childReal);
-            } catch (GitCommandException) {
-                continue;
-            }
+            $topLevel = rescue(
+                fn (): string => $this->git->getTopLevel($childReal),
+                rescue: '',
+                report: false,
+            );
 
             if ($topLevel === '') {
                 continue;

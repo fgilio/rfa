@@ -96,11 +96,11 @@ class GitMetadataService
      */
     public function getRemoteUrl(string $directory, string $remoteName = 'origin'): ?string
     {
-        try {
-            $url = trim($this->git->run($directory, ['config', '--get', 'remote.'.$remoteName.'.url']));
-        } catch (GitCommandException) {
-            return null;
-        }
+        $url = rescue(
+            fn (): string => trim($this->git->run($directory, ['config', '--get', 'remote.'.$remoteName.'.url'])),
+            rescue: '',
+            report: false,
+        );
 
         return $url === '' ? null : $url;
     }
@@ -116,13 +116,11 @@ class GitMetadataService
             return false;
         }
 
-        try {
+        return rescue(function () use ($directory, $branch): bool {
             $this->git->run($directory, ['rev-parse', '--verify', '--quiet', 'refs/heads/'.$branch]);
 
             return true;
-        } catch (GitCommandException) {
-            return false;
-        }
+        }, rescue: false, report: false);
     }
 
     public function getFileContent(string $repoPath, string $path, string $ref = GitRef::Working->value): ?string
@@ -241,14 +239,14 @@ class GitMetadataService
             return null;
         }
 
-        try {
-            $output = trim($this->git->run($repoPath, ['merge-base', $a, $b]));
+        // Unrelated histories or missing refs are both non-fatal here.
+        $output = rescue(
+            fn (): string => trim($this->git->run($repoPath, ['merge-base', $a, $b])),
+            rescue: '',
+            report: false,
+        );
 
-            return $output !== '' ? $output : null;
-        } catch (GitCommandException) {
-            // Unrelated histories or missing ref — both are non-fatal here.
-            return null;
-        }
+        return $output !== '' ? $output : null;
     }
 
     public function getChildCommit(string $repoPath, string $hash): ?string
@@ -288,31 +286,30 @@ class GitMetadataService
             ->values()
             ->all();
 
-        $remote = [];
+        $remoteOutput = rescue(
+            fn (): string => $this->git->run($repoPath, ['branch', '--remotes', '--no-color']),
+            rescue: '',
+            report: false,
+        );
 
-        try {
-            $remoteOutput = $this->git->run($repoPath, ['branch', '--remotes', '--no-color']);
-            $remote = collect(explode("\n", $remoteOutput))
-                ->map(fn (string $line): string => trim($line))
-                ->filter()
-                ->reject(fn (string $name): bool => str_contains($name, '->'))
-                ->map(function (string $name): BranchEntry {
-                    $remoteName = str_contains($name, '/')
-                        ? substr($name, 0, (int) strpos($name, '/'))
-                        : null;
+        $remote = collect(explode("\n", $remoteOutput))
+            ->map(fn (string $line): string => trim($line))
+            ->filter()
+            ->reject(fn (string $name): bool => str_contains($name, '->'))
+            ->map(function (string $name): BranchEntry {
+                $remoteName = str_contains($name, '/')
+                    ? substr($name, 0, (int) strpos($name, '/'))
+                    : null;
 
-                    return new BranchEntry(
-                        name: $name,
-                        isCurrent: false,
-                        isRemote: true,
-                        remote: $remoteName,
-                    );
-                })
-                ->values()
-                ->all();
-        } catch (GitCommandException) {
-            // No remotes configured - ignore
-        }
+                return new BranchEntry(
+                    name: $name,
+                    isCurrent: false,
+                    isRemote: true,
+                    remote: $remoteName,
+                );
+            })
+            ->values()
+            ->all();
 
         return ['local' => $local, 'remote' => $remote];
     }
