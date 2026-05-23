@@ -19,7 +19,10 @@ final class PathGuard
         $normalizedPath = str_replace('\\', '/', $path);
 
         throw_if(
-            $path === '' || Str::startsWith($normalizedPath, '/') || in_array('..', explode('/', $normalizedPath), true),
+            $path === ''
+                || Str::startsWith($normalizedPath, '/')
+                || preg_match('/^[A-Za-z]:\//', $normalizedPath) === 1
+                || in_array('..', explode('/', $normalizedPath), true),
             InvalidArgumentException::class,
             "Invalid file path: {$path}",
         );

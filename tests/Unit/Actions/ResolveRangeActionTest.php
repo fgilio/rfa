@@ -70,6 +70,12 @@ test('resolves a plain short base to a full hash', function () {
         ->and($target->to())->toBe($this->childSha);
 });
 
+test('context key uses resolved full refs for short range inputs', function () {
+    $target = $this->action->handle($this->tmpDir, substr($this->rootSha, 0, 7), substr($this->childSha, 0, 7));
+
+    expect($target->contextKey())->toBe($this->rootSha.'..'.$this->childSha);
+});
+
 test('passes through an unresolvable <ref>^ base without substitution', function () {
     $target = $this->action->handle($this->tmpDir, 'does-not-exist^', $this->childSha);
 
