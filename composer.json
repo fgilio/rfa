@@ -63,7 +63,7 @@
         "test:types": "./vendor/bin/phpstan analyse --memory-limit=512M",
         "test": [
             "@php artisan config:clear --ansi",
-            "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Core --parallel"
+            "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Core --parallel --passthru-php=\"-d memory_limit=512M\""
         ],
         "test:serial": [
             "@php artisan config:clear --ansi",
