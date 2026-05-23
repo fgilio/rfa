@@ -53,6 +53,12 @@ test('returns null when file not found', function () {
     expect($result)->toBeNull();
 });
 
+test('returns null for invalid image paths', function () {
+    $result = app(ServeImageAction::class)->handle($this->project->id, '../secrets.png', 'working');
+
+    expect($result)->toBeNull();
+});
+
 test('returns null when file not in HEAD', function () {
     File::put($this->tmpDir.'/untracked.png', "PNG\0new");
 

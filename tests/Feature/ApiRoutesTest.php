@@ -146,5 +146,5 @@ test('image route rejects path traversal', function () {
     $project = Project::factory()->create();
 
     $this->get("/api/image/{$project->id}/HEAD/../../etc/passwd")
-        ->assertStatus(500);
+        ->assertNotFound();
 });
