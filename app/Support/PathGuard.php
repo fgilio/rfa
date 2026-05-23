@@ -13,7 +13,9 @@ final class PathGuard
      */
     public static function assertRelative(string $path): void
     {
-        if (str_starts_with($path, '/') || str_contains($path, '..')) {
+        $segments = explode('/', str_replace('\\', '/', $path));
+
+        if ($path === '' || str_starts_with($path, '/') || in_array('..', $segments, true)) {
             throw new \InvalidArgumentException("Invalid file path: {$path}");
         }
     }
