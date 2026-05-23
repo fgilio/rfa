@@ -7,7 +7,6 @@ namespace App\Actions;
 use App\Models\Project;
 use App\Services\GitMetadataService;
 use App\Support\PathGuard;
-use InvalidArgumentException;
 
 final readonly class ServeImageAction
 {
@@ -18,9 +17,13 @@ final readonly class ServeImageAction
     /** @return array{content: string, mimeType: string}|null */
     public function handle(int $projectId, string $path, string $ref): ?array
     {
-        try {
+        $isValidPath = rescue(function () use ($path): bool {
             PathGuard::assertRelative($path);
-        } catch (InvalidArgumentException) {
+
+            return true;
+        }, rescue: false, report: false);
+
+        if (! $isValidPath) {
             return null;
         }
 

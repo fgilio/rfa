@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
 use Throwable;
 
@@ -301,7 +302,7 @@ final class RuntimeDiagnosticsService
 
         $path = parse_url($url, PHP_URL_PATH);
 
-        if (! is_string($path) || ! str_starts_with($path, '/')) {
+        if (! is_string($path) || ! Str::startsWith($path, '/')) {
             return null;
         }
 
