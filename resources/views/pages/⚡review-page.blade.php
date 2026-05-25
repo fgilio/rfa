@@ -1326,18 +1326,16 @@ new #[Layout('layouts.app')] class extends Component
     "
     x-data="{
         pendingSaves: 0,
+        pendingSavesGuard: null,
         init() {
-            const wireId = this.$root.getAttribute('wire:id');
-            Livewire.hook('commit', ({ component, succeed, fail }) => {
-                if (component.id !== wireId) return;
-                this.pendingSaves++;
-                const done = () => { this.pendingSaves--; };
-                succeed(({ snapshot, effect }) => { done(); });
-                fail(done);
+            this.pendingSavesGuard = window.rfaPendingSaves?.createPendingSavesGuard({
+                root: window,
+                livewire: Livewire,
+                getWireId: () => this.$root.getAttribute('wire:id'),
+                onPendingSavesChanged: (count) => { this.pendingSaves = count; },
             });
-            window.addEventListener('beforeunload', (e) => {
-                if (this.pendingSaves > 0) e.preventDefault();
-            });
+
+            this.pendingSavesGuard?.attach();
         },
         activeFile: null,
         reviewedFiles: @js((object) collect($sourceFiles)->filter(fn($f) => array_key_exists($f['path'], $reviewedFiles))->pluck('id')->flip()->map(fn() => true)->all()),
@@ -1495,6 +1493,8 @@ new #[Layout('layouts.app')] class extends Component
             tryScroll();
         },
         destroy() {
+            this.pendingSavesGuard?.detach();
+            this.pendingSavesGuard = null;
             clearTimeout(this.commentScrollPollId);
         }
     }"
@@ -2085,17 +2085,24 @@ new #[Layout('layouts.app')] class extends Component
                         <span class="section-label text-gh-muted mb-3 block">Trash</span>
                         @foreach($trashedFiles as $trashed)
                             <div class="w-full px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2 group transition-colors"
-                                x-data="{ expiresAt: {{ $trashed['expires_at'] ? \Carbon\Carbon::parse($trashed['expires_at'])->getTimestampMs() : 0 }}, remaining: '' }"
-                                x-init="
-                                    const update = () => {
-                                        const ms = expiresAt - Date.now();
-                                        if (ms <= 0) { remaining = 'expired'; clearInterval($el._iv); return; }
-                                        const m = Math.ceil(ms / 60000);
-                                        remaining = m < 1 ? '< 1m' : m + 'm';
-                                    };
-                                    update();
-                                    $el._iv = setInterval(update, 15000);
-                                "
+                                x-data="{
+                                    expiresAt: {{ $trashed['expires_at'] ? \Carbon\Carbon::parse($trashed['expires_at'])->getTimestampMs() : 0 }},
+                                    remaining: '',
+                                    intervalId: null,
+                                    init() {
+                                        const update = () => {
+                                            const ms = this.expiresAt - Date.now();
+                                            if (ms <= 0) { this.remaining = 'expired'; clearInterval(this.intervalId); return; }
+                                            const m = Math.ceil(ms / 60000);
+                                            this.remaining = m < 1 ? '< 1m' : m + 'm';
+                                        };
+                                        update();
+                                        this.intervalId = setInterval(update, 15000);
+                                    },
+                                    destroy() {
+                                        clearInterval(this.intervalId);
+                                    },
+                                }"
                             >
                                 <span class="font-mono text-xs text-gh-muted truncate flex-1" title="{{ $trashed['file_path'] }}">{{ basename($trashed['file_path']) }}</span>
                                 <span class="text-[10px] text-gh-muted tabular-nums" x-text="remaining"></span>

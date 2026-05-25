@@ -23,6 +23,7 @@
     <script src="/js/page-search.js"></script>
     <script src="/js/session-recovery.js"></script>
     <script src="/js/smart-poll.js"></script>
+    <script src="/js/pending-saves.js"></script>
     <style>
         @font-face {
             font-family: 'Space Grotesk';
