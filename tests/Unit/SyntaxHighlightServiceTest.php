@@ -105,6 +105,98 @@ test('highlights Blade hunks that start inside a Livewire SFC PHP block', functi
         ->and($result[0]->lines[4]->highlightedContent)->toContain('<span class="hl-keyword">if</span>');
 });
 
+test('highlights html template files as html', function () {
+    $hunks = [
+        new Hunk('', 1, 2, 1, 2, [
+            new DiffLine(LineType::Context, '<!DOCTYPE html>', 1, 1),
+            new DiffLine(LineType::Context, '<script>var ready = true;</script>', 2, 2),
+        ]),
+    ];
+
+    $result = $this->service->highlightHunks($hunks, 'fenice/config/templates/bundle-index.html.template');
+
+    expect($this->service->lastHighlighter())->toBe('tempest')
+        ->and($result[0]->lines[1]->highlightedContent)->toContain('<span class="hl-keyword">script</span>');
+});
+
+test('highlights gradle properties templates as ini style', function () {
+    $hunks = [
+        new Hunk('', 1, 2, 1, 2, [
+            new DiffLine(LineType::Context, '# Project-wide Gradle settings.', 1, 1),
+            new DiffLine(LineType::Context, 'org.gradle.parallel=true', 2, 2),
+        ]),
+    ];
+
+    $result = $this->service->highlightHunks($hunks, 'fenice/config/templates/gradle.properties.template');
+
+    expect($this->service->lastHighlighter())->toBe('tempest')
+        ->and($result[0]->lines[1]->highlightedContent)->toContain('<span class="hl-property">org.gradle.parallel</span>');
+});
+
+test('uses Tempest for project template and dump formats found under pla', function (string $path, string $line, string $expectedToken) {
+    $hunks = [
+        new Hunk('', 1, 1, 1, 1, [
+            new DiffLine(LineType::Context, $line, 1, 1),
+        ]),
+    ];
+
+    $result = $this->service->highlightHunks($hunks, $path);
+
+    expect($this->service->lastHighlighter())->toBe('tempest')
+        ->and($result[0]->lines[0]->highlightedContent)->toContain($expectedToken);
+})->with([
+    'js template' => ['fenice/config/templates/config.js.template', 'const config = { enabled: true };', '<span class="hl-keyword">const</span>'],
+    'json example' => ['picchio/data/template/users.json.example', '{"name": "Franco"}', '<span class="hl-keyword">&quot;name&quot;</span>'],
+    'json lines' => ['talpa/runtime/audit.jsonl', '{"ts": "2026-05-04T20:42:45Z"}', '<span class="hl-keyword">&quot;ts&quot;</span>'],
+    'json dotfile' => ['fenice/mobile/.babelrc', '{"plugins": ["jsx"]}', '<span class="hl-keyword">&quot;plugins&quot;</span>'],
+    'plist template' => ['fenice/config/templates/Info.plist.template', '<key>CFBundleName</key>', '<span class="hl-keyword">key</span>'],
+    'xml template' => ['fenice/config/templates/strings.xml.template', '<string name="app_name">Publica</string>', '<span class="hl-keyword">string</span>'],
+    'xcscheme template' => ['fenice/config/templates/Staging.xcscheme.template', '<Scheme version="1.7">', '<span class="hl-keyword">Scheme</span>'],
+    'xml fragment template' => ['fenice/config/templates/ios-fonts.template', '<string>NotoSans-Regular.ttf</string>', '<span class="hl-keyword">string</span>'],
+    'php stub' => ['mentat/stubs/agent.stub', 'class {{ class }} implements Agent', '<span class="hl-keyword">class</span>'],
+    'mdc rules' => ['fenice/fenice/.cursor/rules.mdc', '# Fenice Project Rules', '<span class="hl-keyword"># Fenice Project Rules</span>'],
+    'cursor rules' => ['pla/.cursorrules', '# Project Rules', '<span class="hl-keyword"># Project Rules</span>'],
+    'npmrc' => ['farfalla/.npmrc', '@publicala:registry=https://gitlab.com/api/v4/packages/npm/', '<span class="hl-property">publicala:registry</span>'],
+    'gitmodules' => ['docs/.gitmodules', '[submodule "docs"]', '<span class="hl-keyword">[submodule &quot;docs&quot;]</span>'],
+    'bashrc' => ['home/.bashrc', 'export PATH="$HOME/bin:$PATH"', '<span class="hl-keyword">export</span>'],
+    'env variant' => ['vito/.env.production', 'VITE_ENVIRONMENT=local', '<span class="hl-keyword">VITE_ENVIRONMENT</span>'],
+    'sql dump' => ['medusa/database/schema/singlestore-schema.dump', 'CREATE TABLE `action_events` (`id` bigint);', '<span class="hl-keyword">CREATE TABLE</span>'],
+    'ejs template' => ['templates/index.ejs', '<div><%= name %></div>', '<span class="hl-keyword">div</span>'],
+    'dockerfile variant' => ['botesito/deploy/Dockerfile.gs-build', 'FROM debian:bookworm-slim AS build', '<span class="hl-keyword">FROM</span>'],
+]);
+
+test('falls back to Phiki Javascript for Vitest snapshots', function () {
+    $hunks = [
+        new Hunk('', 1, 1, 1, 1, [
+            new DiffLine(LineType::Context, 'exports[`summary 1`] = `ok`;', 1, 1),
+        ]),
+    ];
+
+    $result = $this->service->highlightHunks($hunks, 'vito/src/__snapshots__/summary.test.ts.snap');
+
+    expect($this->service->lastHighlighter())->toBe('phiki')
+        ->and($result[0]->lines[0]->highlightedContent)->toContain('<span');
+});
+
+test('falls back to Phiki Ruby for Fastfile and Podfile', function (string $path) {
+    $hunks = [
+        new Hunk('', 1, 3, 1, 3, [
+            new DiffLine(LineType::Context, "require 'json'", 1, 1),
+            new DiffLine(LineType::Context, 'default_platform(:ios)', 2, 2),
+            new DiffLine(LineType::Context, 'def load_changelog_artifact(tag)', 3, 3),
+        ]),
+    ];
+
+    $result = $this->service->highlightHunks($hunks, $path);
+
+    expect($this->service->lastHighlighter())->toBe('phiki')
+        ->and($result[0]->lines[0]->highlightedContent)->toContain('<span')
+        ->and($result[0]->lines[2]->highlightedContent)->toContain('<span');
+})->with([
+    'mobile/fastlane/Fastfile',
+    'mobile/ios/Podfile',
+]);
+
 test('context lines get new-side highlighting', function () {
     $hunks = [
         new Hunk('', 1, 1, 1, 1, [

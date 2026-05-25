@@ -52,13 +52,34 @@ class SyntaxHighlightService
 {
     /** @var array<string, string> */
     private const TEMPEST_FILENAME_MAP = [
+        '.babelrc' => 'json',
+        '.bashrc' => 'bash',
+        '.cursorrules' => 'markdown',
+        '.gitmodules' => 'ini',
+        '.npmrc' => 'ini',
+        '.prettierrc' => 'json',
+        '.shiftrc' => 'ini',
+        '.watchmanconfig' => 'json',
         'dockerfile' => 'dockerfile',
+        'dockerfile.gs-build' => 'dockerfile',
+        'ios-fonts.template' => 'xml',
         'makefile' => 'text',
     ];
 
     /** @var array<string, string> */
     private const TEMPEST_COMPOUND_MAP = [
         'blade.php' => 'blade',
+        'html.template' => 'html',
+        'js.template' => 'javascript',
+        'json.example' => 'json',
+        'plist.template' => 'xml',
+        'properties.template' => 'ini',
+        'entitlements.template' => 'xml',
+        'xcscheme.template' => 'xml',
+        'xml.template' => 'xml',
+        'xml.dist' => 'xml',
+        'toml.example' => 'text',
+        'env.example' => 'dotenv',
     ];
 
     /** @var array<string, string> */
@@ -75,26 +96,47 @@ class SyntaxHighlightService
         'svelte' => 'svelte',
         'css' => 'css',
         'scss' => 'scss',
+        'ejs' => 'html',
         'html' => 'html',
         'htm' => 'html',
+        'xhtml' => 'xml',
         'xml' => 'xml',
+        'opf' => 'xml',
+        'ncx' => 'xml',
+        'xsl' => 'xml',
+        'plist' => 'xml',
+        'storyboard' => 'xml',
+        'xcscheme' => 'xml',
+        'xcworkspacedata' => 'xml',
+        'entitlements' => 'xml',
+        'xcprivacy' => 'xml',
+        'config' => 'xml',
         'svg' => 'xml',
         'json' => 'json',
+        'jsonl' => 'json',
+        'webmanifest' => 'json',
+        'code-workspace' => 'json',
         'yaml' => 'yaml',
         'yml' => 'yaml',
         'ini' => 'ini',
+        'properties' => 'ini',
+        'editorconfig' => 'ini',
         'env' => 'dotenv',
+        'stub' => 'php',
         'md' => 'markdown',
+        'mdc' => 'markdown',
         'py' => 'python',
         'sh' => 'bash',
         'bash' => 'bash',
         'zsh' => 'bash',
         'sql' => 'sql',
+        'dump' => 'sql',
         'graphql' => 'graphql',
         'gql' => 'graphql',
         'tf' => 'terraform',
         'hcl' => 'terraform',
         'docker' => 'dockerfile',
+        'dockerfile' => 'dockerfile',
         'diff' => 'diff',
         'patch' => 'diff',
         'nginx' => 'nginx',
@@ -487,6 +529,10 @@ class SyntaxHighlightService
 
         if (isset(self::TEMPEST_FILENAME_MAP[$filename])) {
             return self::TEMPEST_FILENAME_MAP[$filename];
+        }
+
+        if (str_starts_with($filename, '.env.') || str_starts_with($filename, '.dev.vars')) {
+            return 'dotenv';
         }
 
         foreach (self::TEMPEST_COMPOUND_MAP as $compound => $language) {
