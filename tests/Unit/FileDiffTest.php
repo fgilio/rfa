@@ -80,6 +80,7 @@ test('emptyArray returns tooLarge array structure', function () {
         'isSymlink' => false,
         'symlinkTarget' => null,
         'tooLarge' => true,
+        'syntaxHighlighter' => 'none',
     ]);
 });
 
