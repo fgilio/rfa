@@ -13,34 +13,114 @@ use Phiki\Grammar\Grammar;
 use Phiki\Phiki;
 use Phiki\Theme\ParsedTheme;
 use Phiki\Theme\Theme;
+use Tempest\Highlight\Highlighter as TempestHighlighter;
+use Throwable;
 
 use function e;
 
 // Performance notes
 //
-// The pipeline is: git diff -> parse -> tokenize -> theme match -> HTML.
-// Profiling shows tokenization + theme matching dominate (~95% of total time).
-// Two optimizations target this:
+// Large "Show full file" diffs are sensitive to syntax highlighting time.
+// The Blade regression fixture from b0456e... has ~2,200 rendered lines:
+// Phiki took roughly 3s end-to-end, while Tempest keeps the highlighted path
+// around 70ms in the benchmark runner.
 //
-// 1. Direct token API (bypasses Phast DOM)
-//    Phiki's codeToHtml() builds a full DOM tree (Element, Text, Properties,
-//    ClassList per token), serializes it to HTML, then we regex-extract lines.
-//    Instead, we call codeToTokens() and build flat HTML strings directly,
-//    skipping all intermediate DOM allocation.
+// Tempest is the primary highlighter for common review targets (Blade, PHP,
+// JS/TS, CSS, JSON, YAML, Markdown, diff). Blade files need extra handling:
+// Livewire SFCs start with a raw PHP opening/closing block, while Tempest's
+// Blade language only injects PHP for Blade constructs (`@php`, `{{ }}`, `@if`).
+// The adapter segments raw PHP blocks and highlights them with PHP, then uses
+// Blade for the template regions.
 //
-// 2. Scope-cached theme matching (bypasses Phiki's Highlighter)
-//    ParsedTheme::match() iterates 100+ theme rules per token, with usort()
-//    for specificity. Many tokens share identical scope arrays ($variables,
-//    keywords, etc). We cache the resolved CSS style string by scope key,
-//    turning repeated O(rules) lookups into O(1) hash hits. For a ~300 line
-//    PHP file this cuts theme matching from ~400ms to ~50ms.
+// Phiki remains as the compatibility fallback for languages Tempest does not
+// cover. The fallback still uses Phiki's token API and cached scope-to-class
+// matching; avoid `codeToHtml()` because it allocates a heavier DOM model.
 //
-// NOTE: Each hunk is tokenized independently (not batched across hunks).
-// Batching would break the tokenizer's grammar state at hunk boundaries
-// because inter-hunk lines are absent from the diff.
+// Diff lines are highlighted by reconstructing old-side and new-side code for
+// each hunk, then mapping highlighted HTML back to the original DiffLine
+// objects. A highlighter result is only accepted when its line count exactly
+// matches the input line count. This prevents broken row alignment in split and
+// unified views.
+//
+// Default-context hunks may start inside a Livewire SFC PHP block without the
+// opening tag. In that case the Blade adapter uses a conservative PHP-shape
+// heuristic so method bodies are not sent through the HTML-oriented Blade lexer.
+//
+// Do not batch separate hunks together. Missing inter-hunk context would let
+// tokenizer state bleed across unrelated regions and produce misleading spans.
 class SyntaxHighlightService
 {
+    /** @var array<string, string> */
+    private const TEMPEST_FILENAME_MAP = [
+        'dockerfile' => 'dockerfile',
+        'makefile' => 'text',
+    ];
+
+    /** @var array<string, string> */
+    private const TEMPEST_COMPOUND_MAP = [
+        'blade.php' => 'blade',
+    ];
+
+    /** @var array<string, string> */
+    private const TEMPEST_EXTENSION_MAP = [
+        'php' => 'php',
+        'js' => 'javascript',
+        'cjs' => 'javascript',
+        'mjs' => 'javascript',
+        'ts' => 'typescript',
+        'cts' => 'typescript',
+        'mts' => 'typescript',
+        'jsx' => 'javascript',
+        'tsx' => 'typescript',
+        'svelte' => 'svelte',
+        'css' => 'css',
+        'scss' => 'scss',
+        'html' => 'html',
+        'htm' => 'html',
+        'xml' => 'xml',
+        'svg' => 'xml',
+        'json' => 'json',
+        'yaml' => 'yaml',
+        'yml' => 'yaml',
+        'ini' => 'ini',
+        'env' => 'dotenv',
+        'md' => 'markdown',
+        'py' => 'python',
+        'sh' => 'bash',
+        'bash' => 'bash',
+        'zsh' => 'bash',
+        'sql' => 'sql',
+        'graphql' => 'graphql',
+        'gql' => 'graphql',
+        'tf' => 'terraform',
+        'hcl' => 'terraform',
+        'docker' => 'dockerfile',
+        'diff' => 'diff',
+        'patch' => 'diff',
+        'nginx' => 'nginx',
+        'conf' => 'nginx',
+        'twig' => 'twig',
+    ];
+
+    /** @var array<string, array{light: string, dark: string}> */
+    private const TEMPEST_STYLE_MAP = [
+        'hl-keyword' => ['light' => 'color:#cf222e;', 'dark' => 'color:#ff7b72;'],
+        'hl-operator' => ['light' => 'color:#0550ae;', 'dark' => 'color:#79c0ff;'],
+        'hl-type' => ['light' => 'color:#8250df;', 'dark' => 'color:#d2a8ff;'],
+        'hl-value' => ['light' => 'color:#0a3069;', 'dark' => 'color:#a5d6ff;'],
+        'hl-variable' => ['light' => 'color:#953800;', 'dark' => 'color:#ffa657;'],
+        'hl-property' => ['light' => 'color:#953800;', 'dark' => 'color:#ffa657;'],
+        'hl-attribute' => ['light' => 'color:#116329;', 'dark' => 'color:#7ee787;'],
+        'hl-generic' => ['light' => 'color:#24292f;', 'dark' => 'color:#e6edf3;'],
+        'hl-number' => ['light' => 'color:#0550ae;', 'dark' => 'color:#79c0ff;'],
+        'hl-literal' => ['light' => 'color:#0550ae;', 'dark' => 'color:#79c0ff;'],
+        'hl-comment' => ['light' => 'color:#6e7781;', 'dark' => 'color:#8b949e;'],
+        'hl-injection' => ['light' => 'color:#8250df;', 'dark' => 'color:#d2a8ff;'],
+    ];
+
     private Phiki $phiki;
+
+    private TempestHighlighter $tempest;
 
     private ParsedTheme $lightTheme;
 
@@ -52,9 +132,12 @@ class SyntaxHighlightService
     /** @var array<string, array{light: string, dark: string}> class name => CSS declarations */
     private array $classStyles = [];
 
+    private string $lastHighlighter = 'none';
+
     public function __construct()
     {
         $this->phiki = new Phiki;
+        $this->tempest = new TempestHighlighter;
         $this->lightTheme = $this->phiki->environment->themes->resolve(Theme::GithubLight);
         $this->darkTheme = $this->phiki->environment->themes->resolve(Theme::GithubDark);
     }
@@ -65,16 +148,34 @@ class SyntaxHighlightService
      */
     public function highlightHunks(array $hunks, string $filePath): array
     {
-        $grammar = GrammarMap::resolve($filePath);
+        $this->scopeCache = [];
+        $this->classStyles = [];
+        $this->lastHighlighter = 'none';
 
+        if ($hunks === []) {
+            return $hunks;
+        }
+
+        $tempestLanguage = $this->resolveTempestLanguage($filePath);
+        if ($tempestLanguage !== null) {
+            $highlighted = $this->highlightWithTempest($hunks, $tempestLanguage);
+
+            if ($highlighted !== null) {
+                $this->classStyles = self::TEMPEST_STYLE_MAP;
+                $this->lastHighlighter = 'tempest';
+
+                return $highlighted;
+            }
+        }
+
+        $grammar = GrammarMap::resolve($filePath);
         if ($grammar === null) {
             return $hunks;
         }
 
-        $this->scopeCache = [];
-        $this->classStyles = [];
+        $this->lastHighlighter = 'phiki';
 
-        return array_map(fn (Hunk $hunk) => $this->highlightHunk($hunk, $grammar), $hunks);
+        return array_map(fn (Hunk $hunk) => $this->highlightHunkWithPhiki($hunk, $grammar), $hunks);
     }
 
     /** @return array<string, array{light: string, dark: string}> */
@@ -83,7 +184,158 @@ class SyntaxHighlightService
         return $this->classStyles;
     }
 
-    private function highlightHunk(Hunk $hunk, Grammar $grammar): Hunk
+    public function lastHighlighter(): string
+    {
+        return $this->lastHighlighter;
+    }
+
+    /**
+     * @param  Hunk[]  $hunks
+     * @return Hunk[]|null
+     */
+    private function highlightWithTempest(array $hunks, string $language): ?array
+    {
+        try {
+            return array_map(fn (Hunk $hunk) => $this->highlightHunkWithTempest($hunk, $language), $hunks);
+        } catch (Throwable $e) {
+            Log::warning('syntax.highlighting.failed', [
+                'reason' => 'tempest_highlighting_failed',
+                'language' => $language,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function highlightHunkWithTempest(Hunk $hunk, string $language): Hunk
+    {
+        return $this->highlightHunk(
+            $hunk,
+            fn (array $codeLines): array => $this->highlightCodeLinesWithTempest($codeLines, $language),
+        );
+    }
+
+    /**
+     * @param  string[]  $codeLines
+     * @return string[]
+     */
+    private function highlightCodeLinesWithTempest(array $codeLines, string $language): array
+    {
+        if ($codeLines === []) {
+            return [];
+        }
+
+        if ($language === 'blade') {
+            return $this->highlightBladeCodeLinesWithTempest($codeLines);
+        }
+
+        $html = $this->tempest->parse(implode("\n", $codeLines), $language);
+        $highlightedLines = explode("\n", $html);
+
+        return count($highlightedLines) === count($codeLines) ? $highlightedLines : [];
+    }
+
+    /**
+     * @param  string[]  $codeLines
+     * @return string[]
+     */
+    private function highlightBladeCodeLinesWithTempest(array $codeLines): array
+    {
+        if (! collect($codeLines)->contains(fn (string $line): bool => str_contains($line, '<?php') || str_contains($line, '?'.'>'))
+            && $this->looksLikePhpBlock($codeLines)) {
+            return $this->highlightPlainCodeLinesWithTempest($codeLines, 'php');
+        }
+
+        /** @var list<array{language: string, lines: string[]}> $segments */
+        $segments = [];
+        $segmentLines = [];
+        $segmentLanguage = 'blade';
+        $insidePhpBlock = false;
+
+        foreach ($codeLines as $line) {
+            $startsPhpBlock = ! $insidePhpBlock && str_contains($line, '<?php');
+            if ($startsPhpBlock && $segmentLanguage !== 'php') {
+                if ($segmentLines !== []) {
+                    $segments[] = ['language' => $segmentLanguage, 'lines' => $segmentLines];
+                }
+
+                $segmentLines = [];
+                $segmentLanguage = 'php';
+                $insidePhpBlock = true;
+            }
+
+            $segmentLines[] = $line;
+
+            if ($insidePhpBlock && str_contains($line, '?'.'>')) {
+                $segments[] = ['language' => $segmentLanguage, 'lines' => $segmentLines];
+                $segmentLines = [];
+                $segmentLanguage = 'blade';
+                $insidePhpBlock = false;
+            }
+        }
+
+        if ($segmentLines !== []) {
+            $segments[] = ['language' => $segmentLanguage, 'lines' => $segmentLines];
+        }
+
+        $highlightedLines = [];
+        foreach ($segments as $segment) {
+            $highlightedLines = [
+                ...$highlightedLines,
+                ...$this->highlightPlainCodeLinesWithTempest($segment['lines'], $segment['language']),
+            ];
+        }
+
+        return count($highlightedLines) === count($codeLines) ? $highlightedLines : [];
+    }
+
+    /**
+     * @param  string[]  $codeLines
+     */
+    private function looksLikePhpBlock(array $codeLines): bool
+    {
+        $code = trim(implode("\n", array_filter($codeLines, fn (string $line): bool => trim($line) !== '')));
+
+        if ($code === '') {
+            return false;
+        }
+
+        if (preg_match('/^\s*(<|@|\{\{|\{!!)/m', $code) === 1) {
+            return false;
+        }
+
+        return preg_match('/^\s*(use\s+[A-Z_\\\\]|new\s+class\b|public\s+|protected\s+|private\s+|if\s*\(|foreach\s*\(|return\b|\$this->|app\()/m', $code) === 1;
+    }
+
+    /**
+     * @param  string[]  $codeLines
+     * @return string[]
+     */
+    private function highlightPlainCodeLinesWithTempest(array $codeLines, string $language): array
+    {
+        if ($codeLines === []) {
+            return [];
+        }
+
+        $html = $this->tempest->parse(implode("\n", $codeLines), $language);
+        $highlightedLines = explode("\n", $html);
+
+        return count($highlightedLines) === count($codeLines) ? $highlightedLines : [];
+    }
+
+    private function highlightHunkWithPhiki(Hunk $hunk, Grammar $grammar): Hunk
+    {
+        return $this->highlightHunk(
+            $hunk,
+            fn (array $codeLines): array => $this->highlightCodeLinesWithPhiki($codeLines, $grammar),
+        );
+    }
+
+    /**
+     * @param  callable(string[]): string[]  $highlightCodeLines
+     */
+    private function highlightHunk(Hunk $hunk, callable $highlightCodeLines): Hunk
     {
         $lines = $hunk->lines;
         $oldCode = [];
@@ -106,8 +358,8 @@ class SyntaxHighlightService
             }
         }
 
-        $oldHighlighted = $this->tokenizeAndHighlight($oldCode, $grammar);
-        $newHighlighted = $this->tokenizeAndHighlight($newCode, $grammar);
+        $oldHighlighted = $highlightCodeLines($oldCode);
+        $newHighlighted = $highlightCodeLines($newCode);
 
         $highlighted = [];
 
@@ -124,7 +376,7 @@ class SyntaxHighlightService
         }
 
         $newLines = array_map(
-            fn (int $i, DiffLine $line) => isset($highlighted[$i])
+            fn (int $i, DiffLine $line) => array_key_exists($i, $highlighted)
                 ? new DiffLine($line->type, $line->content, $line->oldLineNum, $line->newLineNum, $highlighted[$i])
                 : $line,
             array_keys($lines),
@@ -145,7 +397,7 @@ class SyntaxHighlightService
      * @param  string[]  $codeLines
      * @return string[]
      */
-    private function tokenizeAndHighlight(array $codeLines, Grammar $grammar): array
+    private function highlightCodeLinesWithPhiki(array $codeLines, Grammar $grammar): array
     {
         if ($codeLines === []) {
             return [];
@@ -166,7 +418,7 @@ class SyntaxHighlightService
                     // Phiki emits a trailing "\n" token on every line as the
                     // line separator. The cell uses white-space: pre-wrap,
                     // which would render that newline as a visible second
-                    // line and double the row height — strip it.
+                    // line and double the row height. Strip it.
                     $tokenText = rtrim($token->text, "\n");
                     if ($tokenText === '') {
                         continue;
@@ -179,9 +431,9 @@ class SyntaxHighlightService
             }
 
             return $result;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::warning('syntax.highlighting.failed', [
-                'reason' => 'syntax_highlighting_failed',
+                'reason' => 'phiki_highlighting_failed',
                 'error' => $e->getMessage(),
             ]);
 
@@ -227,5 +479,24 @@ class SyntaxHighlightService
         }
 
         return $css;
+    }
+
+    private function resolveTempestLanguage(string $filePath): ?string
+    {
+        $filename = strtolower(basename($filePath));
+
+        if (isset(self::TEMPEST_FILENAME_MAP[$filename])) {
+            return self::TEMPEST_FILENAME_MAP[$filename];
+        }
+
+        foreach (self::TEMPEST_COMPOUND_MAP as $compound => $language) {
+            if (str_ends_with($filename, '.'.$compound)) {
+                return $language;
+            }
+        }
+
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+
+        return self::TEMPEST_EXTENSION_MAP[$extension] ?? null;
     }
 }

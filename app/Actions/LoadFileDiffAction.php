@@ -101,6 +101,7 @@ final readonly class LoadFileDiffAction
                 'gridLayout' => true,
                 'lineTypesAreEnum' => true,
                 'renameAware' => true,
+                'syntaxHighlighter' => $this->syntaxHighlightService->lastHighlighter(),
             ];
         };
 

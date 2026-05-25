@@ -46,6 +46,65 @@ test('handles empty hunks', function () {
     expect($result)->toBe([]);
 });
 
+test('uses Tempest for Blade hunks', function () {
+    $hunks = [
+        new Hunk('', 1, 2, 1, 2, [
+            new DiffLine(LineType::Context, '<div>{{ $name }}</div>', 1, 1),
+            new DiffLine(LineType::Add, '@if ($name)', null, 2),
+        ]),
+    ];
+
+    $result = $this->service->highlightHunks($hunks, 'resources/views/pages/example.blade.php');
+
+    expect($this->service->lastHighlighter())->toBe('tempest')
+        ->and($result[0]->lines[0]->highlightedContent)->toContain('hl-')
+        ->and($result[0]->lines[1]->highlightedContent)->toContain('hl-');
+});
+
+test('highlights raw PHP blocks in Livewire SFC Blade files', function () {
+    $hunks = [
+        new Hunk('', 1, 8, 1, 8, [
+            new DiffLine(LineType::Context, '<?php', 1, 1),
+            new DiffLine(LineType::Context, 'use App\Actions\LoadFileDiffAction;', 2, 2),
+            new DiffLine(LineType::Context, 'new class extends Component {', 3, 3),
+            new DiffLine(LineType::Context, '    public string $repoPath = "";', 4, 4),
+            new DiffLine(LineType::Context, '};', 5, 5),
+            new DiffLine(LineType::Context, '?>', 6, 6),
+            new DiffLine(LineType::Context, '<section>{{ $repoPath }}</section>', 7, 7),
+            new DiffLine(LineType::Context, '@if ($repoPath)', 8, 8),
+        ]),
+    ];
+
+    $result = $this->service->highlightHunks($hunks, 'resources/views/livewire/example.blade.php');
+
+    expect($this->service->lastHighlighter())->toBe('tempest')
+        ->and($result[0]->lines[1]->highlightedContent)->toContain('<span class="hl-keyword">use</span>')
+        ->and($result[0]->lines[3]->highlightedContent)->toContain('<span class="hl-keyword">public</span>')
+        ->and($result[0]->lines[6]->highlightedContent)->toContain('<span class="hl-keyword">section</span>')
+        ->and($result[0]->lines[7]->highlightedContent)->toContain('<span class="hl-keyword">@if</span>');
+});
+
+test('highlights Blade hunks that start inside a Livewire SFC PHP block', function () {
+    $hunks = [
+        new Hunk('', 79, 7, 79, 7, [
+            new DiffLine(LineType::Context, '    public function loadFileDiff(): void', 79, 79),
+            new DiffLine(LineType::Context, '    {', 80, 80),
+            new DiffLine(LineType::Add, '        $startedAt = microtime(true);', null, 81),
+            new DiffLine(LineType::Context, '', 81, 82),
+            new DiffLine(LineType::Context, '        if ($this->diffData !== null) {', 82, 83),
+            new DiffLine(LineType::Context, '            return;', 83, 84),
+            new DiffLine(LineType::Context, '        }', 84, 85),
+        ]),
+    ];
+
+    $result = $this->service->highlightHunks($hunks, 'resources/views/livewire/example.blade.php');
+
+    expect($this->service->lastHighlighter())->toBe('tempest')
+        ->and($result[0]->lines[0]->highlightedContent)->toContain('<span class="hl-keyword">public</span>')
+        ->and($result[0]->lines[2]->highlightedContent)->toContain('<span class="hl-variable">$startedAt</span>')
+        ->and($result[0]->lines[4]->highlightedContent)->toContain('<span class="hl-keyword">if</span>');
+});
+
 test('context lines get new-side highlighting', function () {
     $hunks = [
         new Hunk('', 1, 1, 1, 1, [
@@ -191,7 +250,7 @@ test('getStyleMap returns expected structure', function () {
     $styleMap = $this->service->getStyleMap();
 
     foreach ($styleMap as $className => $styles) {
-        expect($className)->toStartWith('_')
+        expect($className)->toStartWith('hl-')
             ->and($styles)->toHaveKeys(['light', 'dark'])
             ->and($styles['light'])->toBeString()
             ->and($styles['dark'])->toBeString();

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "32b1ef3b597372cf64dcbd932ac5c00d",
+    "content-hash": "dd740dafa48d79b97d3b5969fa6204cb",
     "packages": [
         {
             "name": "brick/math",
@@ -6373,6 +6373,65 @@
                 }
             ],
             "time": "2026-03-30T15:14:47+00:00"
+        },
+        {
+            "name": "tempest/highlight",
+            "version": "2.25.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/tempestphp/highlight.git",
+                "reference": "ec0bb3353912244bd04acb7155694d3ea352f53f"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/tempestphp/highlight/zipball/ec0bb3353912244bd04acb7155694d3ea352f53f",
+                "reference": "ec0bb3353912244bd04acb7155694d3ea352f53f",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.4"
+            },
+            "require-dev": {
+                "assertchris/ellison": "^1.0.2",
+                "friendsofphp/php-cs-fixer": "^3.84",
+                "league/commonmark": "^2.4",
+                "phpbench/phpbench": "^1.4",
+                "phpstan/phpstan": "^2.1",
+                "phpunit/phpunit": "^12.0",
+                "symfony/var-dumper": "^6.4|^7.0|^8.0"
+            },
+            "suggest": {
+                "assertchris/ellison": "Allows you to analyse sentence complexity",
+                "league/commonmark": "Adds markdown support"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Tempest\\Highlight\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Brent Roose",
+                    "email": "brendt@stitcher.io"
+                }
+            ],
+            "description": "Fast, extensible, server-side code highlighting",
+            "support": {
+                "issues": "https://github.com/tempestphp/highlight/issues",
+                "source": "https://github.com/tempestphp/highlight/tree/2.25.0"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/brendt",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-05-19T07:56:07+00:00"
         },
         {
             "name": "tijsverkoyen/css-to-inline-styles",

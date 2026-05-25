@@ -152,6 +152,23 @@ test('result contains syntaxStyles CSS for known file types', function () {
         ->and($result['syntaxStyles'])->toContain('.dark ');
 });
 
+test('keeps syntax highlighting for large known file diffs', function () {
+    File::put($this->tmpDir.'/large.php', "<?php\n".implode("\n", array_map(fn ($i) => "\$value{$i} = {$i};", range(1, 20)))."\n");
+    $this->commitTestRepo($this->tmpDir, 'add large php');
+    File::put($this->tmpDir.'/large.php', "<?php\n".implode("\n", array_map(fn ($i) => "\$value{$i} = ".($i + 1).';', range(1, 20)))."\n");
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService, new CsvAlignerService, new MarkdownRegionService, app(ExternalFilesService::class));
+    $result = $action->handle($this->tmpDir, 'large.php', contextLines: 99999);
+
+    $hasHighlighted = collect($result['hunks'])
+        ->flatMap(fn ($hunk) => $hunk['lines'])
+        ->contains(fn ($line) => isset($line['highlightedContent']));
+
+    expect($result['syntaxHighlighter'])->toBe('tempest')
+        ->and($result['syntaxStyles'])->not->toBe('')
+        ->and($hasHighlighted)->toBeTrue();
+});
+
 test('no highlightedContent for unknown file types', function () {
     File::put($this->tmpDir.'/data.xyz', "some content\n");
     $this->commitTestRepo($this->tmpDir, 'add xyz');

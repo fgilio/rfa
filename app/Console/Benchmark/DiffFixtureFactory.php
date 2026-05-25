@@ -45,7 +45,8 @@ use App\Enums\LineType;
  *     deletions: int,
  *     isBinary: bool,
  *     tooLarge: bool,
- *     syntaxStyles: string
+ *     syntaxStyles: string,
+ *     syntaxHighlighter: string
  * }
  * @phpstan-type CommentData array{
  *     id: string,
@@ -204,6 +205,7 @@ final class DiffFixtureFactory
             'isBinary' => false,
             'tooLarge' => false,
             'syntaxStyles' => '.hl-variable{color:#e36209;}.dark .hl-variable{color:#ffab70;}.hl-comment{color:#6a737d;}.dark .hl-comment{color:#6a737d;}',
+            'syntaxHighlighter' => 'fixture',
             'lineTypesAreEnum' => true,
         ];
     }

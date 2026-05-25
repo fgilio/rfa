@@ -13,7 +13,7 @@ final class DiffCacheKey
 
     public static function for(int|string $projectIdOrRepoPath, string $fileId, string $contextKey = self::WORKING_TREE_CONTEXT): string
     {
-        return 'rfa_diff_v8_'.hash('xxh128', $projectIdOrRepoPath.':'.$contextKey.':'.$fileId);
+        return 'rfa_diff_v9_'.hash('xxh128', $projectIdOrRepoPath.':'.$contextKey.':'.$fileId);
     }
 
     /**
@@ -32,6 +32,7 @@ final class DiffCacheKey
             && array_key_exists('headingsAnnotated', $cached)
             && array_key_exists('gridLayout', $cached)
             && array_key_exists('lineTypesAreEnum', $cached)
-            && array_key_exists('renameAware', $cached);
+            && array_key_exists('renameAware', $cached)
+            && array_key_exists('syntaxHighlighter', $cached);
     }
 }

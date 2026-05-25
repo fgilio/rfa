@@ -49,6 +49,7 @@ class FileDiff
             'isSymlink' => false,
             'symlinkTarget' => null,
             'tooLarge' => $tooLarge,
+            'syntaxHighlighter' => 'none',
         ];
     }
 
