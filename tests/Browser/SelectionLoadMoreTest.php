@@ -40,5 +40,8 @@ test('shift-clicking across Load more selects the full range on both pages', fun
     $bottom->hover();
     $bottom->getByTestId('commit-select-toggle')->click(['modifiers' => ['Shift']]);
 
-    $page->assertSee('55 selected');
+    $button = $page->page()->getByRole('button', ['name' => 'Apply working tree + 55 commits']);
+    $button->waitFor();
+
+    expect($button->innerText())->toContain('WT+55');
 });
