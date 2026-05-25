@@ -223,4 +223,4 @@ jobs:
           php artisan rfa:benchmark-perf --compare=/tmp/rfa-perf-baseline.json --max-regression=5 --min-absolute-ms=10 --max-memory-regression=10 --min-absolute-memory-mb=3 --max-retained-memory-regression=10 --min-absolute-retained-memory-mb=3
       - if: github.event_name != 'pull_request'
         name: Report benchmark on main
-        run: php artisan rfa:benchmark-perf --compare=/tmp/rfa-perf-baseline.json --max-regression=5 --max-memory-regression=10 --min-absolute-memory-mb=3 --max-retained-memory-regression=10 --min-absolute-retained-memory-mb=3
+        run: php artisan rfa:benchmark-perf
