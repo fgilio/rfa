@@ -5,6 +5,9 @@ describe('runtime diagnostics', () => {
     afterEach(() => {
         delete window.__rfaRuntimeDiagnosticsAttached;
         delete window.__rfaRuntimeDiagnosticsLivewireHooked;
+        delete window.__rfaLongTasks;
+        delete window.__rfaLastDiffActionTiming;
+        delete window.__rfaDiffActionTimings;
         delete window.rfaDiagnosticsConfig;
         document.body.innerHTML = '';
         vi.restoreAllMocks();
@@ -59,5 +62,65 @@ describe('runtime diagnostics', () => {
 
         expect(payloads[1].reason).toBe('heartbeat');
         expect(payloads[1].includeProcessSnapshot).toBe(false);
+    });
+
+    it('posts diff action timings from browser events', async () => {
+        const payloads = [];
+        window.fetch = vi.fn((url, options) => {
+            payloads.push(JSON.parse(options.body));
+
+            return Promise.resolve({});
+        });
+        window.rfaDiagnosticsConfig = { enabled: true };
+
+        runtimeDiagnostics.install(window);
+
+        Object.assign(window.__rfaLongTasks, {
+            count: 1,
+            totalMs: 500,
+            maxMs: 500,
+            durations: [500],
+        });
+
+        document.body.dispatchEvent(new CustomEvent('rfa:diff-action-start', {
+            bubbles: true,
+            detail: { fileId: 'file-1', action: 'expandContext' },
+        }));
+
+        Object.assign(window.__rfaLongTasks, {
+            count: 2,
+            totalMs: 600,
+            maxMs: 500,
+            durations: [500, 100],
+        });
+
+        window.dispatchEvent(new CustomEvent('rfa:diff-action-completed', {
+            detail: {
+                fileId: 'file-1',
+                action: 'expandContext',
+                phpMs: 2200,
+                hunkCount: 1,
+                diffLineCount: 2247,
+                lineContentBytes: 180000,
+            },
+        }));
+
+        const diffPayload = payloads.find((payload) => payload.reason === 'diff.action');
+
+        expect(diffPayload.timings.diffAction).toMatchObject({
+            fileId: 'file-1',
+            action: 'expandContext',
+            phpMs: 2200,
+            hunkCount: 1,
+            diffLines: 2247,
+            lineContentBytes: 180000,
+        });
+        expect(diffPayload.timings.longTasksDuringAction).toMatchObject({
+            count: 1,
+            totalMs: 100,
+            maxMs: 100,
+        });
+        expect(window.__rfaLastDiffActionTiming.diffLines).toBe(2247);
+        expect(window.__rfaDiffActionTimings.expandContext.diffLines).toBe(2247);
     });
 });

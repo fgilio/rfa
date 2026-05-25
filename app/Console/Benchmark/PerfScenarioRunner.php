@@ -16,7 +16,9 @@ use App\Support\DiffCacheKey;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
+use Symfony\Component\Process\Process;
 
 /**
  * @phpstan-import-type CommentData from DiffFixtureFactory
@@ -25,14 +27,18 @@ use Livewire\Livewire;
  */
 final class PerfScenarioRunner
 {
+    /** @var array{repoPath: string, path: string, from: string, to: string}|null */
+    private ?array $largeBladeRepository = null;
+
     public function __construct(
         private readonly Application $app,
     ) {}
 
     /**
+     * @param  list<string>  $only
      * @return array<string, array{median_ms: float, median_peak_mb: float, median_retained_mb: float}>
      */
-    public function measureAll(int $rounds = 7, int $warmupRounds = 2): array
+    public function measureAll(int $rounds = 7, int $warmupRounds = 2, array $only = []): array
     {
         $results = [];
         $diagnosticsEnabled = config('rfa.diagnostics.enabled');
@@ -40,7 +46,7 @@ final class PerfScenarioRunner
         config(['rfa.diagnostics.enabled' => false]);
 
         try {
-            foreach ($this->scenarios() as $name => $scenario) {
+            foreach ($this->scenarios($only) as $name => $scenario) {
                 $results[$name] = $this->measureScenario($scenario, $rounds, $warmupRounds);
             }
         } finally {
@@ -59,11 +65,12 @@ final class PerfScenarioRunner
     }
 
     /**
+     * @param  list<string>  $only
      * @return array<string, callable(): void>
      */
-    private function scenarios(): array
+    private function scenarios(array $only = []): array
     {
-        return [
+        $scenarios = [
             'diff-small' => function (): void {
                 $this->renderDiffFile(
                     DiffFixtureFactory::fileEntry('src/Small.php', 'modified', 2, 1),
@@ -84,6 +91,12 @@ final class PerfScenarioRunner
                     DiffFixtureFactory::diffData(hunks: 2, linesPerHunk: 30, path: 'src/Commented.php'),
                     DiffFixtureFactory::comments($file['id'], 10),
                 );
+            },
+            'load-file-diff-blade-default-context' => function (): void {
+                $this->loadLargeBladeDiff(contextLines: 3);
+            },
+            'load-file-diff-blade-full-context' => function (): void {
+                $this->loadLargeBladeDiff(contextLines: 99999);
             },
             'review-page-20-files' => function (): void {
                 $this->renderReviewPage(20);
@@ -113,6 +126,14 @@ final class PerfScenarioRunner
                 );
             },
         ];
+
+        if ($only === []) {
+            return $scenarios;
+        }
+
+        return collect($only)
+            ->mapWithKeys(fn (string $scenario): array => [$scenario => $scenarios[$scenario]])
+            ->all();
     }
 
     /**
@@ -302,6 +323,140 @@ final class PerfScenarioRunner
         });
 
         Livewire::test('pages::review-page', ['slug' => 'perf-review']);
+    }
+
+    private function loadLargeBladeDiff(int $contextLines): void
+    {
+        $this->resetState();
+
+        $fixture = $this->largeBladeRepository();
+
+        app(LoadFileDiffAction::class)->handle(
+            $fixture['repoPath'],
+            $fixture['path'],
+            false,
+            contextLines: $contextLines,
+            target: DiffTarget::range($fixture['from'], $fixture['to']),
+        );
+    }
+
+    /**
+     * @return array{repoPath: string, path: string, from: string, to: string}
+     */
+    private function largeBladeRepository(): array
+    {
+        if ($this->largeBladeRepository !== null) {
+            return $this->largeBladeRepository;
+        }
+
+        $repoPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'rfa-benchmark-repo-'.bin2hex(random_bytes(8));
+        $relativePath = 'resources/views/pages/review-page.blade.php';
+        $absolutePath = $repoPath.DIRECTORY_SEPARATOR.$relativePath;
+
+        File::ensureDirectoryExists(dirname($absolutePath));
+        File::put($absolutePath, $this->largeBladeContents(modified: false));
+
+        $this->runProcess(['git', 'init', '-b', 'main', '-q', $repoPath]);
+        $this->runGit($repoPath, ['add', '-A']);
+        $this->runGit($repoPath, ['commit', '-q', '-m', 'Initial large Blade file']);
+        $from = trim($this->runGit($repoPath, ['rev-parse', 'HEAD']));
+
+        File::put($absolutePath, $this->largeBladeContents(modified: true));
+
+        $this->runGit($repoPath, ['add', '-A']);
+        $this->runGit($repoPath, ['commit', '-q', '-m', 'Modify large Blade file']);
+        $to = trim($this->runGit($repoPath, ['rev-parse', 'HEAD']));
+
+        register_shutdown_function(static fn (): bool => self::deleteDirectory($repoPath));
+
+        return $this->largeBladeRepository = [
+            'repoPath' => $repoPath,
+            'path' => $relativePath,
+            'from' => $from,
+            'to' => $to,
+        ];
+    }
+
+    private function largeBladeContents(bool $modified): string
+    {
+        $changedLines = array_fill_keys([30, 90, 160, 220, 280, 340, 400, 460, 520], true);
+        $lines = [
+            '<?php',
+            '',
+            'use Livewire\Component;',
+            '',
+            'new class extends Component {',
+            '    public array $items = [];',
+            '};',
+            '?>',
+            '',
+            '<section class="review-page">',
+        ];
+
+        for ($i = 1; $i <= 550; $i++) {
+            $label = $modified && isset($changedLines[$i])
+                ? "Updated review row {$i}"
+                : "Review row {$i}";
+
+            $lines[] = "    <div class=\"grid grid-cols-[auto_1fr] gap-2\" data-row=\"{$i}\">";
+            $lines[] = "        <flux:badge size=\"sm\">{$i}</flux:badge>";
+            $lines[] = "        <span>{{ \$items[{$i}] ?? '{$label}' }}</span>";
+            $lines[] = '    </div>';
+        }
+
+        $lines[] = '</section>';
+        $lines[] = '';
+
+        return implode("\n", $lines);
+    }
+
+    /** @param list<string> $args */
+    private function runGit(string $repoPath, array $args): string
+    {
+        return $this->runProcess([
+            'git',
+            '-C',
+            $repoPath,
+            '-c',
+            'user.name=RFA Benchmark',
+            '-c',
+            'user.email=benchmark@rfa.test',
+            ...$args,
+        ]);
+    }
+
+    /** @param list<string> $command */
+    private function runProcess(array $command): string
+    {
+        $process = new Process($command);
+        $process->setTimeout(30);
+        $process->mustRun();
+
+        return $process->getOutput();
+    }
+
+    private static function deleteDirectory(string $path): bool
+    {
+        if (! is_dir($path)) {
+            return true;
+        }
+
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+
+        foreach ($items as $item) {
+            if ($item->isDir() && ! $item->isLink()) {
+                @rmdir($item->getPathname());
+
+                continue;
+            }
+
+            @unlink($item->getPathname());
+        }
+
+        return @rmdir($path);
     }
 
     /** @param  array<string, int>  $data */

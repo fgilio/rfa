@@ -25,6 +25,7 @@ class BenchmarkPerformanceCommand extends Command
         {--warmup-samples=1 : Number of child-process warmup samples to discard}
         {--rounds=7 : Number of measured rounds per scenario inside each child}
         {--warmup-rounds=2 : Number of warmup rounds per scenario inside each child}
+        {--only=* : Limit the run to the given scenario name}
         {--max-regression=5 : Allowed regression percentage before failing}
         {--min-absolute-ms=1 : Minimum absolute increase (ms) before a percentage regression counts}
         {--max-memory-regression=10 : Allowed peak memory regression percentage before failing}
@@ -36,6 +37,8 @@ class BenchmarkPerformanceCommand extends Command
 
     public function handle(PerfScenarioRunner $runner, BenchmarkIsolation $benchmarkIsolation): int
     {
+        $this->onlyScenarios($runner);
+
         if ((bool) $this->option('child')) {
             return $this->runChildSample($runner, $benchmarkIsolation);
         }
@@ -70,6 +73,7 @@ class BenchmarkPerformanceCommand extends Command
             'results' => $runner->measureAll(
                 rounds: (int) $this->option('rounds'),
                 warmupRounds: (int) $this->option('warmup-rounds'),
+                only: $this->onlyScenarios($runner),
             ),
         ];
 
@@ -165,6 +169,10 @@ class BenchmarkPerformanceCommand extends Command
             '--json',
             '--rounds='.$this->option('rounds'),
             '--warmup-rounds='.$this->option('warmup-rounds'),
+            ...array_map(
+                fn (string $scenario): string => '--only='.$scenario,
+                $this->onlyScenarios(),
+            ),
         ], base_path(), $environment);
 
         try {
@@ -184,6 +192,31 @@ class BenchmarkPerformanceCommand extends Command
         } finally {
             $benchmarkIsolation->cleanupDatabase($databasePath);
         }
+    }
+
+    /** @return list<string> */
+    private function onlyScenarios(?PerfScenarioRunner $runner = null): array
+    {
+        $only = array_values(array_filter(
+            array_map('strval', (array) $this->option('only')),
+            fn (string $scenario): bool => $scenario !== '',
+        ));
+
+        if ($runner === null || $only === []) {
+            return $only;
+        }
+
+        $unknown = array_values(array_diff($only, $runner->scenarioNames()));
+
+        if ($unknown !== []) {
+            throw new \RuntimeException(sprintf(
+                'Unknown benchmark scenario [%s]. Available scenarios: %s',
+                implode(', ', $unknown),
+                implode(', ', $runner->scenarioNames()),
+            ));
+        }
+
+        return $only;
     }
 
     /**

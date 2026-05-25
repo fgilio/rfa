@@ -80,6 +80,13 @@
                 this.foldedHeadings[id] = !this.foldedHeadings[id];
             },
 
+            markDiffActionStart(action) {
+                this.$dispatch('rfa:diff-action-start', {
+                    fileId: this.fileId,
+                    action,
+                });
+            },
+
             isLineFolded(ancestors) {
                 if (!ancestors || ancestors.length === 0) return false;
                 for (let i = 0; i < ancestors.length; i++) {

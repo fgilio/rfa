@@ -11,8 +11,83 @@
     const DEFAULT_PROCESS_SAMPLE_INTERVAL_MS = 300_000;
     const COMMIT_SAMPLE_THROTTLE_MS = 30_000;
 
+    function nowMs(root) {
+        return root.performance?.now ? root.performance.now() : Date.now();
+    }
+
+    function roundMs(value) {
+        return value === null || value === undefined ? null : Math.round(value);
+    }
+
     function bytesToMegabytes(bytes) {
         return Math.round((bytes / 1024 / 1024) * 1000) / 1000;
+    }
+
+    function installLongTaskObserver(root) {
+        if (root.__rfaLongTasks) {
+            return root.__rfaLongTasks;
+        }
+
+        const metrics = {
+            count: 0,
+            totalMs: 0,
+            maxMs: 0,
+            durations: [],
+        };
+
+        root.__rfaLongTasks = metrics;
+
+        if (!root.PerformanceObserver) {
+            return metrics;
+        }
+
+        try {
+            const observer = new root.PerformanceObserver((list) => {
+                for (const entry of list.getEntries()) {
+                    const duration = Math.max(0, entry.duration || 0);
+
+                    metrics.count++;
+                    metrics.totalMs += duration;
+                    metrics.maxMs = Math.max(metrics.maxMs, duration);
+                    metrics.durations.push(duration);
+                }
+            });
+
+            observer.observe({ type: 'longtask', buffered: true });
+            metrics.observer = observer;
+        } catch {
+            // Long Task API support varies by runtime.
+        }
+
+        return metrics;
+    }
+
+    function collectLongTasks(root) {
+        const metrics = root.__rfaLongTasks;
+
+        if (!metrics) {
+            return null;
+        }
+
+        return {
+            count: metrics.count,
+            totalMs: roundMs(metrics.totalMs),
+            maxMs: roundMs(metrics.maxMs),
+        };
+    }
+
+    function longTaskDelta(root, start) {
+        const current = collectLongTasks(root);
+
+        if (!current || !start) {
+            return current;
+        }
+
+        return {
+            count: Math.max(0, current.count - start.count),
+            totalMs: Math.max(0, current.totalMs - start.totalMs),
+            maxMs: roundMs(Math.max(0, ...((root.__rfaLongTasks?.durations || []).slice(start.count, current.count)))),
+        };
     }
 
     function collectHeap(win) {
@@ -54,7 +129,7 @@
         };
     }
 
-    function collectSample(root, reason, includeProcessSnapshot) {
+    function collectSample(root, reason, includeProcessSnapshot, timings = {}) {
         return {
             reason,
             includeProcessSnapshot,
@@ -69,6 +144,10 @@
             heap: collectHeap(root),
             dom: collectDom(root.document),
             navigation: collectNavigation(root),
+            timings: {
+                longTasks: collectLongTasks(root),
+                ...timings,
+            },
         };
     }
 
@@ -97,9 +176,11 @@
         }
 
         root.__rfaRuntimeDiagnosticsAttached = true;
+        installLongTaskObserver(root);
 
         const sampleIntervalMs = Number(config.sampleIntervalMs || DEFAULT_SAMPLE_INTERVAL_MS);
         const processSampleIntervalMs = Number(config.processSampleIntervalMs || DEFAULT_PROCESS_SAMPLE_INTERVAL_MS);
+        const pendingDiffActions = new Map();
         let lastProcessSampleAt = 0;
         let lastCommitSampleAt = 0;
 
@@ -112,7 +193,7 @@
             return true;
         }
 
-        function sample(reason, forceProcessSnapshot = false) {
+        function sample(reason, forceProcessSnapshot = false, timings = {}) {
             const now = Date.now();
             let includeProcessSnapshot = shouldIncludeProcessSnapshot(now);
 
@@ -121,8 +202,50 @@
                 includeProcessSnapshot = true;
             }
 
-            return postSample(root, collectSample(root, reason, includeProcessSnapshot));
+            return postSample(root, collectSample(root, reason, includeProcessSnapshot, timings));
         }
+
+        function diffActionKey(detail) {
+            return `${detail?.fileId || 'unknown'}:${detail?.action || 'unknown'}`;
+        }
+
+        root.addEventListener('rfa:diff-action-start', (event) => {
+            pendingDiffActions.set(diffActionKey(event.detail), {
+                startedAtMs: nowMs(root),
+                longTasks: collectLongTasks(root),
+            });
+        });
+
+        root.addEventListener('rfa:diff-action-completed', (event) => {
+            const detail = event.detail || {};
+            const started = pendingDiffActions.get(diffActionKey(detail)) || null;
+            pendingDiffActions.delete(diffActionKey(detail));
+
+            const elapsedMs = started ? roundMs(nowMs(root) - started.startedAtMs) : null;
+            const diffAction = {
+                fileId: detail.fileId || null,
+                action: detail.action || null,
+                elapsedMs,
+                phpMs: roundMs(detail.phpMs ?? detail.durationMs),
+                hunkCount: detail.hunkCount ?? detail.hunk_count ?? null,
+                diffLines: detail.diffLineCount ?? detail.diff_line_count ?? null,
+                lineContentBytes: detail.lineContentBytes ?? detail.line_content_bytes ?? null,
+                tooLarge: detail.tooLarge ?? detail.too_large ?? false,
+                binary: detail.binary ?? false,
+                cached: detail.cached ?? false,
+            };
+
+            root.__rfaLastDiffActionTiming = diffAction;
+            root.__rfaDiffActionTimings = root.__rfaDiffActionTimings || {};
+            if (diffAction.action) {
+                root.__rfaDiffActionTimings[diffAction.action] = diffAction;
+            }
+
+            sample('diff.action', false, {
+                diffAction,
+                longTasksDuringAction: longTaskDelta(root, started?.longTasks),
+            });
+        });
 
         sample('boot', true);
 
@@ -143,7 +266,10 @@
 
             root.__rfaRuntimeDiagnosticsLivewireHooked = true;
             root.Livewire.hook('commit', ({ succeed, fail }) => {
-                const mark = () => {
+                const startedAtMs = nowMs(root);
+                const startedLongTasks = collectLongTasks(root);
+
+                const mark = (status) => {
                     const now = Date.now();
 
                     if (now - lastCommitSampleAt < COMMIT_SAMPLE_THROTTLE_MS) {
@@ -151,11 +277,17 @@
                     }
 
                     lastCommitSampleAt = now;
-                    sample('livewire.commit');
+                    sample('livewire.commit', false, {
+                        livewireCommit: {
+                            status,
+                            elapsedMs: roundMs(nowMs(root) - startedAtMs),
+                        },
+                        longTasksDuringCommit: longTaskDelta(root, startedLongTasks),
+                    });
                 };
 
-                succeed(mark);
-                fail(mark);
+                succeed(() => mark('succeeded'));
+                fail(() => mark('failed'));
             });
         });
 
@@ -175,5 +307,5 @@
         return install(root);
     }
 
-    return { bytesToMegabytes, collectSample, install, autoInstall };
+    return { bytesToMegabytes, collectSample, collectLongTasks, install, autoInstall };
 });

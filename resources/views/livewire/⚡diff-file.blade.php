@@ -79,8 +79,12 @@ HTML;
     public function loadFileDiff(): void
     {
         if ($this->diffData !== null) {
+            $this->dispatchDiffActionCompleted('loadFileDiff', 0, cached: true);
+
             return;
         }
+
+        $startedAt = microtime(true);
 
         $this->diffData = app(LoadFileDiffAction::class)->handle(
             $this->repoPath,
@@ -92,9 +96,15 @@ HTML;
             externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
         );
 
-        $this->ensureCommentedLinesVisible();
+        $durationMs = $this->durationSince($startedAt);
 
-        app(RecordRuntimeDiagnosticAction::class)->handle('diff.loaded', $this->diagnosticContext($this->diffData));
+        app(RecordRuntimeDiagnosticAction::class)->handle('diff.loaded', $this->diagnosticContext($this->diffData) + [
+            'duration_ms' => $durationMs,
+        ]);
+
+        $this->dispatchDiffActionCompleted('loadFileDiff', $durationMs);
+
+        $this->ensureCommentedLinesVisible();
     }
 
     public function copyContent(string $kind): void
@@ -124,6 +134,8 @@ HTML;
         $cacheKey = $this->diffCacheKey();
         Cache::forget($cacheKey);
 
+        $startedAt = microtime(true);
+
         $this->diffData = app(LoadFileDiffAction::class)->handle(
             $this->repoPath,
             $this->file['path'],
@@ -135,7 +147,13 @@ HTML;
             externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
         );
 
-        app(RecordRuntimeDiagnosticAction::class)->handle('diff.context_expanded', $this->diagnosticContext($this->diffData));
+        $durationMs = $this->durationSince($startedAt);
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('diff.context_expanded', $this->diagnosticContext($this->diffData) + [
+            'duration_ms' => $durationMs,
+        ]);
+
+        $this->dispatchDiffActionCompleted('expandContext', $durationMs);
     }
 
     public function expandGap(int $hunkIndex, ?int $lineCount = null): void
@@ -143,6 +161,8 @@ HTML;
         if ($this->diffData === null || empty($this->diffData['hunks'])) {
             return;
         }
+
+        $startedAt = microtime(true);
 
         $fullDiff = app(LoadFileDiffAction::class)->handle(
             $this->repoPath,
@@ -173,10 +193,15 @@ HTML;
 
         Cache::put($this->diffCacheKey(), $this->diffData, now()->addHours($this->buildDiffTarget()->cacheTtlHours()));
 
+        $durationMs = $this->durationSince($startedAt);
+
         app(RecordRuntimeDiagnosticAction::class)->handle('diff.gap_expanded', $this->diagnosticContext($this->diffData) + [
             'hunk_index' => $hunkIndex,
             'line_count' => $lineCount,
+            'duration_ms' => $durationMs,
         ]);
+
+        $this->dispatchDiffActionCompleted('expandGap', $durationMs);
     }
 
     /** @param array<string, mixed>|null $diffData */
@@ -219,6 +244,28 @@ HTML;
     private function diagnosticStringBytes(mixed $value): int
     {
         return is_string($value) ? strlen($value) : 0;
+    }
+
+    private function durationSince(float $startedAt): int
+    {
+        return (int) round((microtime(true) - $startedAt) * 1000);
+    }
+
+    private function dispatchDiffActionCompleted(string $action, int $durationMs, bool $cached = false): void
+    {
+        $context = $this->diagnosticContext($this->diffData);
+
+        $this->dispatch('rfa:diff-action-completed',
+            fileId: (string) ($this->file['id'] ?? ''),
+            action: $action,
+            phpMs: $durationMs,
+            hunkCount: $context['hunk_count'],
+            diffLineCount: $context['diff_line_count'],
+            lineContentBytes: $context['line_content_bytes'],
+            tooLarge: $context['too_large'],
+            binary: $context['binary'],
+            cached: $cached,
+        );
     }
 
     private function ensureCommentedLinesVisible(): void
@@ -437,7 +484,7 @@ HTML;
             {{-- One spinner for both the pre-request setTimeout window and the
                  in-flight request, so the visual doesn't swap mid-load. --}}
             <div
-                x-intersect.once="setTimeout(() => $wire.loadFileDiff(), {{ $loadDelay }})"
+                x-intersect.once="setTimeout(() => { markDiffActionStart('loadFileDiff'); $wire.loadFileDiff(); }, {{ $loadDelay }})"
                 class="px-4 py-8 text-center"
             >
                 <flux:icon icon="arrow-path" variant="outline" class="animate-spin inline-block text-gh-muted mr-1" />
@@ -478,6 +525,7 @@ HTML;
                             wire:click="expandContext"
                             wire:loading.attr="disabled"
                             wire:target="expandContext"
+                            @click="markDiffActionStart('expandContext')"
                             class="text-gh-link text-xs hover:underline inline-flex items-center gap-1 disabled:opacity-50"
                         >
                             <flux:icon wire:loading wire:target="expandContext" icon="arrow-path" variant="outline" class="animate-spin" />

@@ -9,6 +9,8 @@ test('benchmark runner reports all representative scenarios', function () {
         'diff-small',
         'diff-large',
         'diff-with-comments',
+        'load-file-diff-blade-default-context',
+        'load-file-diff-blade-full-context',
         'review-page-20-files',
         'review-page-50-files',
         'review-page-100-files',
@@ -26,4 +28,14 @@ test('benchmark runner returns positive timings', function () {
             ->and($measurement['median_peak_mb'], $scenario)->toBeFloat()->toBeGreaterThanOrEqual(0)
             ->and($measurement['median_retained_mb'], $scenario)->toBeFloat();
     }
+});
+
+test('benchmark runner preserves targeted scenario order', function () {
+    $results = app(PerfScenarioRunner::class)->measureAll(
+        rounds: 1,
+        warmupRounds: 0,
+        only: ['diff-large', 'diff-small'],
+    );
+
+    expect(array_keys($results))->toBe(['diff-large', 'diff-small']);
 });

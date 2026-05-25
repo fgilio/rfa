@@ -13,7 +13,7 @@
             wire:click="expandGap({{ $hunkIndex }})"
             wire:loading.attr="disabled"
             wire:target="expandGap"
-            @click="loading = true"
+            @click="loading = true; markDiffActionStart('expandGap')"
             x-show="!loading"
             class="text-gh-link hover:text-gh-text transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
         >
@@ -32,7 +32,7 @@
                         wire:click="expandGap({{ $hunkIndex }}, {{ $tier }})"
                         wire:loading.attr="disabled"
                         wire:target="expandGap"
-                        @click="loading = true"
+                        @click="loading = true; markDiffActionStart('expandGap')"
                         class="text-gh-link hover:bg-gh-link/10 hover:text-gh-text rounded px-1.5 py-0.5 transition-colors disabled:opacity-50 tabular-nums"
                     >{{ $tier }}</button>
                 @endforeach
@@ -42,7 +42,7 @@
                 wire:click="expandGap({{ $hunkIndex }})"
                 wire:loading.attr="disabled"
                 wire:target="expandGap"
-                @click="loading = true"
+                @click="loading = true; markDiffActionStart('expandGap')"
                 class="text-gh-link hover:bg-gh-link/10 hover:text-gh-text rounded px-1.5 py-0.5 transition-colors disabled:opacity-50 tabular-nums"
             >{{ $hiddenCount }} <span class="text-gh-muted/60">hidden lines</span></button>
         </span>

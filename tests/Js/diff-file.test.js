@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import diffFile from '../../public/js/diff-file.js';
 
-const { getScrollSpeed, extractLineSnippet, install } = diffFile;
+const { getScrollSpeed, extractLineSnippet, createDiffFile, install } = diffFile;
 
 describe('getScrollSpeed', () => {
     // Coherent fixture: viewport 800px tall, sticky header consumes 50px,
@@ -199,5 +199,30 @@ describe('install', () => {
         window.Alpine = { data };
         expect(install(window)).toBe(true);
         expect(data).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('diff action diagnostics', () => {
+    afterEach(() => {
+        delete globalThis.Alpine;
+        delete window.__rfaPendingExpandFiles;
+    });
+
+    it('dispatches a start event for measured diff actions', () => {
+        globalThis.Alpine = { store: () => ({ collapseAll: false }) };
+
+        const component = createDiffFile({
+            fileId: 'file-1',
+            filePath: 'resources/views/pages/review-page.blade.php',
+            isReviewed: false,
+        });
+
+        component.$dispatch = vi.fn();
+        component.markDiffActionStart('expandContext');
+
+        expect(component.$dispatch).toHaveBeenCalledWith('rfa:diff-action-start', {
+            fileId: 'file-1',
+            action: 'expandContext',
+        });
     });
 });

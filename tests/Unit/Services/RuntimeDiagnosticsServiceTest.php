@@ -81,6 +81,10 @@ test('browser sample records useful counters without query strings', function ()
         'heap' => ['usedJSHeapSizeMb' => 123.456, 'totalJSHeapSizeMb' => 150.0],
         'dom' => ['nodes' => 5000, 'livewireComponents' => 120, 'diffFiles' => 30, 'expandedDiffFiles' => 12],
         'navigation' => ['type' => 'navigate', 'resources' => 45],
+        'timings' => [
+            'diffAction' => ['action' => 'expandContext', 'elapsedMs' => 2400, 'phpMs' => 2200, 'diffLines' => 2247],
+            'longTasksDuringAction' => ['count' => 3, 'totalMs' => 180, 'maxMs' => 90],
+        ],
     ]);
 
     $entry = json_decode(trim((string) file_get_contents($this->diagnosticsPath)), true);
@@ -90,6 +94,8 @@ test('browser sample records useful counters without query strings', function ()
         ->and($entry['context']['path_hash'])->toBe(hash('xxh128', '/p/rfa/c/abcdef'))
         ->and($entry['context']['heap']['usedJSHeapSizeMb'])->toBe(123.456)
         ->and($entry['context']['dom']['diffFiles'])->toBe(30)
+        ->and($entry['context']['timings']['diffAction']['phpMs'])->toBe(2200)
+        ->and($entry['context']['timings']['longTasksDuringAction']['count'])->toBe(3)
         ->and($entry['context']['viewport']['width'])->toBe(1280);
 });
 

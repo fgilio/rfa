@@ -72,13 +72,18 @@ test('diagnostics route accepts validated browser samples', function () {
         'includeProcessSnapshot' => false,
         'viewport' => ['width' => 1280, 'height' => 720, 'devicePixelRatio' => 2],
         'dom' => ['nodes' => 100, 'livewireComponents' => 4],
+        'timings' => [
+            'diffAction' => ['action' => 'expandContext', 'elapsedMs' => 2500, 'phpMs' => 2200, 'diffLines' => 2247],
+            'longTasks' => ['count' => 2, 'totalMs' => 120, 'maxMs' => 80],
+        ],
     ])->assertNoContent();
 
     $entry = json_decode(trim((string) file_get_contents($diagnosticsPath)), true);
 
     expect($entry['event'])->toBe('browser.sample')
         ->and($entry['context']['path'])->toBe('/p/{project}/context')
-        ->and($entry['context']['dom']['nodes'])->toBe(100);
+        ->and($entry['context']['dom']['nodes'])->toBe(100)
+        ->and($entry['context']['timings']['diffAction']['elapsedMs'])->toBe(2500);
 
     foreach (glob($diagnosticsPath.'*') ?: [] as $path) {
         @unlink($path);

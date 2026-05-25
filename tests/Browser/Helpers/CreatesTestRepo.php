@@ -278,6 +278,57 @@ trait CreatesTestRepo
         $this->registerTestProject($this->testRepoPath);
     }
 
+    protected function setUpLargeBladeDiffRepo(): void
+    {
+        $this->testRepoPath = $this->makeTempRepoPath('rfa_browser_large_blade_');
+        $relativePath = 'resources/views/pages/review-page.blade.php';
+        $absolutePath = $this->testRepoPath.'/'.$relativePath;
+
+        File::ensureDirectoryExists(dirname($absolutePath));
+        File::put($absolutePath, $this->largeBladeContents(modified: false));
+
+        $this->initTestRepo($this->testRepoPath);
+        $this->commitTestRepo($this->testRepoPath, 'Initial large Blade file');
+        $this->assertHeadExists();
+
+        File::put($absolutePath, $this->largeBladeContents(modified: true));
+
+        $this->registerTestProject($this->testRepoPath);
+    }
+
+    private function largeBladeContents(bool $modified): string
+    {
+        $changedRows = array_fill_keys([30, 90, 160, 220, 280, 340, 400, 460, 520], true);
+        $lines = [
+            '<?php',
+            '',
+            'use Livewire\Component;',
+            '',
+            'new class extends Component {',
+            '    public array $items = [];',
+            '};',
+            '?>',
+            '',
+            '<section class="review-page">',
+        ];
+
+        for ($i = 1; $i <= 550; $i++) {
+            $label = $modified && isset($changedRows[$i])
+                ? "Updated review row {$i}"
+                : "Review row {$i}";
+
+            $lines[] = "    <div class=\"grid grid-cols-[auto_1fr] gap-2\" data-row=\"{$i}\">";
+            $lines[] = "        <flux:badge size=\"sm\">{$i}</flux:badge>";
+            $lines[] = "        <span>{{ \$items[{$i}] ?? '{$label}' }}</span>";
+            $lines[] = '    </div>';
+        }
+
+        $lines[] = '</section>';
+        $lines[] = '';
+
+        return implode("\n", $lines);
+    }
+
     protected function addLargeFile(string $name = 'large.txt', int $bytes = 600_000): void
     {
         File::put($this->testRepoPath.'/'.$name, str_repeat("line of content for large file\n", (int) ceil($bytes / 30)));

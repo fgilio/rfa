@@ -140,6 +140,22 @@ test('benchmark command json includes speed and memory metrics', function () {
         ->and($firstResult['median_peak_mb'])->toBeNumeric()->toBeGreaterThanOrEqual(0);
 });
 
+test('benchmark command can run a targeted scenario', function () {
+    Artisan::call('rfa:benchmark-perf', [
+        '--json' => true,
+        '--only' => ['load-file-diff-blade-default-context'],
+        '--samples' => 1,
+        '--warmup-samples' => 0,
+        '--rounds' => 1,
+        '--warmup-rounds' => 0,
+    ]);
+
+    $report = json_decode(Artisan::output(), true);
+
+    expect(array_keys($report['results']))->toBe(['load-file-diff-blade-default-context'])
+        ->and($report['results']['load-file-diff-blade-default-context']['median_ms'])->toBeGreaterThan(0);
+});
+
 test('benchmark compare fails retained memory regressions', function () {
     $snapshotPath = tempnam(sys_get_temp_dir(), 'rfa-perf-snapshot-');
 

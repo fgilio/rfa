@@ -72,6 +72,7 @@ final class RuntimeDiagnosticsService
                 'domCompleteMs',
                 'resources',
             ]),
+            'timings' => $this->normalizeTimings($payload['timings'] ?? null),
         ]);
 
         if (($payload['includeProcessSnapshot'] ?? false) === true) {
@@ -261,6 +262,33 @@ final class RuntimeDiagnosticsService
     private function arrayOnly(mixed $value, array $keys): ?array
     {
         return is_array($value) ? Arr::only($value, $keys) : null;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function normalizeTimings(mixed $value): ?array
+    {
+        if (! is_array($value)) {
+            return null;
+        }
+
+        return array_filter([
+            'longTasks' => $this->arrayOnly($value['longTasks'] ?? null, ['count', 'totalMs', 'maxMs']),
+            'longTasksDuringAction' => $this->arrayOnly($value['longTasksDuringAction'] ?? null, ['count', 'totalMs', 'maxMs']),
+            'longTasksDuringCommit' => $this->arrayOnly($value['longTasksDuringCommit'] ?? null, ['count', 'totalMs', 'maxMs']),
+            'diffAction' => $this->arrayOnly($value['diffAction'] ?? null, [
+                'fileId',
+                'action',
+                'elapsedMs',
+                'phpMs',
+                'hunkCount',
+                'diffLines',
+                'lineContentBytes',
+                'tooLarge',
+                'binary',
+                'cached',
+            ]),
+            'livewireCommit' => $this->arrayOnly($value['livewireCommit'] ?? null, ['status', 'elapsedMs']),
+        ], fn (mixed $item): bool => $item !== null);
     }
 
     private function redactedUrlPath(mixed $url): ?string
