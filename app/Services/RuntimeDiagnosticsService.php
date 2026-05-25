@@ -100,13 +100,18 @@ final class RuntimeDiagnosticsService
      */
     private function rfaProcesses(): array
     {
-        if (PHP_OS_FAMILY !== 'Darwin') {
+        if (! (bool) config('rfa.diagnostics.process_snapshots', PHP_OS_FAMILY === 'Darwin')) {
             return [];
         }
 
         $processList = new Process(['ps', '-axo', 'pid=,ppid=,rss=,comm=,command=']);
-        $processList->setTimeout(2);
-        $processList->run();
+        $processList->setTimeout((float) config('rfa.diagnostics.process_snapshot_timeout_seconds', 2));
+
+        try {
+            $processList->run();
+        } catch (Throwable) {
+            return [];
+        }
 
         if (! $processList->isSuccessful()) {
             return [];

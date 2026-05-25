@@ -12,6 +12,8 @@ return [
         'max_browser_payload_bytes' => env('RFA_DIAGNOSTICS_MAX_BROWSER_PAYLOAD_BYTES', 64 * 1024),
         'browser_sample_interval_ms' => env('RFA_DIAGNOSTICS_BROWSER_SAMPLE_INTERVAL_MS', 60_000),
         'process_sample_interval_ms' => env('RFA_DIAGNOSTICS_PROCESS_SAMPLE_INTERVAL_MS', 300_000),
+        'process_snapshots' => env('RFA_DIAGNOSTICS_PROCESS_SNAPSHOTS', PHP_OS_FAMILY === 'Darwin'),
+        'process_snapshot_timeout_seconds' => env('RFA_DIAGNOSTICS_PROCESS_SNAPSHOT_TIMEOUT_SECONDS', 2),
     ],
 
     /*

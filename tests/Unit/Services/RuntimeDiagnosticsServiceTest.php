@@ -22,6 +22,14 @@ afterEach(function () {
         @unlink($path);
     }
 
+    foreach (glob($this->diagnosticsDir.'/bin/*') ?: [] as $path) {
+        @unlink($path);
+    }
+
+    if (is_dir($this->diagnosticsDir.'/bin')) {
+        @rmdir($this->diagnosticsDir.'/bin');
+    }
+
     if (is_dir($this->diagnosticsDir)) {
         @rmdir($this->diagnosticsDir);
     }
@@ -83,6 +91,41 @@ test('browser sample records useful counters without query strings', function ()
         ->and($entry['context']['heap']['usedJSHeapSizeMb'])->toBe(123.456)
         ->and($entry['context']['dom']['diffFiles'])->toBe(30)
         ->and($entry['context']['viewport']['width'])->toBe(1280);
+});
+
+test('browser sample does not leak process snapshot timeouts', function () {
+    $originalPath = getenv('PATH') ?: '';
+    $fakeBin = $this->diagnosticsDir.'/bin';
+    $fakePs = $fakeBin.'/ps';
+
+    mkdir($fakeBin, 0755, true);
+    file_put_contents($fakePs, "#!/bin/sh\nsleep 1\n");
+    chmod($fakePs, 0755);
+
+    config([
+        'rfa.diagnostics.process_snapshots' => true,
+        'rfa.diagnostics.process_snapshot_timeout_seconds' => 0.01,
+    ]);
+
+    putenv('PATH='.$fakeBin.':'.$originalPath);
+
+    try {
+        app(RuntimeDiagnosticsService::class)->recordBrowserSample([
+            'reason' => 'heartbeat',
+            'includeProcessSnapshot' => true,
+        ]);
+    } finally {
+        putenv('PATH='.$originalPath);
+    }
+
+    $entries = collect(file($this->diagnosticsPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES))
+        ->map(fn (string $line): array => json_decode($line, true))
+        ->all();
+
+    expect($entries)->toHaveCount(2)
+        ->and($entries[0]['event'])->toBe('browser.sample')
+        ->and($entries[1]['event'])->toBe('system.processes')
+        ->and($entries[1]['context']['processes'])->toBe([]);
 });
 
 test('browser sample drops urls without a path', function () {
