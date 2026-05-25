@@ -16,8 +16,8 @@ test('switching branches clears an in-flight commit selection', function () {
     $page->page()->getByText('1 selected')->waitFor();
 
     // Switch to the other local branch. loadSelectedBranch flips
-    // selectedBranch, awaits loadCommits, and — because the name changed
-    // — clears selection.
+    // selectedBranch, awaits loadSnapshot, and - because the name changed -
+    // clears selection.
     $page->page()->locator('[x-ref="branchList"]')->getByText('feature-x')->click();
 
     $page->page()->getByText('selected')->waitFor(['state' => 'hidden']);

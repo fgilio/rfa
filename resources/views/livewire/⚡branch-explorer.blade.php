@@ -1,8 +1,8 @@
 <?php
 
-use App\Actions\GetBranchListAction;
-use App\Actions\GetCommitHistoryAction;
-use App\Actions\ResolveBranchBaseAction;
+use App\Actions\LoadBranchExplorerSnapshotAction;
+use App\Actions\ResolveBranchExplorerSelectionAction;
+use App\DTOs\BranchExplorerSnapshot;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
@@ -54,60 +54,96 @@ new class extends Component {
 
     public bool $hasMore = false;
 
+    public string $snapshotBranch = '';
+
+    public ?string $selectedBranchTipSha = null;
+
+    public string $snapshotKey = '';
+
+    public int $loadedLimit = 0;
+
     private int $pageSize = 50;
 
     #[Renderless]
-    public function loadBranches(): void
+    public function loadSnapshot(string $branch = '', int $minimumCommitCount = 0): void
     {
-        $this->branches = app(GetBranchListAction::class)->handle($this->repoPath);
-    }
-
-    #[Renderless]
-    public function loadBranchBase(): void
-    {
-        $result = app(ResolveBranchBaseAction::class)->handle(
-            $this->repoPath,
-            $this->defaultBaseBranch !== '' ? $this->defaultBaseBranch : null,
-            $this->currentBranch !== '' ? $this->currentBranch : null,
+        $snapshot = app(LoadBranchExplorerSnapshotAction::class)->handle(
+            repoPath: $this->repoPath,
+            selectedBranch: $branch !== '' ? $branch : $this->currentBranch,
+            currentBranch: $this->currentBranch,
+            baseBranch: $this->defaultBaseBranch !== '' ? $this->defaultBaseBranch : null,
+            pageSize: $this->pageSize,
+            minimumCommitCount: $minimumCommitCount,
         );
 
-        $this->branchBase = $result->toArray();
-    }
-
-    /**
-     * Load commits for the displayed branch. When the picker is showing the
-     * project's current branch and the configured base is more than `pageSize`
-     * commits behind, the limit is bumped so every commit in `base..HEAD`
-     * is loaded - otherwise the auto-select on the "Since {base}" row would
-     * tick checkboxes that aren't rendered.
-     */
-    #[Renderless]
-    public function loadCommits(string $branch): void
-    {
-        $limit = $this->effectiveCommitLimit($branch);
-        $commits = app(GetCommitHistoryAction::class)->handle($this->repoPath, $limit, 0, $branch);
-
-        $this->commits = $commits;
-        $this->hasMore = count($commits) >= $limit;
+        $this->hydrateSnapshot($snapshot);
     }
 
     #[Renderless]
-    public function loadMore(string $branch): void
+    public function loadMore(string $branch, string $snapshotKey): void
     {
-        $offset = count($this->commits);
-        $more = app(GetCommitHistoryAction::class)->handle($this->repoPath, $this->pageSize, $offset, $branch);
+        $snapshot = app(LoadBranchExplorerSnapshotAction::class)->handle(
+            repoPath: $this->repoPath,
+            selectedBranch: $branch,
+            currentBranch: $this->currentBranch,
+            baseBranch: $this->defaultBaseBranch !== '' ? $this->defaultBaseBranch : null,
+            pageSize: $this->pageSize,
+            minimumCommitCount: count($this->commits) + $this->pageSize,
+        );
 
-        $this->commits = array_merge($this->commits, $more);
-        $this->hasMore = count($more) >= $this->pageSize;
+        $stale = $snapshot->snapshotKey !== $snapshotKey;
+        $this->hydrateSnapshot($snapshot);
+
+        if ($stale) {
+            $this->dispatch('branch-explorer-selection-stale', message: 'Commit list changed. Refreshed the picker.');
+        }
     }
 
-    private function effectiveCommitLimit(string $branch): int
+    /** @param  list<string>  $selectedHashes */
+    #[Renderless]
+    public function applySelection(string $branch, array $selectedHashes, bool $workingTreeSelected, string $snapshotKey): void
     {
-        if ($branch !== $this->currentBranch || $this->branchBase === null) {
-            return $this->pageSize;
+        $result = app(ResolveBranchExplorerSelectionAction::class)->handle(
+            repoPath: $this->repoPath,
+            projectSlug: $this->projectSlug,
+            selectedBranch: $branch,
+            currentBranch: $this->currentBranch,
+            baseBranch: $this->defaultBaseBranch !== '' ? $this->defaultBaseBranch : null,
+            selectedHashes: $selectedHashes,
+            workingTreeSelected: $workingTreeSelected,
+            snapshotKey: $snapshotKey,
+            pageSize: $this->pageSize,
+            minimumCommitCount: count($this->commits),
+        );
+
+        if ($result->isStale()) {
+            $this->loadSnapshot($branch, max(count($this->commits), $this->pageSize));
+            $this->dispatch('branch-explorer-selection-stale', message: $result->message ?? 'Commit list changed. Refreshed the picker.');
+
+            return;
         }
 
-        return max($this->pageSize, $this->branchBase['commitCount']);
+        if ($result->isError()) {
+            $this->dispatch('branch-explorer-selection-error', message: $result->message ?? 'Unable to apply selection.');
+
+            return;
+        }
+
+        if ($result->shouldNavigate()) {
+            $this->redirect($result->url, navigate: true);
+        }
+    }
+
+    private function hydrateSnapshot(BranchExplorerSnapshot $snapshot): void
+    {
+        $this->branches = $snapshot->branches;
+        $this->snapshotBranch = $snapshot->selectedBranch;
+        $this->branchBase = $snapshot->branchBase;
+        $this->commits = $snapshot->commits;
+        $this->hasMore = $snapshot->hasMore;
+        $this->selectedBranchTipSha = $snapshot->selectedBranchTipSha;
+        $this->snapshotKey = $snapshot->snapshotKey;
+        $this->loadedLimit = $snapshot->loadedLimit;
     }
 };
 
@@ -128,6 +164,8 @@ new class extends Component {
     x-init="$store.keymap.register('⌘B', () => open ? closePanel() : openPanel())"
     @keydown.window="handleKeydown($event)"
     @open-selection-drawer.window="openPanel()"
+    @branch-explorer-selection-error.window="showSelectionError($event.detail.message)"
+    @branch-explorer-selection-stale.window="handleSnapshotStale($event.detail.message)"
     @if($hasRemote) @contextmenu="handleRemoteContextMenu($event)" @endif
     x-effect="if (open && !$store.overlays.is('branch-explorer')) closePanel()"
 >
@@ -273,6 +311,8 @@ new class extends Component {
                                 <button
                                     type="button"
                                     @click="applySelection()"
+                                    wire:loading.attr="disabled"
+                                    wire:target="applySelection,loadSnapshot,loadMore"
                                     class="group flex items-stretch h-6 rounded-md overflow-hidden ring-1 ring-inset ring-gh-link/30 bg-gh-link/10 hover:bg-gh-link/20 hover:ring-gh-link/50 transition-colors cursor-pointer"
                                     :aria-label="'Apply ' + selectionDescription"
                                 >
@@ -302,6 +342,13 @@ new class extends Component {
                             </div>
                         </template>
                     </div>
+
+                    <template x-if="selectionError">
+                        <div class="px-4 py-2 border-b border-gh-border/50 bg-gh-red/5 text-gh-red flex items-start gap-2" role="status" aria-live="polite">
+                            <flux:icon icon="exclamation-triangle" variant="outline" class="!size-3.5 shrink-0 mt-0.5" />
+                            <span class="text-[10px] font-mono leading-4" x-text="selectionError"></span>
+                        </div>
+                    </template>
 
                     {{-- Commits list --}}
                     <div class="overflow-y-auto flex-1" x-ref="commitList">
@@ -410,11 +457,14 @@ new class extends Component {
                                     data-testid="working-tree-select-toggle"
                                     @click.stop="toggleWorkingTreeSelection($event)"
                                     @mousedown.stop
+                                    :disabled="!workingTreeSelectable"
                                     class="mt-0.5 size-4 shrink-0 grid place-items-center rounded border transition-colors cursor-pointer"
-                                    :class="workingTreeSelected
-                                        ? 'border-gh-link bg-gh-link/20 text-gh-link'
-                                        : 'border-gh-border opacity-0 group-hover:opacity-100 hover:border-gh-text/40'"
-                                    :title="workingTreeSelected ? 'Remove working tree from selection' : 'Add working tree to selection (shift+click for range)'"
+                                    :class="!workingTreeSelectable
+                                        ? 'border-gh-border opacity-30 cursor-not-allowed'
+                                        : (workingTreeSelected
+                                            ? 'border-gh-link bg-gh-link/20 text-gh-link'
+                                            : 'border-gh-border opacity-0 group-hover:opacity-100 hover:border-gh-text/40')"
+                                    :title="!workingTreeSelectable ? 'Working tree belongs to the current branch' : (workingTreeSelected ? 'Remove working tree from selection' : 'Add working tree to selection (shift+click for range)')"
                                 >
                                     <template x-if="workingTreeSelected">
                                         <flux:icon icon="check" variant="outline" class="!size-3" />
@@ -492,8 +542,10 @@ new class extends Component {
                         <template x-if="$wire.hasMore">
                             <div class="px-4 py-3 text-center">
                                 <button
-                                    @click="$wire.loadMore(selectedBranch)"
-                                    class="text-xs text-gh-link hover:underline cursor-pointer"
+                                    @click="loadMoreCommits()"
+                                    wire:loading.attr="disabled"
+                                    wire:target="loadMore"
+                                    class="text-xs text-gh-link hover:underline cursor-pointer disabled:opacity-50"
                                 >
                                     Load more commits...
                                 </button>

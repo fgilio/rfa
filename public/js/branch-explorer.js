@@ -18,79 +18,6 @@
     });
 
     /**
-     * @param {object} input
-     * @param {Array<{hash: string}>} input.commits  newest-first; index 0 = tip.
-     * @param {string[]} input.selectedHashes        subset of commits[].hash, any order.
-     * @param {boolean}  input.workingTreeSelected
-     * @param {string}   input.projectSlug
-     * @param {{state: string, baseSha: string|null, hashesInRange: string[]}|null} [input.sinceBase]
-     * @returns {{kind: 'noop'} | {kind: 'navigate', url: string} | {kind: 'alert', message: string}}
-     */
-    function decideSelection({ commits, selectedHashes, workingTreeSelected, projectSlug, sinceBase = null }) {
-        const hasAnySelection = workingTreeSelected || selectedHashes.length > 0;
-        if (!hasAnySelection) return { kind: 'noop' };
-
-        if (
-            sinceBase?.state === BranchBaseState.Ready
-            && sinceBase.baseSha
-            && isSinceBaseExactly({ selectedHashes, workingTreeSelected, hashesInRange: sinceBase.hashesInRange })
-        ) {
-            return { kind: 'navigate', url: `/p/${projectSlug}/rw/${encodeURIComponent(sinceBase.baseSha)}` };
-        }
-
-        const indices = [...new Set(
-            selectedHashes
-                .map(h => commits.findIndex(c => c.hash === h))
-                .filter(i => i >= 0)
-        )].sort((a, b) => a - b);
-
-        // Working tree alone - plain working-tree view.
-        if (workingTreeSelected && indices.length === 0) {
-            return { kind: 'navigate', url: `/p/${projectSlug}` };
-        }
-
-        // All hashes were unknown to `commits` - treat as nothing real selected.
-        // Without this guard, the single-commit branch below dereferences
-        // `commits[undefined].hash` and throws.
-        if (indices.length === 0) return { kind: 'noop' };
-
-        // A non-contiguous commit pick (e.g. A and C without B) would silently pull B
-        // into the diff if we just used min/max. Reject it so users have to
-        // explicitly include every commit in their range.
-        if (indices[indices.length - 1] - indices[0] + 1 !== indices.length) {
-            return {
-                kind: 'alert',
-                message: 'Selection is not contiguous - pick every commit between the oldest and newest you want to review.',
-            };
-        }
-
-        // Backstop for the tip-anchor invariant. Normally the Alpine state
-        // machine auto-unticks WT (see `_enforceWorkingTreeTipAnchor`); this
-        // catches any bypass (programmatic state, future code).
-        if (violatesTipAnchor({ selectedHashes, workingTreeSelected, commits })) {
-            return {
-                kind: 'alert',
-                message: 'Selection is not contiguous - working tree must be paired with the newest commits.',
-            };
-        }
-
-        if (workingTreeSelected) {
-            const oldest = commits[indices[indices.length - 1]];
-            const fromRef = encodeURIComponent(oldest.hash + '^');
-            return { kind: 'navigate', url: `/p/${projectSlug}/rw/${fromRef}` };
-        }
-
-        if (indices.length === 1) {
-            return { kind: 'navigate', url: `/p/${projectSlug}/c/${commits[indices[0]].hash}` };
-        }
-
-        const newest = commits[indices[0]];
-        const oldest = commits[indices[indices.length - 1]];
-        const baseRef = encodeURIComponent(oldest.hash + '^');
-        return { kind: 'navigate', url: `/p/${projectSlug}/${newest.hash}/${baseRef}` };
-    }
-
-    /**
      * Returns true when the current selection state is exactly "everything in base..HEAD
      * plus working tree" - i.e., the user clicked the "Since {base}" row and hasn't trimmed.
      *
@@ -110,8 +37,7 @@
      * Working tree extends a diff through HEAD's working state, so a selection
      * that pairs WT with commits MUST include the tip - otherwise the user is
      * asking for a diff that excludes HEAD's commit while still including its
-     * working tree, which has no coherent diff range. Used as both a guard
-     * (in the picker's auto-untick) and a backstop (in `decideSelection`).
+     * working tree, which has no coherent diff range.
      *
      * @param {object} input
      * @param {string[]} input.selectedHashes
@@ -163,6 +89,7 @@
             activeCommitHash,
             activeDiffFrom: activeDiffFrom || 'HEAD',
             projectSlug,
+            selectionError: '',
             selectedHashes: [],
             workingTreeSelected: false,
             // Shift-click anchor. At most one is active at a time:
@@ -176,11 +103,15 @@
             _loadId: 0, // Stale-response guard: incremented before each async load, checked after
 
             get isWorkingTreeActive() {
-                return this.activeCommitHash === null;
+                return this.activeCommitHash === null && this.selectedBranch === this.currentBranch;
             },
 
             get hasAnySelection() {
                 return this.workingTreeSelected || this.selectedHashes.length > 0;
+            },
+
+            get workingTreeSelectable() {
+                return this.selectedBranch === this.currentBranch;
             },
 
             /**
@@ -244,18 +175,13 @@
                 this.open = true;
                 this.search = '';
                 this.selectedIndex = 0;
+                this._clearSelectionError();
                 Alpine.store('overlays').open('branch-explorer');
-                // Resolve base info before loading commits so the commit-load
-                // can extend its window to cover all base..HEAD hashes when the
-                // configured base is more than `pageSize` commits behind.
-                await Promise.all([
-                    this.$wire.loadBranches(),
-                    this.$wire.loadBranchBase(),
-                ]);
-                this.allBranches = this.$wire.branches;
+
+                await this.refreshSnapshot(this.selectedBranch || this.currentBranch, { force: true });
+
                 const currentIdx = this.allFiltered.findIndex(b => b.name === this.selectedBranch);
                 if (currentIdx >= 0) this.selectedIndex = currentIdx;
-                await this.loadSelectedBranch();
                 this._rehydrateSelectionFromActiveView();
                 await this.$nextTick();
                 this._scrollActiveCommitIntoView();
@@ -267,17 +193,28 @@
                 if (Alpine.store('overlays').is('branch-explorer')) Alpine.store('overlays').close();
             },
 
-            async loadSelectedBranch() {
+            async refreshSnapshot(branchName, { clear = false, force = false, minimumCommitCount = 0 } = {}) {
+                if (!force && branchName === this.selectedBranch && this.$wire.commits.length > 0) return true;
+
+                const id = ++this._loadId;
+                await this.$wire.loadSnapshot(branchName, minimumCommitCount);
+                if (this._loadId !== id) return false;
+
+                this.allBranches = this.$wire.branches;
+                this.selectedBranch = this.$wire.snapshotBranch || branchName;
+
+                if (clear) this.clearSelection();
+
+                return true;
+            },
+
+            async loadSelectedBranch({ force = false } = {}) {
                 const branch = this.allFiltered[this.selectedIndex];
                 if (!branch) return;
-                if (branch.name === this.selectedBranch && this.$wire.commits.length > 0) return;
                 // Selected branch is actually changing - stale hashes no longer apply.
                 const branchChanged = this.selectedBranch !== branch.name;
-                this.selectedBranch = branch.name;
-                const id = ++this._loadId;
-                await this.$wire.loadCommits(branch.name);
-                if (this._loadId !== id) return;
-                if (branchChanged) this.clearSelection();
+                this._clearSelectionError();
+                await this.refreshSnapshot(branch.name, { clear: branchChanged, force });
             },
 
             handleKeydown(e) {
@@ -336,7 +273,7 @@
 
             selectBranchAt(index) {
                 this.selectedIndex = index;
-                this.loadSelectedBranch();
+                this.loadSelectedBranch({ force: true });
             },
 
             copyHash(hash) {
@@ -404,6 +341,7 @@
 
             toggleSelection(hash, idx, event) {
                 event.stopPropagation();
+                this._clearSelectionError();
 
                 if (event.shiftKey) {
                     if (this.lastSelectionAnchorIsWT) {
@@ -434,6 +372,12 @@
 
             toggleWorkingTreeSelection(event) {
                 event.stopPropagation();
+                this._clearSelectionError();
+
+                if (!this.workingTreeSelectable) {
+                    this.showSelectionError('Working tree can only be paired with commits from the current branch.');
+                    return;
+                }
 
                 if (event.shiftKey && this.lastSelectionIndex >= 0 && !this.lastSelectionAnchorIsWT) {
                     this._mergeRangeIntoSelection(0, this.lastSelectionIndex);
@@ -459,10 +403,28 @@
             },
 
             clearSelection() {
+                this._clearSelectionError();
                 this.selectedHashes = [];
                 this.workingTreeSelected = false;
                 this.lastSelectionIndex = -1;
                 this.lastSelectionAnchorIsWT = false;
+            },
+
+            showSelectionError(message) {
+                this.selectionError = message || 'Unable to apply selection.';
+            },
+
+            handleSnapshotStale(message) {
+                this.showSelectionError(message);
+                this.selectedHashes = [];
+                this.workingTreeSelected = false;
+                this.lastSelectionIndex = -1;
+                this.lastSelectionAnchorIsWT = false;
+                this._rehydrateSelectionFromActiveView();
+            },
+
+            _clearSelectionError() {
+                this.selectionError = '';
             },
 
             /**
@@ -572,6 +534,7 @@
             selectSinceBase() {
                 const base = this.$wire.branchBase;
                 if (!base || base.state !== BranchBaseState.Ready) return;
+                this._clearSelectionError();
 
                 if (this.sinceBaseSelected) {
                     this.clearSelection();
@@ -592,6 +555,7 @@
             startDrag(idx, event) {
                 if (event.button !== 0) return;
                 if (event.shiftKey) return;
+                this._clearSelectionError();
                 let moved = false;
                 let active = true;
                 let lastHoveredIdx = idx;
@@ -645,24 +609,25 @@
                 window.addEventListener('blur', onBlur);
             },
 
-            applySelection() {
-                const result = decideSelection({
-                    commits: this.$wire.commits,
-                    selectedHashes: this.selectedHashes,
-                    workingTreeSelected: this.workingTreeSelected,
-                    projectSlug: this.projectSlug,
-                    sinceBase: this.$wire.branchBase,
-                });
+            async loadMoreCommits() {
+                this._clearSelectionError();
+                const id = ++this._loadId;
+                const before = this.$wire.snapshotKey || '';
+                await this.$wire.loadMore(this.selectedBranch, before);
+                if (this._loadId !== id) return false;
+                this.selectedBranch = this.$wire.snapshotBranch || this.selectedBranch;
+                this.allBranches = this.$wire.branches;
+                return true;
+            },
 
-                if (result.kind === 'noop') return;
-                if (result.kind === 'alert') {
-                    window.alert(result.message);
-                    return;
-                }
-                if (result.kind === 'navigate') {
-                    Livewire.navigate(result.url);
-                    this.closePanel();
-                }
+            async applySelection() {
+                this._clearSelectionError();
+                await this.$wire.applySelection(
+                    this.selectedBranch,
+                    this.selectedHashes,
+                    this.workingTreeSelected,
+                    this.$wire.snapshotKey || '',
+                );
             },
         };
     }
@@ -682,5 +647,5 @@
         }
     }
 
-    return { BranchBaseState, decideSelection, isSinceBaseExactly, violatesTipAnchor, createBranchExplorer, install, autoInstall };
+    return { BranchBaseState, isSinceBaseExactly, violatesTipAnchor, createBranchExplorer, install, autoInstall };
 });
