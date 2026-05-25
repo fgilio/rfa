@@ -226,3 +226,38 @@ describe('diff action diagnostics', () => {
         });
     });
 });
+
+describe('diff file lifecycle', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        globalThis.Alpine = { store: () => ({ collapseAll: false }) };
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        delete globalThis.Alpine;
+    });
+
+    it('clears the escape hint timer on destroy', () => {
+        const component = createDiffFile({
+            fileId: 'file-1',
+            filePath: 'resources/views/pages/review-page.blade.php',
+            isReviewed: false,
+        });
+
+        component.formBody = 'draft comment';
+        component.handleEscape();
+
+        expect(component.escHint).toBe(true);
+        expect(component.escTimer).not.toBeNull();
+
+        component.destroy();
+
+        expect(component.escTimer).toBeNull();
+        expect(component.escHint).toBe(false);
+
+        vi.advanceTimersByTime(1500);
+
+        expect(component.escHint).toBe(false);
+    });
+});

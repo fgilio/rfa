@@ -101,6 +101,21 @@ test('diagnostics route rejects unknown browser sample fields', function () {
     ])->assertUnprocessable();
 });
 
+test('diagnostics route rejects unknown timing fields', function () {
+    config(['rfa.diagnostics.enabled' => true]);
+
+    $this->postJson('/api/diagnostics/browser', [
+        'reason' => 'diff.action',
+        'timings' => [
+            'diffAction' => [
+                'action' => 'expandContext',
+                'elapsedMs' => 120,
+                'unexpected' => 'rejected',
+            ],
+        ],
+    ])->assertUnprocessable();
+});
+
 test('diagnostics route rejects oversized browser samples', function () {
     config([
         'rfa.diagnostics.enabled' => true,
@@ -153,3 +168,38 @@ test('image route rejects path traversal', function () {
     $this->get("/api/image/{$project->id}/HEAD/../../etc/passwd")
         ->assertNotFound();
 });
+
+test('image route preserves encoded special characters in paths', function (string $path) {
+    $project = Project::factory()->create();
+    $received = (object) ['path' => null, 'ref' => null];
+
+    app()->bind(ServeImageAction::class, fn () => new class($received)
+    {
+        public function __construct(
+            private readonly stdClass $received,
+        ) {}
+
+        public function handle(int $projectId, string $path, string $ref): ?array
+        {
+            $this->received->path = $path;
+            $this->received->ref = $ref;
+
+            return ['content' => 'fake-png-data', 'mimeType' => 'image/png'];
+        }
+    });
+
+    $encodedPath = collect(explode('/', $path))
+        ->map(fn (string $segment): string => rawurlencode($segment))
+        ->implode('/');
+
+    $this->get("/api/image/{$project->id}/HEAD/{$encodedPath}")
+        ->assertOk();
+
+    expect($received->path)->toBe($path)
+        ->and($received->ref)->toBe('HEAD');
+})->with([
+    'space' => ['screenshots/has space.png'],
+    'hash' => ['screenshots/has#hash.png'],
+    'question' => ['screenshots/has?query.png'],
+    'percent' => ['screenshots/has%percent.png'],
+]);

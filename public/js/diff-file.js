@@ -252,6 +252,12 @@
                 this.isDragging = false;
             },
 
+            destroy() {
+                this.stopDragTracking();
+                if (this.escTimer) { clearTimeout(this.escTimer); this.escTimer = null; }
+                this.escHint = false;
+            },
+
             handleEscape() {
                 if (this.formBody.trim() === '') {
                     if (this.editingCommentId) {

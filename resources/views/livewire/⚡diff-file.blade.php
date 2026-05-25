@@ -251,6 +251,15 @@ HTML;
         return (int) round((microtime(true) - $startedAt) * 1000);
     }
 
+    private function imageUrl(string $ref, string $path): string
+    {
+        $encodedPath = collect(explode('/', $path))
+            ->map(fn (string $segment): string => rawurlencode($segment))
+            ->implode('/');
+
+        return '/api/image/'.$this->projectId.'/'.rawurlencode($ref).'/'.$encodedPath;
+    }
+
     private function dispatchDiffActionCompleted(string $action, int $durationMs, bool $cached = false): void
     {
         $context = $this->diagnosticContext($this->diffData);
@@ -456,7 +465,7 @@ HTML;
                         <flux:badge color="red" size="sm">{{ $status === 'deleted' ? 'Deleted' : 'Before' }}</flux:badge>
                         <div class="border border-gh-border rounded-lg p-1" style="background: repeating-conic-gradient(rgb(128 128 128 / 0.15) 0% 25%, transparent 0% 50%) 50% / 16px 16px;">
                             <img
-                                src="/api/image/{{ $projectId }}/{{ $beforeRef }}/{{ $beforePath }}"
+                                src="{{ $this->imageUrl($beforeRef, $beforePath) }}"
                                 alt="{{ $beforePath }}"
                                 class="max-h-96 object-contain"
                                 loading="lazy"
@@ -470,7 +479,7 @@ HTML;
                         <flux:badge color="green" size="sm">{{ $status === 'added' ? 'New' : 'After' }}</flux:badge>
                         <div class="border border-gh-border rounded-lg p-1" style="background: repeating-conic-gradient(rgb(128 128 128 / 0.15) 0% 25%, transparent 0% 50%) 50% / 16px 16px;">
                             <img
-                                src="/api/image/{{ $projectId }}/{{ $afterRef }}/{{ $file['path'] }}"
+                                src="{{ $this->imageUrl($afterRef, $file['path']) }}"
                                 alt="{{ $file['path'] }}"
                                 class="max-h-96 object-contain"
                                 loading="lazy"

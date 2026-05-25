@@ -67,6 +67,22 @@ test('returns null when file not in HEAD', function () {
     expect($result)->toBeNull();
 });
 
+test('returns working images with special characters in their paths', function (string $path) {
+    File::ensureDirectoryExists(dirname($this->tmpDir.'/'.$path));
+    File::put($this->tmpDir.'/'.$path, "PNG\0encoded");
+
+    $result = app(ServeImageAction::class)->handle($this->project->id, $path, 'working');
+
+    expect($result)->not->toBeNull()
+        ->and($result['content'])->toBe("PNG\0encoded")
+        ->and($result['mimeType'])->toBe('image/png');
+})->with([
+    'space' => ['screenshots/has space.png'],
+    'hash' => ['screenshots/has#hash.png'],
+    'question' => ['screenshots/has?query.png'],
+    'percent' => ['screenshots/has%percent.png'],
+]);
+
 test('detects correct mime type for each extension', function () {
     $extensions = [
         'png' => 'image/png',

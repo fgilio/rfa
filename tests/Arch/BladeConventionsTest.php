@@ -22,6 +22,23 @@ function bladeFiles(): array
     return $files;
 }
 
+function bladeRelativePath(string $path): string
+{
+    return str_replace(dirname(__DIR__, 2).'/resources/views/', '', $path);
+}
+
+function inlineAlpineObjects(string $content): array
+{
+    preg_match_all('/x-data="\{(.*?)\}"(?=\s|>)/s', $content, $matches, PREG_OFFSET_CAPTURE);
+
+    return collect($matches[1])
+        ->map(fn (array $match): array => [
+            'body' => $match[0],
+            'line' => substr_count(substr($content, 0, $match[1]), "\n") + 1,
+        ])
+        ->all();
+}
+
 test('flux:icon uses outline variant', function () {
     $violations = [];
     foreach (bladeFiles() as $file) {
@@ -166,4 +183,57 @@ test('branch explorer active commit state uses ref-aware matching', function () 
     expect($content)
         ->toContain('isActiveCommit(commit.hash)')
         ->not->toContain('activeCommitHash === commit.hash');
+});
+
+test('blade templates do not attach pending-save Livewire hooks inline', function () {
+    $violations = [];
+
+    foreach (bladeFiles() as $file) {
+        $content = file_get_contents($file);
+
+        // Target the pending-save regression only. Other Livewire hooks can be
+        // valid when owned by a testable public/js module with explicit cleanup.
+        if (preg_match('/Livewire\.hook\([\'"]commit[\'"]/', $content)) {
+            $violations[] = bladeRelativePath($file);
+        }
+    }
+
+    expect($violations)->toBeEmpty();
+});
+
+test('inline alpine timers clear themselves on destroy', function () {
+    $violations = [];
+
+    foreach (bladeFiles() as $file) {
+        foreach (inlineAlpineObjects(file_get_contents($file)) as $object) {
+            if (! str_contains($object['body'], 'setInterval(') && ! str_contains($object['body'], 'setTimeout(')) {
+                continue;
+            }
+
+            if (! str_contains($object['body'], 'destroy()')) {
+                $violations[] = bladeRelativePath($file).':'.$object['line'];
+            }
+        }
+    }
+
+    expect($violations)->toBeEmpty();
+});
+
+test('diff-file alpine component clears timers on destroy', function () {
+    $script = file_get_contents(dirname(__DIR__, 2).'/public/js/diff-file.js');
+
+    expect($script)
+        ->toContain('escTimer: null')
+        ->toContain('setTimeout(')
+        ->toContain('destroy()')
+        ->toContain('clearTimeout(this.escTimer)');
+});
+
+test('diff image sources use encoded image urls', function () {
+    $component = dirname(__DIR__, 2).'/resources/views/livewire/⚡diff-file.blade.php';
+    $content = file_get_contents($component);
+
+    expect($content)
+        ->toContain('$this->imageUrl(')
+        ->not->toContain('src="/api/image/');
 });
