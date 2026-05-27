@@ -4,15 +4,9 @@ macOS (Apple Silicon) desktop app for reviewing AI agent code changes. Open any 
 
 ## Install
 
-Download the latest `.dmg` from [GitHub Releases](https://github.com/fgilio/rfa/releases) and drag to Applications.
+Download the latest `.dmg` from [GitHub Releases](https://github.com/fgilio/rfa/releases) and drag rfa to Applications.
 
-Builds are currently unsigned. After installing, remove the quarantine attribute before first launch:
-
-```bash
-xattr -cr /Applications/rfa.app
-```
-
-Auto-updates work normally after that (handled by Electron, independent of code signing).
+Builds are signed and notarized, so Gatekeeper opens them on first launch without warnings. Updates download and install automatically in the background.
 
 ## Quickstart
 
@@ -42,8 +36,8 @@ This launches the app (or focuses it if running) and opens the repo.
 
 ## Features
 
-- Unified diff view with syntax highlighting (Phiki)
-- Inline comments on any changed line; shift+click for range selection
+- Unified diff view with syntax highlighting (Tempest Highlight, with Phiki as fallback for languages it doesn't cover)
+- Inline comments on any changed line (shift+click for range selection)
 - Global review comment
 - Commit history browser
 - File sidebar with change stats and grouping

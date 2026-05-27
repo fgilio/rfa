@@ -19,9 +19,9 @@ git push --tags
 - electron-updater reads `latest-mac.yml` from the latest published (non-draft) release
 - Auto-update uses the `.zip` artifact; `.dmg` is for manual download
 
-## Code signing (not yet configured)
+## Code signing
 
-Add these secrets to enable signing and notarization:
+Releases are signed and notarized. The build step passes these secrets as `env:`:
 
 - `CSC_LINK` - base64-encoded Developer ID `.p12` certificate
 - `CSC_KEY_PASSWORD` - certificate password
@@ -29,4 +29,4 @@ Add these secrets to enable signing and notarization:
 - `NATIVEPHP_APPLE_ID_PASS` - app-specific password
 - `NATIVEPHP_APPLE_TEAM_ID` - Apple Developer Team ID
 
-`notarize.js` already handles notarization when these are present. Pass them as `env:` in the build step.
+`notarize.js` runs as an aftersign hook and notarizes the app once these are present.
