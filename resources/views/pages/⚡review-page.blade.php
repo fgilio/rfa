@@ -60,6 +60,8 @@ new #[Layout('layouts.app')] class extends Component
     /** Undo-toast `type` for the "marked file as reviewed" action. */
     private const UNDO_TYPE_MARK_REVIEWED = 'mark-reviewed';
 
+    private const UNDO_TYPE_SWITCH_BRANCH = 'switch-branch';
+
     /** @var array<int, array<string, mixed>> */
     public array $files = [];
 
@@ -140,8 +142,12 @@ new #[Layout('layouts.app')] class extends Component
     /** @var array<string, mixed> */
     public array $divergenceContext = [];
 
-    /** HEAD sha at which the user last dismissed a divergence banner. */
+    /** HEAD sha at which the user last dismissed a divergence banner (detached only). */
     public ?string $dismissedAtHead = null;
+
+    /** Head branch the user last chose to keep reviewing past (diverged / missing-target).
+     *  Suppresses by branch identity, not sha, so committing on that branch doesn't re-nag. */
+    public ?string $dismissedAtBranch = null;
 
     /** Guards `skipRender()` on poll ticks so the initial mount still renders. */
     #[Locked]
@@ -682,6 +688,12 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         if ($target !== '' && $head->targetExists === false) {
+            if ($this->dismissedAtBranch === $head->branch) {
+                $this->markAligned();
+
+                return;
+            }
+
             $this->divergenceState = DivergenceState::MissingTarget;
             $this->divergenceContext = [
                 'target' => $target,
@@ -699,7 +711,9 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
-        if ($this->dismissedAtHead === $head->sha) {
+        // Suppress by branch identity, not sha: once the user opts to keep reviewing
+        // their target, committing on the diverged branch shouldn't re-nag every commit.
+        if ($this->dismissedAtBranch === $head->branch) {
             $this->markAligned();
 
             return;
@@ -711,6 +725,7 @@ new #[Layout('layouts.app')] class extends Component
             'currentBranch' => $head->branch,
             'currentSha' => $head->sha,
             'shortSha' => substr($head->sha, 0, 7),
+            'commentCount' => $this->persistedCommentCount(),
         ];
     }
 
@@ -722,15 +737,38 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
+        // Capture before autoFollow clears state, so the switch stays undoable.
+        $wasDiverged = $this->divergenceState === DivergenceState::Diverged;
+        $fromBranch = $this->projectBranch;
+
         $this->autoFollowToHead($head->branch);
+
+        // Only offer undo when leaving a real, still-existing target (Diverged).
+        // MissingTarget's old branch is gone — undoing would re-point at nothing.
+        if ($wasDiverged && $fromBranch !== '' && $fromBranch !== $head->branch) {
+            $this->dispatch(
+                'undo-available',
+                type: self::UNDO_TYPE_SWITCH_BRANCH,
+                payload: ['fromBranch' => $fromBranch],
+                message: 'Switched review to '.$head->branch,
+            );
+        }
     }
 
     public function keepReviewing(): void
     {
-        $currentSha = $this->divergenceContext['currentSha'] ?? null;
+        $branch = $this->divergenceContext['currentBranch'] ?? null;
 
-        if (is_string($currentSha) && $currentSha !== '') {
-            $this->dismissedAtHead = $currentSha;
+        if (is_string($branch) && $branch !== '') {
+            // Diverged / missing-target: suppress by branch identity.
+            $this->dismissedAtBranch = $branch;
+        } else {
+            // Detached: no branch to key on, so fall back to the sha.
+            $sha = $this->divergenceContext['currentSha'] ?? null;
+
+            if (is_string($sha) && $sha !== '') {
+                $this->dismissedAtHead = $sha;
+            }
         }
 
         $this->markAligned();
@@ -739,6 +777,21 @@ new #[Layout('layouts.app')] class extends Component
     public function dismissDetachedBanner(): void
     {
         $this->keepReviewing();
+    }
+
+    public function dismissMissingTarget(): void
+    {
+        $this->keepReviewing();
+    }
+
+    /** @param array{fromBranch?: string} $payload */
+    public function restoreReviewBranch(array $payload): void
+    {
+        $branch = $payload['fromBranch'] ?? null;
+
+        if (is_string($branch) && $branch !== '') {
+            $this->autoFollowToHead($branch);
+        }
     }
 
     private function autoFollowToHead(string $newBranch): void
@@ -754,6 +807,7 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->projectBranch = $newBranch;
         $this->dismissedAtHead = null;
+        $this->dismissedAtBranch = null;
         $this->markAligned();
 
         $this->rehydrateForTarget();
@@ -767,9 +821,20 @@ new #[Layout('layouts.app')] class extends Component
 
     private function hasPersistedComments(): bool
     {
+        return $this->persistedCommentQuery()->exists();
+    }
+
+    private function persistedCommentCount(): int
+    {
+        return $this->persistedCommentQuery()->count();
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Builder<\App\Models\Comment> */
+    private function persistedCommentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
         $projectId = $this->projectId === 0 ? null : $this->projectId;
 
-        return \App\Models\Comment::forProjectOrRepo($projectId, $this->repoPath)->exists();
+        return \App\Models\Comment::forProjectOrRepo($projectId, $this->repoPath);
     }
 
     // endregion: Branch Divergence
@@ -1011,6 +1076,7 @@ new #[Layout('layouts.app')] class extends Component
             'delete', 'clear-all' => $this->restoreComments($payload),
             'discard' => $this->restoreDiscardedFile($payload),
             self::UNDO_TYPE_MARK_REVIEWED => $this->unmarkReviewed($payload['filePaths'] ?? []),
+            self::UNDO_TYPE_SWITCH_BRANCH => $this->restoreReviewBranch(is_array($payload) ? $payload : []),
             default => null,
         };
     }
@@ -1618,6 +1684,9 @@ new #[Layout('layouts.app')] class extends Component
                         :selection-title="$selectionTitle"
                         :default-base-branch="$defaultBaseBranch"
                     />
+                    @if(! $this->isCommitMode())
+                        <x-divergence.marker :state="$divergenceState" :context="$divergenceContext" />
+                    @endif
                 @endif
                 <livewire:comments-drawer :repo-path="$repoPath" :project-id="$projectId ?: null" />
             </div>
@@ -1850,7 +1919,9 @@ new #[Layout('layouts.app')] class extends Component
         </x-slot:below>
     </x-page-header>
 
-    {{-- Branch divergence banner + polling island (working-tree mode only) --}}
+    {{-- Branch divergence: HEAD poller + (missing-target only) blocking bar.
+         Diverged / detached surface as a quiet marker on the branch control in
+         the header (see <x-divergence.marker> above) so the canvas stays calm. --}}
     @if(! $this->isCommitMode())
         <livewire:head-divergence-poller
             wire:key="head-divergence-poller-{{ $projectId }}-{{ $diffFrom }}-{{ $projectBranch }}"
@@ -1858,43 +1929,7 @@ new #[Layout('layouts.app')] class extends Component
             :target="$projectBranch"
         />
 
-        @if($divergenceState === DivergenceState::Diverged)
-            <div class="px-5 py-3 border-b border-gh-border" role="status" aria-live="polite" data-testid="divergence-banner-diverged">
-                <flux:callout icon="arrow-path" variant="warning" inline>
-                    <flux:callout.heading>Repo switched to <span class="font-mono">{{ $divergenceContext['currentBranch'] }}</span></flux:callout.heading>
-                    <flux:callout.text>Still reviewing <span class="font-mono">{{ $divergenceContext['target'] }}</span>.</flux:callout.text>
-                    <x-slot name="actions">
-                        <flux:button size="sm" variant="primary" wire:click="switchReviewToHead">
-                            Switch review to <span class="font-mono ml-1">{{ $divergenceContext['currentBranch'] }}</span>
-                        </flux:button>
-                        <flux:button size="sm" variant="ghost" wire:click="keepReviewing">
-                            Keep reviewing <span class="font-mono ml-1">{{ $divergenceContext['target'] }}</span>
-                        </flux:button>
-                    </x-slot>
-                </flux:callout>
-            </div>
-        @elseif($divergenceState === DivergenceState::Detached)
-            <div class="px-5 py-3 border-b border-gh-border" role="status" aria-live="polite" data-testid="divergence-banner-detached">
-                <flux:callout icon="information-circle" variant="secondary" inline>
-                    <flux:callout.heading>Repo detached at <span class="font-mono">{{ $divergenceContext['shortSha'] }}</span></flux:callout.heading>
-                    <flux:callout.text>Still reviewing <span class="font-mono">{{ $divergenceContext['target'] }}</span>.</flux:callout.text>
-                    <x-slot name="actions">
-                        <flux:button size="sm" variant="ghost" wire:click="dismissDetachedBanner">Dismiss</flux:button>
-                    </x-slot>
-                </flux:callout>
-            </div>
-        @elseif($divergenceState === DivergenceState::MissingTarget)
-            <div class="px-5 py-3 border-b border-gh-border" role="alert" aria-live="assertive" data-testid="divergence-banner-missing">
-                <flux:callout icon="exclamation-triangle" variant="danger" inline>
-                    <flux:callout.heading>Review target <span class="font-mono">{{ $divergenceContext['target'] }}</span> no longer exists</flux:callout.heading>
-                    <x-slot name="actions">
-                        <flux:button size="sm" variant="primary" wire:click="switchReviewToHead">
-                            Switch to <span class="font-mono ml-1">{{ $divergenceContext['currentBranch'] }}</span>
-                        </flux:button>
-                    </x-slot>
-                </flux:callout>
-            </div>
-        @endif
+        <x-divergence.missing-bar :state="$divergenceState" :context="$divergenceContext" />
     @endif
 
     @if($commitInfo)
@@ -2139,6 +2174,18 @@ new #[Layout('layouts.app')] class extends Component
                         @if($this->isCommitMode())
                             <h2 class="font-semibold tracking-brutal text-lg mb-2">No file changes in this commit</h2>
                             <p class="text-sm text-gh-muted">This commit has no diff (empty or merge commit)</p>
+                        @elseif($divergenceState === DivergenceState::Diverged)
+                            {{-- Empty *because* the checkout drifted: tell the one true story instead
+                                 of a generic "clean" message disconnected from the divergence marker. --}}
+                            <h2 class="font-semibold tracking-brutal text-lg mb-2">Nothing to review on <span class="font-mono">{{ $divergenceContext['target'] ?? $projectBranch }}</span></h2>
+                            <p class="text-sm text-gh-muted max-w-md mx-auto leading-relaxed mb-5">
+                                Your repo is on <span class="font-mono text-gh-text">{{ $divergenceContext['currentBranch'] ?? '' }}</span> right now.
+                                Switch your review to it, or edit files on <span class="font-mono text-gh-text">{{ $divergenceContext['target'] ?? $projectBranch }}</span> to see changes here.
+                            </p>
+                            <div class="flex items-center justify-center gap-2">
+                                <button type="button" wire:click="switchReviewToHead" class="text-xs font-medium font-display rounded-md px-3.5 py-2 bg-gh-accent text-gh-bg hover:opacity-90 transition-opacity">Switch review here</button>
+                                <button type="button" wire:click="keepReviewing" class="text-xs font-medium text-gh-muted hover:text-gh-text px-3 py-2 transition-colors">Keep reviewing</button>
+                            </div>
                         @else
                             <h2 class="font-semibold tracking-brutal text-lg mb-2">Working tree is clean</h2>
                             <p class="text-sm text-gh-muted">Edit files to see them here</p>
