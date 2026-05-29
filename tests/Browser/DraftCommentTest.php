@@ -183,13 +183,21 @@ test('clicking line with existing draft re-opens it', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
 
-    // Wait for the draft to land in both server-rendered HTML *and* the
-    // client-side $wire proxy. The badge shows after the server morph; the
-    // mousedown handler reads $wire.fileComments synchronously to find the
-    // existing draft, so we also need the wire-property sync to have
-    // happened. networkidle covers the Livewire round-trip end-to-end.
+    // The re-open mousedown handler reads $wire.fileComments synchronously to
+    // find the existing draft. The rendered badge can briefly lead that client
+    // snapshot, so poll the Livewire component state directly until the draft is
+    // present before re-clicking — networkidle was an unreliable proxy for this
+    // and produced flakes (the click would open a blank form that the
+    // inputValue poll below can never recover).
     $page->page()->getByTestId('draft-comment')->waitFor();
-    $page->waitForEvent('networkidle');
+    $deadline = microtime(true) + 5.0;
+    do {
+        $synced = $page->script('(() => { try { return [...document.querySelectorAll("[wire\:id]")].some(el => { const c = window.Livewire && window.Livewire.find(el.getAttribute("wire:id")); return c && typeof c.get === "function" && (c.get("fileComments") || []).some(x => x.isDraft); }); } catch (e) { return false; } })()');
+        if ($synced) {
+            break;
+        }
+        usleep(50_000);
+    } while (microtime(true) < $deadline);
 
     // Click same line again
     $lineNum->click();
@@ -334,10 +342,10 @@ test('drafts excluded from export', function () {
 
 // -- Confirm dialog cancel path --
 
-test('canceling confirm dialog does not submit review', function () {
-    $page = $this->visit($this->projectUrl());
+test('canceling the armed draft submit does not submit review', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
 
-    // Create finalized comment
+    // Create finalized comment (enables submit)
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Stay here');
     $page->press('Save');
@@ -348,11 +356,16 @@ test('canceling confirm dialog does not submit review', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
 
-    // Override confirm to return false (cancel)
-    $page->script('window.confirm = function() { return false; }');
+    $page->assertSee('1 draft');
 
-    $page->page()->getByRole('button', ['name' => 'Submit review'])->click();
+    // Arm the inline confirm, then cancel by clicking outside the submit button
+    // (@click.outside resets `armed`). The review must not submit and the button
+    // reverts to its normal label.
+    $page->press('Submit review');
+    $page->assertSee('Submit without 1 draft?');
+    $page->page()->getByPlaceholder('Overall review comment', false)->click();
 
+    $page->assertSee('Submit review');
     $page->assertDontSee('Review submitted');
     $page->assertSee('Stay here');
 });
