@@ -287,7 +287,11 @@ class GitMetadataService
         $local = collect(explode("\n", $localOutput))
             ->filter()
             ->map(fn (string $line): BranchEntry => new BranchEntry(
-                name: trim(ltrim($line, '* ')),
+                // `git branch --list` uses a fixed two-column marker: `* ` for the
+                // current branch, `+ ` for a branch checked out in a linked worktree,
+                // two spaces otherwise. Strip those columns rather than only the `* `,
+                // so a worktree branch doesn't become an unresolvable "+ name" ref.
+                name: trim(substr($line, 2)),
                 isCurrent: str_starts_with($line, '* '),
                 isRemote: false,
             ))

@@ -319,6 +319,31 @@ test('getBranches returns multiple local branches', function () {
     expect(array_values($current)[0]->name)->toBe('main');
 });
 
+test('getBranches strips the worktree marker from branches checked out elsewhere', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    // A branch checked out in a linked worktree is prefixed with `+ ` by
+    // `git branch --list`, just as the current branch is prefixed with `* `.
+    $linkedWorktree = $this->createTempDirectory('rfa_test_wt_').'/linked';
+    $this->runTestRepoCommand($this->tmpDir, [
+        'git branch feature-x',
+        'git worktree add '.escapeshellarg($linkedWorktree).' feature-x',
+    ]);
+
+    $result = $this->service->getBranches($this->tmpDir);
+    $names = array_map(fn ($b) => $b->name, $result['local']);
+
+    expect($names)->toContain('feature-x')
+        ->and($names)->not->toContain('+ feature-x')
+        ->and($names)->toContain('main');
+
+    $featureX = array_values(array_filter($result['local'], fn ($b) => $b->name === 'feature-x'))[0];
+    expect($featureX->isCurrent)->toBeFalse()
+        ->and($featureX->isRemote)->toBeFalse();
+});
+
 test('getBranches returns empty remote list when no remotes', function () {
     $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "ok\n");
