@@ -200,10 +200,7 @@
              * from `upstream/x`.
              */
             get hasMultipleRemotes() {
-                const remotes = new Set();
-                for (const branch of (this.allBranches.remote || [])) {
-                    if (branch.remote) remotes.add(branch.remote);
-                }
+                const remotes = new Set((this.allBranches.remote || []).map(b => b.remote).filter(Boolean));
                 return remotes.size > 1;
             },
 

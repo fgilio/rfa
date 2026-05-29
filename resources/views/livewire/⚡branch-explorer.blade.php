@@ -269,7 +269,7 @@ new class extends Component {
                                         @if($hasRemote)
                                             data-remote-context
                                             data-remote-type="branch"
-                                            :data-remote-params="JSON.stringify({ name: branch.remote && branch.name.startsWith(branch.remote + '/') ? branch.name.slice(branch.remote.length + 1) : branch.name })"
+                                            :data-remote-params="JSON.stringify({ name: remoteBranchLabel(branch) })"
                                             :data-remote-label="'branch ' + branch.name"
                                         @endif
                                     >
