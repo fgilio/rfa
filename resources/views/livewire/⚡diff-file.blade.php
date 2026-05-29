@@ -528,14 +528,7 @@ HTML;
             >
                 @if($hasGaps)
                     <x-diff.expand-control>
-                        <button
-                            wire:click="expandContext"
-                            wire:loading.attr="disabled"
-                            wire:target="expandContext"
-                            @click="loading = true; markDiffActionStart('expandContext')"
-                            aria-label="Show full file"
-                            class="text-gh-link hover:text-gh-text transition-colors disabled:opacity-50"
-                        >full file</button>
+                        <x-diff.expand-button action="expandContext" aria-label="Show full file">full file</x-diff.expand-button>
                     </x-diff.expand-control>
                 @endif
 

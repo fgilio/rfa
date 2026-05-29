@@ -17,8 +17,6 @@
 @props([
     'icon' => 'expand-all',
     'align' => 'center',
-    'verb' => 'Show',
-    'loadingLabel' => 'Loading…',
 ])
 
 @php
@@ -37,11 +35,11 @@
     @if($hasIcon)
         <flux:icon :icon="$icon" variant="outline" class="!size-3.5 shrink-0 text-gh-muted/50" x-show="!loading" />
         <span x-show="!loading" class="inline-flex min-w-0 items-center gap-2">
-            @if($verb !== '')<span class="text-gh-muted/60">{{ $verb }}</span>@endif
+            <span class="text-gh-muted/60">Show</span>
             {{ $slot }}
         </span>
         <flux:icon icon="arrow-path" variant="outline" class="!size-3.5 shrink-0 animate-spin text-gh-muted" x-show="loading" x-cloak />
-        <span x-show="loading" x-cloak class="text-gh-muted">{{ $loadingLabel }}</span>
+        <span x-show="loading" x-cloak class="text-gh-muted">Loading…</span>
     @else
         {{ $slot }}
     @endif
