@@ -101,7 +101,18 @@ test('interceptor silently reloads on 419 instead of showing Livewire confirm di
         }
     JS);
 
-    $page->page()->evaluate('() => { Livewire.first().$refresh(); }');
+    // Triggering $refresh fires the faked 419, and session-recovery.js can begin
+    // the silent reload before this evaluate's round-trip resolves — destroying
+    // the execution context mid-call. That navigation is exactly what we assert
+    // ran below, so tolerate the race here the same way the sessionStorage reads
+    // do. Under heavy parallel load the evaluate is slow enough to overlap the
+    // reload; in isolation it resolves first, so this only bites under contention.
+    try {
+        $page->page()->evaluate('() => { Livewire.first().$refresh(); }');
+    } catch (Throwable) {
+        // Reload navigation started mid-evaluate; the beforeunload signal below
+        // is the real proof it ran.
+    }
 
     expect(waitForSessionValue($page, '__csrf419ReloadRan', '1'))->toBe('1');
 
