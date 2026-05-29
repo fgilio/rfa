@@ -46,6 +46,14 @@
     --color-accent-foreground: rgb(var(--gh-bg));
 }
 
+/* Bring Flux toasts onto the app surface so they match the hand-built
+   undo-toast (radius/shadow already align). Targets the toast dialog body;
+   higher specificity than Flux's bg-white/zinc utilities, loaded after them. */
+[data-flux-toast-dialog] > div {
+    background-color: rgb(var(--gh-surface));
+    border-color: rgb(var(--gh-border));
+}
+
 * {
     scrollbar-width: thin;
     scrollbar-color: gray transparent;

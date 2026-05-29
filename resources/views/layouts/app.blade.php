@@ -268,6 +268,9 @@
     </div>
 
     <livewire:keepalive />
+    {{-- Single defined home for Flux toasts (bottom-right), clear of the undo-toast
+         and submit bar. Surface styling is brought onto gh-* tokens in app.css. --}}
+    <flux:toast position="bottom end" />
     {{ $slot }}
     <script>
         document.addEventListener('livewire:init', () => {
