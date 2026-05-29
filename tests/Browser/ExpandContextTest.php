@@ -26,12 +26,12 @@ test('show full file button reveals all hidden lines', function () {
     // Wait for diff to load
     $page->assertSee('changed1');
 
-    $page->page()->locator('button')->filter(['hasText' => 'Show full file'])->first()->click();
+    $page->page()->getByRole('button', ['name' => 'Show full file'])->click();
 
     // After expansion, previously hidden content is visible
     $page->assertSee('line15');
 
     // No more expand buttons
     expect($page->page()->locator('button')->filter(['hasText' => 'hidden lines'])->count())->toBe(0);
-    expect($page->page()->locator('button')->filter(['hasText' => 'Show full file'])->count())->toBe(0);
+    expect($page->page()->getByRole('button', ['name' => 'Show full file'])->count())->toBe(0);
 });

@@ -355,7 +355,7 @@ test('tiered expand buttons render for middle gap larger than 15 lines', functio
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
-    // Should show tiered buttons: "Expand 15  20 hidden lines"
+    // Should show tiered targets: "Show  15 · 20 hidden lines"
     expect($html)->toContain('expandGap(1, 15)')
         ->and($html)->toContain('expandGap(1)')
         ->and($html)->toContain('20')
@@ -369,7 +369,8 @@ test('single expand button renders for gap of 15 or fewer lines', function () {
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
-    expect($html)->toContain('Expand 10 hidden lines')
+    // The "Show" verb lives in the <x-diff.expand-control> shell; the button is the target.
+    expect($html)->toContain('10 hidden lines')
         ->and($html)->not->toContain('expandGap(1, 15)');
 });
 
@@ -381,7 +382,7 @@ test('tiered expand buttons render for leading gap larger than 15 lines', functi
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
-    // Should show tiered buttons for leading gap: "Expand 15 · 24 hidden lines"
+    // Should show tiered targets for leading gap: "Show  15 · 24 hidden lines"
     expect($html)->toContain('expandGap(0, 15)')
         ->and($html)->toContain('expandGap(0)')
         ->and($html)->toContain('24')
@@ -408,7 +409,7 @@ test('exactly 15-line gap shows single expand button with no tiers', function ()
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
-    expect($html)->toContain('Expand 15 hidden lines')
+    expect($html)->toContain('15 hidden lines')
         ->and($html)->not->toContain('expandGap(1, 15)');
 });
 
@@ -432,7 +433,7 @@ test('1-line gap shows single expand button', function () {
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
-    expect($html)->toContain('Expand 1 hidden line')
-        ->and($html)->not->toContain('Expand 1 hidden lines')
+    expect($html)->toContain('1 hidden line')
+        ->and($html)->not->toContain('1 hidden lines')
         ->and($html)->not->toContain('&middot;');
 });

@@ -525,18 +525,16 @@ HTML;
                 :class="isDragging ? 'select-none' : ''"
             >
                 @if($hasGaps)
-                    <div class="diff-fullspan bg-gh-hunk-bg px-4 py-1 text-center">
+                    <x-diff.expand-control>
                         <button
                             wire:click="expandContext"
                             wire:loading.attr="disabled"
                             wire:target="expandContext"
-                            @click="markDiffActionStart('expandContext')"
-                            class="text-gh-link text-xs hover:underline inline-flex items-center gap-1 disabled:opacity-50"
-                        >
-                            <flux:icon wire:loading wire:target="expandContext" icon="arrow-path" variant="outline" class="animate-spin" />
-                            Show full file
-                        </button>
-                    </div>
+                            @click="loading = true; markDiffActionStart('expandContext')"
+                            aria-label="Show full file"
+                            class="text-gh-link hover:text-gh-text transition-colors disabled:opacity-50"
+                        >full file</button>
+                    </x-diff.expand-control>
                 @endif
 
                 @foreach($hunks as $hunkIndex => $hunk)
@@ -550,9 +548,9 @@ HTML;
                 @endforeach
 
                 @if($hasTrailingGap)
-                    <div class="diff-fullspan bg-gh-hunk-bg py-1.5 text-center text-xs border-y border-dashed border-gh-border/20">
+                    <x-diff.expand-control wire:key="expand-gap-trailing-{{ count($hunks) }}">
                         <x-tiered-expand-gap :hunk-index="count($hunks)" :hidden-count="$trailingHiddenCount" />
-                    </div>
+                    </x-diff.expand-control>
                 @endif
             </div>
         @endif
