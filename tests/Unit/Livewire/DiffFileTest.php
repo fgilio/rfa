@@ -358,8 +358,7 @@ test('tiered expand buttons render for middle gap larger than 15 lines', functio
     // Should show tiered targets: "Show  15 · 20 hidden lines"
     expect($html)->toContain('expandGap(1, 15)')
         ->and($html)->toContain('expandGap(1)')
-        ->and($html)->toContain('20')
-        ->and($html)->toContain('hidden lines');
+        ->and($html)->toContain('20 hidden lines');
 });
 
 test('single expand button renders for gap of 15 or fewer lines', function () {
@@ -385,8 +384,7 @@ test('tiered expand buttons render for leading gap larger than 15 lines', functi
     // Should show tiered targets for leading gap: "Show  15 · 24 hidden lines"
     expect($html)->toContain('expandGap(0, 15)')
         ->and($html)->toContain('expandGap(0)')
-        ->and($html)->toContain('24')
-        ->and($html)->toContain('hidden lines');
+        ->and($html)->toContain('24 hidden lines');
 });
 
 test('tiered expand buttons render for trailing gap larger than 15 lines', function () {

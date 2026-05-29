@@ -543,7 +543,7 @@ HTML;
                 @endforeach
 
                 @if($hasTrailingGap)
-                    <x-diff.expand-control wire:key="expand-gap-trailing-{{ count($hunks) }}">
+                    <x-diff.expand-control wire:key="expand-gap-trailing-{{ count($hunks) }}-{{ $trailingHiddenCount }}">
                         <x-tiered-expand-gap :hunk-index="count($hunks)" :hidden-count="$trailingHiddenCount" />
                     </x-diff.expand-control>
                 @endif
