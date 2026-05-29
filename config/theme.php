@@ -42,19 +42,22 @@ return [
     // Full color values - no opacity modifier needed
     'raw' => [
         'light' => [
-            'add-bg' => 'rgba(22,163,74,0.08)',
-            'add-line' => 'rgba(22,163,74,0.25)',
-            'del-bg' => 'rgba(220,38,38,0.08)',
-            'del-line' => 'rgba(220,38,38,0.25)',
+            // Row fills stay light so syntax highlighting reads through; the
+            // change-marker stripe (add-line/del-line) carries the signal at a
+            // confident alpha so adds/dels segment pre-attentively.
+            'add-bg' => 'rgba(22,163,74,0.10)',
+            'add-line' => 'rgba(22,163,74,0.60)',
+            'del-bg' => 'rgba(220,38,38,0.10)',
+            'del-line' => 'rgba(220,38,38,0.60)',
             'hunk-bg' => 'rgba(9,9,11,0.03)',
             'hover-bg' => 'rgba(9,9,11,0.04)',
             'selected-bg' => 'rgba(9,9,11,0.08)',
         ],
         'dark' => [
-            'add-bg' => 'rgba(74,222,128,0.10)',
-            'add-line' => 'rgba(74,222,128,0.30)',
-            'del-bg' => 'rgba(248,113,113,0.10)',
-            'del-line' => 'rgba(248,113,113,0.30)',
+            'add-bg' => 'rgba(74,222,128,0.12)',
+            'add-line' => 'rgba(74,222,128,0.65)',
+            'del-bg' => 'rgba(248,113,113,0.12)',
+            'del-line' => 'rgba(248,113,113,0.65)',
             'hunk-bg' => 'rgba(250,250,250,0.04)',
             'hover-bg' => 'rgba(250,250,250,0.05)',
             'selected-bg' => 'rgba(250,250,250,0.10)',
