@@ -78,6 +78,23 @@
         return matches.length === 1 ? matches[0] : -1;
     }
 
+    /**
+     * Strip a remote-tracking branch's `<remote>/` prefix for display. The full
+     * ref (e.g. `origin/feature/x`) is what git needs to resolve the branch, but
+     * under the picker's "Remote" header the remote is implied, so the list shows
+     * just `feature/x` - keeping the distinguishing tail visible in a narrow pane.
+     *
+     * @param {string}  name    full branch name, e.g. `origin/feature/x`
+     * @param {?string} remote  remote name, e.g. `origin`
+     */
+    function stripRemotePrefix(name, remote) {
+        const value = String(name || '');
+        if (remote && value.startsWith(remote + '/')) {
+            return value.slice(remote.length + 1);
+        }
+        return value;
+    }
+
     function createBranchExplorer({ currentBranch, activeCommitHash, activeDiffFrom, projectSlug, branches }) {
         return {
             open: false,
@@ -170,6 +187,25 @@
             get filteredLocal() { return this._filterBranches('local'); },
             get filteredRemote() { return this._filterBranches('remote'); },
             get allFiltered() { return [...this.filteredLocal, ...this.filteredRemote]; },
+
+            /** Display label for a remote branch row - the `<remote>/` prefix dropped. */
+            remoteBranchLabel(branch) {
+                return stripRemotePrefix(branch.name, branch.remote);
+            },
+
+            /**
+             * True when the repo tracks more than one remote (e.g. origin +
+             * upstream). With a single remote the dropped `<remote>/` prefix is
+             * pure noise; with several, a muted tag keeps `origin/x` distinct
+             * from `upstream/x`.
+             */
+            get hasMultipleRemotes() {
+                const remotes = new Set();
+                for (const branch of (this.allBranches.remote || [])) {
+                    if (branch.remote) remotes.add(branch.remote);
+                }
+                return remotes.size > 1;
+            },
 
             async openPanel() {
                 this.open = true;
@@ -647,5 +683,5 @@
         }
     }
 
-    return { BranchBaseState, isSinceBaseExactly, violatesTipAnchor, createBranchExplorer, install, autoInstall };
+    return { BranchBaseState, isSinceBaseExactly, violatesTipAnchor, stripRemotePrefix, createBranchExplorer, install, autoInstall };
 });

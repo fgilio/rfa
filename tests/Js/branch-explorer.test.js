@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import branchExplorer from '../../public/js/branch-explorer.js';
 
-const { BranchBaseState, isSinceBaseExactly, createBranchExplorer, install } = branchExplorer;
+const { BranchBaseState, isSinceBaseExactly, stripRemotePrefix, createBranchExplorer, install } = branchExplorer;
 
 /** Minimal factory wrapper for tests that exercise the Alpine state machine
  *  directly. Provides a stub `$wire` that the production code reads from. */
@@ -832,5 +832,57 @@ describe('install', () => {
         window.Alpine = { data };
         expect(install(window)).toBe(true);
         expect(data).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('stripRemotePrefix', () => {
+    it('drops the matching remote prefix for display', () => {
+        expect(stripRemotePrefix('origin/feature/laravel-cloud-migration', 'origin'))
+            .toBe('feature/laravel-cloud-migration');
+    });
+
+    it('leaves the name untouched when it does not start with the remote', () => {
+        expect(stripRemotePrefix('feature/x', 'origin')).toBe('feature/x');
+    });
+
+    it('leaves the name untouched when the remote is null', () => {
+        expect(stripRemotePrefix('origin/feature/x', null)).toBe('origin/feature/x');
+    });
+
+    it('only strips the leading remote segment, not later collisions', () => {
+        expect(stripRemotePrefix('origin/origin/x', 'origin')).toBe('origin/x');
+    });
+});
+
+describe('remote branch display', () => {
+    function withRemotes(remote) {
+        return createBranchExplorer({
+            currentBranch: 'main',
+            activeCommitHash: null,
+            activeDiffFrom: 'HEAD',
+            projectSlug: 'p',
+            branches: { local: [], remote },
+        });
+    }
+
+    it('remoteBranchLabel drops the prefix for the row', () => {
+        const a = withRemotes([{ name: 'origin/feature/x', remote: 'origin' }]);
+        expect(a.remoteBranchLabel({ name: 'origin/feature/x', remote: 'origin' })).toBe('feature/x');
+    });
+
+    it('hasMultipleRemotes is false when every branch shares one remote', () => {
+        const a = withRemotes([
+            { name: 'origin/main', remote: 'origin' },
+            { name: 'origin/dev', remote: 'origin' },
+        ]);
+        expect(a.hasMultipleRemotes).toBe(false);
+    });
+
+    it('hasMultipleRemotes is true when branches span more than one remote', () => {
+        const a = withRemotes([
+            { name: 'origin/main', remote: 'origin' },
+            { name: 'upstream/main', remote: 'upstream' },
+        ]);
+        expect(a.hasMultipleRemotes).toBe(true);
     });
 });
