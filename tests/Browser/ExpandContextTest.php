@@ -37,7 +37,7 @@ test('show full file button reveals all hidden lines', function () {
 });
 
 test('keyboard-expanding a gap returns focus to the remaining expander', function () {
-    $page = $this->visitAndLoad($this->projectUrl());
+    $page = $this->visit($this->projectUrl());
 
     // Multi-hunk fixture: a single 22-line gap between the hunks, keyed at hunk
     // index 1. With >15 hidden it renders the "15" tier chip + an "all" button.
@@ -50,19 +50,10 @@ test('keyboard-expanding a gap returns focus to the remaining expander', functio
     // Partial expand from the top of the gap: 22 − 15 = 7 lines remain, so a
     // smaller expander stays put at the same gap.
     $page->assertSee('7 hidden lines');
-    $page->page()->locator('[data-expand-gap="1"]')->first()->waitFor();
 
     // The chip we activated was destroyed by the re-render, so focus landing
     // back on a gap-1 expander (instead of falling to <body>) proves restoration.
-    $activeGap = null;
-    $deadline = microtime(true) + 5.0;
-    do {
-        $activeGap = $page->script('document.activeElement && document.activeElement.getAttribute("data-expand-gap")');
-        if ($activeGap === '1') {
-            break;
-        }
-        usleep(50_000);
-    } while (microtime(true) < $deadline);
-
-    expect($activeGap)->toBe('1');
+    // Wait on the :focus selector so it auto-retries — the Livewire morph plus
+    // the post-render refocus tick can lag a slow, parallel CI runner.
+    $page->page()->locator('[data-expand-gap="1"]:focus')->waitFor();
 });
