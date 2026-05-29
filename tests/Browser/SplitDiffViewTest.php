@@ -92,7 +92,11 @@ test('split view pairs a remove with its add on the same row', function () {
     // split mode, blocking grid-auto-flow:dense from packing rem+add together.
     $page = $this->visitAndLoad($this->projectUrl());
     $page->page()->getByLabel('Switch to split view')->click();
-    $page->page()->locator('[data-testid="diff-table"][data-view-mode="split"]')->first()->waitFor();
+    // Wait for the split table that already has *both* a remove and an add line,
+    // not just the table shell: the diff lines arrive via a lazy x-intersect
+    // round-trip and can lag under load, and the evaluate() below assumes this
+    // compound table exists (otherwise querySelector returns null and throws).
+    $page->page()->locator('[data-testid="diff-table"][data-view-mode="split"]:has(.diff-line[data-type="remove"]):has(.diff-line[data-type="add"])')->first()->waitFor();
 
     $rect = $page->page()->evaluate(<<<'JS'
         () => {
