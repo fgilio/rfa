@@ -18,7 +18,7 @@
     <span class="text-gh-red">-{{ collect($sourceFiles)->sum('deletions') }}</span>
 
     @if(count($reviewPairs) > 0)
-        <span class="px-1.5 py-px rounded border border-gh-border">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
+        <span class="text-gh-muted">{{ count($reviewPairs) }} {{ Str::plural('review', count($reviewPairs)) }}</span>
     @endif
 
     <div class="ml-auto flex items-center gap-2">

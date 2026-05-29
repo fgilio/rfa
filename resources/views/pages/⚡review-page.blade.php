@@ -1589,7 +1589,12 @@ new #[Layout('layouts.app')] class extends Component
             <div
                 x-show="remoteMenu.open"
                 x-cloak
-                x-transition.opacity.duration.75ms
+                x-transition:enter="transition ease-out duration-150"
+                x-transition:enter-start="opacity-0 scale-95"
+                x-transition:enter-end="opacity-100 scale-100"
+                x-transition:leave="transition ease-in duration-100"
+                x-transition:leave-start="opacity-100 scale-100"
+                x-transition:leave-end="opacity-0 scale-95"
                 @click.outside="closeRemoteMenu()"
                 @keydown.escape.window="closeRemoteMenu()"
                 @click="closeRemoteMenu()"
@@ -1627,7 +1632,7 @@ new #[Layout('layouts.app')] class extends Component
                 <livewire:update-banner />
             </x-slot:above>
         @endnative
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 min-w-0">
                 <div
                     @if($hasRemote)
                         @contextmenu.prevent="$dispatch('open-remote-menu', {

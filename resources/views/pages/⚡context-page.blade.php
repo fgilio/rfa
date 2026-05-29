@@ -469,7 +469,7 @@ new #[Layout('layouts.app')] class extends Component
     class="min-h-screen flex flex-col"
 >
     <x-page-header>
-        <div class="flex items-center gap-3 min-w-0">
+        <div class="flex items-center gap-2 min-w-0">
             @native
                 <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" mode="context" />
             @else

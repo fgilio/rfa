@@ -240,7 +240,7 @@ new class extends Component
             <span>Downloading v{{ $version }}...</span>
             <div class="w-24 h-1 bg-gh-border rounded-full overflow-hidden">
                 <div
-                    class="h-full bg-gh-link rounded-full transition-all duration-500 ease-out"
+                    class="h-full bg-gh-link rounded-full transition-all duration-300 ease-out"
                     style="width: {{ $downloadPercent }}%"
                 ></div>
             </div>

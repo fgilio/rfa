@@ -14,7 +14,7 @@
     $reviewHref = route('review-page', ['slug' => $projectSlug]);
     $contextHref = route('context-page', ['slug' => $projectSlug]);
 
-    $baseSide = 'group relative inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-display tracking-tight transition-colors cursor-pointer';
+    $baseSide = 'group relative inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-display tracking-brutal transition-colors cursor-pointer';
     $activeSide = 'bg-gh-surface text-gh-text ring-1 ring-gh-border';
     $inactiveSide = 'text-gh-muted hover:text-gh-text hover:bg-gh-border/25';
 
