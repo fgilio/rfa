@@ -257,10 +257,10 @@ test('drafts alone do not enable submit button', function () {
     $page->assertButtonDisabled('Submit review');
 });
 
-test('submit with drafts shows confirm dialog', function () {
+test('submit with drafts arms an inline confirm', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
-    // Create finalized comment
+    // Create finalized comment (this is what enables the submit button)
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Keep me');
     $page->press('Save');
@@ -274,13 +274,11 @@ test('submit with drafts shows confirm dialog', function () {
     // Wait for draft to be saved to Livewire state before submitting
     $page->assertSee('1 draft');
 
-    // Override confirm to capture message and auto-accept
-    $page->script('window.__confirmMsg = null; window.confirm = function(msg) { window.__confirmMsg = msg; return true; }');
-
-    $page->pressAndWaitFor('Submit review', 3);
-
-    $dialogMessage = $page->script('window.__confirmMsg');
-    expect($dialogMessage)->toBeString()->toContain('draft');
+    // Drafts use an inline arm-to-confirm (no native confirm dialog): the first
+    // click warns that the draft will be excluded and waits for a second click.
+    $page->press('Submit review');
+    $page->assertSee('Submit without 1 draft?');
+    $page->assertDontSee('Review submitted');
 });
 
 // -- Persistence --
@@ -317,10 +315,13 @@ test('drafts excluded from export', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
     $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
 
-    // Auto-accept confirm dialog for drafts
-    $page->script('window.confirm = function() { return true; }');
+    // Wait for the draft to sync into Livewire state so the first submit click
+    // arms (draftCount > 0) rather than submitting immediately.
+    $page->assertSee('1 draft');
 
-    $page->pressAndWaitFor('Submit review', 3);
+    // Drafts use an inline arm-to-confirm: first click arms, second submits.
+    $page->press('Submit review');
+    $page->pressAndWaitFor('Submit without 1 draft?', 3);
     $page->assertSee('Review submitted');
 
     $rfaDir = $this->testRepoPath.'/.rfa';

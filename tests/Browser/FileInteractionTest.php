@@ -201,8 +201,12 @@ test('clicking sidebar file scrolls to it', function () {
     // Click the last sidebar button (utils.php)
     $page->page()->getByRole('button', ['name' => 'utils.php'])->click();
 
-    $activeCount = $page->page()->locator('aside .text-gh-link')->count();
-    expect($activeCount)->toBeGreaterThan(0);
+    // The clicked file gets the active-row highlight (bg-gh-text/10). waitFor
+    // first — the active class lands after the click's Alpine tick, so a bare
+    // synchronous count() races it.
+    $active = $page->page()->locator('aside [class*="bg-gh-text/10"]');
+    $active->first()->waitFor();
+    expect($active->count())->toBeGreaterThan(0);
 });
 
 test('file comment button opens form and save displays comment', function () {

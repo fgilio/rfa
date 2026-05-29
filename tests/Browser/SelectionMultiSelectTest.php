@@ -114,5 +114,8 @@ test('clearing the selection removes the selected chip', function () {
 
     $page->page()->getByTitle('Clear selection')->click();
 
-    $page->page()->getByText('selected')->waitFor(['state' => 'hidden']);
+    // Wait on the Clear-selection affordance itself: getByText('selected') is a
+    // substring match that also catches toasts, tripping Playwright strict mode.
+    $page->page()->getByLabel('Clear selection')->waitFor(['state' => 'hidden']);
+    $page->assertDontSee('1 selected');
 });
