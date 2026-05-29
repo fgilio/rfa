@@ -492,12 +492,8 @@ HTML;
         @elseif($diffData === null)
             {{-- One spinner for both the pre-request setTimeout window and the
                  in-flight request, so the visual doesn't swap mid-load. --}}
-            <div
-                x-intersect.once="setTimeout(() => { markDiffActionStart('loadFileDiff'); $wire.loadFileDiff(); }, {{ $loadDelay }})"
-                class="px-4 py-8 text-center"
-            >
-                <flux:icon icon="arrow-path" variant="outline" class="animate-spin inline-block text-gh-muted mr-1" />
-                <flux:text variant="subtle" size="sm" inline>Loading diff...</flux:text>
+            <div x-intersect.once="setTimeout(() => { markDiffActionStart('loadFileDiff'); $wire.loadFileDiff(); }, {{ $loadDelay }})">
+                <x-diff-skeleton />
             </div>
         @elseif($diffData['tooLarge'] ?? false)
             <div class="px-4 py-8 text-center">

@@ -2160,38 +2160,36 @@ new #[Layout('layouts.app')] class extends Component
         </x-slot:sidebar>
 
             @if($gitError)
-                <div class="flex items-center justify-center h-[60vh]" role="alert" aria-live="assertive">
-                    <div class="text-center max-w-lg">
-                        <p class="rfa-logo text-3xl text-gh-red/30 mb-4" aria-hidden="true">!</p>
-                        <h2 class="font-semibold tracking-brutal text-lg mb-2">Git error</h2>
-                        <p class="font-mono text-xs text-gh-muted leading-relaxed">{{ $gitError }}</p>
-                    </div>
-                </div>
+                <x-empty-state glyph="!" glyph-class="text-gh-red/30" role="alert" aria-live="assertive">
+                    <x-slot:heading>Git error</x-slot:heading>
+                    <p class="font-mono text-xs text-gh-muted leading-relaxed">{{ $gitError }}</p>
+                </x-empty-state>
             @elseif(empty($files))
-                <div class="flex items-center justify-center h-[60vh]">
-                    <div class="text-center">
-                        <p class="rfa-logo text-5xl text-gh-muted/20 mb-6" aria-hidden="true">rfa</p>
-                        @if($this->isCommitMode())
-                            <h2 class="font-semibold tracking-brutal text-lg mb-2">No file changes in this commit</h2>
-                            <p class="text-sm text-gh-muted">This commit has no diff (empty or merge commit)</p>
-                        @elseif($divergenceState === DivergenceState::Diverged)
-                            {{-- Empty *because* the checkout drifted: tell the one true story instead
-                                 of a generic "clean" message disconnected from the divergence marker. --}}
-                            <h2 class="font-semibold tracking-brutal text-lg mb-2">Nothing to review on <span class="font-mono">{{ $divergenceContext['target'] ?? $projectBranch }}</span></h2>
-                            <p class="text-sm text-gh-muted max-w-md mx-auto leading-relaxed mb-5">
-                                Your repo is on <span class="font-mono text-gh-text">{{ $divergenceContext['currentBranch'] ?? '' }}</span> right now.
-                                Switch your review to it, or edit files on <span class="font-mono text-gh-text">{{ $divergenceContext['target'] ?? $projectBranch }}</span> to see changes here.
-                            </p>
-                            <div class="flex items-center justify-center gap-2">
-                                <button type="button" wire:click="switchReviewToHead" class="text-xs font-medium font-display rounded-md px-3.5 py-2 bg-gh-accent text-gh-bg hover:opacity-90 transition-opacity">Switch review here</button>
-                                <button type="button" wire:click="keepReviewing" class="text-xs font-medium text-gh-muted hover:text-gh-text px-3 py-2 transition-colors">Keep reviewing</button>
-                            </div>
-                        @else
-                            <h2 class="font-semibold tracking-brutal text-lg mb-2">Working tree is clean</h2>
-                            <p class="text-sm text-gh-muted">Edit files to see them here</p>
-                        @endif
-                    </div>
-                </div>
+                @if($this->isCommitMode())
+                    <x-empty-state>
+                        <x-slot:heading>No file changes in this commit</x-slot:heading>
+                        <p class="text-sm text-gh-muted">This commit has no diff (empty or merge commit)</p>
+                    </x-empty-state>
+                @elseif($divergenceState === DivergenceState::Diverged)
+                    {{-- Empty *because* the checkout drifted: tell the one true story instead
+                         of a generic "clean" message disconnected from the divergence marker. --}}
+                    <x-empty-state>
+                        <x-slot:heading>Nothing to review on <span class="font-mono">{{ $divergenceContext['target'] ?? $projectBranch }}</span></x-slot:heading>
+                        <p class="text-sm text-gh-muted leading-relaxed">
+                            Your repo is on <span class="font-mono text-gh-text">{{ $divergenceContext['currentBranch'] ?? '' }}</span> right now.
+                            Switch your review to it, or edit files on <span class="font-mono text-gh-text">{{ $divergenceContext['target'] ?? $projectBranch }}</span> to see changes here.
+                        </p>
+                        <x-slot:actions>
+                            <button type="button" wire:click="switchReviewToHead" class="text-xs font-medium font-display rounded-md px-3.5 py-2 bg-gh-accent text-gh-bg hover:opacity-90 transition-opacity">Switch review here</button>
+                            <button type="button" wire:click="keepReviewing" class="text-xs font-medium text-gh-muted hover:text-gh-text px-3 py-2 transition-colors">Keep reviewing</button>
+                        </x-slot:actions>
+                    </x-empty-state>
+                @else
+                    <x-empty-state>
+                        <x-slot:heading>Working tree is clean</x-slot:heading>
+                        <p class="text-sm text-gh-muted">Edit files to see them here</p>
+                    </x-empty-state>
+                @endif
             @else
                 {{-- Review Pairs (working directory mode only) --}}
                 @if(! $this->isCommitMode())
