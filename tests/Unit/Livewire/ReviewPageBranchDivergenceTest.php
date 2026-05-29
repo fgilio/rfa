@@ -343,7 +343,7 @@ test('switchReviewToHead is undoable and undo restores the original target', fun
     expect($component->get('divergenceState'))->toBe(DivergenceState::Diverged);
 
     $component->call('switchReviewToHead')
-        ->assertDispatched('undo-available', type: 'switch-branch', payload: ['fromBranch' => 'main']);
+        ->assertDispatched('undo-available', type: 'switch-branch', payload: ['fromBranch' => 'main'], message: 'Switched review to feature-x');
 
     expect($component->get('projectBranch'))->toBe('feature-x');
     expect($this->project->fresh()->branch)->toBe('feature-x');
@@ -352,10 +352,14 @@ test('switchReviewToHead is undoable and undo restores the original target', fun
     $component->call('undo', 'switch-branch', ['fromBranch' => 'main']);
     expect($component->get('projectBranch'))->toBe('main');
     expect($this->project->fresh()->branch)->toBe('main');
+
+    // HEAD is still on feature-x, so restoring the main target must re-surface
+    // divergence — the head poller won't fire on an unchanged HEAD identity.
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Diverged);
 });
 
 test('dismissMissingTarget suppresses the missing-target banner for that branch', function () {
-    bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'feature-x', sha: 'e'.str_repeat('0', 39), detached: false, targetExists: false));
+    $fake = bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'feature-x', sha: 'e'.str_repeat('0', 39), detached: false, targetExists: false));
 
     $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
     expect($component->get('divergenceState'))->toBe(DivergenceState::MissingTarget);
@@ -367,4 +371,10 @@ test('dismissMissingTarget suppresses the missing-target banner for that branch'
     // Same HEAD: stays suppressed.
     $component->call('checkHeadDivergence');
     expect($component->get('divergenceState'))->toBe(DivergenceState::Aligned);
+
+    // A different missing-target branch must re-surface the banner: dismissal is
+    // scoped to feature-x, not a global mute.
+    $fake->result = new CurrentHeadResult(branch: 'feature-y', sha: 'f'.str_repeat('0', 39), detached: false, targetExists: false);
+    $component->call('checkHeadDivergence');
+    expect($component->get('divergenceState'))->toBe(DivergenceState::MissingTarget);
 });

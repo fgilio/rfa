@@ -791,6 +791,13 @@ new #[Layout('layouts.app')] class extends Component
 
         if (is_string($branch) && $branch !== '') {
             $this->autoFollowToHead($branch);
+
+            // autoFollowToHead() aligns to the restored target, which is right for
+            // its "follow HEAD" callers — but here HEAD is still on the branch we
+            // switched away from, so the review is diverged again. Recompute now:
+            // the head poller won't re-fire (HEAD's identity hasn't changed) and
+            // would otherwise leave the divergence marker hidden indefinitely.
+            $this->refreshDivergenceState();
         }
     }
 
