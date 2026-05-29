@@ -462,7 +462,7 @@ HTML;
             <div class="px-4 py-6 flex items-start justify-center gap-6">
                 @if($hasBeforeImage)
                     <div class="flex flex-col items-center gap-2 {{ $hasAfterImage ? 'max-w-[50%]' : '' }}">
-                        <flux:badge color="red" size="sm">{{ $status === 'deleted' ? 'Deleted' : 'Before' }}</flux:badge>
+                        <span class="font-mono text-[11px] font-medium text-gh-red">{{ $status === 'deleted' ? 'Deleted' : 'Before' }}</span>
                         <div class="border border-gh-border rounded-lg p-1" style="background: repeating-conic-gradient(rgb(128 128 128 / 0.15) 0% 25%, transparent 0% 50%) 50% / 16px 16px;">
                             <img
                                 src="{{ $this->imageUrl($beforeRef, $beforePath) }}"
@@ -476,7 +476,7 @@ HTML;
                 @endif
                 @if($hasAfterImage)
                     <div class="flex flex-col items-center gap-2 {{ $hasBeforeImage ? 'max-w-[50%]' : '' }}">
-                        <flux:badge color="green" size="sm">{{ $status === 'added' ? 'New' : 'After' }}</flux:badge>
+                        <span class="font-mono text-[11px] font-medium text-gh-green">{{ $status === 'added' ? 'New' : 'After' }}</span>
                         <div class="border border-gh-border rounded-lg p-1" style="background: repeating-conic-gradient(rgb(128 128 128 / 0.15) 0% 25%, transparent 0% 50%) 50% / 16px 16px;">
                             <img
                                 src="{{ $this->imageUrl($afterRef, $file['path']) }}"
@@ -506,7 +506,7 @@ HTML;
             </div>
         @elseif($diffData['error'] ?? false)
             <div class="px-4 py-8 text-center">
-                <flux:icon icon="exclamation-triangle" variant="outline" class="inline-block text-red-400 mr-1" />
+                <flux:icon icon="exclamation-triangle" variant="outline" class="inline-block text-gh-red mr-1" />
                 <flux:text variant="subtle" size="sm" inline>Git error: {{ $diffData['error'] }}</flux:text>
             </div>
         @elseif(empty($diffData['hunks']))

@@ -35,6 +35,17 @@
     --tracking-brutal-tight: -0.06em;
 }
 
+/* Map Flux's accent token (used by variant="primary", checkboxes, focus rings)
+   onto the app's monochrome `gh-accent` so Flux components stay on-brand
+   (near-black in light, near-white in dark) instead of Flux's stock indigo.
+   Custom properties resolve at use-time, so referencing --gh-* (defined in the
+   layout's inline style) here is safe regardless of stylesheet order. */
+:root {
+    --color-accent: rgb(var(--gh-accent));
+    --color-accent-content: rgb(var(--gh-accent));
+    --color-accent-foreground: rgb(var(--gh-bg));
+}
+
 * {
     scrollbar-width: thin;
     scrollbar-color: gray transparent;

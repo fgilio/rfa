@@ -1952,7 +1952,7 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                     @foreach($reviewPairs as $pair)
                         <div class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-colors text-gh-text">
-                            <span class="text-[10px] font-mono font-medium text-purple-500 dark:text-purple-400 shrink-0">R</span>
+                            <span class="text-[10px] font-mono font-medium text-gh-link shrink-0">R</span>
                             <button @click="scrollToFile('{{ $pair['id'] }}')" class="truncate text-left font-mono" title="{{ $pair['basename'] }}">
                                 {{ $pair['displayName'] }}
                             </button>
@@ -2143,7 +2143,7 @@ new #[Layout('layouts.app')] class extends Component
                                 <span class="text-[10px] text-gh-muted tabular-nums" x-text="remaining"></span>
                                 <button @click="$wire.restoreDiscardedFile({{ $trashed['id'] }})" title="Restore"
                                     aria-label="Restore discarded file"
-                                    class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-green hover:text-green-400 shrink-0">
+                                    class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-green hover:text-gh-text shrink-0">
                                     <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
                                 </button>
                                 <x-arm-commit-button
@@ -2162,7 +2162,7 @@ new #[Layout('layouts.app')] class extends Component
             @if($gitError)
                 <div class="flex items-center justify-center h-[60vh]" role="alert" aria-live="assertive">
                     <div class="text-center max-w-lg">
-                        <p class="rfa-logo text-3xl text-red-400/30 mb-4" aria-hidden="true">!</p>
+                        <p class="rfa-logo text-3xl text-gh-red/30 mb-4" aria-hidden="true">!</p>
                         <h2 class="font-semibold tracking-brutal text-lg mb-2">Git error</h2>
                         <p class="font-mono text-xs text-gh-muted leading-relaxed">{{ $gitError }}</p>
                     </div>
@@ -2205,7 +2205,7 @@ new #[Layout('layouts.app')] class extends Component
                                     <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
                                     <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
                                 </button>
-                                <span class="text-[10px] font-mono font-medium text-purple-500 dark:text-purple-400 shrink-0">R</span>
+                                <span class="text-[10px] font-mono font-medium text-gh-link shrink-0">R</span>
                                 <span class="font-mono text-sm truncate" title="{{ $pair['displayName'] }}">{{ $pair['displayName'] }}</span>
                                 <span class="text-[10px] font-mono text-gh-muted">.md</span>
                                 <span class="ml-auto">

@@ -237,3 +237,39 @@ test('diff image sources use encoded image urls', function () {
         ->toContain('$this->imageUrl(')
         ->not->toContain('src="/api/image/');
 });
+
+test('blade templates use gh-* tokens, not stock Tailwind palette colors', function () {
+    // The app is monochrome-brutalist: color comes from the gh-* token system
+    // (config/theme.php), never stock Tailwind palette utilities. See resources/CLAUDE.md.
+    $pattern = '/\b(?:text|bg|border|ring|fill|stroke|divide|from|to|via|outline|decoration|shadow|accent|caret)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-(?:50|[1-9]00|950)\b/';
+
+    $violations = [];
+    foreach (bladeFiles() as $file) {
+        $content = file_get_contents($file);
+        if (preg_match_all($pattern, $content, $matches)) {
+            foreach ($matches[0] as $hit) {
+                $violations[] = bladeRelativePath($file).': '.$hit;
+            }
+        }
+    }
+
+    expect($violations)->toBeEmpty();
+});
+
+test('flux components do not use stock palette color props', function () {
+    // Flux color="red|green|…" bypasses the gh-* tokens. Use gh-* utilities, or the
+    // accent token (aliased to gh-accent in app.css) for primary emphasis.
+    $pattern = '/\bcolor="(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)"/';
+
+    $violations = [];
+    foreach (bladeFiles() as $file) {
+        $content = file_get_contents($file);
+        if (preg_match_all($pattern, $content, $matches)) {
+            foreach ($matches[0] as $hit) {
+                $violations[] = bladeRelativePath($file).': '.$hit;
+            }
+        }
+    }
+
+    expect($violations)->toBeEmpty();
+});

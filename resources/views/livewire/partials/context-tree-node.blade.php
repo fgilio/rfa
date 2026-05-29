@@ -42,7 +42,7 @@
             <span class="font-mono font-medium text-[10px] shrink-0 {{ $kind->badgeColorClass() }}">{{ $kind->badgeLabel() }}</span>
             <span class="font-mono truncate text-gh-text flex-1 min-w-0">{{ $file['basename'] }}</span>
             @if(! $file['isTracked'])
-                <flux:badge size="sm" color="zinc" inset="top bottom">untracked</flux:badge>
+                <span class="font-mono text-[10px] text-gh-muted/70 shrink-0">untracked</span>
             @endif
             @if($file['isSymlink'])
                 <flux:tooltip content="Symlink → {{ $file['symlinkTarget'] }}">
