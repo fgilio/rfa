@@ -2024,12 +2024,14 @@ new #[Layout('layouts.app')] class extends Component
                 </template>
                 @foreach($sourceFiles as $file)
                     @php
-                        [$badgeColor, $badgeLabel] = match($file['status']) {
-                            'added' => ['green', 'A'],
-                            'deleted' => ['red', 'D'],
-                            'renamed' => ['yellow', 'R'],
-                            'commented' => ['zinc', 'C'],
-                            default => ['yellow', 'M'],
+                        // Single source of truth: status → [color class, letter]. M and R get
+                        // distinct hues so modified vs renamed are glanceable in the column.
+                        [$badgeClass, $badgeLabel] = match($file['status']) {
+                            'added' => ['text-gh-green', 'A'],
+                            'deleted' => ['text-gh-red', 'D'],
+                            'renamed' => ['text-gh-link', 'R'],
+                            'commented' => ['text-gh-muted', 'C'],
+                            default => ['text-gh-attention', 'M'],
                         };
                         $remoteStatus = ($file['isUntracked'] ?? false) ? 'added' : ($file['status'] ?? 'modified');
                     @endphp
@@ -2047,14 +2049,14 @@ new #[Layout('layouts.app')] class extends Component
                                 clientY: $event.clientY,
                             })"
                         @endif
-                        class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-[opacity,colors] duration-150 ease-out"
+                        class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-[opacity,colors] duration-150 ease-out focus-within:outline focus-within:outline-1 focus-within:-outline-offset-1 focus-within:outline-gh-accent"
                         :class="[
-                            activeFile === '{{ $file['id'] }}' ? 'bg-gh-link/10 text-gh-link' : 'text-gh-muted',
+                            activeFile === '{{ $file['id'] }}' ? 'bg-gh-text/10 text-gh-text' : 'text-gh-muted',
                             fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}') ? 'opacity-100' : 'opacity-0',
                         ]"
                     >
                         <button @click="scrollToFile('{{ $file['id'] }}')" class="flex items-center gap-2.5 min-w-0 flex-1">
-                            <span class="font-mono font-medium shrink-0 {{ match($badgeLabel) { 'A' => 'text-gh-green', 'D' => 'text-gh-red', 'C' => 'text-gh-muted', default => 'text-gh-attention' } }}">{{ $badgeLabel }}</span>
+                            <span class="font-mono font-medium shrink-0 {{ $badgeClass }}">{{ $badgeLabel }}</span>
                             @if($file['isSymlink'] ?? false)
                                 <flux:icon icon="link" variant="outline" class="!size-3 text-gh-muted shrink-0" aria-hidden="true" />
                             @endif
@@ -2071,6 +2073,7 @@ new #[Layout('layouts.app')] class extends Component
                                 :path="$file['path']"
                                 class="text-xs"
                                 :title="$fileTitle"
+                                :collapse="true"
                             />
                         </button>
                         <flux:tooltip>
@@ -2115,6 +2118,11 @@ new #[Layout('layouts.app')] class extends Component
                         </span>
                     </div>
                 @endforeach
+                {{-- No-match feedback so an active filter never leaves a blank void. --}}
+                <div x-show="fileFilter.trim() !== '' && visibleFileCount === 0" x-cloak
+                     class="px-2.5 py-6 text-center text-xs text-gh-muted font-mono">
+                    No files match “<span class="text-gh-text" x-text="fileFilter"></span>”
+                </div>
                 @if(! empty($trashedFiles))
                     <div class="border-t border-gh-border mt-3 pt-3">
                         <span class="section-label text-gh-muted mb-3 block">Trash</span>

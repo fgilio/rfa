@@ -93,7 +93,30 @@ new class extends Component
         };
         $sortChildren($root);
 
-        return $root;
+        // Collapse single-child, file-less folder chains into one breadcrumb row
+        // (app › Console › Commands › Pla › Db  →  app/Console/Commands/Pla/Db),
+        // like VS Code / GitHub, so indentation tracks real branching, not depth.
+        // The root stays the container; only its descendant chains are merged.
+        $compact = function (array $node) use (&$compact): array {
+            foreach ($node['children'] as $key => $child) {
+                $child = $compact($child);
+
+                while (count($child['children']) === 1 && empty($child['files'])) {
+                    $grandchild = reset($child['children']);
+                    $child['name'] = $child['name'].'/'.$grandchild['name'];
+                    $child['path'] = $grandchild['path'];
+                    $child['files'] = $grandchild['files'];
+                    $child['hasContext'] = $grandchild['hasContext'];
+                    $child['children'] = $grandchild['children'];
+                }
+
+                $node['children'][$key] = $child;
+            }
+
+            return $node;
+        };
+
+        return $compact($root);
     }
 };
 
@@ -108,7 +131,6 @@ new class extends Component
     <flux:select wire:model.live="filterMode" size="sm">
         <flux:select.option value="all">All paths</flux:select.option>
         <flux:select.option value="with-context">With context only</flux:select.option>
-        <flux:select.option value="missing" disabled>Missing only — coming soon</flux:select.option>
     </flux:select>
 
     @if(empty($contextFiles))

@@ -15,6 +15,22 @@ test('emphasizes the basename and dims the directory', function () {
         ->toContain('text-gh-text');
 });
 
+test('collapse mode middle-ellipsizes a deep directory but keeps the full path in title', function () {
+    $html = Blade::render('<x-file-path path="app/Domains/BulkOperations/Jobs/ImportUsersJob.php" :collapse="true" />');
+
+    expect($html)
+        ->toContain('app/…/Jobs/')                 // directory collapsed to a breadcrumb
+        ->toContain('ImportUsersJob.php')           // basename survives intact
+        ->not->toContain('app/Domains/BulkOperations/Jobs/</span>') // full chain not shown inline
+        ->toContain('title="app/Domains/BulkOperations/Jobs/ImportUsersJob.php"'); // recoverable on hover
+});
+
+test('collapse mode leaves shallow paths untouched', function () {
+    $html = Blade::render('<x-file-path path="app/Foo.php" :collapse="true" />');
+
+    expect($html)->toContain('app/')->toContain('Foo.php')->not->toContain('…');
+});
+
 test('renders the full path in the title attribute by default', function () {
     $html = Blade::render('<x-file-path path="src/Foo.php" />');
 
