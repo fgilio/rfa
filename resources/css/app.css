@@ -76,3 +76,25 @@
     0%   { transform: translateX(-100%); }
     100% { transform: translateX(250%); }
 }
+
+/* Inline/file comment form reveal. The form is mounted via x-if (a single
+   instance, kept off-DOM until opened — see public/js/diff-file.js), so it
+   can't use an Alpine enter-transition. On mount it unfolds with a height
+   collapse (grid-template-rows 0fr -> 1fr) plus a fade, pushing the rows below
+   down instead of popping in. Open-only: x-if removes the node on close. The
+   global reduced-motion rule above neutralizes the duration. */
+@keyframes rfa-comment-open {
+    from { grid-template-rows: 0fr; opacity: 0; }
+    to   { grid-template-rows: 1fr; opacity: 1; }
+}
+.comment-open {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 1fr;
+    animation: rfa-comment-open 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.comment-open > * {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}

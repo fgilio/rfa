@@ -394,7 +394,9 @@ HTML;
     <div x-show="!collapsed" x-collapse.duration.150ms>
         <div x-ref="fileCommentForm">
             <template x-if="showForm && formSide === 'file'">
-                <x-comment-form save="submitComment" placeholder="File comment..." border-class="border-b" />
+                <div class="comment-open">
+                    <x-comment-form save="submitComment" placeholder="File comment..." border-class="border-b" />
+                </div>
             </template>
             @foreach($fileComments as $comment)
                 @if($comment['side'] === DiffSide::File->value)

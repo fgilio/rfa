@@ -76,7 +76,7 @@
 
 @if($lineNum !== null)
     <template x-if="showForm && formEndLine === {{ $lineNum }} && formSide !== 'file' && (@js($lineSide) === 'context' || formSide === @js($lineSide))">
-        <div class="diff-fullspan" @if($ancestorJs) x-show="!isLineFolded({{ $ancestorJs }})" @endif>
+        <div class="diff-fullspan comment-open" @if($ancestorJs) x-show="!isLineFolded({{ $ancestorJs }})" @endif>
             <x-comment-form save="submitComment" placeholder="Write a comment..." border-class="border-y" />
         </div>
     </template>
