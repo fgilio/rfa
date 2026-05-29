@@ -44,6 +44,18 @@
         return lines.length ? lines.join('\n').trimEnd() : null;
     }
 
+    // The expander to refocus after a gap expand re-renders, keyed by hunk index.
+    // A keyboard-activated expander loses focus when its node is replaced by the
+    // post-expand morph; this hands focus to the expander that now occupies the
+    // same gap. Returns null when the gap fully closed (the "all N hidden lines"
+    // target) — nothing remains to focus there, so focus is left to fall back.
+    function expanderToRefocus(root, gapKey) {
+        if (!root || gapKey === null || gapKey === undefined || gapKey === '') {
+            return null;
+        }
+        return root.querySelector(`[data-expand-gap="${gapKey}"]`);
+    }
+
     function createDiffFile({ fileId, filePath, oldPath = null, status = 'modified', isReviewed, singleFile = false }) {
         const pending = window.__rfaPendingExpandFiles;
         const wantsExpand = pending && pending.has(fileId);
@@ -84,6 +96,37 @@
                 this.$dispatch('rfa:diff-action-start', {
                     fileId: this.fileId,
                     action,
+                });
+            },
+
+            // Hunk index of a keyboard-activated gap expander, remembered so focus
+            // can return to that gap after the expand re-render replaces the
+            // activated node. Null for mouse clicks (focus shouldn't jump) and for
+            // the master "full file" expander (no gap remains to focus).
+            _refocusExpandKey: null,
+            _onDiffActionCompleted: null,
+
+            armExpandRefocus(event, gapKey) {
+                // Keyboard activation of a <button> fires a click with detail 0;
+                // mouse clicks report detail >= 1. Only keyboard users lose their
+                // place on the re-render, so only they get focus restored.
+                this._refocusExpandKey = (event && event.detail === 0 && gapKey != null) ? gapKey : null;
+            },
+
+            restoreExpandFocus(action) {
+                if (action !== 'expandGap' && action !== 'expandContext') {
+                    return;
+                }
+                const gapKey = this._refocusExpandKey;
+                this._refocusExpandKey = null;
+                if (gapKey == null) {
+                    return;
+                }
+                this.$nextTick(() => {
+                    const target = expanderToRefocus(this.$root, gapKey);
+                    if (target) {
+                        target.focus();
+                    }
                 });
             },
 
@@ -252,10 +295,29 @@
                 this.isDragging = false;
             },
 
+            init() {
+                // expandGap/expandContext dispatch rfa:diff-action-completed after
+                // their re-render. We attach imperatively rather than via @-binding
+                // because the colon in the event name is awkward in Alpine's @
+                // syntax — same reason runtime-diagnostics.js listens this way.
+                this._onDiffActionCompleted = (event) => {
+                    const detail = event.detail || {};
+                    if (String(detail.fileId) !== String(this.fileId)) {
+                        return;
+                    }
+                    this.restoreExpandFocus(detail.action);
+                };
+                window.addEventListener('rfa:diff-action-completed', this._onDiffActionCompleted);
+            },
+
             destroy() {
                 this.stopDragTracking();
                 if (this.escTimer) { clearTimeout(this.escTimer); this.escTimer = null; }
                 this.escHint = false;
+                if (this._onDiffActionCompleted) {
+                    window.removeEventListener('rfa:diff-action-completed', this._onDiffActionCompleted);
+                    this._onDiffActionCompleted = null;
+                }
             },
 
             handleEscape() {
@@ -427,5 +489,5 @@
         }
     }
 
-    return { getScrollSpeed, extractLineSnippet, createDiffFile, install, autoInstall };
+    return { getScrollSpeed, extractLineSnippet, expanderToRefocus, createDiffFile, install, autoInstall };
 });

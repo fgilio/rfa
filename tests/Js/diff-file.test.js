@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import diffFile from '../../public/js/diff-file.js';
 
-const { getScrollSpeed, extractLineSnippet, createDiffFile, install } = diffFile;
+const { getScrollSpeed, extractLineSnippet, expanderToRefocus, createDiffFile, install } = diffFile;
 
 describe('getScrollSpeed', () => {
     // Coherent fixture: viewport 800px tall, sticky header consumes 50px,
@@ -259,5 +259,129 @@ describe('diff file lifecycle', () => {
         vi.advanceTimersByTime(1500);
 
         expect(component.escHint).toBe(false);
+    });
+});
+
+describe('expand focus restoration', () => {
+    let root;
+
+    beforeEach(() => {
+        globalThis.Alpine = { store: () => ({ collapseAll: false }) };
+        root = document.createElement('div');
+        document.body.appendChild(root);
+    });
+
+    afterEach(() => {
+        root.remove();
+        delete globalThis.Alpine;
+        delete window.__rfaPendingExpandFiles;
+    });
+
+    function makeComponent() {
+        const component = createDiffFile({
+            fileId: 'file-1',
+            filePath: 'resources/views/pages/review-page.blade.php',
+            isReviewed: false,
+        });
+        component.$root = root;
+        component.$nextTick = (fn) => fn();
+        return component;
+    }
+
+    describe('expanderToRefocus', () => {
+        it('returns the first expander still sitting at the gap', () => {
+            root.innerHTML = '<button data-expand-gap="1">15</button><button data-expand-gap="1">7 hidden lines</button>';
+            expect(expanderToRefocus(root, 1)).toBe(root.querySelector('button'));
+        });
+
+        it('returns null when the gap fully closed (no expander left there)', () => {
+            root.innerHTML = '<button data-expand-gap="2">x</button>';
+            expect(expanderToRefocus(root, 1)).toBeNull();
+        });
+
+        it.each([[null], [undefined], ['']])('returns null for a missing gap key (%s)', (key) => {
+            root.innerHTML = '<button data-expand-gap="1">x</button>';
+            expect(expanderToRefocus(root, key)).toBeNull();
+        });
+
+        it('treats gap index 0 as a real key', () => {
+            root.innerHTML = '<button data-expand-gap="0">x</button>';
+            expect(expanderToRefocus(root, 0)).toBe(root.querySelector('button'));
+        });
+
+        it('returns null without a root', () => {
+            expect(expanderToRefocus(null, 1)).toBeNull();
+        });
+    });
+
+    describe('armExpandRefocus', () => {
+        it('arms on keyboard activation (click detail 0) with a gap key', () => {
+            const component = makeComponent();
+            component.armExpandRefocus({ detail: 0 }, 1);
+            expect(component._refocusExpandKey).toBe(1);
+        });
+
+        it('does not arm on mouse activation (click detail >= 1)', () => {
+            const component = makeComponent();
+            component.armExpandRefocus({ detail: 1 }, 1);
+            expect(component._refocusExpandKey).toBeNull();
+        });
+
+        it('does not arm without a gap key (master full-file expander)', () => {
+            const component = makeComponent();
+            component.armExpandRefocus({ detail: 0 }, null);
+            expect(component._refocusExpandKey).toBeNull();
+        });
+    });
+
+    describe('restore on completion', () => {
+        it('returns focus to the remaining expander after a keyboard gap expand', () => {
+            const component = makeComponent();
+            component.init();
+            component.armExpandRefocus({ detail: 0 }, 1);
+
+            // Simulate the post-expand morph leaving a smaller gap at hunk index 1.
+            root.innerHTML = '<button data-expand-gap="1">7 hidden lines</button>';
+            window.dispatchEvent(new window.CustomEvent('rfa:diff-action-completed', {
+                detail: { fileId: 'file-1', action: 'expandGap' },
+            }));
+
+            expect(document.activeElement).toBe(root.querySelector('[data-expand-gap="1"]'));
+            expect(component._refocusExpandKey).toBeNull();
+
+            component.destroy();
+        });
+
+        it('ignores completion events for other files', () => {
+            const component = makeComponent();
+            component.init();
+            component.armExpandRefocus({ detail: 0 }, 1);
+
+            root.innerHTML = '<button data-expand-gap="1">7 hidden lines</button>';
+            window.dispatchEvent(new window.CustomEvent('rfa:diff-action-completed', {
+                detail: { fileId: 'other-file', action: 'expandGap' },
+            }));
+
+            expect(document.activeElement).not.toBe(root.querySelector('[data-expand-gap="1"]'));
+            expect(component._refocusExpandKey).toBe(1);
+
+            component.destroy();
+        });
+
+        it('stops restoring focus after destroy', () => {
+            const component = makeComponent();
+            component.init();
+            component.destroy();
+            component.armExpandRefocus({ detail: 0 }, 1);
+
+            root.innerHTML = '<button data-expand-gap="1">7 hidden lines</button>';
+            window.dispatchEvent(new window.CustomEvent('rfa:diff-action-completed', {
+                detail: { fileId: 'file-1', action: 'expandGap' },
+            }));
+
+            expect(document.activeElement).not.toBe(root.querySelector('[data-expand-gap="1"]'));
+
+            component.destroy();
+        });
     });
 });

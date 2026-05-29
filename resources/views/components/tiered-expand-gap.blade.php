@@ -16,7 +16,7 @@
 
 @if(empty($applicableTiers))
     {{-- Inline ternary instead of Str::plural for the same hot-path reason. --}}
-    <x-diff.expand-button action="expandGap" args="{{ $hunkIndex }}" class="tabular-nums">
+    <x-diff.expand-button action="expandGap" args="{{ $hunkIndex }}" :gap-key="$hunkIndex" class="tabular-nums">
         {{ $hiddenCount }} hidden {{ $hiddenCount === 1 ? 'line' : 'lines' }}
     </x-diff.expand-button>
 @else
@@ -25,10 +25,10 @@
             @if(!$loop->first)
                 <span class="text-gh-muted/20" aria-hidden="true">&middot;</span>
             @endif
-            <x-diff.expand-button action="expandGap" args="{{ $hunkIndex }}, {{ $tier }}" class="hover:bg-gh-link/10 rounded px-1.5 py-0.5 tabular-nums">{{ $tier }}</x-diff.expand-button>
+            <x-diff.expand-button action="expandGap" args="{{ $hunkIndex }}, {{ $tier }}" :gap-key="$hunkIndex" class="hover:bg-gh-link/10 rounded px-1.5 py-0.5 tabular-nums">{{ $tier }}</x-diff.expand-button>
         @endforeach
     </span>
     {{-- Always plural here: this branch only renders when hiddenCount > 15. The
          full "N hidden lines" target reads identically to the single-gap button. --}}
-    <x-diff.expand-button action="expandGap" args="{{ $hunkIndex }}" class="hover:bg-gh-link/10 rounded px-1.5 py-0.5 tabular-nums">{{ $hiddenCount }} hidden lines</x-diff.expand-button>
+    <x-diff.expand-button action="expandGap" args="{{ $hunkIndex }}" :gap-key="$hunkIndex" class="hover:bg-gh-link/10 rounded px-1.5 py-0.5 tabular-nums">{{ $hiddenCount }} hidden lines</x-diff.expand-button>
 @endif

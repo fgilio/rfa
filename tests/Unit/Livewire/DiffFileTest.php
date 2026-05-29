@@ -358,7 +358,13 @@ test('tiered expand buttons render for middle gap larger than 15 lines', functio
     // Should show tiered targets: "Show  15 · 20 hidden lines"
     expect($html)->toContain('expandGap(1, 15)')
         ->and($html)->toContain('expandGap(1)')
-        ->and($html)->toContain('20 hidden lines');
+        ->and($html)->toContain('20 hidden lines')
+        // Gap expanders carry the hunk-index anchor + keyboard refocus arming so
+        // focus returns to the gap after a partial expand re-render.
+        ->and($html)->toContain('data-expand-gap="1"')
+        ->and($html)->toContain('armExpandRefocus($event, 1)')
+        // The master "full file" expander has no gap to return to: it arms null.
+        ->and($html)->toContain('armExpandRefocus($event, null)');
 });
 
 test('single expand button renders for gap of 15 or fewer lines', function () {
@@ -384,7 +390,10 @@ test('tiered expand buttons render for leading gap larger than 15 lines', functi
     // Should show tiered targets for leading gap: "Show  15 · 24 hidden lines"
     expect($html)->toContain('expandGap(0, 15)')
         ->and($html)->toContain('expandGap(0)')
-        ->and($html)->toContain('24 hidden lines');
+        ->and($html)->toContain('24 hidden lines')
+        // Gap index 0 is a real anchor, not a falsy no-op.
+        ->and($html)->toContain('data-expand-gap="0"')
+        ->and($html)->toContain('armExpandRefocus($event, 0)');
 });
 
 test('tiered expand buttons render for trailing gap larger than 15 lines', function () {

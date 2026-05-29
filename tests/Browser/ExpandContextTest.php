@@ -35,3 +35,34 @@ test('show full file button reveals all hidden lines', function () {
     expect($page->page()->locator('button')->filter(['hasText' => 'hidden lines'])->count())->toBe(0);
     expect($page->page()->getByRole('button', ['name' => 'Show full file'])->count())->toBe(0);
 });
+
+test('keyboard-expanding a gap returns focus to the remaining expander', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    // Multi-hunk fixture: a single 22-line gap between the hunks, keyed at hunk
+    // index 1. With >15 hidden it renders the "15" tier chip + an "all" button.
+    $page->assertSee('changed1');
+    $page->page()->locator('[data-expand-gap="1"]')->first()->waitFor();
+
+    // Keyboard-activate the first gap expander (Enter → click with detail 0).
+    $page->page()->locator('[data-expand-gap="1"]')->first()->press('Enter');
+
+    // Partial expand from the top of the gap: 22 − 15 = 7 lines remain, so a
+    // smaller expander stays put at the same gap.
+    $page->assertSee('7 hidden lines');
+    $page->page()->locator('[data-expand-gap="1"]')->first()->waitFor();
+
+    // The chip we activated was destroyed by the re-render, so focus landing
+    // back on a gap-1 expander (instead of falling to <body>) proves restoration.
+    $activeGap = null;
+    $deadline = microtime(true) + 5.0;
+    do {
+        $activeGap = $page->script('document.activeElement && document.activeElement.getAttribute("data-expand-gap")');
+        if ($activeGap === '1') {
+            break;
+        }
+        usleep(50_000);
+    } while (microtime(true) < $deadline);
+
+    expect($activeGap)->toBe('1');
+});
