@@ -29,9 +29,13 @@
     [$dir, $base] = $pos === false ? ['', $path] : [substr($path, 0, $pos + 1), substr($path, $pos + 1)];
 
     if ($collapse && $dir !== '') {
-        $segments = explode('/', rtrim($dir, '/'));
+        // Preserve a leading slash for absolute paths: trimming both ends keeps
+        // the first real segment as $segments[0] (an absolute path would otherwise
+        // explode to a leading '' and collapse to '/…/c/', dropping the root dir).
+        $prefix = str_starts_with($dir, '/') ? '/' : '';
+        $segments = explode('/', trim($dir, '/'));
         if (count($segments) > 2) {
-            $dir = $segments[0].'/…/'.end($segments).'/';
+            $dir = $prefix.$segments[0].'/…/'.end($segments).'/';
         }
     }
 

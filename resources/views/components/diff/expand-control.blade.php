@@ -36,7 +36,11 @@
     ]) }}
     @if($hasIcon)
         x-data="{ loading: false }"
-        @rfa:diff-action-completed.window="loading = false"
+        {{-- Scope the clear to THIS file: the event is a global window dispatch, so
+             without the fileId guard a sibling file's expand completing would clear
+             this row's in-flight spinner. String() both sides — the dispatch casts
+             fileId to string while the Alpine fileId may be numeric (see diff-file.js). --}}
+        @rfa:diff-action-completed.window="if (String($event.detail.fileId) === String(fileId)) loading = false"
     @endif
 >
     @if($hasIcon)

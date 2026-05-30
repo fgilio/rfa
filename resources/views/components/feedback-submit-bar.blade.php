@@ -105,6 +105,10 @@
                     variant="primary"
                     @click="if (draftCount > 0 && !armed) { armed = true; return; } $wire.{{ $submitAction }}()"
                     @click.outside="armed = false"
+                    {{-- Drop a stale arm if the drafts it was armed against vanish (e.g.
+                         deleted via a skipRender'd action that leaves this x-data intact),
+                         so a later submit can't skip the confirm against a different set. --}}
+                    x-effect="if (draftCount === 0) { armed = false }"
                     wire:loading.attr="disabled"
                     wire:target="{{ $submitAction }}"
                     x-bind:disabled="commentCount === 0 && !hasGlobal"

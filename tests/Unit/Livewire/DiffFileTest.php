@@ -485,12 +485,35 @@ test('expandGap settles the action when the full-context reload finds no diff', 
         ->assertDispatched('rfa:diff-action-completed', action: 'expandGap');
 });
 
+test('expandGap settles a tiered-chip expand when the reload finds no diff', function () {
+    // The tiered chips call expandGap($hunkIndex, $tier); that partial-expand arg
+    // shape must settle through the same no-op early return as the full "N hidden
+    // lines" button (expandGap($hunkIndex)), or clicking a tier leaves the spinner
+    // stuck. Guards a regression that only settles when $lineCount is null.
+    app()->bind(LoadFileDiffAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
+        {
+            return $contextLines >= 99999 ? ['hunks' => []] : DiffFixtureFactory::diffData(path: $path);
+        }
+    });
+
+    Livewire::test('diff-file', [
+        'file' => $this->file,
+        'repoPath' => '/tmp/test',
+        'projectId' => 0,
+        'fileComments' => [],
+    ])->call('expandGap', 1, 15)
+        ->assertDispatched('rfa:diff-action-completed', action: 'expandGap');
+});
+
 test('gap expand-control clears its loading spinner when the action completes', function () {
     $diffData = DiffFixtureFactory::diffData(hunks: 2, path: 'src/Test.php');
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
     // The spinner is reset by the completion event rather than the post-expand
-    // morph, so it survives the no-op early-return paths above.
-    expect($html)->toContain('@rfa:diff-action-completed.window="loading = false"');
+    // morph, so it survives the no-op early-return paths above — and is scoped to
+    // this file's id so a sibling file's expand can't clear it.
+    expect($html)->toContain('@rfa:diff-action-completed.window="if (String($event.detail.fileId) === String(fileId)) loading = false"');
 });
