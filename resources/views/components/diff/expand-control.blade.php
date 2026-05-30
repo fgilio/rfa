@@ -11,8 +11,12 @@
     Expandable bands carry the `expand-all` (↕) icon, a dashed top/bottom rule
     (dashed = collapsed content lives here), and own a shared `loading` Alpine
     flag so any button in the slot can swap the row to a spinner with
-    `@click="loading = true"`. The section-context label passes `:icon="false"`
-    (and `align="start"`) — no affordance, no verb, no rule, just the context.
+    `@click="loading = true"`. The flag clears itself when the diff action
+    settles (`rfa:diff-action-completed`) rather than relying on the post-expand
+    morph to replace this row — so the spinner can't get stuck when expandGap
+    early-returns on a no-op (diff changed underneath, nothing to morph). The
+    section-context label passes `:icon="false"` (and `align="start"`) — no
+    affordance, no verb, no rule, just the context.
 --}}
 @props([
     'icon' => 'expand-all',
@@ -30,7 +34,10 @@
         'justify-center select-none' => $align === 'center',
         'justify-start' => $align === 'start',
     ]) }}
-    @if($hasIcon) x-data="{ loading: false }" @endif
+    @if($hasIcon)
+        x-data="{ loading: false }"
+        @rfa:diff-action-completed.window="loading = false"
+    @endif
 >
     @if($hasIcon)
         <flux:icon :icon="$icon" variant="outline" class="!size-3.5 shrink-0 text-gh-muted/50" x-show="!loading" />

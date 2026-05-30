@@ -159,6 +159,11 @@ HTML;
     public function expandGap(int $hunkIndex, ?int $lineCount = null): void
     {
         if ($this->diffData === null || empty($this->diffData['hunks'])) {
+            // Diff fell out of cache between render and click: nothing to expand.
+            // Still settle the action so the client clears the optimistic loading
+            // spinner and the paired runtime-diagnostics start mark isn't orphaned.
+            $this->dispatchDiffActionCompleted('expandGap', 0);
+
             return;
         }
 
@@ -176,6 +181,11 @@ HTML;
         );
 
         if (empty($fullDiff['hunks'])) {
+            // The full-context reload found no diff — the file changed underneath
+            // the cached hunks. Same settle contract as the guard above so the
+            // expander's spinner can't get stuck on a no-op that morphs nothing.
+            $this->dispatchDiffActionCompleted('expandGap', $this->durationSince($startedAt));
+
             return;
         }
 
