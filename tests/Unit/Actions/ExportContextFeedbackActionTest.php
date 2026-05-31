@@ -77,6 +77,24 @@ test('skips draft comments from export and stamping', function () {
     expect($result['md'])->not->toContain('draft body');
 });
 
+test('excludes unplaced comments from export and stamping and reports them', function () {
+    $placed = $this->workflow->handle($this->repoA, null, $this->filesA, 'ctx-a', 'right', 1, 1, 'placed body');
+    $unplaced = $this->workflow->handle($this->repoA, null, $this->filesA, 'ctx-a', 'right', 2, 2, 'stale body');
+
+    // The anchor resolver marked the second one unplaced (its file drifted past
+    // recovery). It must not be exported with a stale line nor stamped submitted.
+    $unplaced['anchorStatus'] = 'unplaced';
+
+    $result = $this->action->handle($this->repoA, null, [$placed, $unplaced], '');
+
+    expect(Comment::find($placed['id'])->submitted_at)->not->toBeNull();
+    expect(Comment::find($unplaced['id'])->submitted_at)->toBeNull();
+    expect($result['md'])->not->toContain('stale body');
+    expect($result['submittedIds'])->toBe([$placed['id']]);
+    expect($result['excludedComments'])->toHaveCount(1);
+    expect($result['excludedComments'][0]['id'])->toBe($unplaced['id']);
+});
+
 test('scopes by project_id when given one', function () {
     $project = Project::factory()->create(['path' => $this->repoA]);
 

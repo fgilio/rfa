@@ -44,10 +44,10 @@ test('view mode persists in localStorage across page reload', function () {
     expect(json_decode($stored, true))->toBe('split');
 
     $page->refresh();
-    // refresh() doesn't run visitAndLoad's networkidle wait, so the lazy
-    // diff-file children may not have rendered yet under parallel pressure.
-    $page->page()->waitForLoadState('networkidle');
-
+    // refresh() doesn't run visitAndLoad's networkidle wait, so the lazy diff-file
+    // children may not have rendered yet under parallel pressure. The locator waitFor
+    // below is the real barrier — it auto-retries until the split table is injected,
+    // which (unlike networkidle) can't resolve before the lazy round-trip lands.
     $page->page()->locator('[data-testid="diff-table"][data-view-mode="split"]')->first()->waitFor();
 });
 
@@ -99,6 +99,8 @@ test('clicking the new side of a shifted context line anchors the form to that r
 
     $shiftedContextRow->locator('.diff-cell-num-new')->click();
 
+    // Wait for the Alpine-rendered form before the synchronous, non-retrying count().
+    $shiftedFile->getByPlaceholder('Write a comment', false)->first()->waitFor();
     expect($shiftedFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
     // Selection (and therefore the form) is anchored to the clicked row itself.
     $shiftedFile->locator('.diff-line.line-selected[data-line-old="5"][data-line-new="4"]')->waitFor();
@@ -120,6 +122,8 @@ test('clicking the old side of a shifted context line anchors the form to that r
 
     $shiftedContextRow->locator('.diff-cell-num-old')->click();
 
+    // Wait for the Alpine-rendered form before the synchronous, non-retrying count().
+    $shiftedFile->getByPlaceholder('Write a comment', false)->first()->waitFor();
     expect($shiftedFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
     $shiftedFile->locator('.diff-line.line-selected[data-line-old="5"][data-line-new="4"]')->waitFor();
     expect($shiftedFile->locator('.diff-line.line-selected')->count())->toBe(1);
@@ -139,6 +143,8 @@ test('clicking a removed line whose old number collides with a shifted new numbe
 
     $removedRow->locator('.diff-cell-num-old')->click();
 
+    // Wait for the Alpine-rendered form before the synchronous, non-retrying count().
+    $shiftedFile->getByPlaceholder('Write a comment', false)->first()->waitFor();
     expect($shiftedFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
 });
 

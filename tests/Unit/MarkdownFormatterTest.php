@@ -116,6 +116,37 @@ test('passes through fenced code blocks inside a comment body verbatim', functio
     expect($md)->toContain("```php\n\$x = 1;\n```");
 });
 
+test('wraps a snippet containing code fences with a longer fence so the document stays balanced', function () {
+    // A diff context for a markdown file can include unchanged ``` lines (context
+    // lines carry a single-space prefix, which CommonMark still reads as a fence).
+    // A bare 3-backtick wrapper would be closed by them and leak the rest of the doc.
+    $snippet = " ```\n some code\n ```";
+    $comments = [
+        new Comment('id', 'file-abc', 'doc.md', DiffSide::Right, 10, 10, 'first body'),
+        new Comment('id2', 'file-abc', 'doc.md', DiffSide::Right, 20, 20, 'second body'),
+    ];
+
+    $md = $this->formatter->format($comments, '', ['doc.md:right:10:10' => $snippet]);
+
+    expect($md)->toContain("````\n{$snippet}\n````");
+    expect($md)->toContain('first body');
+    expect($md)->toContain('second body');
+    // Every fence line in the document is balanced (even count).
+    expect(preg_match_all('/^`{3,}/m', $md) % 2)->toBe(0);
+});
+
+test('closes an unterminated code fence in a comment body so it cannot swallow the separator', function () {
+    $comments = [
+        new Comment('id', 'file-abc', 'f.php', DiffSide::Right, 1, 1, "look:\n```php\n\$x = 1;"),
+        new Comment('id2', 'file-abc', 'f.php', DiffSide::Right, 2, 2, 'second comment'),
+    ];
+
+    $md = $this->formatter->format($comments, '', []);
+
+    expect($md)->toContain('second comment');
+    expect(preg_match_all('/^`{3,}/m', $md) % 2)->toBe(0);
+});
+
 test('treats whitespace-only global comment as empty', function () {
     $md = $this->formatter->format([], "   \n\t", []);
 

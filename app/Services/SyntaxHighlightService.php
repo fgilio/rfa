@@ -158,6 +158,10 @@ class SyntaxHighlightService
         'hl-literal' => ['light' => 'color:#0550ae;', 'dark' => 'color:#79c0ff;'],
         'hl-comment' => ['light' => 'color:#6e7781;', 'dark' => 'color:#8b949e;'],
         'hl-injection' => ['light' => 'color:#8250df;', 'dark' => 'color:#d2a8ff;'],
+        // Tempest's `diff` language emits these for +/- lines when a .diff/.patch
+        // file is itself under review. Without entries here they render unstyled.
+        'hl-addition' => ['light' => 'color:#1a7f37;', 'dark' => 'color:#3fb950;'],
+        'hl-deletion' => ['light' => 'color:#cf222e;', 'dark' => 'color:#f85149;'],
     ];
 
     private Phiki $phiki;
@@ -273,9 +277,57 @@ class SyntaxHighlightService
         }
 
         $html = $this->tempest->parse(implode("\n", $codeLines), $language);
-        $highlightedLines = explode("\n", $html);
+        $highlightedLines = $this->splitBalancedTempestHtml($html);
 
         return count($highlightedLines) === count($codeLines) ? $highlightedLines : [];
+    }
+
+    /**
+     * Split Tempest's single highlighted-HTML string into per-line fragments,
+     * re-balancing spans that cross line boundaries.
+     *
+     * Tempest highlights the whole block at once and wraps multi-line constructs
+     * (PHPDoc, block comments, template literals) in `<span>`s that open on one
+     * line and close on a later one. Splitting naively on "\n" leaves each cell's
+     * HTML unbalanced — emitted raw via {!! !!}, the browser auto-closes the open
+     * span (color bleed) and orphan `</span>`s corrupt structure. Here we track
+     * the open-span stack: at each newline we close all open spans to end the
+     * line, then re-open them (with their exact tags/classes) to start the next.
+     *
+     * @return string[]
+     */
+    private function splitBalancedTempestHtml(string $html): array
+    {
+        if (preg_match_all('/<span\b[^>]*>|<\/span>|\n/', $html, $matches, PREG_OFFSET_CAPTURE) === 0) {
+            return explode("\n", $html);
+        }
+
+        $lines = [];
+        $line = '';
+        $openTags = [];
+        $cursor = 0;
+
+        foreach ($matches[0] as [$token, $offset]) {
+            $line .= substr($html, $cursor, $offset - $cursor);
+            $cursor = $offset + strlen($token);
+
+            if ($token === "\n") {
+                $line .= str_repeat('</span>', count($openTags));
+                $lines[] = $line;
+                $line = implode('', $openTags);
+            } elseif ($token === '</span>') {
+                $line .= $token;
+                array_pop($openTags);
+            } else {
+                $line .= $token;
+                $openTags[] = $token;
+            }
+        }
+
+        $line .= substr($html, $cursor);
+        $lines[] = $line;
+
+        return $lines;
     }
 
     /**
@@ -347,7 +399,23 @@ class SyntaxHighlightService
             return false;
         }
 
-        return preg_match('/^\s*(use\s+[A-Z_\\\\]|new\s+class\b|public\s+|protected\s+|private\s+|if\s*\(|foreach\s*\(|return\b|\$this->|app\()/m', $code) === 1;
+        // Any line that opens with a PHP statement keyword, a declaration, a
+        // variable assignment, or an `echo`/`$this->`/`app()` call marks the hunk
+        // as PHP rather than Blade markup. The Blade/HTML bail above keeps this
+        // from misfiring on template lines.
+        return preg_match(
+            '/^\s*('
+            .'use\s+[A-Za-z_\\\\]|namespace\s+|declare\s*\(|'
+            .'(?:abstract\s+|final\s+|readonly\s+)*class\s+|new\s+class\b|'
+            .'interface\s+|trait\s+|enum\s+|function\s+|const\s+|'
+            .'public\s+|protected\s+|private\s+|static\s+|readonly\s+|'
+            .'if\s*\(|elseif\s*\(|else\b|for\s*\(|foreach\s*\(|while\s*\(|do\b|'
+            .'switch\s*\(|match\s*\(|try\b|throw\b|return\b|echo\b|print\b|'
+            .'\$this->|app\(|'
+            .'\$[a-zA-Z_]\w*\s*(?:=[^=]|\[|\?\?=|\.=)'
+            .')/m',
+            $code,
+        ) === 1;
     }
 
     /**
@@ -361,7 +429,7 @@ class SyntaxHighlightService
         }
 
         $html = $this->tempest->parse(implode("\n", $codeLines), $language);
-        $highlightedLines = explode("\n", $html);
+        $highlightedLines = $this->splitBalancedTempestHtml($html);
 
         return count($highlightedLines) === count($codeLines) ? $highlightedLines : [];
     }

@@ -54,9 +54,12 @@ final readonly class BuildDiffContextAction
             $lines = [];
             foreach ($diffData['hunks'] as $hunk) {
                 foreach ($hunk['lines'] as $line) {
-                    $lineNum = $useOld
-                        ? ($line['oldLineNum'] ?? $line['newLineNum'])
-                        : ($line['newLineNum'] ?? $line['oldLineNum']);
+                    // Use the line number for the comment's own side only. Falling back
+                    // to the other side would pull in lines absent from this side — e.g.
+                    // an Add line (oldLineNum=null, newLineNum=41) would match a left-side
+                    // range of old lines 40-42 and be emitted into the old-side snippet,
+                    // despite having no presence on the left at all.
+                    $lineNum = $useOld ? $line['oldLineNum'] : $line['newLineNum'];
                     if ($lineNum === null) {
                         continue;
                     }

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Models\TrashedFile;
-use Illuminate\Support\Facades\Storage;
 
 final readonly class DeleteTrashedFileAction
 {
@@ -19,7 +18,7 @@ final readonly class DeleteTrashedFileAction
             return;
         }
 
-        Storage::delete("trash/{$trashed->id}");
+        // Deleting the record also purges its blob (TrashedFile::deleting).
         $trashed->delete();
     }
 }

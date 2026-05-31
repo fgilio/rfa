@@ -10,11 +10,13 @@ use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use App\Enums\GitRef;
 use App\Services\GitFileContentService;
+use App\Services\LineSnippetMatcherService;
 
 final readonly class ResolveCommentAnchorAction
 {
     public function __construct(
         private GitFileContentService $gitFileContentService,
+        private LineSnippetMatcherService $snippetMatcher,
     ) {}
 
     /**
@@ -57,6 +59,9 @@ final readonly class ResolveCommentAnchorAction
             $storedSide = (string) ($row['side'] ?? DiffSide::Right->value);
             $storedOriginRef = (string) ($row['origin_ref'] ?? $row['originRef'] ?? GitRef::Working->value);
             $isExternal = $storedOriginRef === GitRef::External->value;
+            $lineSnippet = $this->stringOrNull($row['line_snippet'] ?? $row['lineSnippet'] ?? null);
+            $startLine = $this->intOrNull($row['start_line'] ?? $row['startLine'] ?? null);
+            $endLine = $this->intOrNull($row['end_line'] ?? $row['endLine'] ?? null);
 
             $anchorStatus = AnchorStatus::Unplaced;
             $resolvedSide = $storedSide;
@@ -65,8 +70,24 @@ final readonly class ResolveCommentAnchorAction
                 $absolute = $externalPathByPath[$filePath] ?? null;
 
                 if ($absolute !== null) {
-                    if ($storedHash === null || $storedHash === '' || $storedHash === $this->gitFileContentService->hashAtAbsolute($absolute)) {
+                    $hasHash = $storedHash !== null && $storedHash !== '';
+
+                    if (! $hasHash || $storedHash === $this->gitFileContentService->hashAtAbsolute($absolute)) {
                         $anchorStatus = AnchorStatus::Placed;
+                    } elseif ($lineSnippet !== null && $startLine !== null) {
+                        // Hash drifted but the snippet may still occur — re-anchor
+                        // instead of dropping. contentAtAbsolute returns null when the
+                        // file is gone, which the matcher rejects.
+                        $shifted = $this->snippetMatcher->shiftedLines(
+                            (string) $this->gitFileContentService->contentAtAbsolute($absolute),
+                            $lineSnippet,
+                            $startLine,
+                        );
+
+                        if ($shifted !== null) {
+                            $anchorStatus = AnchorStatus::Placed;
+                            [$startLine, $endLine] = $shifted;
+                        }
                     }
                 }
             } elseif ($storedHash !== null && $storedHash !== '' && isset($fileIdByPath[$filePath])) {
@@ -89,6 +110,17 @@ final readonly class ResolveCommentAnchorAction
                 } elseif ($storedHash === $rightHash) {
                     $anchorStatus = AnchorStatus::Placed;
                     $resolvedSide = DiffSide::Right->value;
+                } else {
+                    // Whole-file hash drifted on both sides — typically an unrelated
+                    // edit elsewhere in the file. Locate the stored line snippet in the
+                    // current content so the comment survives and re-anchors, instead of
+                    // being stamped unplaced and silently dropped at submit.
+                    $recovered = $this->recoverBySnippet($repoPath, $target, $storedSide, $filePath, $leftPath, $rightRef, $lineSnippet, $startLine);
+
+                    if ($recovered !== null) {
+                        [$resolvedSide, $startLine, $endLine] = $recovered;
+                        $anchorStatus = AnchorStatus::Placed;
+                    }
                 }
             } elseif (isset($fileIdByPath[$filePath])) {
                 $anchorStatus = AnchorStatus::Placed;
@@ -100,12 +132,12 @@ final readonly class ResolveCommentAnchorAction
                 'file' => $filePath,
                 'side' => $resolvedSide,
                 'originalSide' => $storedSide,
-                'startLine' => $this->intOrNull($row['start_line'] ?? $row['startLine'] ?? null),
-                'endLine' => $this->intOrNull($row['end_line'] ?? $row['endLine'] ?? null),
+                'startLine' => $startLine,
+                'endLine' => $endLine,
                 'body' => (string) ($row['body'] ?? ''),
                 'originRef' => $storedOriginRef,
                 'fileContentHash' => $storedHash,
-                'lineSnippet' => $row['line_snippet'] ?? $row['lineSnippet'] ?? null,
+                'lineSnippet' => $lineSnippet,
                 'isDraft' => (bool) ($row['is_draft'] ?? $row['isDraft'] ?? false),
                 'submittedAt' => $row['submitted_at'] ?? $row['submittedAt'] ?? null,
                 'anchorStatus' => $anchorStatus->value,
@@ -115,8 +147,51 @@ final readonly class ResolveCommentAnchorAction
         return $resolved;
     }
 
+    /**
+     * Re-anchor a drifted comment by finding its line snippet in the current
+     * content. Searches the stored side first, then the opposite side (flipping
+     * it on a match) so a comment whose side changed still recovers. Returns
+     * [side, startLine, endLine] or null when the snippet can't be found.
+     *
+     * @return array{0: string, 1: int, 2: int}|null
+     */
+    private function recoverBySnippet(string $repoPath, DiffTarget $target, string $storedSide, string $filePath, string $leftPath, string $rightRef, ?string $snippet, ?int $startLine): ?array
+    {
+        // No snippet means nothing to search for — skip the content fetch entirely
+        // (avoids a `git show` per drifted comment that could never re-anchor).
+        if ($snippet === null || $snippet === '' || $startLine === null) {
+            return null;
+        }
+
+        $left = fn (): ?string => $this->gitFileContentService->contentAt($repoPath, $target->from(), $leftPath);
+        $right = fn (): ?string => $this->gitFileContentService->contentAt($repoPath, $rightRef, $filePath);
+
+        $order = $storedSide === DiffSide::Left->value
+            ? [[DiffSide::Left->value, $left], [DiffSide::Right->value, $right]]
+            : [[DiffSide::Right->value, $right], [DiffSide::Left->value, $left]];
+
+        foreach ($order as [$side, $fetch]) {
+            $content = $fetch();
+            if ($content === null) {
+                continue;
+            }
+
+            $shifted = $this->snippetMatcher->shiftedLines($content, $snippet, $startLine);
+            if ($shifted !== null) {
+                return [$side, $shifted[0], $shifted[1]];
+            }
+        }
+
+        return null;
+    }
+
     private function intOrNull(mixed $value): ?int
     {
         return $value === null ? null : (int) $value;
+    }
+
+    private function stringOrNull(mixed $value): ?string
+    {
+        return $value === null ? null : (string) $value;
     }
 }

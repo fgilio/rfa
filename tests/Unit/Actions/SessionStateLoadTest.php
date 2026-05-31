@@ -185,6 +185,37 @@ test('excludes submitted comments from restored view', function () {
     expect($result['comments'][0]['id'])->toBe('c-open');
 });
 
+test('excludes context-file comments from the review surface', function () {
+    // A comment left on CLAUDE.md from the Context page must never surface on the
+    // review diff, or submitting the review would export and consume it.
+    $repoPath = '/tmp/'.$this->faker->word();
+
+    Comment::create([
+        'id' => 'c-review',
+        'repo_path' => $repoPath,
+        'origin_ref' => 'working',
+        'file_path' => 'CLAUDE.md',
+        'side' => 'right',
+        'body' => 'review comment',
+    ]);
+
+    Comment::create([
+        'id' => 'c-context',
+        'repo_path' => $repoPath,
+        'origin_ref' => Comment::ORIGIN_CONTEXT,
+        'file_path' => 'CLAUDE.md',
+        'side' => 'right',
+        'body' => 'context comment',
+    ]);
+
+    $files = [['id' => 'file-claude', 'path' => 'CLAUDE.md', 'isUntracked' => false]];
+
+    $result = app(SessionStateAction::class)->handle($repoPath, $files);
+
+    expect($result['comments'])->toHaveCount(1);
+    expect($result['comments'][0]['id'])->toBe('c-review');
+});
+
 test('marks comment as placed when content hash matches right side', function () {
     $repoPath = '/tmp/'.$this->faker->word();
 

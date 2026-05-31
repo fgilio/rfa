@@ -24,6 +24,7 @@ class GitDiffService
     {
         $target ??= DiffTarget::workingDirectory();
         $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
+        $ignoreRules = $this->ignoreService->rules($repoPath);
 
         // Get status (M/A/D/R) for tracked changes
         $nameStatus = $this->git->run($repoPath, [
@@ -69,12 +70,15 @@ class GitDiffService
             $isBinary = $parts[0] === '-' && $parts[1] === '-';
             // For renames, numstat shows the new path (last tab-separated value)
             $path = $parts[2];
-            // Renames show as "new\told" in some formats, handle "{old => new}" too
+            // numstat renders renames two ways. With a common prefix/suffix it uses
+            // the compact brace form `dir/{old => new}/file`; with none (e.g. a
+            // repo-root rename) it emits a bare `old => new` with no braces. Resolve
+            // both to the new path so the key matches name-status (`$parts[2]` there).
             if (str_contains($path, ' => ')) {
-                // Extract just the new path
-                preg_match('/\{.*? => (.*?)\}/', $path, $m);
-                if ($m) {
+                if (preg_match('/\{.*? => (.*?)\}/', $path, $m) === 1) {
                     $path = str_replace($m[0], $m[1], $path);
+                } else {
+                    $path = substr($path, (int) strpos($path, ' => ') + 4);
                 }
             }
             $statMap[$path] = [
@@ -132,7 +136,7 @@ class GitDiffService
                 $untrackedFiles = array_filter(explode("\n", trim($untrackedOutput)));
 
                 foreach ($untrackedFiles as $file) {
-                    if ($this->ignoreService->isPathExcluded($file, $excludes)) {
+                    if ($this->ignoreService->isPathExcluded($file, $ignoreRules)) {
                         continue;
                     }
 
@@ -213,6 +217,7 @@ class GitDiffService
     public function getWorkingDirectoryStatus(string $repoPath, ?string $globalGitignorePath = null): array
     {
         $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
+        $ignoreRules = $this->ignoreService->rules($repoPath);
 
         $nameStatus = $this->git->run($repoPath, [
             'diff', 'HEAD', '--name-status', '--find-renames',
@@ -233,12 +238,12 @@ class GitDiffService
             ),
         ]);
 
-        $lines = array_filter($lines, function (string $line) use ($excludes) {
+        $lines = array_filter($lines, function (string $line) use ($ignoreRules) {
             if (! str_starts_with($line, "?\t")) {
                 return true;
             }
 
-            return ! $this->ignoreService->isPathExcluded(substr($line, 2), $excludes);
+            return ! $this->ignoreService->isPathExcluded(substr($line, 2), $ignoreRules);
         });
 
         $lines = array_map(

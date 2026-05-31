@@ -9,7 +9,6 @@ use App\Models\Project;
 use App\Services\ExternalFilesService;
 use App\Services\GitDiffService;
 use App\Support\DiffCacheKey;
-use Illuminate\Support\Facades\Cache;
 
 final readonly class GetFileListAction
 {
@@ -46,7 +45,7 @@ final readonly class GetFileListAction
         if ($clearCache && ! $target->isImmutable()) {
             $projectKey = $projectId ?? $repoPath;
             collect($files)->each(function (array $file) use ($projectKey, $target): void {
-                Cache::forget(DiffCacheKey::for($projectKey, $file['id'], $target->contextKey()));
+                DiffCacheKey::forget($projectKey, $file['id'], $target->contextKey());
             });
         }
 

@@ -126,3 +126,32 @@ test('defaults scp-style remotes to https', function () {
     expect($result['scheme'])->toBe('https');
     expect($result['webBaseUrl'])->toBe('https://github.com/fgilio/rfa');
 });
+
+test('parses ssh:// url with explicit port without leaking the port into the path', function () {
+    $result = $this->parser->parse('ssh://git@github.com:2222/fgilio/rfa.git');
+
+    expect($result['provider'])->toBe('github');
+    expect($result['host'])->toBe('github.com');
+    expect($result['owner'])->toBe('fgilio');
+    expect($result['repo'])->toBe('rfa');
+    expect($result['webBaseUrl'])->toBe('https://github.com/fgilio/rfa');
+});
+
+test('parses self-hosted gitlab ssh:// url with userinfo and port', function () {
+    $result = $this->parser->parse('ssh://git@gitlab.acme.com:2222/team/backend/project.git');
+
+    expect($result['provider'])->toBe('gitlab');
+    expect($result['host'])->toBe('gitlab.acme.com');
+    expect($result['owner'])->toBe('team/backend');
+    expect($result['repo'])->toBe('project');
+    expect($result['webBaseUrl'])->toBe('https://gitlab.acme.com/team/backend/project');
+});
+
+test('parses https url with userinfo and port', function () {
+    $result = $this->parser->parse('https://user@github.com:8443/fgilio/rfa.git');
+
+    expect($result['host'])->toBe('github.com');
+    expect($result['owner'])->toBe('fgilio');
+    expect($result['repo'])->toBe('rfa');
+    expect($result['webBaseUrl'])->toBe('https://github.com/fgilio/rfa');
+});

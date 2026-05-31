@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Exceptions\NotAGitRepositoryException;
 use App\Models\Project;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 final readonly class OpenProjectFromPathAction
 {
@@ -24,7 +26,13 @@ final readonly class OpenProjectFromPathAction
 
         try {
             return $this->register->handle($realPath);
-        } catch (\RuntimeException $e) {
+        } catch (NotAGitRepositoryException) {
+            // Expected: the deep-linked path simply isn't a git repo. No-op.
+            return null;
+        } catch (Throwable $e) {
+            // Unexpected (e.g. a database error). Log it as a real failure rather
+            // than silently treating it as "not a git repository", and still avoid
+            // crashing the deep-link/menu handler.
             Log::warning('project.registration.failed', [
                 'reason' => 'project_registration_failed',
                 'path' => $path,

@@ -101,7 +101,7 @@ class MarkdownTableAlignerService
                 continue;
             }
             foreach ($row['cells'] as $colIndex => $cell) {
-                $colWidths[$colIndex] = max($colWidths[$colIndex], mb_strwidth($cell));
+                $colWidths[$colIndex] = max($colWidths[$colIndex], $this->displayWidth($cell));
             }
         }
 
@@ -153,11 +153,15 @@ class MarkdownTableAlignerService
         $indent = $m[1];
         $trimmed = substr($content, strlen($indent));
 
-        // Strip leading and trailing |
+        // Strip the leading and trailing row delimiters. The trailing strip uses a
+        // negative lookbehind so a final cell ending in an escaped pipe (`\|`) keeps it.
         $trimmed = preg_replace('/^\|/', '', $trimmed);
-        $trimmed = preg_replace('/\|$/', '', $trimmed);
+        $trimmed = preg_replace('/(?<!\\\\)\|$/', '', $trimmed);
 
-        $cells = array_map('trim', explode('|', $trimmed));
+        // Split on unescaped pipes only — a cell may legitimately contain `\|`
+        // (a literal pipe). Splitting on every `|` would shatter such a cell and
+        // inflate the column count, corrupting the whole table group.
+        $cells = array_map('trim', preg_split('/(?<!\\\\)\|/', $trimmed) ?: ['']);
 
         $isSeparator = collect($cells)->every(
             fn (string $cell) => (bool) preg_match('/^:?-+:?$/', $cell)
@@ -172,10 +176,18 @@ class MarkdownTableAlignerService
 
     private function padContentCell(string $cell, int $width): string
     {
-        $currentWidth = mb_strwidth($cell);
-        $padding = max(0, $width - $currentWidth);
+        $padding = max(0, $width - $this->displayWidth($cell));
 
         return $cell.str_repeat(' ', $padding);
+    }
+
+    /**
+     * Display width of a cell: an escaped pipe (`\|`) is two source characters but
+     * renders as one, so it must count as a single column for alignment.
+     */
+    private function displayWidth(string $cell): int
+    {
+        return mb_strwidth(str_replace('\\|', '|', $cell));
     }
 
     private function padSeparatorCell(string $cell, int $width): string

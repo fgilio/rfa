@@ -7,6 +7,7 @@ namespace App\Actions;
 use App\DTOs\Comment as CommentDTO;
 use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
+use App\Services\LineSnippetMatcherService;
 use Illuminate\Support\Facades\File;
 
 /**
@@ -36,6 +37,10 @@ use Illuminate\Support\Facades\File;
  */
 final readonly class ResolveContextCommentAnchorAction
 {
+    public function __construct(
+        private LineSnippetMatcherService $snippetMatcher,
+    ) {}
+
     /**
      * @param  iterable<array<string, mixed>>  $rawComments  Rows from the comments table or their array form.
      * @return array<int, array<string, mixed>>
@@ -77,7 +82,7 @@ final readonly class ResolveContextCommentAnchorAction
         if ($content === null) {
             $anchorStatus = AnchorStatus::Unplaced;
         } elseif ($side !== DiffSide::File && $storedHash !== null && hash('xxh128', $content) !== $storedHash) {
-            $shifted = $this->shiftedLines($content, $lineSnippet, $startLine, $endLine);
+            $shifted = $this->snippetMatcher->shiftedLines($content, $lineSnippet, $startLine);
 
             if ($shifted === null) {
                 $anchorStatus = AnchorStatus::Unplaced;
@@ -110,49 +115,6 @@ final readonly class ResolveContextCommentAnchorAction
             null,
             report: false,
         );
-    }
-
-    /**
-     * Find $snippet in $content. Returns the new [startLine, endLine]
-     * shifted to the location of the closest match to the original
-     * $startLine, or null when the snippet is unrecoverable.
-     *
-     * @return array{0: int, 1: int}|null
-     */
-    private function shiftedLines(string $content, ?string $snippet, ?int $startLine, ?int $endLine): ?array
-    {
-        if ($snippet === null || $snippet === '' || $startLine === null) {
-            return null;
-        }
-
-        $fileLines = explode("\n", $content);
-        $snippetLines = explode("\n", $snippet);
-        $snippetLen = count($snippetLines);
-        $haystackLen = count($fileLines);
-
-        if ($snippetLen > $haystackLen) {
-            return null;
-        }
-
-        $needle = rtrim($snippet);
-        $matches = [];
-        for ($i = 0; $i <= $haystackLen - $snippetLen; $i++) {
-            $candidate = array_slice($fileLines, $i, $snippetLen);
-            if (rtrim(implode("\n", $candidate)) === $needle) {
-                $matches[] = $i + 1;
-            }
-        }
-
-        if ($matches === []) {
-            return null;
-        }
-
-        $rangeLength = ($endLine ?? $startLine) - $startLine;
-        $closest = collect($matches)
-            ->sortBy(fn (int $n): int => abs($n - $startLine))
-            ->first();
-
-        return [$closest, $closest + $rangeLength];
     }
 
     private function intOrNull(mixed $value): ?int

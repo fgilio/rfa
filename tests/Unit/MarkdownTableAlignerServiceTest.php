@@ -33,6 +33,24 @@ test('returns hunks unchanged when no tables present', function () {
     expect($result)->toBe($hunks);
 });
 
+test('keeps an escaped pipe inside a cell instead of splitting the column', function () {
+    $hunks = [
+        new Hunk('', 1, 3, 1, 3, [
+            new DiffLine(LineType::Context, '| a \| b | second column |', 1, 1),
+            new DiffLine(LineType::Context, '| --- | --- |', 2, 2),
+            new DiffLine(LineType::Context, '| short | val |', 3, 3),
+        ]),
+    ];
+
+    $result = $this->aligner->alignTables($hunks, 'doc.md');
+    $lines = $result[0]->lines;
+
+    // The literal pipe (\|) stays inside cell 1 rather than shattering it.
+    expect($lines[0]->content)->toContain('a \| b');
+    // The separator keeps exactly two columns (3 delimiter pipes), not three.
+    expect(substr_count($lines[1]->content, '|'))->toBe(3);
+});
+
 test('aligns simple table columns', function () {
     $hunks = [
         new Hunk('', 1, 4, 1, 4, [

@@ -283,6 +283,100 @@ test('marks external comments as unplaced when the on-disk content has changed',
     expect($result[0]['anchorStatus'])->toBe('unplaced');
 });
 
+test('recovers a right-side comment via snippet after an unrelated edit drifts the file hash', function () {
+    // The whole-file hash drifts because line 2 changed, but the commented line
+    // ($c = 3) is untouched. Snippet recovery must keep the comment placed instead
+    // of dropping it — the silent-loss bug.
+    $repo = $this->createTempDirectory('rfa_anchor_recover_right_');
+    $this->initTestRepo($repo);
+    file_put_contents($repo.'/f.php', "<?php\n\$a = 1;\n\$b = 2;\n\$c = 3;\n");
+    $this->commitTestRepo($repo, 'init');
+    file_put_contents($repo.'/f.php', "<?php\n\$a = 99;\n\$b = 2;\n\$c = 3;\n");
+
+    app()->forgetInstance(GitFileContentService::class);
+    $action = app(ResolveCommentAnchorAction::class);
+
+    $result = $action->handle(
+        $repo,
+        [[
+            'id' => 'c-1',
+            'file_path' => 'f.php',
+            'side' => 'right',
+            'start_line' => 4,
+            'end_line' => 4,
+            'file_content_hash' => 'stale-whole-file-hash',
+            'line_snippet' => '$c = 3;',
+            'body' => 'comment on $c',
+        ]],
+        [['id' => 'file-f', 'path' => 'f.php']],
+        DiffTarget::workingDirectory(),
+    );
+
+    expect($result[0]['anchorStatus'])->toBe('placed');
+    expect($result[0]['side'])->toBe('right');
+    expect($result[0]['startLine'])->toBe(4);
+});
+
+test('recovers a left-side comment via snippet from the committed content', function () {
+    $repo = $this->createTempDirectory('rfa_anchor_recover_left_');
+    $this->initTestRepo($repo);
+    file_put_contents($repo.'/f.php', "<?php\n\$a = 1;\n\$keep = 'anchor';\n\$c = 3;\n");
+    $this->commitTestRepo($repo, 'init');
+    // Working copy drifts; the left/committed side still holds the snippet.
+    file_put_contents($repo.'/f.php', "<?php\nchanged\n\$keep = 'anchor';\n\$c = 3;\n");
+
+    app()->forgetInstance(GitFileContentService::class);
+    $action = app(ResolveCommentAnchorAction::class);
+
+    $result = $action->handle(
+        $repo,
+        [[
+            'id' => 'c-left',
+            'file_path' => 'f.php',
+            'side' => 'left',
+            'start_line' => 3,
+            'end_line' => 3,
+            'file_content_hash' => 'stale-whole-file-hash',
+            'line_snippet' => "\$keep = 'anchor';",
+            'body' => 'left comment',
+        ]],
+        [['id' => 'file-f', 'path' => 'f.php']],
+        DiffTarget::workingDirectory(),
+    );
+
+    expect($result[0]['anchorStatus'])->toBe('placed');
+    expect($result[0]['side'])->toBe('left');
+});
+
+test('stays unplaced when the snippet itself is gone from every side', function () {
+    $repo = $this->createTempDirectory('rfa_anchor_recover_gone_');
+    $this->initTestRepo($repo);
+    file_put_contents($repo.'/f.php', "<?php\n\$a = 1;\n");
+    $this->commitTestRepo($repo, 'init');
+    file_put_contents($repo.'/f.php', "<?php\ntotally different\n");
+
+    app()->forgetInstance(GitFileContentService::class);
+    $action = app(ResolveCommentAnchorAction::class);
+
+    $result = $action->handle(
+        $repo,
+        [[
+            'id' => 'c-gone',
+            'file_path' => 'f.php',
+            'side' => 'right',
+            'start_line' => 2,
+            'end_line' => 2,
+            'file_content_hash' => 'stale-whole-file-hash',
+            'line_snippet' => 'a line that exists nowhere anymore',
+            'body' => 'orphan',
+        ]],
+        [['id' => 'file-f', 'path' => 'f.php']],
+        DiffTarget::workingDirectory(),
+    );
+
+    expect($result[0]['anchorStatus'])->toBe('unplaced');
+});
+
 test('uses the working copy as the right side when the target has no `to`', function () {
     $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'HEAD', 'f.php')->andReturn('old');
     $this->gitFileContent->shouldReceive('hashAt')

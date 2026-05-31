@@ -79,6 +79,36 @@ test('skips tooLarge files gracefully', function () {
     expect($context)->not->toHaveKey('hello.php:right:1:1');
 });
 
+test('left-side context excludes added lines whose new-line number lands in the old range', function () {
+    // Insert a line above the commented region so old-line N and new-line N
+    // diverge. An Add line at new-line 3 must NOT leak into a left-side comment
+    // anchored at old lines 3-4 — it has no presence on the old side.
+    File::put($this->tmpDir.'/shift.php', "<?php\necho 'AAA';\necho 'BBB';\necho 'CCC';\necho 'DDD';\n");
+    $this->commitTestRepo($this->tmpDir, 'base for shift');
+
+    File::put($this->tmpDir.'/shift.php', "<?php\necho 'AAA';\necho 'INS';\necho 'BBB';\necho 'CCC';\necho 'DDD';\n");
+
+    $fileId = 'file-'.hash('xxh128', 'shift.php');
+    $files = [['id' => $fileId, 'path' => 'shift.php', 'isUntracked' => false]];
+    $comments = [[
+        'id' => 'c-1',
+        'fileId' => $fileId,
+        'file' => 'shift.php',
+        'side' => 'left',
+        'startLine' => 3,
+        'endLine' => 4,
+        'body' => 'old lines BBB and CCC',
+    ]];
+
+    $action = app(BuildDiffContextAction::class);
+    $context = $action->handle($this->tmpDir, $comments, $files);
+
+    $snippet = $context['shift.php:left:3:4'];
+    expect($snippet)->toContain("echo 'BBB'");
+    expect($snippet)->toContain("echo 'CCC'");
+    expect($snippet)->not->toContain("echo 'INS'");
+});
+
 test('skips comments for unknown file ids', function () {
     $comments = [[
         'id' => 'c-1',

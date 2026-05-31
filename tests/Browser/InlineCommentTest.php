@@ -88,13 +88,24 @@ test('clicking the same line number again with a non-empty input keeps the form 
 test('shift+click selects a line range', function () {
     $page = $this->visit($this->projectUrl());
 
-    // Click first line number
-    $page->page()->getByTestId('diff-line-number')->first()->click();
+    // Scope to one file so both clicks resolve to the same file's rows regardless of
+    // lazy-load order — an unscoped ->first()/->nth() re-resolves per action and can
+    // flip between files as their diffs stream in, landing the two clicks in different
+    // files (no range). Target hello.php's right-side (new) numbers for predictable,
+    // contiguous numbering (mirrors the drag-range test below).
+    $helloFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("hello.php"))');
+    $lineNumbers = $helloFile->locator('.diff-cell-num-new');
 
-    // Shift+click a later line number to extend range
-    $page->page()->getByTestId('diff-line-number')->nth(4)->click(['modifiers' => ['Shift']]);
+    $lineNumbers->first()->click();
+    $lineNumbers->last()->click(['modifiers' => ['Shift']]);
 
-    $page->assertSee('Cancel');
+    // Save and assert range EVIDENCE, not just that a form opened: a true multi-line
+    // selection renders a "Lines X-Y" indicator that a single-line form never would.
+    $helloFile->getByPlaceholder('Write a comment', false)->first()->fill('Shift range comment');
+    $helloFile->getByRole('button', ['name' => 'Save'])->first()->click();
+
+    $page->assertSee('Shift range comment');
+    $page->assertSee('Lines');
 });
 
 test('comments on left and right sides at same line render independently', function () {
@@ -126,7 +137,11 @@ test('clicking line on removal row opens exactly one comment form', function () 
     // Click left-side line number on a removed row - line exists on both sides
     $helloFile->locator('.diff-line[data-type="remove"] .diff-cell-num-old')->first()->click();
 
-    // Only one comment form should render, not two
+    // The form is rendered client-side by Alpine (<template x-if>) during the reactive
+    // flush that runs AFTER the mouseup handler returns, so wait for it to appear before
+    // the synchronous count() read (count() does not auto-retry). This keeps the
+    // exact-one assertion that guards against the double-render (count == 2) regression.
+    $helloFile->getByPlaceholder('Write a comment', false)->first()->waitFor();
     expect($helloFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
 });
 

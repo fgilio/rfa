@@ -2,6 +2,7 @@
 
 use App\Enums\AgentContextFileKind;
 use App\Services\AgentContextFileScannerService;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
@@ -150,4 +151,32 @@ test('records line count for discovered files', function () {
     $files = ctxScan($this->repo, $this->scanner);
 
     expect($files[0]->lineCount)->toBe(3);
+});
+
+// -- defensive git-date parsing --
+
+test('parseGitDate returns null for empty tokens instead of now()', function () {
+    $method = new ReflectionMethod(AgentContextFileScannerService::class, 'parseGitDate');
+    $method->setAccessible(true);
+
+    expect($method->invoke($this->scanner, ''))->toBeNull();
+    expect($method->invoke($this->scanner, '   '))->toBeNull();
+    expect($method->invoke($this->scanner, null))->toBeNull();
+});
+
+test('parseGitDate returns null for an unparseable token instead of throwing', function () {
+    $method = new ReflectionMethod(AgentContextFileScannerService::class, 'parseGitDate');
+    $method->setAccessible(true);
+
+    expect($method->invoke($this->scanner, 'not-a-date'))->toBeNull();
+});
+
+test('parseGitDate parses a valid ISO author date', function () {
+    $method = new ReflectionMethod(AgentContextFileScannerService::class, 'parseGitDate');
+    $method->setAccessible(true);
+
+    $parsed = $method->invoke($this->scanner, '2026-01-02T03:04:05+00:00');
+
+    expect($parsed)->toBeInstanceOf(CarbonImmutable::class);
+    expect($parsed->year)->toBe(2026);
 });

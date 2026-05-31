@@ -135,6 +135,43 @@ test('deletes storage file on restore', function () {
     expect(Storage::exists($storageKey))->toBeFalse();
 });
 
+// -- symlink write-through safety --
+
+test('restoring over a symlink does not write through to a file outside the repo', function () {
+    File::put($this->tmpDir.'/file.txt', "changed\n");
+    $trashed = $this->discardAction->handle($this->tmpDir, 'file.txt', 'modified', $this->project->id);
+
+    // Between discard and restore, file.txt is replaced by a symlink to an
+    // out-of-repo file (crafted repo / external process). File::put() would
+    // otherwise follow the link and overwrite the external target.
+    $outside = $this->createTempDirectory('rfa_restore_outside_');
+    $outsideFile = $outside.'/secret.txt';
+    File::put($outsideFile, "DO NOT TOUCH\n");
+    File::delete($this->tmpDir.'/file.txt');
+    symlink($outsideFile, $this->tmpDir.'/file.txt');
+
+    $this->restoreAction->handle($trashed->id, $this->tmpDir, $this->project->id);
+
+    expect(File::get($outsideFile))->toBe("DO NOT TOUCH\n");
+    expect(is_link($this->tmpDir.'/file.txt'))->toBeFalse();
+    expect(File::get($this->tmpDir.'/file.txt'))->toBe("changed\n");
+});
+
+test('restore refuses a path whose parent directory escapes the repo via a symlink', function () {
+    File::put($this->tmpDir.'/file.txt', "changed\n");
+    $trashed = $this->discardAction->handle($this->tmpDir, 'file.txt', 'modified', $this->project->id);
+
+    // Point the stored path at escape/x.txt, where `escape` is a symlink to an
+    // out-of-repo directory. assertWithinRepo must block the write.
+    $outsideDir = $this->createTempDirectory('rfa_restore_escape_');
+    symlink($outsideDir, $this->tmpDir.'/escape');
+    $trashed->update(['file_path' => 'escape/x.txt']);
+
+    expect(fn () => $this->restoreAction->handle($trashed->id, $this->tmpDir, $this->project->id))
+        ->toThrow(InvalidArgumentException::class);
+    expect(File::exists($outsideDir.'/x.txt'))->toBeFalse();
+});
+
 // -- not found --
 
 test('throws on invalid trash id', function () {

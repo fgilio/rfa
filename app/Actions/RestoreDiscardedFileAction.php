@@ -21,15 +21,15 @@ final readonly class RestoreDiscardedFileAction
             ->active()
             ->firstOrFail();
 
-        PathGuard::assertRelative($trashed->file_path);
+        PathGuard::assertWithinRepo($repoPath, $trashed->file_path);
 
         if ($trashed->old_path !== null) {
-            PathGuard::assertRelative($trashed->old_path);
+            PathGuard::assertWithinRepo($repoPath, $trashed->old_path);
         }
 
         $fullPath = $repoPath.'/'.$trashed->file_path;
-        $content = Storage::exists("trash/{$trashed->id}")
-            ? Storage::get("trash/{$trashed->id}")
+        $content = Storage::exists($trashed->blobPath())
+            ? Storage::get($trashed->blobPath())
             : null;
 
         match ($trashed->file_status) {
@@ -40,8 +40,7 @@ final readonly class RestoreDiscardedFileAction
 
         $comments = $trashed->comments ?? [];
 
-        // Clean up storage and delete record
-        Storage::delete("trash/{$trashed->id}");
+        // Deleting the record also purges its blob (TrashedFile::deleting).
         $trashed->delete();
 
         return $comments;
@@ -64,6 +63,14 @@ final readonly class RestoreDiscardedFileAction
             }
             symlink($content, $fullPath);
         } else {
+            // If a symlink has appeared at the target since the discard, remove it
+            // first. File::put() follows an existing symlink and would write THROUGH
+            // it, overwriting whatever it points at — potentially a file outside the
+            // repo. assertWithinRepo above blocks an escaping path; this blocks the
+            // write-through at the leaf.
+            if (is_link($fullPath)) {
+                File::delete($fullPath);
+            }
             File::put($fullPath, $content);
         }
     }

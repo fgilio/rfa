@@ -201,3 +201,31 @@ test('discards symlink file', function () {
     // Symlink target should be stored
     expect(Storage::get("trash/{$trashed->id}"))->toBe($target);
 });
+
+test('discards a dangling symlink and still saves its target to trash', function () {
+    // file_exists() follows the link and reports false for a dangling symlink;
+    // is_link() must be consulted first or the "undoable" discard saves nothing.
+    $missingTarget = $this->tmpDir.'/does-not-exist';
+    $link = $this->tmpDir.'/dangling.txt';
+    symlink($missingTarget, $link);
+
+    $trashed = $this->action->handle(
+        $this->tmpDir, 'dangling.txt', 'added', $this->project->id, isUntracked: true, isSymlink: true
+    );
+
+    expect($trashed->is_symlink)->toBeTrue();
+    expect(Storage::exists("trash/{$trashed->id}"))->toBeTrue();
+    expect(Storage::get("trash/{$trashed->id}"))->toBe($missingTarget);
+    expect(is_link($link))->toBeFalse();
+});
+
+test('deleting a trash record purges its content blob', function () {
+    File::put($this->tmpDir.'/file.txt', "changed\n");
+    $trashed = $this->action->handle($this->tmpDir, 'file.txt', 'modified', $this->project->id);
+
+    expect(Storage::exists("trash/{$trashed->id}"))->toBeTrue();
+
+    $trashed->delete();
+
+    expect(Storage::exists("trash/{$trashed->id}"))->toBeFalse();
+});

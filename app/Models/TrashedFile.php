@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 class TrashedFile extends Model
 {
@@ -25,6 +26,26 @@ class TrashedFile extends Model
         'comments',
         'expires_at',
     ];
+
+    /**
+     * Delete the on-disk content blob whenever the row is deleted, so a
+     * trashed file's content can never outlive its record. This is the single
+     * source of truth for blob cleanup — every deletion path must go through a
+     * model delete (NOT a query-builder bulk delete or a DB-level cascade,
+     * both of which bypass model events). Project deletion is handled in
+     * ProjectObserver::deleting for exactly that reason.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (TrashedFile $trashedFile): void {
+            Storage::delete($trashedFile->blobPath());
+        });
+    }
+
+    public function blobPath(): string
+    {
+        return "trash/{$this->id}";
+    }
 
     protected function casts(): array
     {

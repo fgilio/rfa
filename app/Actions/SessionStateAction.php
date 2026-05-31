@@ -84,6 +84,7 @@ final readonly class SessionStateAction
     {
         return Comment::query()
             ->forProjectOrRepo($projectId, $repoPath)
+            ->fromReview()
             ->whereNull('submitted_at')
             ->orderBy('created_at')
             ->get()

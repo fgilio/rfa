@@ -107,6 +107,46 @@ test('getFileList returns renamed file with oldPath', function () {
     expect($entries[0]->oldPath)->toBe('old_name.txt');
 });
 
+test('getFileList reports additions for a renamed-and-modified repo-root file', function () {
+    // numstat renders a root rename as a brace-less `old => new`; the parser must
+    // resolve that to the new path so the stats land on the entry instead of
+    // defaulting to +0/-0. A nested rename uses the brace form and is covered by
+    // git's compact notation path.
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/root.txt', "line1\nline2\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    $this->runTestRepoCommand($this->tmpDir, 'git mv root.txt renamed.txt');
+    File::put($this->tmpDir.'/renamed.txt', "line1\nline2\nline3\nline4\n");
+
+    $entries = $this->service->getFileList($this->tmpDir);
+
+    expect($entries)->toHaveCount(1);
+    expect($entries[0]->status)->toBe('renamed');
+    expect($entries[0]->path)->toBe('renamed.txt');
+    expect($entries[0]->oldPath)->toBe('root.txt');
+    expect($entries[0]->additions)->toBeGreaterThan(0);
+});
+
+test('getFileList reports additions for a nested renamed-and-modified file', function () {
+    // The brace form `dir/{old => new}` path: confirm stats still attach after
+    // the rewrite to the new path.
+    $this->initTestRepo($this->tmpDir);
+    File::makeDirectory($this->tmpDir.'/src', 0755, true);
+    File::put($this->tmpDir.'/src/old.txt', "a\nb\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    $this->runTestRepoCommand($this->tmpDir, 'git mv src/old.txt src/new.txt');
+    File::put($this->tmpDir.'/src/new.txt', "a\nb\nc\n");
+
+    $entries = $this->service->getFileList($this->tmpDir);
+
+    expect($entries)->toHaveCount(1);
+    expect($entries[0]->status)->toBe('renamed');
+    expect($entries[0]->path)->toBe('src/new.txt');
+    expect($entries[0]->additions)->toBeGreaterThan(0);
+});
+
 test('getFileList detects binary files', function () {
     $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");

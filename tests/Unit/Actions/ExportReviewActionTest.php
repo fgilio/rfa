@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\ExportReviewAction;
+use App\DTOs\DiffTarget;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -50,4 +51,23 @@ test('handles empty comments', function () {
 
     expect($result)->toHaveKeys(['md', 'clipboard', 'submittedIds']);
     expect(File::exists($result['md']))->toBeTrue();
+});
+
+test('excludes unplaced comments and reports them instead of dropping them silently', function () {
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'changed';\n");
+
+    $fileId = 'file-'.hash('xxh128', 'hello.php');
+    $files = [['id' => $fileId, 'path' => 'hello.php', 'isUntracked' => false]];
+    $comments = [
+        ['id' => 'c-placed', 'fileId' => $fileId, 'file' => 'hello.php', 'side' => 'right', 'startLine' => 2, 'endLine' => 2, 'body' => 'in scope', 'anchorStatus' => 'placed'],
+        ['id' => 'c-unplaced', 'fileId' => $fileId, 'file' => 'hello.php', 'side' => 'right', 'startLine' => 2, 'endLine' => 2, 'body' => 'out of scope', 'anchorStatus' => 'unplaced'],
+    ];
+
+    $action = app(ExportReviewAction::class);
+    $result = $action->handle($this->tmpDir, $comments, '', $files, DiffTarget::workingDirectory());
+
+    expect($result['submittedIds'])->toBe(['c-placed']);
+    expect($result['excludedComments'])->toHaveCount(1);
+    expect($result['excludedComments'][0]['id'])->toBe('c-unplaced');
+    expect(File::get($result['md']))->not->toContain('out of scope');
 });

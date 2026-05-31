@@ -177,46 +177,43 @@ test('double esc on edited draft updates the draft', function () {
 test('clicking line with existing draft re-opens it', function () {
     $page = $this->visit($this->projectUrl());
 
-    $lineNum = $page->page()->getByTestId('diff-line-number')->first();
+    // Pin BOTH clicks to one named file. An unscoped getByTestId('diff-line-number')
+    // ->first() is an unstable locator: it re-resolves on every action, and while the
+    // changed files lazy-load their diffs (x-intersect), the "first" line on the page
+    // flips to whichever file rendered its rows first. So the initial click could create
+    // the draft on one file while the re-click lands on a *different* file (which has no
+    // draft) — the mousedown handler then misses the draft, falls through to the drag
+    // path, and opens a BLANK form that no later poll can recover. Scoping to hello.php
+    // makes both clicks resolve to the same line that actually owns the draft.
+    $helloFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("hello.php"))');
+    $lineNum = $helloFile->getByTestId('diff-line-number')->first();
+
     $lineNum->click();
-    $page->page()->getByPlaceholder('Write a comment', false)->fill('Existing draft');
-    $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
-    $page->page()->getByPlaceholder('Write a comment', false)->press('Escape');
+    $helloFile->getByPlaceholder('Write a comment', false)->fill('Existing draft');
+    $helloFile->getByPlaceholder('Write a comment', false)->press('Escape');
+    $helloFile->getByPlaceholder('Write a comment', false)->press('Escape');
 
-    // The re-open mousedown handler reads $wire.fileComments synchronously to
-    // find the existing draft. The rendered badge can briefly lead that client
-    // snapshot, so poll the Livewire component state directly until the draft is
-    // present before re-clicking — networkidle was an unreliable proxy for this
-    // and produced flakes (the click would open a blank form that the
-    // inputValue poll below can never recover).
-    $page->page()->getByTestId('draft-comment')->waitFor();
-    $deadline = microtime(true) + 5.0;
-    do {
-        $synced = $page->script('(() => { try { return [...document.querySelectorAll("[wire\:id]")].some(el => { const c = window.Livewire && window.Livewire.find(el.getAttribute("wire:id")); return c && typeof c.get === "function" && (c.get("fileComments") || []).some(x => x.isDraft); }); } catch (e) { return false; } })()');
-        if ($synced) {
-            break;
-        }
-        usleep(50_000);
-    } while (microtime(true) < $deadline);
+    // The re-open mousedown handler reads $wire.fileComments synchronously to find the
+    // existing draft, so the draft must be committed into this file's client state before
+    // we re-click. The draft badge is server-rendered from $fileComments, so once it
+    // appears the updateComments commit has landed and the synchronous read will see it.
+    $helloFile->getByTestId('draft-comment')->first()->waitFor();
 
-    // Click same line again
+    // Re-click the same line — now guaranteed to hit the existing-draft branch.
     $lineNum->click();
 
-    // inputValue() is a one-shot read (Pest's waitForFunction wrapper is
-    // also single-shot, see Csrf419RecoveryTest), so poll from PHP until
-    // the textarea is hydrated.
-    $input = $page->page()->getByPlaceholder('Write a comment', false);
+    // editComment() sets formBody synchronously, but x-model flushes to the textarea on
+    // the next Alpine tick — wait (in-browser, polled) until the value hydrates.
+    $input = $helloFile->getByPlaceholder('Write a comment', false);
     $input->waitFor(['state' => 'visible']);
-    $deadline = microtime(true) + 5.0;
-    do {
-        $value = $input->inputValue();
-        if ($value !== '') {
-            break;
+    $page->page()->waitForFunction(<<<'JS'
+        () => {
+            const ta = [...document.querySelectorAll('textarea')].find(t => (t.placeholder || '').startsWith('Write a comment'));
+            return !!ta && ta.value === 'Existing draft';
         }
-        usleep(50_000);
-    } while (microtime(true) < $deadline);
+    JS);
 
-    expect($value)->toBe('Existing draft');
+    expect($input->inputValue())->toBe('Existing draft');
 });
 
 // -- File-level drafts --

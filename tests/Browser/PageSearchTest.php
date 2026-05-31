@@ -20,7 +20,7 @@ test('Cmd+F opens the search bar, Escape closes it and clears marks', function (
     $page = $this->visitAndLoad($this->projectUrl());
     waitForDiffsLoaded($page);
 
-    expect($page->page()->getByPlaceholder('Find...')->isVisible())->toBeFalse();
+    $page->page()->getByPlaceholder('Find...')->waitFor(['state' => 'hidden']);
 
     $page->page()->locator('body')->press('Meta+f');
 

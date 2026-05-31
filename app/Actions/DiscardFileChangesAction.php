@@ -47,20 +47,24 @@ final readonly class DiscardFileChangesAction
             'expires_at' => now()->addMinutes(30),
         ]);
 
-        // Save file content (if the file exists in working tree)
+        // Save file content (if the file exists in working tree). Check is_link
+        // FIRST: File::exists()/file_exists() follows the link and returns false
+        // for a DANGLING symlink, which would skip the save entirely and make the
+        // "undoable" discard silently unrecoverable. readlink reads the target
+        // string without requiring the target to exist.
         $fullPath = $repoPath.'/'.$path;
 
-        if (File::exists($fullPath)) {
-            $content = $isSymlink ? readlink($fullPath) : File::get($fullPath);
-            Storage::put("trash/{$trashRecord->id}", $content);
+        if (is_link($fullPath)) {
+            Storage::put($trashRecord->blobPath(), (string) readlink($fullPath));
+        } elseif (File::exists($fullPath)) {
+            Storage::put($trashRecord->blobPath(), File::get($fullPath));
         }
 
         // Run the discard operation
         try {
             $this->executeDiscard($repoPath, $path, $status, $oldPath, $isUntracked, $fullPath);
         } catch (\Throwable $e) {
-            // Clean up trash entry and storage if git command fails
-            Storage::delete("trash/{$trashRecord->id}");
+            // Roll back: deleting the record also purges its blob (TrashedFile::deleting).
             $trashRecord->delete();
             throw $e;
         }

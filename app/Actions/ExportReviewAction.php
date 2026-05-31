@@ -21,11 +21,11 @@ final readonly class ExportReviewAction
     /**
      * @param  array<int, array<string, mixed>>  $comments  Currently-loaded, view-ready comments.
      * @param  array<int, array<string, mixed>>  $files  Files in the current diff.
-     * @return array{md: string, clipboard: string, submittedIds: array<int, string>}
+     * @return array{md: string, clipboard: string, submittedIds: array<int, string>, excludedComments: array<int, array<string, mixed>>}
      */
     public function handle(string $repoPath, array $comments, string $globalComment, array $files, ?DiffTarget $target = null): array
     {
-        $inScope = $this->filterInScope($comments, $target);
+        [$inScope, $excluded] = $this->partitionByScope($comments, $target);
 
         $commentDTOs = array_map(fn ($c) => Comment::fromArray($c), $inScope);
 
@@ -40,29 +40,39 @@ final readonly class ExportReviewAction
 
         $this->ensureGitExclude->handle($repoPath);
 
-        return [...$result, 'submittedIds' => $ids];
+        return [...$result, 'submittedIds' => $ids, 'excludedComments' => $excluded];
     }
 
     /**
-     * In scope means "the anchor resolver placed this comment against the active diff".
-     * Comments that aren't placed belong to another selection and survive this submit
-     * untouched (no submitted_at stamp, not included in the export payload).
+     * Split comments into the ones the anchor resolver placed against the active
+     * diff (exported + stamped submitted) and the ones it couldn't (left
+     * untouched: no submitted_at stamp, not exported). Surfacing the excluded
+     * set lets the caller warn the user instead of silently dropping them.
      *
-     * Comments without an explicit `anchorStatus` (e.g. fresh inputs in direct callers /
-     * tests) default to placed.
+     * Comments without an explicit `anchorStatus` (e.g. fresh inputs in direct
+     * callers / tests) default to placed.
      *
      * @param  array<int, array<string, mixed>>  $comments
-     * @return array<int, array<string, mixed>>
+     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>}
      */
-    private function filterInScope(array $comments, ?DiffTarget $target): array
+    private function partitionByScope(array $comments, ?DiffTarget $target): array
     {
         if ($target === null) {
-            return $comments;
+            return [$comments, []];
         }
 
-        return array_values(array_filter(
-            $comments,
-            fn (array $c) => ($c['anchorStatus'] ?? AnchorStatus::Placed->value) === AnchorStatus::Placed->value,
-        ));
+        $inScope = [];
+        $excluded = [];
+
+        foreach ($comments as $comment) {
+            $placed = ($comment['anchorStatus'] ?? AnchorStatus::Placed->value) === AnchorStatus::Placed->value;
+            if ($placed) {
+                $inScope[] = $comment;
+            } else {
+                $excluded[] = $comment;
+            }
+        }
+
+        return [$inScope, $excluded];
     }
 }

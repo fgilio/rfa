@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\RegisterProjectAction;
+use App\Exceptions\NotAGitRepositoryException;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\File;
@@ -66,9 +67,24 @@ test('handles slug collisions with suffix', function () {
     expect($second->slug)->toBe($first->slug.'-2');
 });
 
-test('throws on non-git directory', function () {
+test('throws NotAGitRepositoryException on non-git directory', function () {
     $nonGit = $this->createTempDirectory('rfa_nongit_');
 
     expect(fn () => app(RegisterProjectAction::class)->handle($nonGit))
-        ->toThrow(RuntimeException::class);
+        ->toThrow(NotAGitRepositoryException::class);
+});
+
+test('refreshes git_common_dir and is_worktree on re-registration', function () {
+    $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
+    $correctCommonDir = $project->git_common_dir;
+
+    // Simulate stale worktree metadata from an earlier registration (e.g. the path
+    // was later converted into/out of a git worktree).
+    $project->update(['git_common_dir' => '/stale/path/.git', 'is_worktree' => true]);
+
+    $refreshed = app(RegisterProjectAction::class)->handle($this->testRepoPath);
+
+    expect($refreshed->id)->toBe($project->id);
+    expect($refreshed->git_common_dir)->toBe($correctCommonDir);
+    expect($refreshed->is_worktree)->toBeFalse();
 });
