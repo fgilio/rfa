@@ -44,7 +44,7 @@
     </div>
 
     <div class="flex items-center gap-2 text-xs shrink-0 font-mono">
-        <div class="flex items-center gap-0.5 opacity-30 group-hover:opacity-100 transition-opacity">
+        <div class="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
             <x-copy-paths-button
                 mode="single"
                 size="sm"
@@ -55,7 +55,7 @@
 
             @if($showContentCopy)
                 <flux:dropdown position="bottom" align="end">
-                    <flux:button icon="ellipsis-vertical" icon:variant="outline" variant="ghost" size="sm" aria-label="Copy content" />
+                    <flux:button icon="clipboard-document" icon:variant="outline" variant="ghost" size="sm" tooltip="Copy content" aria-label="Copy content" />
                     <flux:menu>
                         <flux:menu.item icon="code-bracket" icon:variant="outline" @click="$wire.copyContent('diff')">
                             Copy diff

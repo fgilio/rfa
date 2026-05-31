@@ -17,11 +17,28 @@
 @props([
     'path',
     'oldPath' => null,
+    // Opt-in: collapse a deep directory to a middle-ellipsis breadcrumb
+    // (app/Domains/BulkOperations/Jobs/ → app/…/Jobs/) so the basename — the
+    // thing being scanned for — survives in narrow lists. Default off; the full
+    // path stays in `title`. Use only where width is genuinely tight (sidebar).
+    'collapse' => false,
 ])
 
 @php
     $pos = strrpos($path, '/');
     [$dir, $base] = $pos === false ? ['', $path] : [substr($path, 0, $pos + 1), substr($path, $pos + 1)];
+
+    if ($collapse && $dir !== '') {
+        // Preserve a leading slash for absolute paths: trimming both ends keeps
+        // the first real segment as $segments[0] (an absolute path would otherwise
+        // explode to a leading '' and collapse to '/…/c/', dropping the root dir).
+        $prefix = str_starts_with($dir, '/') ? '/' : '';
+        $segments = explode('/', trim($dir, '/'));
+        if (count($segments) > 2) {
+            $dir = $prefix.$segments[0].'/…/'.end($segments).'/';
+        }
+    }
+
     $hasOldPath = $oldPath !== null && $oldPath !== '';
     $defaultTitle = $hasOldPath ? $oldPath.' → '.$path : $path;
 @endphp

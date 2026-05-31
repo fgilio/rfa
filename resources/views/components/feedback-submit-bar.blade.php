@@ -68,6 +68,7 @@
     @else
         <div class="px-5 py-3.5 flex items-center gap-4"
             x-data="{
+                armed: false,
                 get commentCount() { return $wire.comments.filter(c => !c.isDraft).length },
                 get draftCount() { return $wire.comments.filter(c => c.isDraft).length },
                 get hasGlobal() { return ($wire.globalComment || '').trim().length > 0 }
@@ -99,14 +100,21 @@
                         <span class="w-px h-4 bg-gh-border"></span>
                     </div>
                 </template>
+                {{-- Drafts won't be included: arm-to-confirm inline (no native confirm() dialog). --}}
                 <flux:button
                     variant="primary"
-                    @click="if (draftCount > 0 && !confirm(`You have ${draftCount} draft comment${draftCount === 1 ? '' : 's'} that won't be included. Submit anyway?`)) return; $wire.{{ $submitAction }}()"
+                    @click="if (draftCount > 0 && !armed) { armed = true; return; } $wire.{{ $submitAction }}()"
+                    @click.outside="armed = false"
+                    {{-- Drop a stale arm if the drafts it was armed against vanish (e.g.
+                         deleted via a skipRender'd action that leaves this x-data intact),
+                         so a later submit can't skip the confirm against a different set. --}}
+                    x-effect="if (draftCount === 0) { armed = false }"
                     wire:loading.attr="disabled"
                     wire:target="{{ $submitAction }}"
                     x-bind:disabled="commentCount === 0 && !hasGlobal"
                 >
-                    {{ $submitLabel }}
+                    <span x-show="!(armed && draftCount > 0)">{{ $submitLabel }}</span>
+                    <span x-show="armed && draftCount > 0" x-cloak x-text="`Submit without ${draftCount} draft${draftCount === 1 ? '' : 's'}?`"></span>
                 </flux:button>
             </div>
         </div>

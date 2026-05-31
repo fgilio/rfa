@@ -159,6 +159,11 @@ HTML;
     public function expandGap(int $hunkIndex, ?int $lineCount = null): void
     {
         if ($this->diffData === null || empty($this->diffData['hunks'])) {
+            // Diff fell out of cache between render and click: nothing to expand.
+            // Still settle the action so the client clears the optimistic loading
+            // spinner and the paired runtime-diagnostics start mark isn't orphaned.
+            $this->dispatchDiffActionCompleted('expandGap', 0);
+
             return;
         }
 
@@ -176,6 +181,11 @@ HTML;
         );
 
         if (empty($fullDiff['hunks'])) {
+            // The full-context reload found no diff — the file changed underneath
+            // the cached hunks. Same settle contract as the guard above so the
+            // expander's spinner can't get stuck on a no-op that morphs nothing.
+            $this->dispatchDiffActionCompleted('expandGap', $this->durationSince($startedAt));
+
             return;
         }
 
@@ -394,7 +404,9 @@ HTML;
     <div x-show="!collapsed" x-collapse.duration.150ms>
         <div x-ref="fileCommentForm">
             <template x-if="showForm && formSide === 'file'">
-                <x-comment-form save="submitComment" placeholder="File comment..." border-class="border-b" />
+                <div class="comment-open">
+                    <x-comment-form save="submitComment" placeholder="File comment..." border-class="border-b" />
+                </div>
             </template>
             @foreach($fileComments as $comment)
                 @if($comment['side'] === DiffSide::File->value)
@@ -462,7 +474,7 @@ HTML;
             <div class="px-4 py-6 flex items-start justify-center gap-6">
                 @if($hasBeforeImage)
                     <div class="flex flex-col items-center gap-2 {{ $hasAfterImage ? 'max-w-[50%]' : '' }}">
-                        <flux:badge color="red" size="sm">{{ $status === 'deleted' ? 'Deleted' : 'Before' }}</flux:badge>
+                        <span class="font-mono text-[11px] font-medium text-gh-red">{{ $status === 'deleted' ? 'Deleted' : 'Before' }}</span>
                         <div class="border border-gh-border rounded-lg p-1" style="background: repeating-conic-gradient(rgb(128 128 128 / 0.15) 0% 25%, transparent 0% 50%) 50% / 16px 16px;">
                             <img
                                 src="{{ $this->imageUrl($beforeRef, $beforePath) }}"
@@ -476,7 +488,7 @@ HTML;
                 @endif
                 @if($hasAfterImage)
                     <div class="flex flex-col items-center gap-2 {{ $hasBeforeImage ? 'max-w-[50%]' : '' }}">
-                        <flux:badge color="green" size="sm">{{ $status === 'added' ? 'New' : 'After' }}</flux:badge>
+                        <span class="font-mono text-[11px] font-medium text-gh-green">{{ $status === 'added' ? 'New' : 'After' }}</span>
                         <div class="border border-gh-border rounded-lg p-1" style="background: repeating-conic-gradient(rgb(128 128 128 / 0.15) 0% 25%, transparent 0% 50%) 50% / 16px 16px;">
                             <img
                                 src="{{ $this->imageUrl($afterRef, $file['path']) }}"
@@ -492,12 +504,8 @@ HTML;
         @elseif($diffData === null)
             {{-- One spinner for both the pre-request setTimeout window and the
                  in-flight request, so the visual doesn't swap mid-load. --}}
-            <div
-                x-intersect.once="setTimeout(() => { markDiffActionStart('loadFileDiff'); $wire.loadFileDiff(); }, {{ $loadDelay }})"
-                class="px-4 py-8 text-center"
-            >
-                <flux:icon icon="arrow-path" variant="outline" class="animate-spin inline-block text-gh-muted mr-1" />
-                <flux:text variant="subtle" size="sm" inline>Loading diff...</flux:text>
+            <div x-intersect.once="setTimeout(() => { markDiffActionStart('loadFileDiff'); $wire.loadFileDiff(); }, {{ $loadDelay }})">
+                <x-diff-skeleton />
             </div>
         @elseif($diffData['tooLarge'] ?? false)
             <div class="px-4 py-8 text-center">
@@ -506,7 +514,7 @@ HTML;
             </div>
         @elseif($diffData['error'] ?? false)
             <div class="px-4 py-8 text-center">
-                <flux:icon icon="exclamation-triangle" variant="outline" class="inline-block text-red-400 mr-1" />
+                <flux:icon icon="exclamation-triangle" variant="outline" class="inline-block text-gh-red mr-1" />
                 <flux:text variant="subtle" size="sm" inline>Git error: {{ $diffData['error'] }}</flux:text>
             </div>
         @elseif(empty($diffData['hunks']))
@@ -529,18 +537,9 @@ HTML;
                 :class="isDragging ? 'select-none' : ''"
             >
                 @if($hasGaps)
-                    <div class="diff-fullspan bg-gh-hunk-bg px-4 py-1 text-center">
-                        <button
-                            wire:click="expandContext"
-                            wire:loading.attr="disabled"
-                            wire:target="expandContext"
-                            @click="markDiffActionStart('expandContext')"
-                            class="text-gh-link text-xs hover:underline inline-flex items-center gap-1 disabled:opacity-50"
-                        >
-                            <flux:icon wire:loading wire:target="expandContext" icon="arrow-path" variant="outline" class="animate-spin" />
-                            Show full file
-                        </button>
-                    </div>
+                    <x-diff.expand-control>
+                        <x-diff.expand-button action="expandContext" aria-label="Show full file">full file</x-diff.expand-button>
+                    </x-diff.expand-control>
                 @endif
 
                 @foreach($hunks as $hunkIndex => $hunk)
@@ -554,9 +553,9 @@ HTML;
                 @endforeach
 
                 @if($hasTrailingGap)
-                    <div class="diff-fullspan bg-gh-hunk-bg py-1.5 text-center text-xs border-y border-dashed border-gh-border/20">
+                    <x-diff.expand-control wire:key="expand-gap-trailing-{{ count($hunks) }}-{{ $trailingHiddenCount }}">
                         <x-tiered-expand-gap :hunk-index="count($hunks)" :hidden-count="$trailingHiddenCount" />
-                    </div>
+                    </x-diff.expand-control>
                 @endif
             </div>
         @endif

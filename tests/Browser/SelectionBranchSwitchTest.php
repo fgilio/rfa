@@ -20,6 +20,8 @@ test('switching branches clears an in-flight commit selection', function () {
     // clears selection.
     $page->page()->locator('[x-ref="branchList"]')->getByText('feature-x')->click();
 
-    $page->page()->getByText('selected')->waitFor(['state' => 'hidden']);
-    $page->assertDontSee('selected');
+    // Wait on the Clear-selection affordance itself: getByText('selected') is a
+    // substring match that also catches toasts, tripping Playwright strict mode.
+    $page->page()->getByLabel('Clear selection')->waitFor(['state' => 'hidden']);
+    $page->assertDontSee('1 selected');
 });

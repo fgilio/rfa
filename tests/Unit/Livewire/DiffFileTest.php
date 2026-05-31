@@ -355,11 +355,16 @@ test('tiered expand buttons render for middle gap larger than 15 lines', functio
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
-    // Should show tiered buttons: "Expand 15  20 hidden lines"
+    // Should show tiered targets: "Show  15 · 20 hidden lines"
     expect($html)->toContain('expandGap(1, 15)')
         ->and($html)->toContain('expandGap(1)')
-        ->and($html)->toContain('20')
-        ->and($html)->toContain('hidden lines');
+        ->and($html)->toContain('20 hidden lines')
+        // Gap expanders carry the hunk-index anchor + keyboard refocus arming so
+        // focus returns to the gap after a partial expand re-render.
+        ->and($html)->toContain('data-expand-gap="1"')
+        ->and($html)->toContain('armExpandRefocus($event, 1)')
+        // The master "full file" expander has no gap to return to: it arms null.
+        ->and($html)->toContain('armExpandRefocus($event, null)');
 });
 
 test('single expand button renders for gap of 15 or fewer lines', function () {
@@ -369,7 +374,8 @@ test('single expand button renders for gap of 15 or fewer lines', function () {
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
-    expect($html)->toContain('Expand 10 hidden lines')
+    // The "Show" verb lives in the <x-diff.expand-control> shell; the button is the target.
+    expect($html)->toContain('10 hidden lines')
         ->and($html)->not->toContain('expandGap(1, 15)');
 });
 
@@ -381,11 +387,13 @@ test('tiered expand buttons render for leading gap larger than 15 lines', functi
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
-    // Should show tiered buttons for leading gap: "Expand 15 · 24 hidden lines"
+    // Should show tiered targets for leading gap: "Show  15 · 24 hidden lines"
     expect($html)->toContain('expandGap(0, 15)')
         ->and($html)->toContain('expandGap(0)')
-        ->and($html)->toContain('24')
-        ->and($html)->toContain('hidden lines');
+        ->and($html)->toContain('24 hidden lines')
+        // Gap index 0 is a real anchor, not a falsy no-op.
+        ->and($html)->toContain('data-expand-gap="0"')
+        ->and($html)->toContain('armExpandRefocus($event, 0)');
 });
 
 test('tiered expand buttons render for trailing gap larger than 15 lines', function () {
@@ -408,7 +416,7 @@ test('exactly 15-line gap shows single expand button with no tiers', function ()
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
-    expect($html)->toContain('Expand 15 hidden lines')
+    expect($html)->toContain('15 hidden lines')
         ->and($html)->not->toContain('expandGap(1, 15)');
 });
 
@@ -432,7 +440,80 @@ test('1-line gap shows single expand button', function () {
 
     $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
 
-    expect($html)->toContain('Expand 1 hidden line')
-        ->and($html)->not->toContain('Expand 1 hidden lines')
+    expect($html)->toContain('1 hidden line')
+        ->and($html)->not->toContain('1 hidden lines')
         ->and($html)->not->toContain('&middot;');
+});
+
+// -- Expand loading spinner settles on no-op early returns --
+
+test('expandGap settles the action when the diff is no longer cached', function () {
+    // Force diffData to hydrate null: the cached diff was evicted between the
+    // render that showed the expander and this click. expandGap hits its first
+    // guard, but must still dispatch so the client clears the optimistic spinner
+    // (and the paired runtime-diagnostics start mark isn't left orphaned).
+    Cache::forget(DiffCacheKey::for(0, $this->file['id']));
+
+    Livewire::test('diff-file', [
+        'file' => $this->file,
+        'repoPath' => '/tmp/test',
+        'projectId' => 0,
+        'fileComments' => [],
+    ])->call('expandGap', 1)
+        ->assertDispatched('rfa:diff-action-completed', action: 'expandGap');
+});
+
+test('expandGap settles the action when the full-context reload finds no diff', function () {
+    // diffData hydrates from the primed cache (has hunks -> first guard passes),
+    // but the full-context reload returns no hunks: the working tree changed under
+    // the cached diff. The keyed row morphs nothing, so expandGap must dispatch
+    // the completion event itself or the spinner stays stuck until a refresh.
+    app()->bind(LoadFileDiffAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
+        {
+            return $contextLines >= 99999 ? ['hunks' => []] : DiffFixtureFactory::diffData(path: $path);
+        }
+    });
+
+    Livewire::test('diff-file', [
+        'file' => $this->file,
+        'repoPath' => '/tmp/test',
+        'projectId' => 0,
+        'fileComments' => [],
+    ])->call('expandGap', 1)
+        ->assertDispatched('rfa:diff-action-completed', action: 'expandGap');
+});
+
+test('expandGap settles a tiered-chip expand when the reload finds no diff', function () {
+    // The tiered chips call expandGap($hunkIndex, $tier); that partial-expand arg
+    // shape must settle through the same no-op early return as the full "N hidden
+    // lines" button (expandGap($hunkIndex)), or clicking a tier leaves the spinner
+    // stuck. Guards a regression that only settles when $lineCount is null.
+    app()->bind(LoadFileDiffAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
+        {
+            return $contextLines >= 99999 ? ['hunks' => []] : DiffFixtureFactory::diffData(path: $path);
+        }
+    });
+
+    Livewire::test('diff-file', [
+        'file' => $this->file,
+        'repoPath' => '/tmp/test',
+        'projectId' => 0,
+        'fileComments' => [],
+    ])->call('expandGap', 1, 15)
+        ->assertDispatched('rfa:diff-action-completed', action: 'expandGap');
+});
+
+test('gap expand-control clears its loading spinner when the action completes', function () {
+    $diffData = DiffFixtureFactory::diffData(hunks: 2, path: 'src/Test.php');
+
+    $html = mountMultiHunkDiffFile($diffData, $this->file)->html();
+
+    // The spinner is reset by the completion event rather than the post-expand
+    // morph, so it survives the no-op early-return paths above — and is scoped to
+    // this file's id so a sibling file's expand can't clear it.
+    expect($html)->toContain('@rfa:diff-action-completed.window="if (String($event.detail.fileId) === String(fileId)) loading = false"');
 });

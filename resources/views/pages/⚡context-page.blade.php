@@ -469,7 +469,7 @@ new #[Layout('layouts.app')] class extends Component
     class="min-h-screen flex flex-col"
 >
     <x-page-header>
-        <div class="flex items-center gap-3 min-w-0">
+        <div class="flex items-center gap-2 min-w-0">
             @native
                 <livewire:project-picker :current-slug="$projectSlug" :project-name="$projectName" mode="context" />
             @else
@@ -515,15 +515,14 @@ new #[Layout('layouts.app')] class extends Component
         </x-slot:sidebar>
 
         @if(empty($contextFiles))
-            <div class="flex flex-col items-center justify-center py-24 px-8 text-center gap-3">
-                <flux:icon icon="document-magnifying-glass" variant="outline" class="size-10 text-gh-muted" />
-                <div class="font-display font-bold tracking-brutal text-lg">No context files found</div>
-                <p class="text-sm text-gh-muted max-w-md">
+            <x-empty-state icon="document-magnifying-glass">
+                <x-slot:heading>No context files found</x-slot:heading>
+                <p class="text-sm text-gh-muted leading-relaxed">
                     rfa scans for <code class="font-mono">CLAUDE.md</code> and
                     <code class="font-mono">AGENTS.md</code> across this repo. Drop one in
                     the repo root or any subdirectory and re-scan.
                 </p>
-            </div>
+            </x-empty-state>
         @else
             @foreach($contextFiles as $file)
                 <div id="{{ $file['id'] }}" class="border-b border-gh-border">

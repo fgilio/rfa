@@ -220,7 +220,12 @@ jobs:
           php artisan key:generate
           touch database/database.sqlite
           php artisan migrate:fresh --force
-          php artisan rfa:benchmark-perf --compare=/tmp/rfa-perf-baseline.json --max-regression=5 --min-absolute-ms=10 --max-memory-regression=10 --min-absolute-memory-mb=3 --max-retained-memory-regression=10 --min-absolute-retained-memory-mb=3
+          # --min-absolute-ms=15: the heaviest scenarios (e.g. review-page-100-files ~180ms)
+          # carry ~5-7ms of run-to-run median variance even on a quiet box, so the
+          # base-snapshot vs head-compare delta swings past 10ms on a contended runner. A
+          # 10ms floor sat inside that noise band and false-failed; 15ms clears it while
+          # still failing on a real regression (>15ms is >8% on the ~180ms scenario).
+          php artisan rfa:benchmark-perf --compare=/tmp/rfa-perf-baseline.json --max-regression=5 --min-absolute-ms=15 --max-memory-regression=10 --min-absolute-memory-mb=3 --max-retained-memory-regression=10 --min-absolute-retained-memory-mb=3
       - if: github.event_name != 'pull_request'
         name: Report benchmark on main
         run: php artisan rfa:benchmark-perf

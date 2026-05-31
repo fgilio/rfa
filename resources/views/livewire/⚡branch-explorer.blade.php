@@ -181,7 +181,7 @@ new class extends Component {
                     x-bind:aria-expanded="open"
                 >
                     <flux:icon icon="share" variant="outline" class="!size-3 text-gh-muted/70 group-hover:text-gh-text transition-colors" />
-                    <span class="tracking-tight">{{ $currentBranch }}</span>
+                    <span class="tracking-brutal">{{ $currentBranch }}</span>
                 </button>
             </flux:tooltip>
         </div>

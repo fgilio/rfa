@@ -87,6 +87,61 @@ test('saving comment from split view shows it inline', function () {
     $page->assertSee('split-view comment');
 });
 
+test('clicking the new side of a shifted context line anchors the form to that row', function () {
+    $this->setUpShiftedContextTestRepo();
+
+    $page = $this->visitAndLoad($this->projectUrl());
+    $page->page()->getByLabel('Switch to split view')->click();
+
+    $shiftedFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("shifted.txt"))');
+    $shiftedContextRow = $shiftedFile->locator('.diff-line[data-type="context"][data-line-old="5"][data-line-new="4"]');
+    $shiftedContextRow->waitFor();
+
+    $shiftedContextRow->locator('.diff-cell-num-new')->click();
+
+    expect($shiftedFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
+    // Selection (and therefore the form) is anchored to the clicked row itself.
+    $shiftedFile->locator('.diff-line.line-selected[data-line-old="5"][data-line-new="4"]')->waitFor();
+    expect($shiftedFile->locator('.diff-line.line-selected')->count())->toBe(1);
+});
+
+test('clicking the old side of a shifted context line anchors the form to that row, not its neighbour', function () {
+    // Old line 5 is new line 4 after the deletion. The pre-fix code anchored by
+    // new-number only, so clicking the old-side gutter landed the form on the
+    // *next* row (old 6 / new 5) instead of the row that was clicked.
+    $this->setUpShiftedContextTestRepo();
+
+    $page = $this->visitAndLoad($this->projectUrl());
+    $page->page()->getByLabel('Switch to split view')->click();
+
+    $shiftedFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("shifted.txt"))');
+    $shiftedContextRow = $shiftedFile->locator('.diff-line[data-type="context"][data-line-old="5"][data-line-new="4"]');
+    $shiftedContextRow->waitFor();
+
+    $shiftedContextRow->locator('.diff-cell-num-old')->click();
+
+    expect($shiftedFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
+    $shiftedFile->locator('.diff-line.line-selected[data-line-old="5"][data-line-new="4"]')->waitFor();
+    expect($shiftedFile->locator('.diff-line.line-selected')->count())->toBe(1);
+});
+
+test('clicking a removed line whose old number collides with a shifted new number opens exactly one form', function () {
+    // Old line 4 was deleted; the shifted context row carries new line 4. The
+    // pre-fix code matched both rows by bare line number and opened two forms.
+    $this->setUpShiftedContextTestRepo();
+
+    $page = $this->visitAndLoad($this->projectUrl());
+    $page->page()->getByLabel('Switch to split view')->click();
+
+    $shiftedFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("shifted.txt"))');
+    $removedRow = $shiftedFile->locator('.diff-line[data-type="remove"][data-line-old="4"]');
+    $removedRow->waitFor();
+
+    $removedRow->locator('.diff-cell-num-old')->click();
+
+    expect($shiftedFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
+});
+
 test('split view pairs a remove with its add on the same row', function () {
     // Regression: gutter cells used to consume the empty side of a row in
     // split mode, blocking grid-auto-flow:dense from packing rem+add together.

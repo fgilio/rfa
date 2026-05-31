@@ -1,6 +1,6 @@
-{{-- Parent Alpine scope contract: isLineInSelection(), onDragOver(), handleLineMousedown(),
+{{-- Parent Alpine scope contract: isRowInSelection(), onDragOver(), handleLineMousedown(),
      onLineContextmenu(), toggleHeadingFold(), foldedHeadings, isLineFolded(),
-     showForm, formEndLine, formSide, editingCommentId. --}}
+     shouldShowLineCommentForm(), editingCommentId. --}}
 @props([
     'line',
     'hasRemote' => false,
@@ -41,7 +41,7 @@
 <div
     class="diff-line"
     data-type="{{ $type->value }}"
-    :class="isLineSideInSelection({{ $lineNum ?? 'null' }}, @js($lineSide)) ? 'line-selected' : ''"
+    :class="isRowInSelection(@js($lineSide), {{ $oldNum ?? 'null' }}, {{ $newNum ?? 'null' }}) ? 'line-selected' : ''"
     @mouseenter="onDragOver({{ $newNum ?? 'null' }}, {{ $oldNum ?? 'null' }})"
     @if($hasRemote && $lineNum !== null) @contextmenu.prevent="onLineContextmenu($event, {{ $lineNum }}, '{{ $lineSide === 'left' ? 'old' : 'new' }}')" @endif
     @if($newNum) data-line-new="{{ $newNum }}" @endif
@@ -75,8 +75,8 @@
 </div>
 
 @if($lineNum !== null)
-    <template x-if="showForm && formEndLine === {{ $lineNum }} && formSide !== 'file' && (@js($lineSide) === 'context' || formSide === @js($lineSide))">
-        <div class="diff-fullspan" @if($ancestorJs) x-show="!isLineFolded({{ $ancestorJs }})" @endif>
+    <template x-if="shouldShowLineCommentForm(@js($lineSide), {{ $oldNum ?? 'null' }}, {{ $newNum ?? 'null' }})">
+        <div class="diff-fullspan comment-open" @if($ancestorJs) x-show="!isLineFolded({{ $ancestorJs }})" @endif>
             <x-comment-form save="submitComment" placeholder="Write a comment..." border-class="border-y" />
         </div>
     </template>

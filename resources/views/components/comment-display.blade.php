@@ -51,7 +51,7 @@
                     size="xs"
                     aria-label="Delete comment"
                     x-on:click.stop="$wire.dispatch('delete-comment', { commentId: '{{ $comment['id'] }}' })"
-                    class="hover:!text-red-400"
+                    class="hover:!text-gh-red"
                 />
             </flux:tooltip>
         </div>

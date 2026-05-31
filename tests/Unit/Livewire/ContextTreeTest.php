@@ -23,3 +23,26 @@ test('clearing every comment shows a zero state in the sidebar', fn () => Livewi
 ])
     ->dispatch('context-comment-summary-updated', summary: [])
     ->assertSet('commentSummary', []));
+
+test('single-child folder chains collapse into one breadcrumb row', function () {
+    Livewire::test('context-tree', [
+        'contextFiles' => [
+            ['id' => 'a', 'path' => 'app/Console/Commands/Pla/Db/CLAUDE.md', 'kind' => 'CLAUDE', 'isTracked' => true, 'isSymlink' => false, 'symlinkTarget' => null],
+        ],
+    ])
+        ->assertSeeHtml('app/Console/Commands/Pla/Db')
+        ->assertDontSeeHtml('>Console<')
+        ->assertDontSeeHtml('>Commands<');
+});
+
+test('folders keep separate rows where the tree actually branches', function () {
+    Livewire::test('context-tree', [
+        'contextFiles' => [
+            ['id' => 'a', 'path' => 'app/Domains/Billing/CLAUDE.md', 'kind' => 'CLAUDE', 'isTracked' => true, 'isSymlink' => false, 'symlinkTarget' => null],
+            ['id' => 'b', 'path' => 'app/Domains/Catalog/CLAUDE.md', 'kind' => 'CLAUDE', 'isTracked' => true, 'isSymlink' => false, 'symlinkTarget' => null],
+        ],
+    ])
+        ->assertSeeHtml('app/Domains')
+        ->assertSeeHtml('>Billing<')
+        ->assertSeeHtml('>Catalog<');
+});

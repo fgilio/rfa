@@ -16,6 +16,6 @@
     <div x-show="escHint" x-cloak class="text-xs text-gh-muted mt-1" data-testid="esc-hint">Press Esc again to save as draft</div>
     <div class="flex justify-end gap-2 mt-2">
         <flux:button variant="ghost" size="sm" x-on:click="cancelForm()">Cancel</flux:button>
-        <flux:button variant="primary" size="sm" color="green" x-on:click="{{ $save }}()" x-bind:disabled="!formBody.trim()">Save</flux:button>
+        <flux:button variant="primary" size="sm" x-on:click="{{ $save }}()" x-bind:disabled="!formBody.trim()">Save</flux:button>
     </div>
 </flux:card>

@@ -9,21 +9,20 @@
 {{-- Each hunk is its own subgrid so split-mode `grid-auto-flow: dense` pairs
      remove+add only within this hunk — never across hunk boundaries. --}}
 <div class="diff-hunk">
-    {{-- Gap with expand controls (or hunk header when no preceding gap). --}}
+    {{-- Gap with expand controls (or hunk section-context label when no preceding gap). --}}
     @if($hunkIndex > 0 || $hunk['newStart'] > 1)
-        <div class="diff-fullspan bg-gh-hunk-bg py-1.5 text-center text-xs border-y border-dashed border-gh-border/20">
-            @php
-                $hiddenCount = $hunkIndex > 0
-                    ? $hunk['newStart'] - ($prevHunk['newStart'] + $prevHunk['newCount'])
-                    : $hunk['newStart'] - 1;
-            @endphp
+        @php
+            $hiddenCount = $hunkIndex > 0
+                ? $hunk['newStart'] - ($prevHunk['newStart'] + $prevHunk['newCount'])
+                : $hunk['newStart'] - 1;
+        @endphp
+        <x-diff.expand-control wire:key="expand-gap-{{ $hunkIndex }}-{{ $hiddenCount }}">
             <x-tiered-expand-gap :hunk-index="$hunkIndex" :hidden-count="$hiddenCount" />
-        </div>
+        </x-diff.expand-control>
     @elseif($hunk['header'] !== '')
-        <div class="diff-fullspan bg-gh-hunk-bg px-4 py-1 text-gh-muted text-xs">
-            @@ -{{ $hunk['oldStart'] }} +{{ $hunk['newStart'] }} @@
-            <span class="text-gh-muted/60">{{ $hunk['header'] }}</span>
-        </div>
+        <x-diff.expand-control :icon="false" align="start">
+            <span class="text-gh-muted/70">{{ $hunk['header'] }}</span>
+        </x-diff.expand-control>
     @endif
 
     @foreach($hunk['lines'] as $line)
