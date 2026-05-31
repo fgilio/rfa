@@ -14,6 +14,13 @@ class AgentContextFileScannerService
 {
     private const BASENAMES = ['CLAUDE.md', 'AGENTS.md'];
 
+    /**
+     * Cap recursion depth when walking for untracked candidates, mirroring
+     * ExternalFilesService::MAX_DEPTH. Without it a pathologically deep tree
+     * could exhaust the PHP recursion stack on the synchronous Context-page scan.
+     */
+    private const MAX_SCAN_DEPTH = 8;
+
     public function __construct(
         private readonly GitProcessService $git,
         private readonly GitDiffService $gitDiffService,
@@ -181,8 +188,12 @@ class AgentContextFileScannerService
      * @param  array<string, int>  $trackedSet  Flipped paths for O(1) skip lookup.
      * @param  array<int, string>  $candidates  Mutated in place.
      */
-    private function walkForCandidates(string $repoPath, string $relDir, array $skipDirs, array $trackedSet, array &$candidates): void
+    private function walkForCandidates(string $repoPath, string $relDir, array $skipDirs, array $trackedSet, array &$candidates, int $depth = 0): void
     {
+        if ($depth > self::MAX_SCAN_DEPTH) {
+            return;
+        }
+
         $absoluteDir = $relDir === '' ? $repoPath : $repoPath.'/'.$relDir;
 
         if (! File::isDirectory($absoluteDir)) {
@@ -215,7 +226,7 @@ class AgentContextFileScannerService
                 $absolutePath = $absoluteDir.'/'.$entry;
 
                 if (is_dir($absolutePath) && ! is_link($absolutePath)) {
-                    $this->walkForCandidates($repoPath, $relPath, $skipDirs, $trackedSet, $candidates);
+                    $this->walkForCandidates($repoPath, $relPath, $skipDirs, $trackedSet, $candidates, $depth + 1);
 
                     continue;
                 }
@@ -321,10 +332,31 @@ class AgentContextFileScannerService
 
         return collect($dates)
             ->map(fn (array $pair): array => [
-                CarbonImmutable::parse($pair[1]),
-                CarbonImmutable::parse($pair[0]),
+                $this->parseGitDate($pair[1]),
+                $this->parseGitDate($pair[0]),
             ])
             ->all();
+    }
+
+    /**
+     * Parse a git author-date token defensively. An empty token must become null
+     * (not `now()`, which CarbonImmutable::parse('') silently returns and which
+     * would mislabel the file as edited just now), and a non-empty-but-unparseable
+     * token must not throw — the parse runs outside the rescue() around the git
+     * call, so an uncaught InvalidFormatException here would crash the whole
+     * Context page render.
+     */
+    private function parseGitDate(?string $value): ?CarbonImmutable
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+
+        return rescue(
+            fn (): CarbonImmutable => CarbonImmutable::parse($value),
+            rescue: null,
+            report: false,
+        );
     }
 
     private function preferOver(AgentContextFile $candidate, AgentContextFile $current): bool

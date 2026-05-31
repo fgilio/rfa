@@ -27,4 +27,52 @@ final class PathGuard
             "Invalid file path: {$path}",
         );
     }
+
+    /**
+     * Assert a repo-relative path resolves to a location *inside* the repo.
+     *
+     * `assertRelative` blocks lexical escapes (`..`, absolute, drive-rooted) but
+     * not a symlinked path component that points outside the tree — the vector
+     * behind writing through a symlink to clobber a file outside the repo. This
+     * resolves the deepest existing ancestor of the target's *parent directory*
+     * (the leaf itself may be a symlink we're about to replace, and may not exist
+     * yet on a restore) and confirms that directory stays under the repo's real
+     * path — so a symlinked intermediate component can't redirect the write out.
+     *
+     * Lenient when the repo root can't be resolved (e.g. a synthetic test path):
+     * `assertRelative` remains the guarantee in that case.
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function assertWithinRepo(string $repoPath, string $relativePath): void
+    {
+        self::assertRelative($relativePath);
+
+        $repoReal = realpath($repoPath);
+        if ($repoReal === false) {
+            return;
+        }
+
+        // Walk up from the target's parent to the deepest ancestor that exists,
+        // resolving symlinks via realpath (which also reports existence, so no raw
+        // file_exists is needed). A symlinked intermediate component resolves to
+        // its real location here, exposing an escape.
+        $ancestor = dirname($repoReal.DIRECTORY_SEPARATOR.str_replace('\\', '/', $relativePath));
+        $ancestorReal = realpath($ancestor);
+        while ($ancestorReal === false && $ancestor !== dirname($ancestor)) {
+            $ancestor = dirname($ancestor);
+            $ancestorReal = realpath($ancestor);
+        }
+
+        if ($ancestorReal === false) {
+            return;
+        }
+
+        throw_unless(
+            $ancestorReal === $repoReal
+                || str_starts_with($ancestorReal.DIRECTORY_SEPARATOR, $repoReal.DIRECTORY_SEPARATOR),
+            InvalidArgumentException::class,
+            "Path escapes the repository: {$relativePath}",
+        );
+    }
 }

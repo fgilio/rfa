@@ -50,6 +50,23 @@ test('clears cache by default', function () {
     expect(Cache::has($cacheKey))->toBeFalse();
 });
 
+test('clears the full-context cache variant too', function () {
+    File::put($this->tmpDir.'/file.txt', "changed\n");
+
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class));
+    $files = $action->handle($this->tmpDir);
+
+    $baseKey = DiffCacheKey::for($this->tmpDir, $files[0]['id']);
+    $fullContextKey = DiffCacheKey::for($this->tmpDir, $files[0]['id'], DiffTarget::workingDirectory()->contextKey().':full-context');
+    Cache::put($baseKey, 'stale-base', 60);
+    Cache::put($fullContextKey, 'stale-full', 60);
+
+    $action->handle($this->tmpDir);
+
+    expect(Cache::has($baseKey))->toBeFalse();
+    expect(Cache::has($fullContextKey))->toBeFalse();
+});
+
 test('preserves cache when clearCache is false', function () {
     File::put($this->tmpDir.'/file.txt', "changed\n");
 

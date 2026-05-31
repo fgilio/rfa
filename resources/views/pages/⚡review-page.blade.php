@@ -883,6 +883,14 @@ new #[Layout('layouts.app')] class extends Component
         $this->comments[] = $comment;
         $this->dispatchFileComments($fileId);
         $this->checkHeadDivergence();
+
+        // The new comment reaches its diff-file child via the comment-updated event
+        // (dispatchFileComments), so the parent never needs to re-render. Skipping it
+        // is the documented contract (CLAUDE.md skipRender table) and avoids a full
+        // parent render re-hydrating every diff-file child — the TooManyComponentsException
+        // hazard. Divergence transitions are surfaced by the head-divergence poller's
+        // own render path, not by piggybacking on comment writes.
+        $this->skipRender();
     }
 
     #[On('update-comment')]
@@ -1033,9 +1041,9 @@ new #[Layout('layouts.app')] class extends Component
             array_filter($this->comments, fn ($c) => $c['fileId'] !== $fileId)
         );
 
-        // Invalidate diff cache for this file
+        // Invalidate every diff-cache variant for this file (base + :full-context).
         $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
-        Cache::forget(DiffCacheKey::for($projectKey, $fileId, $this->buildDiffTarget()->contextKey()));
+        DiffCacheKey::forget($projectKey, $fileId, $this->buildDiffTarget()->contextKey());
 
         unset($this->reviewedFiles[$file['path']]);
 
@@ -1212,6 +1220,17 @@ new #[Layout('layouts.app')] class extends Component
 
         Flux::toast(variant: 'success', heading: 'Review submitted', text: $this->exportResult);
         $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
+
+        // Never drop a comment silently: if the anchor resolver couldn't place some
+        // comments against this diff, they stay in the pool and the user is told.
+        $excludedCount = count($result['excludedComments'] ?? []);
+        if ($excludedCount > 0) {
+            Flux::toast(
+                variant: 'warning',
+                heading: $excludedCount === 1 ? '1 comment not included' : "{$excludedCount} comments not included",
+                text: "Their anchor could not be placed in this diff. They're kept for a later submit.",
+            );
+        }
 
         // Only drop comments the export actually submitted; drafts and out-of-scope
         // comments (e.g. hash-anchored from another selection) stay in the pool.

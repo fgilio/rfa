@@ -61,9 +61,13 @@ final class GitRemoteParser
      */
     private function extractHostAndPath(string $remoteUrl): ?array
     {
-        // SCP-style: `git@host:owner/repo.git`. Defer to parse_url() if the path starts
-        // with `/`, otherwise this regex would mis-claim true URLs.
-        if (preg_match('#^(?:[^@\s]+@)?([^:\s/]+):([^\s]+)$#', $remoteUrl, $m) === 1
+        // SCP-style: `git@host:owner/repo.git`. This form never carries a scheme, so a
+        // `://` anywhere means it's a real URL (e.g. `ssh://git@host:2222/owner/repo`)
+        // that must go through parse_url — otherwise the regex captures the port as the
+        // first path segment (`host` + `2222/owner/repo`). Also defer when the path
+        // starts with `/`, which only a scheme'd URL produces.
+        if (! str_contains($remoteUrl, '://')
+            && preg_match('#^(?:[^@\s]+@)?([^:\s/]+):([^\s]+)$#', $remoteUrl, $m) === 1
             && ! str_contains($m[1], '/')
             && ! str_starts_with($m[2], '/')
         ) {

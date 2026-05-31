@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Exceptions\NotAGitRepositoryException;
 use App\Models\Project;
 use Native\Desktop\Dialog;
 use Native\Desktop\Facades\Alert;
+use Throwable;
 
 final readonly class OpenRepositoryDialogAction
 {
@@ -27,11 +29,20 @@ final readonly class OpenRepositoryDialogAction
 
         try {
             return $this->register->handle($path);
-        } catch (\RuntimeException) {
+        } catch (NotAGitRepositoryException) {
             Alert::new()
                 ->type('warning')
                 ->title('Not a Git Repository')
                 ->show('The selected folder is not a git repository.');
+
+            return null;
+        } catch (Throwable $e) {
+            // A real failure (e.g. a database error) — don't mislabel it as
+            // "not a git repository".
+            Alert::new()
+                ->type('warning')
+                ->title('Could Not Open Repository')
+                ->show('Something went wrong opening the repository: '.$e->getMessage());
 
             return null;
         }

@@ -58,6 +58,26 @@ test('drifted hash with recoverable snippet shifts the anchor', function () {
     expect($rows[0]['startLine'])->toBe(4);
 });
 
+test('recovered end line spans the snippet, not the original wider line range', function () {
+    // Comment was stored with start_line=2, end_line=4 (a 3-line span) but its
+    // captured snippet is only 2 lines (a row was skipped at capture). After drift
+    // the recovered end must be start + 1 (snippet length), never start + 2.
+    File::put($this->repo.'/CLAUDE.md', "x\ny\nfirst\nsecond\nz\n");
+
+    $rows = $this->action->handle($this->repo, [
+        rawCommentRow([
+            'file_content_hash' => 'stale',
+            'line_snippet' => "first\nsecond",
+            'start_line' => 2,
+            'end_line' => 4,
+        ]),
+    ]);
+
+    expect($rows[0]['anchorStatus'])->toBe(AnchorStatus::Placed->value);
+    expect($rows[0]['startLine'])->toBe(3);
+    expect($rows[0]['endLine'])->toBe(4);
+});
+
 test('drifted hash without a snippet match flips the anchor to Unplaced', function () {
     File::put($this->repo.'/CLAUDE.md', "totally rewritten\n");
 

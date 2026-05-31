@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\Comment as CommentDTO;
+use App\Enums\AnchorStatus;
 use App\Enums\CommentExportKind;
 use App\Models\Comment;
 use App\Services\CommentExporter;
@@ -24,14 +25,29 @@ final readonly class ExportContextFeedbackAction
 
     /**
      * @param  array<int, array<string, mixed>>  $comments  View-state context-file comments.
-     * @return array{md: string, clipboard: string, submittedIds: array<int, string>}
+     * @return array{md: string, clipboard: string, submittedIds: array<int, string>, excludedComments: array<int, array<string, mixed>>}
      */
     public function handle(string $repoPath, ?int $projectId, array $comments, string $globalComment): array
     {
-        $finalized = array_values(array_filter(
-            $comments,
-            fn (array $c): bool => ! ($c['isDraft'] ?? false),
-        ));
+        // Exclude drafts (intentionally held back) and any comment the anchor
+        // resolver couldn't place — exporting an unplaced comment would write a
+        // stale line number into the markdown and stamp it submitted, silently
+        // losing it. Unplaced comments stay in the pool for a later submit.
+        $finalized = [];
+        $excluded = [];
+
+        foreach ($comments as $comment) {
+            if ($comment['isDraft'] ?? false) {
+                continue;
+            }
+
+            $placed = ($comment['anchorStatus'] ?? AnchorStatus::Placed->value) === AnchorStatus::Placed->value;
+            if ($placed) {
+                $finalized[] = $comment;
+            } else {
+                $excluded[] = $comment;
+            }
+        }
 
         $commentDTOs = array_map(fn ($c) => CommentDTO::fromArray($c), $finalized);
 
@@ -55,6 +71,6 @@ final readonly class ExportContextFeedbackAction
 
         $this->ensureGitExclude->handle($repoPath);
 
-        return [...$result, 'submittedIds' => $ids];
+        return [...$result, 'submittedIds' => $ids, 'excludedComments' => $excluded];
     }
 }

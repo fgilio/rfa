@@ -415,6 +415,17 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->exportResult = $result['clipboard'];
         $this->submitted = true;
+
+        // Surface any comment whose anchor drifted past recovery instead of
+        // silently dropping it from the export.
+        $excludedCount = count($result['excludedComments'] ?? []);
+        if ($excludedCount > 0) {
+            Flux::toast(
+                variant: 'warning',
+                heading: $excludedCount === 1 ? '1 comment not included' : "{$excludedCount} comments not included",
+                text: "Their anchor could not be placed in the current file. They're kept for a later submit.",
+            );
+        }
     }
 
     public function startNewFeedback(): void

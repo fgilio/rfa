@@ -226,9 +226,24 @@ final class RuntimeDiagnosticsService
 
     private function rotateIfNeeded(string $path): void
     {
+        // RFA writes diagnostics from two processes (main: deep-link/menu/boot
+        // breadcrumbs; renderer: browser samples). Serialize rotation behind a
+        // dedicated lock file so two processes hitting the size threshold at once
+        // can't both shuffle the .1.. .N files and clobber a rotated segment.
+        $lockHandle = @fopen($path.'.lock', 'c');
+        if ($lockHandle === false) {
+            return;
+        }
+
         try {
+            if (! flock($lockHandle, LOCK_EX)) {
+                return;
+            }
+
             clearstatcache(true, $path);
 
+            // Re-check under the lock: if another process already rotated, $path is
+            // the fresh (small) file and there's nothing to do.
             if (! is_file($path) || filesize($path) < (int) config('rfa.diagnostics.max_file_bytes', 5 * 1024 * 1024)) {
                 return;
             }
@@ -251,6 +266,9 @@ final class RuntimeDiagnosticsService
             @rename($path, "{$path}.1");
         } catch (Throwable) {
             return;
+        } finally {
+            @flock($lockHandle, LOCK_UN);
+            @fclose($lockHandle);
         }
     }
 

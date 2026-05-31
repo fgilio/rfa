@@ -38,3 +38,45 @@ test('rejects path traversal', function (string $path) {
     '..',
     'foo/../bar',
 ])->throws(InvalidArgumentException::class);
+
+// -- assertWithinRepo --
+
+test('assertWithinRepo accepts a path inside the repo', function () {
+    $repo = sys_get_temp_dir().'/rfa_pathguard_'.getmypid().'_'.uniqid('', true);
+    mkdir($repo.'/sub', 0755, true);
+
+    PathGuard::assertWithinRepo($repo, 'sub/file.txt');
+    expect(true)->toBeTrue();
+
+    exec('rm -rf '.escapeshellarg($repo));
+});
+
+test('assertWithinRepo accepts a leaf that is itself a symlink (about to be replaced)', function () {
+    $repo = sys_get_temp_dir().'/rfa_pathguard_'.getmypid().'_'.uniqid('', true);
+    $outside = sys_get_temp_dir().'/rfa_pathguard_out_'.getmypid().'_'.uniqid('', true);
+    mkdir($repo, 0755, true);
+    mkdir($outside, 0755, true);
+    file_put_contents($outside.'/target.txt', 'x');
+    symlink($outside.'/target.txt', $repo.'/leaf.txt');
+
+    // The leaf escaping is fine — the writer unlinks it first. Only the parent dir matters.
+    PathGuard::assertWithinRepo($repo, 'leaf.txt');
+    expect(true)->toBeTrue();
+
+    exec('rm -rf '.escapeshellarg($repo).' '.escapeshellarg($outside));
+});
+
+test('assertWithinRepo rejects a path whose parent directory escapes via a symlink', function () {
+    $repo = sys_get_temp_dir().'/rfa_pathguard_'.getmypid().'_'.uniqid('', true);
+    $outside = sys_get_temp_dir().'/rfa_pathguard_out_'.getmypid().'_'.uniqid('', true);
+    mkdir($repo, 0755, true);
+    mkdir($outside, 0755, true);
+    symlink($outside, $repo.'/escape');
+
+    try {
+        expect(fn () => PathGuard::assertWithinRepo($repo, 'escape/x.txt'))
+            ->toThrow(InvalidArgumentException::class);
+    } finally {
+        exec('rm -rf '.escapeshellarg($repo).' '.escapeshellarg($outside));
+    }
+});

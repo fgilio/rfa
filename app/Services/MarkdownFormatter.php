@@ -54,16 +54,62 @@ class MarkdownFormatter
 
                 $contextKey = "{$comment->file}:{$comment->side->value}:{$comment->startLine}:{$comment->endLine}";
                 if (isset($diffContext[$contextKey]) && $diffContext[$contextKey] !== '') {
+                    $snippet = $diffContext[$contextKey];
+                    $fence = $this->fenceFor($snippet);
                     $md .= "{$lineRef}\n\n";
-                    $md .= "```\n{$diffContext[$contextKey]}\n```\n\n";
+                    $md .= "{$fence}\n{$snippet}\n{$fence}\n\n";
                 } elseif ($lineRef !== '') {
                     $md .= "{$lineRef}\n\n";
                 }
 
-                $md .= "{$comment->body}\n\n---\n\n";
+                $md .= $this->withClosedFences($comment->body)."\n\n---\n\n";
             }
         }
 
         return rtrim($md)."\n";
+    }
+
+    /**
+     * A code fence long enough to wrap $content without the content's own
+     * backtick runs closing it early. CommonMark requires the fence to be longer
+     * than any run of backticks inside — a snippet that itself contains a ```
+     * line (commenting on a markdown file's code block) would otherwise terminate
+     * the wrapper and leak the rest of the document.
+     */
+    private function fenceFor(string $content): string
+    {
+        preg_match_all('/`+/', $content, $matches);
+
+        $longestRun = 0;
+        foreach ($matches[0] as $run) {
+            $longestRun = max($longestRun, strlen($run));
+        }
+
+        return str_repeat('`', max(3, $longestRun + 1));
+    }
+
+    /**
+     * Close any code fence the comment body leaves open, so the `---` separator
+     * and the following comments aren't swallowed into the block. Bodies with
+     * balanced fences are returned unchanged.
+     */
+    private function withClosedFences(string $body): string
+    {
+        $openMarker = null;
+
+        foreach (explode("\n", $body) as $line) {
+            if (preg_match('/^\s*(`{3,}|~{3,})/', $line, $matches) !== 1) {
+                continue;
+            }
+
+            $marker = $matches[1][0];
+            if ($openMarker === null) {
+                $openMarker = $marker;
+            } elseif ($marker === $openMarker) {
+                $openMarker = null;
+            }
+        }
+
+        return $openMarker === null ? $body : $body."\n".str_repeat($openMarker, 3);
     }
 }

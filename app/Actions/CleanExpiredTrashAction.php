@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Models\TrashedFile;
-use Illuminate\Support\Facades\Storage;
 
 final readonly class CleanExpiredTrashAction
 {
@@ -16,15 +15,12 @@ final readonly class CleanExpiredTrashAction
      */
     public function handle(int $projectId): array
     {
-        // Clean expired entries (storage files first, then bulk delete)
-        $expired = TrashedFile::where('project_id', $projectId)
+        // Delete per-model (not a bulk query-builder delete) so each row's
+        // TrashedFile::deleting event fires and purges its content blob.
+        TrashedFile::where('project_id', $projectId)
             ->where('expires_at', '<', now())
-            ->get();
-
-        if ($expired->isNotEmpty()) {
-            $expired->each(fn (TrashedFile $r) => Storage::delete("trash/{$r->id}"));
-            TrashedFile::whereIn('id', $expired->pluck('id'))->delete();
-        }
+            ->get()
+            ->each(fn (TrashedFile $trashedFile) => $trashedFile->delete());
 
         // Return active entries
         return TrashedFile::where('project_id', $projectId)

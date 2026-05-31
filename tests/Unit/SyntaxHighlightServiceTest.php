@@ -61,6 +61,72 @@ test('uses Tempest for Blade hunks', function () {
         ->and($result[0]->lines[1]->highlightedContent)->toContain('hl-');
 });
 
+test('emits balanced spans per line for a multi-line comment block', function () {
+    // Tempest wraps a PHPDoc/block comment in a single span spanning all its
+    // lines; the splitter must close + reopen it so each per-line cell is balanced.
+    $hunks = [
+        new Hunk('', 1, 4, 1, 4, [
+            new DiffLine(LineType::Context, '/**', 1, 1),
+            new DiffLine(LineType::Context, ' * A doc comment spanning', 2, 2),
+            new DiffLine(LineType::Context, ' * multiple lines.', 3, 3),
+            new DiffLine(LineType::Context, ' */', 4, 4),
+        ]),
+    ];
+
+    $result = $this->service->highlightHunks($hunks, 'sample.php');
+
+    foreach ($result[0]->lines as $line) {
+        $html = $line->highlightedContent ?? '';
+        expect(substr_count($html, '<span'))->toBe(substr_count($html, '</span>'));
+    }
+});
+
+test('splitBalancedTempestHtml closes and reopens spans across newlines', function () {
+    $method = new ReflectionMethod(SyntaxHighlightService::class, 'splitBalancedTempestHtml');
+    $method->setAccessible(true);
+
+    // A span opened on line 1 and closed on line 3 (as Tempest emits for a block).
+    $html = "<span class=\"hl-comment\">/**\n * doc\n */</span>";
+    $lines = $method->invoke($this->service, $html);
+
+    expect($lines)->toHaveCount(3);
+    foreach ($lines as $line) {
+        expect(substr_count($line, '<span'))->toBe(substr_count($line, '</span>'));
+    }
+    expect($lines[0])->toContain('hl-comment');
+    expect($lines[1])->toContain('hl-comment'); // reopened on the continuation line
+});
+
+test('looksLikePhpBlock detects plain PHP statements, not just keywords', function () {
+    $method = new ReflectionMethod(SyntaxHighlightService::class, 'looksLikePhpBlock');
+    $method->setAccessible(true);
+
+    expect($method->invoke($this->service, ['$x = 1;']))->toBeTrue();
+    expect($method->invoke($this->service, ['echo "hi";']))->toBeTrue();
+    expect($method->invoke($this->service, ['class Foo {']))->toBeTrue();
+    expect($method->invoke($this->service, ['function bar(): void {']))->toBeTrue();
+    expect($method->invoke($this->service, ['namespace App\\Foo;']))->toBeTrue();
+
+    // Still recognises Blade / HTML as not-a-PHP-block.
+    expect($method->invoke($this->service, ['<div>hi</div>']))->toBeFalse();
+    expect($method->invoke($this->service, ['@if ($x)']))->toBeFalse();
+    expect($method->invoke($this->service, ['{{ $name }}']))->toBeFalse();
+});
+
+test('style map includes diff addition and deletion classes for .diff files', function () {
+    $hunks = [
+        new Hunk('', 1, 1, 1, 1, [
+            new DiffLine(LineType::Context, '+added in the patch', 1, 1),
+        ]),
+    ];
+
+    $this->service->highlightHunks($hunks, 'changes.diff');
+
+    expect($this->service->getStyleMap())
+        ->toHaveKey('hl-addition')
+        ->toHaveKey('hl-deletion');
+});
+
 test('highlights raw PHP blocks in Livewire SFC Blade files', function () {
     $hunks = [
         new Hunk('', 1, 8, 1, 8, [
