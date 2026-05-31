@@ -87,6 +87,21 @@ test('saving comment from split view shows it inline', function () {
     $page->assertSee('split-view comment');
 });
 
+test('clicking a shifted context line in split view opens exactly one comment form', function () {
+    $this->setUpShiftedContextTestRepo();
+
+    $page = $this->visitAndLoad($this->projectUrl());
+    $page->page()->getByLabel('Switch to split view')->click();
+
+    $shiftedFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("shifted.txt"))');
+    $shiftedContextRow = $shiftedFile->locator('.diff-line[data-type="context"][data-line-old="5"][data-line-new="4"]');
+    $shiftedContextRow->waitFor();
+
+    $shiftedContextRow->locator('.diff-cell-num-new')->click();
+
+    expect($shiftedFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
+});
+
 test('split view pairs a remove with its add on the same row', function () {
     // Regression: gutter cells used to consume the empty side of a row in
     // split mode, blocking grid-auto-flow:dense from packing rem+add together.

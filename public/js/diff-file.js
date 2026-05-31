@@ -56,6 +56,28 @@
         return root.querySelector(`[data-expand-gap="${gapKey}"]`);
     }
 
+    function createLinePoint(lineNumber, side) {
+        if (lineNumber == null || (side !== 'left' && side !== 'right')) return null;
+        const line = Number(lineNumber);
+        if (!Number.isFinite(line)) return null;
+
+        return { line, side };
+    }
+
+    function areLinePointsEqual(first, second) {
+        if (first == null || second == null) return first === second;
+
+        return first.line === second.line && first.side === second.side;
+    }
+
+    function rowContainsLinePoint(rowSide, oldLineNumber, newLineNumber, point) {
+        if (point == null) return false;
+        if (point.side === 'left') return oldLineNumber === point.line && (rowSide === 'left' || rowSide === 'context');
+        if (point.side === 'right') return newLineNumber === point.line && (rowSide === 'right' || rowSide === 'context');
+
+        return false;
+    }
+
     function createDiffFile({ fileId, filePath, oldPath = null, status = 'modified', isReviewed, singleFile = false }) {
         const pending = window.__rfaPendingExpandFiles;
         const wantsExpand = pending && pending.has(fileId);
@@ -72,8 +94,10 @@
             formLine: null,
             formEndLine: null,
             formSide: 'right',
+            formStartPoint: null,
+            formEndPoint: null,
             formBody: '',
-            lastClickedLine: null,
+            lastClickedPoint: null,
             showForm: false,
             editingCommentId: null,
             escHint: false,
@@ -82,7 +106,7 @@
 
             // Line-drag state
             isDragging: false,
-            dragStartLine: null,
+            dragStartPoint: null,
             dragSide: null,
 
             // Markdown heading fold state (id -> true when collapsed)
@@ -139,7 +163,9 @@
             },
 
             onLineContextmenu(event, lineNum, side) {
+                const commentSide = side === 'old' ? 'left' : 'right';
                 const inSelection = this.formLine !== null
+                    && this.formSide === commentSide
                     && lineNum >= this.formLine
                     && lineNum <= (this.formEndLine ?? this.formLine);
                 this.$dispatch('open-remote-menu', {
@@ -190,10 +216,12 @@
             handleLineMousedown(lineNum, side, event) {
                 this.autoExpandedForComment = false;
                 if (event.button !== 0) return;
-                if (event.shiftKey && this.lastClickedLine !== null) {
-                    this.formLine = Math.min(this.lastClickedLine, lineNum);
-                    this.formEndLine = Math.max(this.lastClickedLine, lineNum);
-                    this.formSide = side;
+
+                const clickedPoint = createLinePoint(lineNum, side);
+                if (clickedPoint == null) return;
+
+                if (event.shiftKey && this.lastClickedPoint?.side === clickedPoint.side) {
+                    this.setLineSelection(this.lastClickedPoint, clickedPoint);
                     this.showForm = true;
                     this.focusCommentInput();
                     return;
@@ -202,9 +230,8 @@
                 if (
                     this.showForm
                     && !this.editingCommentId
-                    && this.formSide === side
-                    && this.formLine === lineNum
-                    && this.formEndLine === lineNum
+                    && areLinePointsEqual(this.formStartPoint, clickedPoint)
+                    && areLinePointsEqual(this.formEndPoint, clickedPoint)
                     && this.formBody.trim() === ''
                 ) {
                     this.cancelForm();
@@ -218,11 +245,9 @@
                     return;
                 }
                 this.isDragging = true;
-                this.dragStartLine = lineNum;
+                this.dragStartPoint = clickedPoint;
                 this.dragSide = side;
-                this.formLine = lineNum;
-                this.formEndLine = lineNum;
-                this.formSide = side;
+                this.setLineSelection(clickedPoint, clickedPoint);
                 this.showForm = false;
 
                 this._cachedFileHeader = this.$el.querySelector('[data-testid="file-header"]');
@@ -251,10 +276,10 @@
 
             onDragOver(newLineNum, oldLineNum) {
                 if (!this.isDragging) return;
-                let lineNum = this.dragSide === 'left' ? oldLineNum : newLineNum;
-                if (lineNum === null) return;
-                this.formLine = Math.min(this.dragStartLine, lineNum);
-                this.formEndLine = Math.max(this.dragStartLine, lineNum);
+                const lineNum = this.dragSide === 'left' ? oldLineNum : newLineNum;
+                const point = createLinePoint(lineNum, this.dragSide);
+                if (point === null || this.dragStartPoint === null) return;
+                this.setLineSelection(this.dragStartPoint, point);
             },
 
             endDrag() {
@@ -262,7 +287,7 @@
                 this.stopDragTracking();
                 this._cachedFileHeader = null;
                 this.showForm = true;
-                this.lastClickedLine = this.formEndLine;
+                this.lastClickedPoint = this.formEndPoint ? { ...this.formEndPoint } : null;
                 this.focusCommentInput();
             },
 
@@ -270,8 +295,7 @@
                 this.stopDragTracking();
                 this.showForm = false;
                 this.formBody = '';
-                this.formLine = null;
-                this.formEndLine = null;
+                this.clearLineSelection();
                 this.escHint = false;
                 if (this.escTimer) { clearTimeout(this.escTimer); this.escTimer = null; }
                 this.editingCommentId = null;
@@ -293,6 +317,7 @@
                     this._onDragWindowBlur = null;
                 }
                 this.isDragging = false;
+                this.dragStartPoint = null;
             },
 
             init() {
@@ -340,17 +365,22 @@
 
             editComment(comment) {
                 this.formBody = comment.body;
-                this.formLine = comment.startLine;
-                this.formEndLine = comment.endLine;
                 this.formSide = comment.side;
+                if (comment.side === 'file') {
+                    this.clearLineSelection();
+                } else {
+                    this.setLineSelection(
+                        createLinePoint(comment.startLine, comment.side),
+                        createLinePoint(comment.endLine ?? comment.startLine, comment.side)
+                    );
+                }
                 this.editingCommentId = comment.id;
                 this.showForm = true;
                 this.focusCommentInput();
             },
 
             openFileComment() {
-                this.formLine = null;
-                this.formEndLine = null;
+                this.clearLineSelection();
                 this.formSide = 'file';
                 this.showForm = true;
 
@@ -382,6 +412,31 @@
             _extractLineSnippet(side, startLine, endLine) {
                 const root = this.$el.closest(`[data-file-id="${this.fileId}"]`) ?? this.$el;
                 return extractLineSnippet({ root, side, startLine, endLine });
+            },
+
+            setLineSelection(startPoint, endPoint = startPoint) {
+                if (startPoint == null) {
+                    this.clearLineSelection();
+                    return;
+                }
+
+                const rangeEndPoint = endPoint?.side === startPoint.side ? endPoint : startPoint;
+                const [start, end] = startPoint.line <= rangeEndPoint.line
+                    ? [startPoint, rangeEndPoint]
+                    : [rangeEndPoint, startPoint];
+
+                this.formStartPoint = { ...start };
+                this.formEndPoint = { ...end };
+                this.formSide = start.side;
+                this.formLine = start.line;
+                this.formEndLine = end.line;
+            },
+
+            clearLineSelection() {
+                this.formStartPoint = null;
+                this.formEndPoint = null;
+                this.formLine = null;
+                this.formEndLine = null;
             },
 
             _ensureScrollLoop() {
@@ -444,10 +499,10 @@
                 const lineNum = this.dragSide === 'left'
                     ? (row.dataset.lineOld ? parseInt(row.dataset.lineOld) : null)
                     : (row.dataset.lineNew ? parseInt(row.dataset.lineNew) : null);
-                if (lineNum === null) return;
+                const point = createLinePoint(lineNum, this.dragSide);
+                if (point === null || this.dragStartPoint === null) return;
 
-                this.formLine = Math.min(this.dragStartLine, lineNum);
-                this.formEndLine = Math.max(this.dragStartLine, lineNum);
+                this.setLineSelection(this.dragStartPoint, point);
             },
 
             isLineInSelection(lineNum) {
@@ -456,14 +511,18 @@
                 return lineNum >= this.formLine && lineNum <= (this.formEndLine ?? this.formLine);
             },
 
-            // In split mode, remove and add rows live side-by-side and their
-            // line numbers can overlap; only highlight the side that owns the
-            // current selection. Context rows span both sides, so they match
-            // whichever side the drag started on.
-            isLineSideInSelection(lineNum, side) {
-                if (lineNum === null) return false;
-                if (side !== 'context' && this.formSide !== side) return false;
+            isRowInSelection(rowSide, oldLineNum, newLineNum) {
+                if (this.formSide === 'file') return false;
+                if (!this.showForm && !this.isDragging) return false;
+
+                const lineNum = this.formSide === 'left' ? oldLineNum : newLineNum;
                 return this.isLineInSelection(lineNum);
+            },
+
+            shouldShowLineCommentForm(rowSide, oldLineNum, newLineNum) {
+                if (!this.showForm || this.formSide === 'file') return false;
+
+                return rowContainsLinePoint(rowSide, oldLineNum, newLineNum, this.formEndPoint);
             },
 
             onReviewedChange() {
@@ -489,5 +548,15 @@
         }
     }
 
-    return { getScrollSpeed, extractLineSnippet, expanderToRefocus, createDiffFile, install, autoInstall };
+    return {
+        getScrollSpeed,
+        extractLineSnippet,
+        expanderToRefocus,
+        createLinePoint,
+        areLinePointsEqual,
+        rowContainsLinePoint,
+        createDiffFile,
+        install,
+        autoInstall,
+    };
 });

@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import diffFile from '../../public/js/diff-file.js';
 
-const { getScrollSpeed, extractLineSnippet, expanderToRefocus, createDiffFile, install } = diffFile;
+const {
+    getScrollSpeed,
+    extractLineSnippet,
+    expanderToRefocus,
+    createLinePoint,
+    areLinePointsEqual,
+    rowContainsLinePoint,
+    createDiffFile,
+    install,
+} = diffFile;
 
 describe('getScrollSpeed', () => {
     // Coherent fixture: viewport 800px tall, sticky header consumes 50px,
@@ -164,6 +173,79 @@ describe('extractLineSnippet', () => {
         const result = extractLineSnippet({ root: wsRoot, side: 'left', startLine: 1, endLine: 2 });
         // Interior whitespace preserved; trailing whitespace on the last line trimmed.
         expect(result).toBe('has   interior   spaces\ntrailing on last line');
+    });
+});
+
+describe('line comment anchors', () => {
+    it('creates only left and right line points', () => {
+        expect(createLinePoint(12, 'left')).toEqual({ line: 12, side: 'left' });
+        expect(createLinePoint(12, 'right')).toEqual({ line: 12, side: 'right' });
+        expect(createLinePoint(null, 'right')).toBeNull();
+        expect(createLinePoint(12, 'file')).toBeNull();
+    });
+
+    it('compares line points by side and line number', () => {
+        expect(areLinePointsEqual(
+            { line: 12, side: 'right' },
+            { line: 12, side: 'right' },
+        )).toBe(true);
+
+        expect(areLinePointsEqual(
+            { line: 12, side: 'right' },
+            { line: 12, side: 'left' },
+        )).toBe(false);
+    });
+
+    it('matches context rows with side-specific old and new coordinates', () => {
+        const contextOld191New192 = { rowSide: 'context', oldLine: 191, newLine: 192 };
+
+        expect(rowContainsLinePoint(
+            contextOld191New192.rowSide,
+            contextOld191New192.oldLine,
+            contextOld191New192.newLine,
+            { side: 'right', line: 192 },
+        )).toBe(true);
+
+        expect(rowContainsLinePoint(
+            contextOld191New192.rowSide,
+            contextOld191New192.oldLine,
+            contextOld191New192.newLine,
+            { side: 'left', line: 192 },
+        )).toBe(false);
+
+        expect(rowContainsLinePoint(
+            contextOld191New192.rowSide,
+            contextOld191New192.oldLine,
+            contextOld191New192.newLine,
+            { side: 'left', line: 191 },
+        )).toBe(true);
+
+        expect(rowContainsLinePoint(
+            'left',
+            192,
+            null,
+            { side: 'right', line: 192 },
+        )).toBe(false);
+    });
+
+    it('renders the form only on the row containing the selected side coordinate', () => {
+        globalThis.Alpine = { store: () => ({ collapseAll: false }) };
+
+        const component = createDiffFile({
+            fileId: 'file-1',
+            filePath: 'app/Service.php',
+            isReviewed: false,
+        });
+
+        component.setLineSelection({ side: 'right', line: 192 });
+        component.showForm = true;
+
+        expect(component.shouldShowLineCommentForm('context', 191, 192)).toBe(true);
+        expect(component.shouldShowLineCommentForm('left', 192, null)).toBe(false);
+        expect(component.isRowInSelection('context', 191, 192)).toBe(true);
+        expect(component.isRowInSelection('left', 192, null)).toBe(false);
+
+        delete globalThis.Alpine;
     });
 });
 

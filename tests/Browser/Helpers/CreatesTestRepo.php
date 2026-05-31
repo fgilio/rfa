@@ -138,6 +138,26 @@ trait CreatesTestRepo
         $this->registerTestProject($this->testRepoPath);
     }
 
+    protected function setUpShiftedContextTestRepo(): void
+    {
+        $this->testRepoPath = $this->makeTempRepoPath();
+
+        $lines = array_map(fn (int $line): string => "line{$line}", range(1, 8));
+        File::put($this->testRepoPath.'/shifted.txt', implode("\n", $lines)."\n");
+
+        $this->initTestRepo($this->testRepoPath);
+        $this->commitTestRepo($this->testRepoPath, 'Initial commit');
+
+        $this->assertHeadExists();
+
+        // Delete old line 4 so the later context row has old line 5 and new
+        // line 4. This catches line-only anchoring in split diff comments.
+        array_splice($lines, 3, 1);
+        File::put($this->testRepoPath.'/shifted.txt', implode("\n", $lines)."\n");
+
+        $this->registerTestProject($this->testRepoPath);
+    }
+
     protected function setUpCommitHistoryRepo(): void
     {
         $this->testRepoPath = $this->makeTempRepoPath();
