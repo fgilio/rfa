@@ -37,13 +37,16 @@ test('global comment persists after page reload', function () {
 
             window.__globalCommentPendingCommits++;
 
-            const done = () => {
+            // Only a SUCCESSFUL commit proves the value persisted. A failed commit must
+            // NOT satisfy the wait — otherwise it masks the real failure behind a refresh
+            // and a confusing value mismatch instead of a clear timeout.
+            succeed(() => {
                 window.__globalCommentPendingCommits--;
                 window.__globalCommentPersisted = true;
-            };
-
-            succeed(done);
-            fail(done);
+            });
+            fail(() => {
+                window.__globalCommentPendingCommits--;
+            });
         });
 
         Livewire.find(wireId).set('globalComment', 'Global persisted note');
@@ -71,13 +74,15 @@ test('reviewed files persist after page reload', function () {
 
             window.__reviewedPendingCommits++;
 
-            const done = () => {
+            // Only a SUCCESSFUL commit proves the toggle persisted; a failed commit must
+            // not satisfy the wait (it would refresh against unsaved state).
+            succeed(() => {
                 window.__reviewedPendingCommits--;
                 window.__reviewedPersisted = true;
-            };
-
-            succeed(done);
-            fail(done);
+            });
+            fail(() => {
+                window.__reviewedPendingCommits--;
+            });
         });
     JS);
 

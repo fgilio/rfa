@@ -99,6 +99,8 @@ test('clicking the new side of a shifted context line anchors the form to that r
 
     $shiftedContextRow->locator('.diff-cell-num-new')->click();
 
+    // Wait for the Alpine-rendered form before the synchronous, non-retrying count().
+    $shiftedFile->getByPlaceholder('Write a comment', false)->first()->waitFor();
     expect($shiftedFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
     // Selection (and therefore the form) is anchored to the clicked row itself.
     $shiftedFile->locator('.diff-line.line-selected[data-line-old="5"][data-line-new="4"]')->waitFor();
@@ -120,6 +122,8 @@ test('clicking the old side of a shifted context line anchors the form to that r
 
     $shiftedContextRow->locator('.diff-cell-num-old')->click();
 
+    // Wait for the Alpine-rendered form before the synchronous, non-retrying count().
+    $shiftedFile->getByPlaceholder('Write a comment', false)->first()->waitFor();
     expect($shiftedFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
     $shiftedFile->locator('.diff-line.line-selected[data-line-old="5"][data-line-new="4"]')->waitFor();
     expect($shiftedFile->locator('.diff-line.line-selected')->count())->toBe(1);
@@ -139,6 +143,8 @@ test('clicking a removed line whose old number collides with a shifted new numbe
 
     $removedRow->locator('.diff-cell-num-old')->click();
 
+    // Wait for the Alpine-rendered form before the synchronous, non-retrying count().
+    $shiftedFile->getByPlaceholder('Write a comment', false)->first()->waitFor();
     expect($shiftedFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
 });
 
