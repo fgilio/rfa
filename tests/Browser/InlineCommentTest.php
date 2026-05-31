@@ -126,7 +126,11 @@ test('clicking line on removal row opens exactly one comment form', function () 
     // Click left-side line number on a removed row - line exists on both sides
     $helloFile->locator('.diff-line[data-type="remove"] .diff-cell-num-old')->first()->click();
 
-    // Only one comment form should render, not two
+    // The form is rendered client-side by Alpine (<template x-if>) during the reactive
+    // flush that runs AFTER the mouseup handler returns, so wait for it to appear before
+    // the synchronous count() read (count() does not auto-retry). This keeps the
+    // exact-one assertion that guards against the double-render (count == 2) regression.
+    $helloFile->getByPlaceholder('Write a comment', false)->first()->waitFor();
     expect($helloFile->getByPlaceholder('Write a comment', false)->count())->toBe(1);
 });
 

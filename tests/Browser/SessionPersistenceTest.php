@@ -19,21 +19,43 @@ test('inline comments persist after page reload', function () {
 test('global comment persists after page reload', function () {
     $page = $this->visit($this->projectUrl());
 
-    // Set global comment directly via Livewire JS API (bypasses wire:model.blur timing issues)
-    $page->script("
-        const wireId = document.querySelector('[data-testid=\"review-component\"]').getAttribute('wire:id');
+    // Set global comment directly via Livewire JS API (bypasses wire:model.blur timing issues).
+    //
+    // We hook the Livewire commit lifecycle BEFORE calling set() so we can wait for the
+    // round-trip to actually reach the server and run updatedGlobalComment() -> saveSession().
+    // networkidle is unreliable here: Livewire dispatches the commit POST on a later tick, so
+    // waitForLoadState('networkidle') can resolve in the gap before the request is even in
+    // flight, letting refresh() race the persist. Mirrors the 'reviewed files' test below.
+    $page->script(<<<'JS'
+        window.__globalCommentPersisted = false;
+        window.__globalCommentPendingCommits = 0;
+
+        const wireId = document.querySelector('[data-testid="review-component"]').getAttribute('wire:id');
+
+        Livewire.hook('commit', ({ component, succeed, fail }) => {
+            if (component.id !== wireId) return;
+
+            window.__globalCommentPendingCommits++;
+
+            const done = () => {
+                window.__globalCommentPendingCommits--;
+                window.__globalCommentPersisted = true;
+            };
+
+            succeed(done);
+            fail(done);
+        });
+
         Livewire.find(wireId).set('globalComment', 'Global persisted note');
-    ");
-    // Livewire.set() updates client state optimistically, so checking the textarea value
-    // can race the server commit. Wait for the Livewire POST to drain so saveSession()
-    // has actually persisted before we refresh.
-    $page->waitForEvent('networkidle');
+    JS);
+
+    $page->page()->waitForFunction('window.__globalCommentPersisted === true && window.__globalCommentPendingCommits === 0');
 
     $page->refresh();
 
     $value = $page->page()->getByPlaceholder('Overall review comment', false)->inputValue();
     expect($value)->toBe('Global persisted note');
-})->flaky();
+});
 
 test('reviewed files persist after page reload', function () {
     $page = $this->visitAndLoad($this->projectUrl());
