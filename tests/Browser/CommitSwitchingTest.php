@@ -173,7 +173,8 @@ test('escape in branch explorer filter clears input before closing panel', funct
 
     expect($filterInput->inputValue())->toBe('');
     expect($page->script("document.activeElement?.getAttribute('placeholder')"))->not->toBe('Filter branches...');
-    expect($filterInput->isVisible())->toBeTrue();
+    // Escape clears the filter but must NOT close the panel — the input stays visible.
+    $filterInput->waitFor(['state' => 'visible']);
 
     $page->page()->locator('body')->press('Escape');
     $filterInput->waitFor(['state' => 'hidden']);

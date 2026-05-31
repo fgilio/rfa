@@ -73,7 +73,10 @@ test('clicking the copy button on a drawer row does not navigate away', function
     $page->page()->locator('[data-testid="overlay-panel-comments-drawer"]')
         ->getByLabel('Copy comment')->first()->click();
 
-    expect($page->page()->locator('[data-testid="overlay-panel-comments-drawer"]')->isVisible())->toBeTrue();
+    // Copying a row must NOT close the drawer (the copy button stops propagation),
+    // so the panel stays visible. A regression that let the click bubble to the row's
+    // select()->close() would hide it synchronously, and this wait would then time out.
+    $page->page()->locator('[data-testid="overlay-panel-comments-drawer"]')->waitFor(['state' => 'visible']);
 });
 
 test('the drawer filter narrows the visible comments', function () {
