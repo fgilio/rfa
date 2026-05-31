@@ -46,8 +46,6 @@
     @if($hasRemote && $lineNum !== null) @contextmenu.prevent="onLineContextmenu($event, {{ $lineNum }}, '{{ $lineSide === 'left' ? 'old' : 'new' }}')" @endif
     @if($newNum) data-line-new="{{ $newNum }}" @endif
     @if($oldNum) data-line-old="{{ $oldNum }}" @endif
-    @if($newNum) data-anchor-right="right:{{ $newNum }}" @endif
-    @if($oldNum) data-anchor-left="left:{{ $oldNum }}" @endif
     @if($ancestorJs) x-show="!isLineFolded({{ $ancestorJs }})" @endif
 >
     <div @if($oldNum && ! $newNum) data-testid="diff-line-number" @endif class="diff-cell diff-cell-num diff-cell-num-old {{ $bgClass }} {{ $oldNumBgClass }}"
