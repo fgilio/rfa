@@ -2,6 +2,7 @@
 
 use App\DTOs\DiffLine;
 use App\DTOs\FileDiff;
+use App\DTOs\FileSourceSpec;
 use App\DTOs\Hunk;
 use App\Enums\LineType;
 use Faker\Factory as Faker;
@@ -31,7 +32,7 @@ test('toArray returns all expected keys', function () {
 
     $result = $fileDiff->toArray();
 
-    expect($result)->toHaveKeys(['path', 'status', 'oldPath', 'hunks', 'additions', 'deletions', 'isBinary'])
+    expect($result)->toHaveKeys(['path', 'status', 'oldPath', 'hunks', 'additions', 'deletions', 'isBinary', 'oldSource', 'newSource'])
         ->and($result['path'])->toBe($path)
         ->and($result['status'])->toBe('modified')
         ->and($result['oldPath'])->toBeNull()
@@ -41,7 +42,9 @@ test('toArray returns all expected keys', function () {
         ->and($result['hunks'][0]['lines'][0])->toBe($lines[0]->toArray())
         ->and($result['additions'])->toBe(1)
         ->and($result['deletions'])->toBe(0)
-        ->and($result['isBinary'])->toBeFalse();
+        ->and($result['isBinary'])->toBeFalse()
+        ->and($result['oldSource'])->toBeNull()
+        ->and($result['newSource'])->toBeNull();
 });
 
 test('toArray handles empty hunks', function () {
@@ -55,7 +58,9 @@ test('toArray handles empty hunks', function () {
 });
 
 test('withHunks returns new instance with replaced hunks', function () {
-    $original = new FileDiff('f.php', 'modified', null, [], 1, 0);
+    $oldSource = FileSourceSpec::git('HEAD', 'f.php');
+    $newSource = FileSourceSpec::working('f.php');
+    $original = new FileDiff('f.php', 'modified', null, [], 1, 0, oldSource: $oldSource, newSource: $newSource);
     $newHunks = [new Hunk('fn()', 1, 1, 1, 1, [new DiffLine(LineType::Add, 'new', null, 1)])];
 
     $updated = $original->withHunks($newHunks);
@@ -63,7 +68,23 @@ test('withHunks returns new instance with replaced hunks', function () {
     expect($updated)->not->toBe($original)
         ->and($updated->hunks)->toBe($newHunks)
         ->and($updated->path)->toBe('f.php')
-        ->and($updated->additions)->toBe(1);
+        ->and($updated->additions)->toBe(1)
+        ->and($updated->oldSource)->toBe($oldSource)
+        ->and($updated->newSource)->toBe($newSource);
+});
+
+test('withSourceSpecs returns new instance with source metadata', function () {
+    $oldSource = FileSourceSpec::git('HEAD', 'f.php');
+    $newSource = FileSourceSpec::working('f.php');
+    $original = new FileDiff('f.php', 'modified', null, [], 1, 0);
+
+    $updated = $original->withSourceSpecs($oldSource, $newSource);
+
+    expect($updated)->not->toBe($original)
+        ->and($updated->oldSource)->toBe($oldSource)
+        ->and($updated->newSource)->toBe($newSource)
+        ->and($updated->toArray()['oldSource'])->toBe($oldSource->toArray())
+        ->and($updated->toArray()['newSource'])->toBe($newSource->toArray());
 });
 
 test('emptyArray returns tooLarge array structure', function () {
@@ -80,7 +101,10 @@ test('emptyArray returns tooLarge array structure', function () {
         'isSymlink' => false,
         'symlinkTarget' => null,
         'tooLarge' => true,
+        'skipReason' => null,
         'syntaxHighlighter' => 'none',
+        'oldSource' => null,
+        'newSource' => null,
     ]);
 });
 
@@ -88,5 +112,23 @@ test('emptyArray returns non-tooLarge array structure', function () {
     $result = FileDiff::emptyArray('empty.php', 'added', tooLarge: false);
 
     expect($result['tooLarge'])->toBeFalse()
+        ->and($result['skipReason'])->toBeNull()
         ->and($result['status'])->toBe('added');
+});
+
+test('emptyArray preserves skipped reason', function () {
+    $result = FileDiff::emptyArray('big.php', 'modified', tooLarge: true, skipReason: 'too-large');
+
+    expect($result['tooLarge'])->toBeTrue()
+        ->and($result['skipReason'])->toBe('too-large');
+});
+
+test('emptyArray can include source specs', function () {
+    $oldSource = FileSourceSpec::git('HEAD', 'big.php');
+    $newSource = FileSourceSpec::working('big.php');
+
+    $result = FileDiff::emptyArray('big.php', 'modified', tooLarge: true, oldSource: $oldSource, newSource: $newSource);
+
+    expect($result['oldSource'])->toBe($oldSource->toArray())
+        ->and($result['newSource'])->toBe($newSource->toArray());
 });

@@ -17,6 +17,8 @@ class FileDiff
         public readonly bool $isBinary = false,
         public readonly bool $isSymlink = false,
         public readonly ?string $symlinkTarget = null,
+        public readonly ?FileSourceSpec $oldSource = null,
+        public readonly ?FileSourceSpec $newSource = null,
     ) {}
 
     /** @param Hunk[] $hunks */
@@ -32,12 +34,37 @@ class FileDiff
             isBinary: $this->isBinary,
             isSymlink: $this->isSymlink,
             symlinkTarget: $this->symlinkTarget,
+            oldSource: $this->oldSource,
+            newSource: $this->newSource,
+        );
+    }
+
+    public function withSourceSpecs(FileSourceSpec $oldSource, FileSourceSpec $newSource): self
+    {
+        return new self(
+            path: $this->path,
+            status: $this->status,
+            oldPath: $this->oldPath,
+            hunks: $this->hunks,
+            additions: $this->additions,
+            deletions: $this->deletions,
+            isBinary: $this->isBinary,
+            isSymlink: $this->isSymlink,
+            symlinkTarget: $this->symlinkTarget,
+            oldSource: $oldSource,
+            newSource: $newSource,
         );
     }
 
     /** @return array<string, mixed> */
-    public static function emptyArray(string $path, string $status, bool $tooLarge): array
-    {
+    public static function emptyArray(
+        string $path,
+        string $status,
+        bool $tooLarge,
+        ?string $skipReason = null,
+        ?FileSourceSpec $oldSource = null,
+        ?FileSourceSpec $newSource = null,
+    ): array {
         return [
             'path' => $path,
             'status' => $status,
@@ -49,11 +76,14 @@ class FileDiff
             'isSymlink' => false,
             'symlinkTarget' => null,
             'tooLarge' => $tooLarge,
+            'skipReason' => $skipReason,
             'syntaxHighlighter' => 'none',
+            'oldSource' => $oldSource?->toArray(),
+            'newSource' => $newSource?->toArray(),
         ];
     }
 
-    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, isSymlink: bool, symlinkTarget: ?string} */
+    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, isSymlink: bool, symlinkTarget: ?string, oldSource: ?array{type: string, ref: ?string, path: ?string, absolutePath: ?string}, newSource: ?array{type: string, ref: ?string, path: ?string, absolutePath: ?string}} */
     public function toArray(): array
     {
         return [
@@ -66,6 +96,8 @@ class FileDiff
             'isBinary' => $this->isBinary,
             'isSymlink' => $this->isSymlink,
             'symlinkTarget' => $this->symlinkTarget,
+            'oldSource' => $this->oldSource?->toArray(),
+            'newSource' => $this->newSource?->toArray(),
         ];
     }
 }

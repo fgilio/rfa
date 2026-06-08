@@ -10,6 +10,7 @@ class DiffLine
 {
     /**
      * @param  int[]  $headingAncestors
+     * @param  'old'|'new'|null  $moved
      */
     public function __construct(
         public readonly LineType $type,
@@ -20,6 +21,7 @@ class DiffLine
         public readonly ?int $headingLevel = null,
         public readonly ?int $headingId = null,
         public readonly array $headingAncestors = [],
+        public readonly ?string $moved = null,
     ) {}
 
     /** @return array<string, mixed> */
@@ -43,6 +45,10 @@ class DiffLine
 
         if ($this->headingAncestors !== []) {
             $array['headingAncestors'] = $this->headingAncestors;
+        }
+
+        if ($this->moved !== null) {
+            $array['moved'] = $this->moved;
         }
 
         return $array;

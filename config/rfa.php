@@ -2,7 +2,13 @@
 
 return [
     'diff_max_bytes' => env('RFA_DIFF_MAX_BYTES', 512_000),
+    'source_max_bytes' => env('RFA_SOURCE_MAX_BYTES', 1_048_576),
     'cache_ttl_hours' => env('RFA_CACHE_TTL_HOURS', 24),
+    'default_context_lines' => env('RFA_DEFAULT_CONTEXT_LINES', 3),
+    'moved_lines' => [
+        'enabled' => env('RFA_MOVED_LINES_ENABLED', false),
+        'mode' => env('RFA_MOVED_LINES_MODE', 'zebra'),
+    ],
     'github_repo' => env('RFA_GITHUB_REPO', 'fgilio/rfa'),
     'diagnostics' => [
         'enabled' => env('RFA_DIAGNOSTICS_ENABLED', true),

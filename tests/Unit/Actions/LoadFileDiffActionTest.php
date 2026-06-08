@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\LoadFileDiffAction;
+use App\Enums\GitRef;
 use App\Exceptions\GitCommandException;
 use App\Services\CsvAlignerService;
 use App\Services\DiffParser;
@@ -36,7 +37,9 @@ test('returns full DTO array for modified file', function () {
         ->and($result['tooLarge'])->toBeFalse()
         ->and($result['path'])->toBe('hello.txt')
         ->and($result['hunks'])->toHaveCount(1)
-        ->and($result['hunks'][0])->toHaveKeys(['header', 'oldStart', 'newStart', 'lines']);
+        ->and($result['hunks'][0])->toHaveKeys(['header', 'oldStart', 'newStart', 'lines'])
+        ->and($result['oldSource'])->toMatchArray(['type' => 'git', 'ref' => 'HEAD', 'path' => 'hello.txt'])
+        ->and($result['newSource'])->toMatchArray(['type' => 'git', 'ref' => GitRef::Working->value, 'path' => 'hello.txt']);
 });
 
 test('returns tooLarge true when diff exceeds limit', function () {
@@ -50,8 +53,11 @@ test('returns tooLarge true when diff exceeds limit', function () {
 
     expect($result)->toHaveKeys(['path', 'status', 'oldPath', 'hunks', 'additions', 'deletions', 'isBinary', 'tooLarge'])
         ->and($result['tooLarge'])->toBeTrue()
+        ->and($result['skipReason'])->toBe('too-large')
         ->and($result['hunks'])->toBe([])
         ->and($result['path'])->toBe('hello.txt')
+        ->and($result['oldSource'])->toMatchArray(['type' => 'git', 'ref' => 'HEAD', 'path' => 'hello.txt'])
+        ->and($result['newSource'])->toMatchArray(['type' => 'git', 'ref' => GitRef::Working->value, 'path' => 'hello.txt'])
         ->and($result['additions'])->toBe(0)
         ->and($result['deletions'])->toBe(0)
         ->and($result['isBinary'])->toBeFalse();
@@ -62,7 +68,8 @@ test('returns empty array for empty diff', function () {
     $result = $action->handle($this->tmpDir, 'nonexistent.txt', isUntracked: true);
 
     expect($result['hunks'])->toBe([])
-        ->and($result['tooLarge'])->toBeFalse();
+        ->and($result['tooLarge'])->toBeFalse()
+        ->and($result['skipReason'])->toBeNull();
 });
 
 test('handles untracked file', function () {
@@ -74,7 +81,9 @@ test('handles untracked file', function () {
     expect($result)->not->toBeNull()
         ->and($result['hunks'])->toHaveCount(1)
         ->and($result['tooLarge'])->toBeFalse()
-        ->and($result['path'])->toBe('newfile.txt');
+        ->and($result['path'])->toBe('newfile.txt')
+        ->and($result['oldSource'])->toMatchArray(['type' => 'none'])
+        ->and($result['newSource'])->toMatchArray(['type' => 'git', 'ref' => GitRef::Working->value, 'path' => 'newfile.txt']);
 });
 
 test('renamed file passes oldPath so rename detection finds the source', function () {
@@ -85,7 +94,7 @@ test('renamed file passes oldPath so rename detection finds the source', functio
     File::put($this->tmpDir.'/old.txt', $original);
     $this->commitTestRepo($this->tmpDir, 'add old.txt');
 
-    // Rename + small modification (drop one line) — staying well above 50% similarity.
+    // Rename + small modification (drop one line), staying well above 50% similarity.
     $this->runTestRepoCommand($this->tmpDir, ['git mv old.txt new.txt']);
     $modified = implode("\n", array_map(fn ($i) => "line {$i}", range(1, 19)))."\n";
     File::put($this->tmpDir.'/new.txt', $modified);
@@ -95,8 +104,23 @@ test('renamed file passes oldPath so rename detection finds the source', functio
 
     expect($result['status'])->toBe('renamed')
         ->and($result['oldPath'])->toBe('old.txt')
+        ->and($result['oldSource'])->toMatchArray(['type' => 'git', 'ref' => 'HEAD', 'path' => 'old.txt'])
+        ->and($result['newSource'])->toMatchArray(['type' => 'git', 'ref' => GitRef::Working->value, 'path' => 'new.txt'])
         ->and($result['additions'])->toBe(0)
         ->and($result['deletions'])->toBe(1);
+});
+
+test('external file diffs expose absolute source metadata', function () {
+    $externalDirectory = $this->createTempDirectory('rfa_external_source_test_');
+    $absolutePath = $externalDirectory.'/notes.md';
+    File::put($absolutePath, "# Notes\n");
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService, new CsvAlignerService, new MarkdownRegionService, app(ExternalFilesService::class));
+    $result = $action->handle($this->tmpDir, 'external/specs/notes.md', externalAbsolutePath: $absolutePath);
+
+    expect($result['status'])->toBe('added')
+        ->and($result['oldSource'])->toMatchArray(['type' => 'none'])
+        ->and($result['newSource'])->toMatchArray(['type' => 'absolute', 'absolutePath' => $absolutePath]);
 });
 
 test('without oldPath the rename diff degrades to all additions', function () {

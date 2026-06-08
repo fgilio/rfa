@@ -17,14 +17,14 @@ final class DiffCacheKey
      * same diff. The empty string is the base diff; `:full-context` is the
      * fully-expanded diff ExpandDiffGapAction pulls gap lines from. Every cache
      * variant a file can hold MUST be listed here so {@see self::forget()}
-     * invalidates all of them together — a variant missing from this list
+     * invalidates all of them together. A variant missing from this list
      * survives invalidation and serves stale content.
      */
     public const VARIANTS = ['', ':full-context'];
 
     public static function for(int|string $projectIdOrRepoPath, string $fileId, string $contextKey = self::WORKING_TREE_CONTEXT): string
     {
-        return 'rfa_diff_v9_'.hash('xxh128', $projectIdOrRepoPath.':'.$contextKey.':'.$fileId);
+        return 'rfa_diff_v10_'.hash('xxh128', $projectIdOrRepoPath.':'.$contextKey.':'.$fileId);
     }
 
     /**
@@ -56,6 +56,8 @@ final class DiffCacheKey
             && array_key_exists('gridLayout', $cached)
             && array_key_exists('lineTypesAreEnum', $cached)
             && array_key_exists('renameAware', $cached)
-            && array_key_exists('syntaxHighlighter', $cached);
+            && array_key_exists('syntaxHighlighter', $cached)
+            && array_key_exists('oldSource', $cached)
+            && array_key_exists('newSource', $cached);
     }
 }

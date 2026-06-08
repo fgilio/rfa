@@ -100,6 +100,58 @@ test('parses diff with non-standard git prefixes', function () {
     expect($files[0]->deletions)->toBe(1);
 });
 
+test('parses diff without git prefixes', function () {
+    $files = $this->parser->parse(File::get(fixture('no_prefix.diff')));
+
+    expect($files)->toHaveCount(1);
+    expect($files[0]->path)->toBe('src/no-prefix.php');
+    expect($files[0]->status)->toBe('modified');
+    expect($files[0]->additions)->toBe(1);
+    expect($files[0]->deletions)->toBe(1);
+});
+
+test('parses diff with multi-character git prefixes', function () {
+    $files = $this->parser->parse(File::get(fixture('multi_character_prefix.diff')));
+
+    expect($files)->toHaveCount(1);
+    expect($files[0]->path)->toBe('src/prefixed.php');
+    expect($files[0]->status)->toBe('modified');
+    expect($files[0]->additions)->toBe(1);
+    expect($files[0]->deletions)->toBe(1);
+});
+
+test('parses moved lines from ansi colored git diff', function () {
+    $diff = implode("\n", [
+        "\e[1mdiff --git a/file.txt b/file.txt\e[m",
+        "\e[1mindex 1aa432c..9f8af6f 100644\e[m",
+        "\e[1m--- a/file.txt\e[m",
+        "\e[1m+++ b/file.txt\e[m",
+        "\e[36m@@ -1,4 +1,4 @@\e[m",
+        " alpha\e[m",
+        "\e[1;35m-one\e[m",
+        " two\e[m",
+        "\e[1;36m+\e[m\e[1;36mone\e[m",
+        " omega\e[m",
+        '',
+    ]);
+
+    $files = $this->parser->parse($diff);
+
+    expect($files)->toHaveCount(1);
+
+    $lines = $files[0]->hunks[0]->lines;
+
+    expect($lines[1]->type)->toBe(LineType::Remove)
+        ->and($lines[1]->content)->toBe('one')
+        ->and($lines[1]->moved)->toBe('old')
+        ->and($lines[3]->type)->toBe(LineType::Add)
+        ->and($lines[3]->content)->toBe('one')
+        ->and($lines[3]->moved)->toBe('new');
+
+    expect(collect($lines)->pluck('content')->implode("\n"))->not->toContain("\e[");
+    expect($files[0]->toArray()['hunks'][0]['lines'][1]['moved'])->toBe('old');
+});
+
 test('parses multiple files in one diff', function () {
     $diff = File::get(fixture('simple.diff'))."\n".File::get(fixture('new_file.diff'));
     $files = $this->parser->parse($diff);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Enums\GitRef;
+use App\Support\PathGuard;
 
 class GitFileContentService
 {
@@ -83,11 +84,23 @@ class GitFileContentService
             return $this->contentCache[$key];
         }
 
+        if (! $this->isValidRepoPath($path)) {
+            return $this->contentCache[$key] = null;
+        }
+
         if ($ref === GitRef::Working->value) {
-            $absolute = rtrim($repoPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.$path;
-            $content = is_file($absolute) ? @file_get_contents($absolute) : false;
+            $absolute = $this->readableRepoPath($repoPath, $path);
+            $content = $absolute !== null && is_file($absolute) ? @file_get_contents($absolute) : false;
 
             return $this->contentCache[$key] = $content === false ? null : $content;
+        }
+
+        if ($ref === GitRef::Index->value) {
+            return $this->contentCache[$key] = rescue(
+                fn (): string => $this->gitProcessService->run($repoPath, ['show', ':'.$path]),
+                rescue: null,
+                report: false,
+            );
         }
 
         return $this->contentCache[$key] = rescue(
@@ -113,5 +126,23 @@ class GitFileContentService
         $content = is_file($absolutePath) ? @file_get_contents($absolutePath) : false;
 
         return $this->contentCache[$key] = $content === false ? null : $content;
+    }
+
+    private function isValidRepoPath(string $path): bool
+    {
+        return rescue(function () use ($path): bool {
+            PathGuard::assertRelative($path);
+
+            return true;
+        }, rescue: false, report: false);
+    }
+
+    private function readableRepoPath(string $repoPath, string $path): ?string
+    {
+        return rescue(
+            fn (): ?string => PathGuard::resolveWithinRepo($repoPath, $path),
+            rescue: null,
+            report: false,
+        );
     }
 }

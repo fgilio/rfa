@@ -6,6 +6,7 @@ use App\Actions\CleanExpiredTrashAction;
 use App\Actions\DeleteCommentAction;
 use App\Actions\DeleteReviewFilesAction;
 use App\Actions\DeleteTrashedFileAction;
+use App\Actions\DeriveReviewStateAction;
 use App\Actions\DiscardFileChangesAction;
 use App\Actions\ExportReviewAction;
 use App\Actions\GetCurrentHeadAction;
@@ -212,7 +213,7 @@ new #[Layout('layouts.app')] class extends Component
             $this->diffTo = $target->to();
             $this->loadCommitInfo();
         } elseif ($rangeFromWorking !== null) {
-            // Range-to-working mode: /p/{slug}/rw/{from} — commits from $from through the working tree.
+            // Range-to-working mode: /p/{slug}/rw/{from}. Commits from $from through the working tree.
             $target = app(ResolveRangeToWorkingAction::class)->handle($this->repoPath, $rangeFromWorking);
             $this->diffFrom = $target->from();
             $this->diffTo = $target->to();
@@ -250,7 +251,7 @@ new #[Layout('layouts.app')] class extends Component
 
     /**
      * Persist the (mode, kind, from, to) shape so that re-entering this
-     * project — via the picker, the home redirect, or a deep-link — puts
+     * project via the picker, the home redirect, or a deep-link puts
      * the user back on the same surface.
      *
      * Kind is derived from the arrival shape (which mount branch fired)
@@ -561,14 +562,14 @@ new #[Layout('layouts.app')] class extends Component
     /**
      * Per-file change signature used to compute `changedCount` for the
      * post-refresh toast ("Up to date" vs "N files updated"). It does NOT
-     * gate rendering — see `softRefresh`.
+     * gate rendering. See `softRefresh`.
      *
      * Uses raw mtime + byte size (not the human-readable `lastModified` /
      * `fileSize` strings), because those bucket aggressively
      * (`diffForHumans` short-form rounds to whole seconds against an
      * ever-advancing "now"; `Number::fileSize` rounds to a precision-1
      * unit) and `additions/deletions` from numstat are also too coarse on
-     * their own — in 1commit+WC and Since-base modes an in-place edit on
+     * their own. In 1commit+WC and Since-base modes an in-place edit on
      * a line already changed by some pinned commit moves neither count.
      *
      * @param  array<int, array<string, mixed>>  $files
@@ -607,7 +608,7 @@ new #[Layout('layouts.app')] class extends Component
     }
 
     /**
-     * HEAD advanced on the same branch the user is reviewing — typically
+     * HEAD advanced on the same branch the user is reviewing, typically
      * because they just committed. Reload the file list so the diff reflects
      * the new commit. Commit/range modes pin both endpoints, so a HEAD move
      * cannot affect what's shown; skip render in that case.
@@ -744,7 +745,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->autoFollowToHead($head->branch);
 
         // Only offer undo when leaving a real, still-existing target (Diverged).
-        // MissingTarget's old branch is gone — undoing would re-point at nothing.
+        // MissingTarget's old branch is gone, so undoing would re-point at nothing.
         if ($wasDiverged && $fromBranch !== '' && $fromBranch !== $head->branch) {
             $this->dispatch(
                 'undo-available',
@@ -793,7 +794,7 @@ new #[Layout('layouts.app')] class extends Component
             $this->autoFollowToHead($branch);
 
             // autoFollowToHead() aligns to the restored target, which is right for
-            // its "follow HEAD" callers — but here HEAD is still on the branch we
+            // its "follow HEAD" callers. Here HEAD is still on the branch we
             // switched away from, so the review is diverged again. Recompute now:
             // the head poller won't re-fire (HEAD's identity hasn't changed) and
             // would otherwise leave the divergence marker hidden indefinitely.
@@ -887,7 +888,7 @@ new #[Layout('layouts.app')] class extends Component
         // The new comment reaches its diff-file child via the comment-updated event
         // (dispatchFileComments), so the parent never needs to re-render. Skipping it
         // is the documented contract (CLAUDE.md skipRender table) and avoids a full
-        // parent render re-hydrating every diff-file child — the TooManyComponentsException
+        // parent render re-hydrating every diff-file child, the TooManyComponentsException
         // hazard. Divergence transitions are surfaced by the head-divergence poller's
         // own render path, not by piggybacking on comment writes.
         $this->skipRender();
@@ -1053,7 +1054,7 @@ new #[Layout('layouts.app')] class extends Component
 
         $commentCount = count($fileComments);
         $message = $commentCount > 0
-            ? 'Discarded '.basename($file['path']).' — '.$commentCount.' comment'.($commentCount === 1 ? '' : 's').' removed'
+            ? 'Discarded '.basename($file['path']).' - '.$commentCount.' comment'.($commentCount === 1 ? '' : 's').' removed'
             : 'Discarded '.basename($file['path']);
         $this->dispatch('undo-available', type: 'discard', payload: $trashRecord->id, message: $message);
         $this->dispatch('fingerprint-reset');
@@ -1159,7 +1160,7 @@ new #[Layout('layouts.app')] class extends Component
 
         $isNowReviewed = array_key_exists($filePath, $this->reviewedFiles);
         // Source-file lookup (not $this->files) so review-pair artifacts
-        // (.json/.md) never consume a slot in the "Recently reviewed" group —
+        // (.json/.md) never consume a slot in the "Recently reviewed" group.
         // that group renders from sourceFiles only.
         $fileId = collect($this->sourceFiles)->firstWhere('path', $filePath)['id'] ?? null;
 
@@ -1185,7 +1186,7 @@ new #[Layout('layouts.app')] class extends Component
 
             // Single un-mark transition uses the same broadcast as bulk undo so the
             // sidebar's reviewedFiles map and DiffFile's `reviewed` mirror flip in lockstep
-            // — callers (e.g. the "Recently reviewed" group) don't have to dual-dispatch.
+            // Callers (e.g. the "Recently reviewed" group) don't have to dual-dispatch.
             $this->dispatch('reviewed-files-reverted', fileIds: [$fileId]);
         }
 
@@ -1406,6 +1407,10 @@ new #[Layout('layouts.app')] class extends Component
 <script src="/js/diff-file.js"></script>
 @endassets
 
+@php
+    $reviewState = app(DeriveReviewStateAction::class)->handle($sourceFiles, $reviewedFiles, $activeFileId);
+@endphp
+
 <div
     data-testid="review-component"
     data-diff-refresh-token="{{ $diffRefreshToken }}"
@@ -1430,26 +1435,11 @@ new #[Layout('layouts.app')] class extends Component
             this.pendingSavesGuard?.attach();
         },
         activeFile: null,
-        reviewedFiles: @js((object) collect($sourceFiles)->filter(fn($f) => array_key_exists($f['path'], $reviewedFiles))->pluck('id')->flip()->map(fn() => true)->all()),
+        reviewedFiles: @js((object) $reviewState->reviewedFileMap),
         hideReviewed: false,
         fileFilter: '',
-        sourceFileEntries: @js(collect($sourceFiles)->map(fn($f) => ['id' => $f['id'], 'path' => $f['path']])->values()->all()),
-        filesById: @js(collect($sourceFiles)->mapWithKeys(fn($f) => [$f['id'] => [
-            'path' => $f['path'],
-            'badgeLabel' => match($f['status']) {
-                'added' => 'A',
-                'deleted' => 'D',
-                'renamed' => 'R',
-                'commented' => 'C',
-                default => 'M',
-            },
-            'badgeClass' => match($f['status']) {
-                'added' => 'text-gh-green',
-                'deleted' => 'text-gh-red',
-                'commented' => 'text-gh-muted',
-                default => 'text-gh-attention',
-            },
-        ]])->all()),
+        sourceFileEntries: @js($reviewState->sourceFileEntries),
+        filesById: @js($reviewState->filesById),
         remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '', disabled: false, disabledReason: '' },
         showRemoteMenu($event) {
             const d = $event.detail;
@@ -1498,7 +1488,7 @@ new #[Layout('layouts.app')] class extends Component
             // For new-side links we only disable when we're sure: pure working-tree
             // mode for `added`, commit/range mode for `deleted`. /rw/{from} mixes
             // working tree and committed history, so we can't tell which side a
-            // status belongs to — leave it enabled rather than mis-disable.
+            // status belongs to, so leave it enabled rather than mis-disable.
             const isWorkingTreeOnly = diffTo === null && diffFrom === 'HEAD';
             const isCommitOrRange = diffTo !== null;
             const usesNewSideRef = d.target === 'file' || d.side !== 'old';
@@ -1797,7 +1787,7 @@ new #[Layout('layouts.app')] class extends Component
                             if (!this.hasChanges) return 'Refresh · ⌘R · ⌘⇧R to hard reload';
                             const n = this.currentCount;
                             const noun = n === 1 ? 'file' : 'files';
-                            return `${n} ${noun} changed externally — click to refresh`;
+                            return `${n} ${noun} changed externally - click to refresh`;
                         },
                         init() {
                             this.check();
@@ -1946,7 +1936,7 @@ new #[Layout('layouts.app')] class extends Component
             </div>
 
         <x-slot:below>
-            <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" />
+            <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" :review-state="$reviewState" />
         </x-slot:below>
     </x-page-header>
 
@@ -2152,7 +2142,7 @@ new #[Layout('layouts.app')] class extends Component
                 {{-- No-match feedback so an active filter never leaves a blank void. --}}
                 <div x-show="fileFilter.trim() !== '' && visibleFileCount === 0" x-cloak
                      class="px-2.5 py-6 text-center text-xs text-gh-muted font-mono">
-                    No files match “<span class="text-gh-text" x-text="fileFilter"></span>”
+                    No files match "<span class="text-gh-text" x-text="fileFilter"></span>"
                 </div>
                 @if(! empty($trashedFiles))
                     <div class="border-t border-gh-border mt-3 pt-3">
@@ -2305,6 +2295,6 @@ new #[Layout('layouts.app')] class extends Component
     <x-feedback-submit-bar
         :submitted="$submitted"
         :export-result="$exportResult"
-        copy-again-tooltip="Already on your clipboard — re-copy if you've copied something else since"
+        copy-again-tooltip="Already on your clipboard - re-copy if you've copied something else since"
     />
 </div>

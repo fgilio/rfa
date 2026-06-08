@@ -36,6 +36,20 @@ test('returns files as arrays with id field', function () {
     expect($files[0]['path'])->toBe('file.txt');
 });
 
+test('loads typed changeset using existing file entries', function () {
+    File::put($this->tmpDir.'/file.txt', "changed\n");
+
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class));
+    $changeset = $action->changeset($this->tmpDir);
+
+    expect($changeset->repoPath)->toBe($this->tmpDir)
+        ->and($changeset->sourceLabel)->toBe('HEAD..working')
+        ->and($changeset->target->contextKey())->toBe('HEAD..working')
+        ->and($changeset->files)->toHaveCount(1)
+        ->and($changeset->files[0]->path)->toBe('file.txt')
+        ->and($changeset->filesToArray()[0])->toHaveKeys(['id', 'path', 'status', 'additions', 'deletions', 'isBinary', 'isUntracked']);
+});
+
 test('clears cache by default', function () {
     File::put($this->tmpDir.'/file.txt', "changed\n");
 
@@ -103,6 +117,26 @@ test('appends entries from configured external paths in working-tree mode', func
     $external = collect($files)->firstWhere('path', 'external/notes/note.md');
     expect($external['isExternal'])->toBeTrue();
     expect($external['externalAbsolutePath'])->toEndWith('/note.md');
+});
+
+test('typed changeset includes external entries in working-tree mode', function () {
+    File::put($this->tmpDir.'/file.txt', "changed\n");
+
+    $extDir = $this->createTempDirectory('rfa_changeset_ext_');
+    File::put($extDir.'/note.md', "external content\n");
+
+    $project = Project::factory()->create([
+        'path' => $this->tmpDir,
+        'git_common_dir' => $this->tmpDir.'/.git',
+        'external_paths' => [['label' => 'notes', 'path' => $extDir]],
+    ]);
+
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class));
+    $changeset = $action->changeset($this->tmpDir, projectId: $project->id);
+
+    $paths = collect($changeset->files)->pluck('path')->all();
+    expect($paths)->toContain('file.txt')
+        ->and($paths)->toContain('external/notes/note.md');
 });
 
 test('hides external entries when the diff target is an immutable commit range', function () {

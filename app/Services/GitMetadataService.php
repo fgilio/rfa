@@ -8,6 +8,7 @@ use App\DTOs\BranchEntry;
 use App\DTOs\CommitEntry;
 use App\Enums\GitRef;
 use App\Exceptions\GitCommandException;
+use App\Support\PathGuard;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 
@@ -125,14 +126,14 @@ class GitMetadataService
 
     public function getFileContent(string $repoPath, string $path, string $ref = GitRef::Working->value): ?string
     {
-        if ($this->looksLikeFlag($ref)) {
+        if ($this->looksLikeFlag($ref) || ! $this->isValidRepoPath($path)) {
             return null;
         }
 
         if ($ref === GitRef::Working->value) {
-            $fullPath = $repoPath.'/'.$path;
+            $fullPath = $this->readableRepoPath($repoPath, $path);
 
-            if (! File::isFile($fullPath)) {
+            if ($fullPath === null || ! File::isFile($fullPath)) {
                 return null;
             }
 
@@ -157,6 +158,24 @@ class GitMetadataService
 
             return null;
         }
+    }
+
+    private function isValidRepoPath(string $path): bool
+    {
+        return rescue(function () use ($path): bool {
+            PathGuard::assertRelative($path);
+
+            return true;
+        }, rescue: false, report: false);
+    }
+
+    private function readableRepoPath(string $repoPath, string $path): ?string
+    {
+        return rescue(
+            fn (): ?string => PathGuard::resolveWithinRepo($repoPath, $path),
+            rescue: null,
+            report: false,
+        );
     }
 
     public function resolveRef(string $repoPath, string $ref): ?string

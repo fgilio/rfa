@@ -150,6 +150,7 @@ class MarkdownRegionService
             headingLevel: $headingLevel,
             headingId: $headingId,
             headingAncestors: $ancestors,
+            moved: $line->moved,
         );
     }
 }

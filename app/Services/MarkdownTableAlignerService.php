@@ -136,6 +136,7 @@ class MarkdownTableAlignerService
                     content: $newContent,
                     oldLineNum: $line->oldLineNum,
                     newLineNum: $line->newLineNum,
+                    moved: $line->moved,
                 );
             }
         }
@@ -158,7 +159,7 @@ class MarkdownTableAlignerService
         $trimmed = preg_replace('/^\|/', '', $trimmed);
         $trimmed = preg_replace('/(?<!\\\\)\|$/', '', $trimmed);
 
-        // Split on unescaped pipes only — a cell may legitimately contain `\|`
+        // Split on unescaped pipes only. A cell may legitimately contain `\|`
         // (a literal pipe). Splitting on every `|` would shatter such a cell and
         // inflate the column count, corrupting the whole table group.
         $cells = array_map('trim', preg_split('/(?<!\\\\)\|/', $trimmed) ?: ['']);

@@ -13,6 +13,16 @@ class DiffParser
 {
     private const SYMLINK_MODE = '120000';
 
+    private const ANSI_SEQUENCE_PATTERN = '/\x1b\[[0-9;]*m/';
+
+    private const MOVED_OLD_MARKER = "\0rfa-moved-old\0";
+
+    private const MOVED_NEW_MARKER = "\0rfa-moved-new\0";
+
+    public function __construct(
+        private readonly PatchNormalizerService $patchNormalizer = new PatchNormalizerService,
+    ) {}
+
     public function parseSingle(string $rawDiff): ?FileDiff
     {
         return $this->parse($rawDiff)[0] ?? null;
@@ -23,6 +33,9 @@ class DiffParser
      */
     public function parse(string $rawDiff): array
     {
+        $rawDiff = $this->stripAnsiAndMarkMovedLines($rawDiff);
+        $rawDiff = $this->patchNormalizer->normalize($rawDiff);
+
         if (trim($rawDiff) === '') {
             return [];
         }
@@ -200,6 +213,8 @@ class DiffParser
         $diffLines = [];
 
         foreach ($rawLines as $raw) {
+            [$raw, $moved] = $this->takeMovedMarker($raw);
+
             if ($raw === '\ No newline at end of file') {
                 continue;
             }
@@ -217,12 +232,24 @@ class DiffParser
             $content = substr($raw, 1);
 
             match ($prefix) {
-                '+' => (function () use (&$diffLines, $content, &$newLine) {
-                    $diffLines[] = new DiffLine(LineType::Add, $content, null, $newLine);
+                '+' => (function () use (&$diffLines, $content, &$newLine, $moved) {
+                    $diffLines[] = new DiffLine(
+                        type: LineType::Add,
+                        content: $content,
+                        oldLineNum: null,
+                        newLineNum: $newLine,
+                        moved: $moved === 'new' ? $moved : null,
+                    );
                     $newLine++;
                 })(),
-                '-' => (function () use (&$diffLines, $content, &$oldLine) {
-                    $diffLines[] = new DiffLine(LineType::Remove, $content, $oldLine, null);
+                '-' => (function () use (&$diffLines, $content, &$oldLine, $moved) {
+                    $diffLines[] = new DiffLine(
+                        type: LineType::Remove,
+                        content: $content,
+                        oldLineNum: $oldLine,
+                        newLineNum: null,
+                        moved: $moved === 'old' ? $moved : null,
+                    );
                     $oldLine++;
                 })(),
                 default => (function () use (&$diffLines, $content, &$oldLine, &$newLine) {
@@ -241,5 +268,46 @@ class DiffParser
             newCount: $newCount,
             lines: $diffLines,
         );
+    }
+
+    private function stripAnsiAndMarkMovedLines(string $rawDiff): string
+    {
+        $lines = explode("\n", str_replace(["\r\n", "\r"], "\n", $rawDiff));
+
+        return implode("\n", array_map(function (string $line): string {
+            $marker = $this->movedMarkerForAnsiLine($line);
+            $strippedLine = preg_replace(self::ANSI_SEQUENCE_PATTERN, '', $line);
+
+            return $marker.($strippedLine ?? $line);
+        }, $lines));
+    }
+
+    private function movedMarkerForAnsiLine(string $line): string
+    {
+        if (preg_match('/\x1b\[(?:1;35|35;1|1;34|34;1)m-/', $line) === 1) {
+            return self::MOVED_OLD_MARKER;
+        }
+
+        if (preg_match('/\x1b\[(?:1;36|36;1|1;33|33;1)m\+/', $line) === 1) {
+            return self::MOVED_NEW_MARKER;
+        }
+
+        return '';
+    }
+
+    /**
+     * @return array{0: string, 1: 'old'|'new'|null}
+     */
+    private function takeMovedMarker(string $line): array
+    {
+        if (str_starts_with($line, self::MOVED_OLD_MARKER)) {
+            return [substr($line, strlen(self::MOVED_OLD_MARKER)), 'old'];
+        }
+
+        if (str_starts_with($line, self::MOVED_NEW_MARKER)) {
+            return [substr($line, strlen(self::MOVED_NEW_MARKER)), 'new'];
+        }
+
+        return [$line, null];
     }
 }

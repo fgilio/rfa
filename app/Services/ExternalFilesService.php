@@ -26,7 +26,12 @@ class ExternalFilesService
 
     public function __construct(
         private readonly GitDiffService $gitDiffService,
-    ) {}
+        ?ReviewConfigService $reviewConfigService = null,
+    ) {
+        $this->reviewConfigService = $reviewConfigService ?? new ReviewConfigService;
+    }
+
+    private readonly ReviewConfigService $reviewConfigService;
 
     /**
      * Build synthetic FileListEntry rows for every configured external path.
@@ -107,7 +112,7 @@ class ExternalFilesService
      */
     public function buildDiff(string $absolutePath, string $mountPath, ?int $maxBytes = null): ?string
     {
-        $maxBytes ??= (int) config('rfa.diff_max_bytes', 512_000);
+        $maxBytes ??= $this->reviewConfigService->resolve()->diffMaxBytes;
 
         return $this->gitDiffService->buildAddedFileDiff($absolutePath, $mountPath, $maxBytes);
     }
@@ -209,8 +214,8 @@ class ExternalFilesService
      * Resolve normalized rows to absolute roots ready for filesystem walking
      * (directories) or direct mounting (single files). Drops rows whose path
      * no longer exists or has changed type. Stored labels are used as-is
-     * (only sanitized) — disambiguation happens at link time so unlinking a
-     * sibling never renames a surviving mount.
+     * after sanitizing. Disambiguation happens at link time so unlinking
+     * a sibling never renames a surviving mount.
      *
      * @param  array<int, mixed>  $raw
      * @return list<array{label: string, root: string, is_file: bool}>
@@ -247,9 +252,8 @@ class ExternalFilesService
     {
         $absolutePath = $config['root'];
 
-        // Single-file mounts are explicit user choices — surface binaries (with
-        // a header-only diff) rather than silently dropping them the way folder
-        // walks do.
+        // Single-file mounts are explicit user choices. Surface binaries with a
+        // header-only diff rather than silently dropping them the way folder walks do.
         $additions = $this->streamCountLines($absolutePath);
         $isBinary = $additions === null;
 
@@ -327,7 +331,7 @@ class ExternalFilesService
      * Stream-count newlines while opportunistically detecting binary files
      * (NUL byte in the first chunk). Returns null for binaries so the caller
      * can skip them, 0 for empty/unreadable, and the line count otherwise.
-     * One disk pass per file — replaces the prior open+read+close-twice.
+     * One disk pass per file replaces the prior open+read+close-twice.
      */
     private function streamCountLines(string $absolutePath): ?int
     {

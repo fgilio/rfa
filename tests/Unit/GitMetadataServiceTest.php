@@ -272,6 +272,18 @@ test('getFileContent returns null for missing working file', function () {
     expect($this->service->getFileContent($this->tmpDir, 'nonexistent.txt'))->toBeNull();
 });
 
+test('getFileContent returns null for working tree symlink escape', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    $outside = $this->createTempDirectory('rfa_gitmetadata_outside_');
+    File::put($outside.'/secret.txt', 'outside');
+    symlink($outside.'/secret.txt', $this->tmpDir.'/escape.txt');
+
+    expect($this->service->getFileContent($this->tmpDir, 'escape.txt'))->toBeNull();
+});
+
 test('getFileContent returns null for file not in HEAD', function () {
     $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");

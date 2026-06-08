@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\Support\PathGuard;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Number;
@@ -14,10 +15,22 @@ class GitDiffService
 {
     private const SYMLINK_MODE = '120000';
 
+    private const STABLE_DIFF_OPTIONS = [
+        '--no-ext-diff',
+        '--find-renames',
+        '--src-prefix=a/',
+        '--dst-prefix=b/',
+    ];
+
     public function __construct(
         private readonly GitProcessService $git,
         private readonly IgnoreService $ignoreService,
-    ) {}
+        ?ReviewConfigService $reviewConfigService = null,
+    ) {
+        $this->reviewConfigService = $reviewConfigService ?? new ReviewConfigService;
+    }
+
+    private readonly ReviewConfigService $reviewConfigService;
 
     /** @return FileListEntry[] */
     public function getFileList(string $repoPath, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
@@ -28,13 +41,13 @@ class GitDiffService
 
         // Get status (M/A/D/R) for tracked changes
         $nameStatus = $this->git->run($repoPath, [
-            ...$target->toDiffArgs(), '--name-status', '--find-renames',
+            ...$this->diffArgs($target, ['--name-status']),
             '--', '.', ...$excludes,
         ]);
 
         // Get +/- line counts for tracked changes
         $numstat = $this->git->run($repoPath, [
-            ...$target->toDiffArgs(), '--numstat', '--find-renames',
+            ...$this->diffArgs($target, ['--numstat']),
             '--', '.', ...$excludes,
         ]);
 
@@ -100,7 +113,7 @@ class GitDiffService
                 }
 
                 $symlinkTarget = $target->isWorkingDirectory()
-                    ? $this->symlinkTarget($repoPath.'/'.$path)
+                    ? $this->symlinkTarget($repoPath, $path)
                     : null;
 
                 $isWorkingDir = $target->isWorkingDirectory();
@@ -140,9 +153,7 @@ class GitDiffService
                         continue;
                     }
 
-                    $fullPath = $repoPath.'/'.$file;
-
-                    $symlinkTarget = $this->symlinkTarget($fullPath);
+                    $symlinkTarget = $this->symlinkTarget($repoPath, $file);
                     if ($symlinkTarget !== null) {
                         $entries[] = new FileListEntry(
                             path: $file,
@@ -160,7 +171,9 @@ class GitDiffService
                         continue;
                     }
 
-                    if (! File::isFile($fullPath)) {
+                    $fullPath = $this->readableRepoPath($repoPath, $file);
+
+                    if ($fullPath === null || ! File::isFile($fullPath)) {
                         continue;
                     }
 
@@ -220,7 +233,7 @@ class GitDiffService
         $ignoreRules = $this->ignoreService->rules($repoPath);
 
         $nameStatus = $this->git->run($repoPath, [
-            'diff', 'HEAD', '--name-status', '--find-renames',
+            ...$this->diffArgs(DiffTarget::workingDirectory(), ['--name-status']),
             '--', '.', ...$excludes,
         ]);
 
@@ -267,9 +280,9 @@ class GitDiffService
             return '';
         }
 
-        $fullPath = $repoPath.'/'.$path;
+        $fullPath = $this->readableRepoPath($repoPath, $path);
 
-        if (! File::isFile($fullPath)) {
+        if ($fullPath === null || ! File::isFile($fullPath)) {
             return '';
         }
 
@@ -310,7 +323,15 @@ class GitDiffService
     public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null): ?string
     {
         $target ??= DiffTarget::workingDirectory();
-        $maxBytes ??= config('rfa.diff_max_bytes', 512_000);
+        $maxBytes ??= $this->reviewConfigService->resolve()->diffMaxBytes;
+
+        if ($this->repoPathForIdentity($repoPath, $path) === null) {
+            return '';
+        }
+
+        if ($oldPath !== null && $this->repoPathForIdentity($repoPath, $oldPath) === null) {
+            return '';
+        }
 
         if ($isUntracked && $target->isWorkingDirectory()) {
             return $this->buildUntrackedDiff($repoPath, $path, $maxBytes);
@@ -323,8 +344,7 @@ class GitDiffService
         $renamePaths = $oldPath !== null && $oldPath !== $path ? [$oldPath] : [];
 
         $raw = $this->git->run($repoPath, [
-            ...$target->toDiffArgs(),
-            '--no-color', '--no-ext-diff', "--unified={$contextLines}", '--text', '--find-renames',
+            ...$this->diffArgs($target, ["--unified={$contextLines}", '--text'], detectMovedLines: true),
             '--', $path, ...$renamePaths, ...$excludes,
         ]);
 
@@ -337,13 +357,16 @@ class GitDiffService
 
     private function buildUntrackedDiff(string $repoPath, string $path, int $maxBytes): ?string
     {
-        $fullPath = $repoPath.'/'.$path;
-
-        $symlinkTarget = $this->symlinkTarget($fullPath);
+        $symlinkTarget = $this->symlinkTarget($repoPath, $path);
         if ($symlinkTarget !== null) {
             $mode = self::SYMLINK_MODE;
 
             return "diff --git a/{$path} b/{$path}\nnew file mode {$mode}\n--- /dev/null\n+++ b/{$path}\n@@ -0,0 +1 @@\n+{$symlinkTarget}\n\\ No newline at end of file\n";
+        }
+
+        $fullPath = $this->readableRepoPath($repoPath, $path);
+        if ($fullPath === null) {
+            return '';
         }
 
         return $this->buildAddedFileDiff($fullPath, $path, $maxBytes);
@@ -395,7 +418,9 @@ class GitDiffService
         $target ??= DiffTarget::workingDirectory();
 
         if ($target->isWorkingDirectory()) {
-            return $this->countLinesInFile($repoPath.'/'.$path);
+            $fullPath = $this->readableRepoPath($repoPath, $path);
+
+            return $fullPath === null ? null : $this->countLinesInFile($fullPath);
         }
 
         $content = rescue(
@@ -432,9 +457,9 @@ class GitDiffService
 
     private function getLastModified(string $repoPath, string $path): ?string
     {
-        $fullPath = $repoPath.'/'.$path;
+        $fullPath = $this->readableRepoPath($repoPath, $path);
 
-        if (! File::isFile($fullPath)) {
+        if ($fullPath === null || ! File::isFile($fullPath)) {
             return null;
         }
 
@@ -443,9 +468,9 @@ class GitDiffService
 
     private function getHumanFileSize(string $repoPath, string $path): ?string
     {
-        $fullPath = $repoPath.'/'.$path;
+        $fullPath = $this->readableRepoPath($repoPath, $path);
 
-        if (! File::isFile($fullPath)) {
+        if ($fullPath === null || ! File::isFile($fullPath)) {
             return null;
         }
 
@@ -454,21 +479,45 @@ class GitDiffService
 
     private function getRawMtime(string $repoPath, string $path): ?int
     {
-        $fullPath = $repoPath.'/'.$path;
+        $fullPath = $this->readableRepoPath($repoPath, $path);
 
-        return File::isFile($fullPath) ? File::lastModified($fullPath) : null;
+        return $fullPath !== null && File::isFile($fullPath) ? File::lastModified($fullPath) : null;
     }
 
     private function getRawByteSize(string $repoPath, string $path): ?int
     {
-        $fullPath = $repoPath.'/'.$path;
+        $fullPath = $this->readableRepoPath($repoPath, $path);
 
-        return File::isFile($fullPath) ? File::size($fullPath) : null;
+        return $fullPath !== null && File::isFile($fullPath) ? File::size($fullPath) : null;
     }
 
-    private function symlinkTarget(string $fullPath): ?string
+    private function symlinkTarget(string $repoPath, string $path): ?string
     {
+        $fullPath = $this->repoPathForIdentity($repoPath, $path);
+
+        if ($fullPath === null) {
+            return null;
+        }
+
         return is_link($fullPath) ? readlink($fullPath) : null;
+    }
+
+    private function readableRepoPath(string $repoPath, string $path): ?string
+    {
+        return rescue(
+            fn (): ?string => PathGuard::resolveWithinRepo($repoPath, $path),
+            rescue: null,
+            report: false,
+        );
+    }
+
+    private function repoPathForIdentity(string $repoPath, string $path): ?string
+    {
+        return rescue(
+            fn (): ?string => PathGuard::resolveWithinRepo($repoPath, $path, followLeaf: false),
+            rescue: null,
+            report: false,
+        );
     }
 
     private function isBinary(string $path): bool
@@ -476,5 +525,24 @@ class GitDiffService
         $chunk = substr(File::get($path), 0, 8192);
 
         return str_contains($chunk, "\0");
+    }
+
+    /**
+     * @param  list<string>  $options
+     * @return list<string>
+     */
+    private function diffArgs(DiffTarget $target, array $options = [], bool $detectMovedLines = false): array
+    {
+        $reviewConfig = $this->reviewConfigService->resolve();
+        $colorOptions = $detectMovedLines && $reviewConfig->movedLineDetection
+            ? ['--color=always', "--color-moved={$reviewConfig->movedLineMode}"]
+            : ['--no-color'];
+
+        return [
+            ...$target->toDiffArgs(),
+            ...$colorOptions,
+            ...self::STABLE_DIFF_OPTIONS,
+            ...$options,
+        ];
     }
 }

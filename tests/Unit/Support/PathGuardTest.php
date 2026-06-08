@@ -59,7 +59,7 @@ test('assertWithinRepo accepts a leaf that is itself a symlink (about to be repl
     file_put_contents($outside.'/target.txt', 'x');
     symlink($outside.'/target.txt', $repo.'/leaf.txt');
 
-    // The leaf escaping is fine — the writer unlinks it first. Only the parent dir matters.
+    // The leaf escaping is fine because the writer unlinks it first. Only the parent dir matters.
     PathGuard::assertWithinRepo($repo, 'leaf.txt');
     expect(true)->toBeTrue();
 
@@ -76,6 +76,53 @@ test('assertWithinRepo rejects a path whose parent directory escapes via a symli
     try {
         expect(fn () => PathGuard::assertWithinRepo($repo, 'escape/x.txt'))
             ->toThrow(InvalidArgumentException::class);
+    } finally {
+        exec('rm -rf '.escapeshellarg($repo).' '.escapeshellarg($outside));
+    }
+});
+
+// -- resolveWithinRepo --
+
+test('resolveWithinRepo returns the real path for an existing in-repo file', function () {
+    $repo = sys_get_temp_dir().'/rfa_pathguard_'.getmypid().'_'.uniqid('', true);
+    mkdir($repo.'/sub', 0755, true);
+    file_put_contents($repo.'/sub/file.txt', 'x');
+
+    try {
+        expect(PathGuard::resolveWithinRepo($repo, 'sub/file.txt'))
+            ->toBe(realpath($repo.'/sub/file.txt'));
+    } finally {
+        exec('rm -rf '.escapeshellarg($repo));
+    }
+});
+
+test('resolveWithinRepo rejects a readable leaf symlink that escapes the repo', function () {
+    $repo = sys_get_temp_dir().'/rfa_pathguard_'.getmypid().'_'.uniqid('', true);
+    $outside = sys_get_temp_dir().'/rfa_pathguard_out_'.getmypid().'_'.uniqid('', true);
+    mkdir($repo, 0755, true);
+    mkdir($outside, 0755, true);
+    file_put_contents($outside.'/target.txt', 'x');
+    symlink($outside.'/target.txt', $repo.'/leaf.txt');
+
+    try {
+        expect(fn () => PathGuard::resolveWithinRepo($repo, 'leaf.txt'))
+            ->toThrow(InvalidArgumentException::class);
+    } finally {
+        exec('rm -rf '.escapeshellarg($repo).' '.escapeshellarg($outside));
+    }
+});
+
+test('resolveWithinRepo can return a leaf symlink identity without following it', function () {
+    $repo = sys_get_temp_dir().'/rfa_pathguard_'.getmypid().'_'.uniqid('', true);
+    $outside = sys_get_temp_dir().'/rfa_pathguard_out_'.getmypid().'_'.uniqid('', true);
+    mkdir($repo, 0755, true);
+    mkdir($outside, 0755, true);
+    file_put_contents($outside.'/target.txt', 'x');
+    symlink($outside.'/target.txt', $repo.'/leaf.txt');
+
+    try {
+        expect(PathGuard::resolveWithinRepo($repo, 'leaf.txt', followLeaf: false))
+            ->toBe(realpath($repo).'/leaf.txt');
     } finally {
         exec('rm -rf '.escapeshellarg($repo).' '.escapeshellarg($outside));
     }

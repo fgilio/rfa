@@ -1,9 +1,10 @@
 <?php
 
 use App\Actions\GroupReviewFilesAction;
+use App\Services\ReviewStateService;
 
 beforeEach(function () {
-    $this->action = new GroupReviewFilesAction;
+    $this->action = new GroupReviewFilesAction(new ReviewStateService);
 });
 
 test('excludes md review files and keeps source files', function () {

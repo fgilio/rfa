@@ -46,7 +46,16 @@ final readonly class BuildDiffContextAction
             }
 
             $diffData = $loaded[$fileId];
-            if (($diffData['tooLarge'] ?? false) || array_key_exists('error', $diffData)) {
+            $key = "{$comment['file']}:{$comment['side']}:{$comment['startLine']}:{$comment['endLine']}";
+
+            if (($diffData['tooLarge'] ?? false)) {
+                $reason = $diffData['skipReason'] ?? 'too-large';
+                $context[$key] = "[Diff skipped: {$reason}]";
+
+                continue;
+            }
+
+            if (array_key_exists('error', $diffData)) {
                 continue;
             }
 
@@ -55,7 +64,7 @@ final readonly class BuildDiffContextAction
             foreach ($diffData['hunks'] as $hunk) {
                 foreach ($hunk['lines'] as $line) {
                     // Use the line number for the comment's own side only. Falling back
-                    // to the other side would pull in lines absent from this side — e.g.
+                    // to the other side would pull in lines absent from this side. For example,
                     // an Add line (oldLineNum=null, newLineNum=41) would match a left-side
                     // range of old lines 40-42 and be emitted into the old-side snippet,
                     // despite having no presence on the left at all.
@@ -74,7 +83,6 @@ final readonly class BuildDiffContextAction
                 }
             }
 
-            $key = "{$comment['file']}:{$comment['side']}:{$comment['startLine']}:{$comment['endLine']}";
             $context[$key] = implode("\n", $lines);
         }
 

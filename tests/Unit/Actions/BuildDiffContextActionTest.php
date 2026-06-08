@@ -56,7 +56,7 @@ test('skips file-level comments (null startLine)', function () {
     expect($context)->toBeEmpty();
 });
 
-test('skips tooLarge files gracefully', function () {
+test('records skipped reason for tooLarge files', function () {
     File::put($this->tmpDir.'/hello.php', str_repeat("long line\n", 500));
 
     config(['rfa.diff_max_bytes' => 100]);
@@ -76,13 +76,14 @@ test('skips tooLarge files gracefully', function () {
     $action = app(BuildDiffContextAction::class);
     $context = $action->handle($this->tmpDir, $comments, $files);
 
-    expect($context)->not->toHaveKey('hello.php:right:1:1');
+    expect($context)->toHaveKey('hello.php:right:1:1');
+    expect($context['hello.php:right:1:1'])->toBe('[Diff skipped: too-large]');
 });
 
 test('left-side context excludes added lines whose new-line number lands in the old range', function () {
     // Insert a line above the commented region so old-line N and new-line N
     // diverge. An Add line at new-line 3 must NOT leak into a left-side comment
-    // anchored at old lines 3-4 — it has no presence on the old side.
+    // anchored at old lines 3-4. It has no presence on the old side.
     File::put($this->tmpDir.'/shift.php', "<?php\necho 'AAA';\necho 'BBB';\necho 'CCC';\necho 'DDD';\n");
     $this->commitTestRepo($this->tmpDir, 'base for shift');
 

@@ -71,3 +71,27 @@ test('excludes unplaced comments and reports them instead of dropping them silen
     expect($result['excludedComments'][0]['id'])->toBe('c-unplaced');
     expect(File::get($result['md']))->not->toContain('out of scope');
 });
+
+test('exports skipped diff reason for comments on tooLarge files', function () {
+    File::put($this->tmpDir.'/hello.php', str_repeat("long line\n", 500));
+    config(['rfa.diff_max_bytes' => 100]);
+
+    $fileId = 'file-'.hash('xxh128', 'hello.php');
+    $files = [['id' => $fileId, 'path' => 'hello.php', 'isUntracked' => false]];
+    $comments = [[
+        'id' => 'c-large',
+        'fileId' => $fileId,
+        'file' => 'hello.php',
+        'side' => 'right',
+        'startLine' => 1,
+        'endLine' => 1,
+        'body' => 'still review this',
+    ]];
+
+    $action = app(ExportReviewAction::class);
+    $result = $action->handle($this->tmpDir, $comments, '', $files);
+
+    $md = File::get($result['md']);
+    expect($md)->toContain('[Diff skipped: too-large]')
+        ->and($md)->toContain('still review this');
+});
