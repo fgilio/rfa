@@ -118,6 +118,57 @@ class GitFileContentService
     }
 
     /**
+     * Byte size of a file at a given ref without materializing its content,
+     * so callers can enforce size caps before reading. Mirrors the source
+     * resolution of {@see self::contentAt()}: working symlink leaves report
+     * the target string's length, git refs ask `git cat-file -s` for the
+     * blob size. Returns null when the file does not exist at that ref.
+     */
+    public function byteSizeAt(string $repoPath, string $ref, string $path): ?int
+    {
+        if (! PathGuard::isRelative($path)) {
+            return null;
+        }
+
+        if ($ref === GitRef::Working->value) {
+            $identityPath = PathGuard::tryResolveWithinRepo($repoPath, $path, followLeaf: false);
+            if ($identityPath !== null && is_link($identityPath)) {
+                $target = readlink($identityPath);
+
+                return $target === false ? null : strlen($target);
+            }
+
+            $absolute = PathGuard::tryResolveWithinRepo($repoPath, $path);
+
+            return $absolute !== null && is_file($absolute) ? $this->fileSize($absolute) : null;
+        }
+
+        $objectSpec = $ref === GitRef::Index->value ? ':'.$path : $ref.':'.$path;
+
+        return rescue(
+            fn (): int => (int) trim($this->gitProcessService->run($repoPath, ['cat-file', '-s', $objectSpec])),
+            rescue: null,
+            report: false,
+        );
+    }
+
+    /**
+     * Byte size of a file by its absolute on-disk path without reading it.
+     * Returns null when the file does not exist.
+     */
+    public function byteSizeAtAbsolute(string $absolutePath): ?int
+    {
+        return is_file($absolutePath) ? $this->fileSize($absolutePath) : null;
+    }
+
+    private function fileSize(string $absolutePath): ?int
+    {
+        $size = @filesize($absolutePath);
+
+        return $size === false ? null : $size;
+    }
+
+    /**
      * Read a file by its absolute on-disk path (for files outside any repo,
      * see {@see GitRef::External} and `Project::external_paths`). Shares the
      * same request-scoped memoization as {@see self::contentAt()}.

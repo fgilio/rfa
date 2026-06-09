@@ -86,3 +86,35 @@ test('fetch returns too large without content when source exceeds max bytes', fu
         ->and($text->byteSize)->toBe(20)
         ->and($text->skipReason)->toBe('source-too-large');
 });
+
+test('fetch skips oversized sources without reading their content', function () {
+    $contentService = Mockery::mock(GitFileContentService::class);
+    $contentService->shouldReceive('byteSizeAt')
+        ->with($this->repoPath, 'working', 'huge.bin')
+        ->once()
+        ->andReturn(5_000_000_000);
+    $contentService->shouldNotReceive('contentAt');
+    $contentService->shouldNotReceive('contentAtAbsolute');
+
+    $text = (new FileSourceService($contentService))
+        ->fetch($this->repoPath, FileSourceSpec::working('huge.bin'), maxBytes: 1_048_576);
+
+    expect($text->isTooLarge())->toBeTrue()
+        ->and($text->content)->toBeNull()
+        ->and($text->byteSize)->toBe(5_000_000_000);
+});
+
+test('fetch skips oversized absolute sources without reading their content', function () {
+    $contentService = Mockery::mock(GitFileContentService::class);
+    $contentService->shouldReceive('byteSizeAtAbsolute')
+        ->with('/mnt/huge.iso')
+        ->once()
+        ->andReturn(5_000_000_000);
+    $contentService->shouldNotReceive('contentAtAbsolute');
+
+    $text = (new FileSourceService($contentService))
+        ->fetch($this->repoPath, FileSourceSpec::absolute('/mnt/huge.iso'), maxBytes: 1_048_576);
+
+    expect($text->isTooLarge())->toBeTrue()
+        ->and($text->content)->toBeNull();
+});

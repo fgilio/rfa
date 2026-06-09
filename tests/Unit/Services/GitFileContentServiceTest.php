@@ -119,3 +119,35 @@ test('flushCache forces a second git lookup for the same (repo, ref, path)', fun
     $service->flushCache();
     $service->hashAt($this->tmpDir, $this->firstCommit, 'hello.php');
 });
+
+test('byteSizeAt reports sizes without reading content for working, index, and commit refs', function () {
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'working';\n");
+
+    expect($this->service->byteSizeAt($this->tmpDir, GitRef::Working->value, 'hello.php'))
+        ->toBe(strlen("<?php\necho 'working';\n"))
+        ->and($this->service->byteSizeAt($this->tmpDir, $this->firstCommit, 'hello.php'))
+        ->toBe(strlen("<?php\necho 'one';\n"))
+        ->and($this->service->byteSizeAt($this->tmpDir, $this->secondCommit, 'hello.php'))
+        ->toBe(strlen("<?php\necho 'two';\n"));
+});
+
+test('byteSizeAt returns null for files missing at the ref', function () {
+    expect($this->service->byteSizeAt($this->tmpDir, $this->firstCommit, 'missing.php'))->toBeNull()
+        ->and($this->service->byteSizeAt($this->tmpDir, GitRef::Working->value, 'missing.php'))->toBeNull();
+});
+
+test('byteSizeAt matches contentAt for working symlink leaves', function () {
+    symlink('hello.php', $this->tmpDir.'/link.php');
+
+    $content = $this->service->contentAt($this->tmpDir, GitRef::Working->value, 'link.php');
+
+    expect($content)->toBe('hello.php')
+        ->and($this->service->byteSizeAt($this->tmpDir, GitRef::Working->value, 'link.php'))
+        ->toBe(strlen($content));
+});
+
+test('byteSizeAtAbsolute reports the on-disk size or null when missing', function () {
+    expect($this->service->byteSizeAtAbsolute($this->tmpDir.'/hello.php'))
+        ->toBe(strlen("<?php\necho 'two';\n"))
+        ->and($this->service->byteSizeAtAbsolute($this->tmpDir.'/nope.php'))->toBeNull();
+});
