@@ -48,6 +48,8 @@ test('selected file remains valid after filtering', function () {
     $state = $this->service->derive($this->files, selectedFileId: 'file-a', fileFilter: 'guide');
 
     expect($state->visibleFiles)->toHaveCount(1)
+        ->and($state->visibleFileEntries)->toBe([['id' => 'file-c', 'path' => 'docs/Guide.md']])
+        ->and($state->visibleFileMap)->toBe(['file-c' => true])
         ->and($state->selectedFileId)->toBe('file-c')
         ->and($state->selectedFile['path'])->toBe('docs/Guide.md')
         ->and($state->previousFileId)->toBeNull()

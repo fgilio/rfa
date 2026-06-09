@@ -214,11 +214,40 @@ test('toggleReviewed still skips parent re-render after these changes', function
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
 });
 
+test('toggleReviewed renders when hide-reviewed visibility changes', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->call('hideReviewedFiles')
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php');
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeFalsy()
+        ->and($component->instance()->reviewState()->visibleFileMap)->not->toHaveKey('id-foo')
+        ->and($component->instance()->reviewState()->visibleFileMap)->toHaveKey('id-bar');
+});
+
+test('toggleReviewed renders when file filter is active', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->set('fileFilter', 'Foo')
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php');
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeFalsy()
+        ->and($component->instance()->reviewState()->reviewedFileIds)->toBe(['id-foo']);
+});
+
 test('clearRecentlyReviewed skips parent re-render', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->call('clearRecentlyReviewed');
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+});
+
+test('clearRecentlyReviewed renders while hide-reviewed group is visible', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
+        ->call('hideReviewedFiles')
+        ->call('clearRecentlyReviewed');
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeFalsy()
+        ->and($component->get('recentlyReviewedIds'))->toBe([]);
 });
 
 test('unmarkReviewed skips parent re-render to avoid 1+N child hydration', function () {

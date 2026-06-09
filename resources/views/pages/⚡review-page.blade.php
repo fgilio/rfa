@@ -9,6 +9,7 @@ use App\Actions\DeleteTrashedFileAction;
 use App\Actions\DeriveReviewStateAction;
 use App\Actions\DiscardFileChangesAction;
 use App\Actions\ExportReviewAction;
+use App\Actions\ExportReviewSnapshotAction;
 use App\Actions\GetCurrentHeadAction;
 use App\Actions\GetFileListAction;
 use App\Actions\GroupReviewFilesAction;
@@ -108,6 +109,10 @@ new #[Layout('layouts.app')] class extends Component
     public array $recentlyReviewedIds = [];
 
     public ?string $activeFileId = null;
+
+    public string $fileFilter = '';
+
+    public bool $hideReviewed = false;
 
     /** @var array<int, array<string, mixed>> */
     public array $trashedFiles = [];
@@ -1131,7 +1136,9 @@ new #[Layout('layouts.app')] class extends Component
             $this->dispatch('reviewed-files-reverted', fileIds: $revertedIds);
         }
 
-        $this->skipRender();
+        if (! $this->reviewedChangeNeedsParentRender()) {
+            $this->skipRender();
+        }
     }
 
     // endregion: Trash & Discard
@@ -1190,13 +1197,55 @@ new #[Layout('layouts.app')] class extends Component
             $this->dispatch('reviewed-files-reverted', fileIds: [$fileId]);
         }
 
-        $this->skipRender();
+        if (! $this->reviewedChangeNeedsParentRender()) {
+            $this->skipRender();
+        }
     }
 
     public function clearRecentlyReviewed(): void
     {
         $this->recentlyReviewedIds = [];
+
+        if (! $this->hideReviewed) {
+            $this->skipRender();
+        }
+    }
+
+    public function hideReviewedFiles(): void
+    {
+        $this->hideReviewed = true;
+    }
+
+    public function showAllFiles(): void
+    {
+        $this->hideReviewed = false;
+        $this->recentlyReviewedIds = [];
+    }
+
+    public function clearFileFilter(): void
+    {
+        $this->fileFilter = '';
+    }
+
+    public function selectFile(string $fileId): void
+    {
+        $this->activeFileId = $fileId;
         $this->skipRender();
+    }
+
+    public function revealFile(string $fileId): void
+    {
+        $this->activeFileId = $fileId;
+
+        if ($this->reviewState()->visibleFileMap[$fileId] ?? false) {
+            $this->skipRender();
+
+            return;
+        }
+
+        $this->fileFilter = '';
+        $this->hideReviewed = false;
+        $this->recentlyReviewedIds = [];
     }
 
     public function updatedGlobalComment(): void
@@ -1250,6 +1299,24 @@ new #[Layout('layouts.app')] class extends Component
         $affectedFileIds->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
     }
 
+    public function exportSnapshot(): void
+    {
+        $this->saveSession();
+
+        $result = app(ExportReviewSnapshotAction::class)->handle(
+            repoPath: $this->repoPath,
+            files: $this->files,
+            comments: $this->comments,
+            globalComment: $this->globalComment,
+            reviewedFiles: $this->reviewedFiles,
+            target: $this->buildDiffTarget(),
+            sourceLabel: $this->projectName !== '' ? $this->projectName : basename($this->repoPath),
+        );
+
+        Flux::toast(variant: 'success', heading: 'Snapshot exported', text: $result['json']);
+        $this->dispatch('copy-to-clipboard', text: $result['clipboard'], toast: 'Snapshot path copied');
+    }
+
     public function startNewReview(): void
     {
         $this->submitted = false;
@@ -1259,6 +1326,57 @@ new #[Layout('layouts.app')] class extends Component
     // endregion: Review State & Export
 
     // region: Computed, Helpers & Persistence
+
+    #[Computed]
+    public function reviewState(): \App\DTOs\ReviewState
+    {
+        return app(DeriveReviewStateAction::class)->handle(
+            files: $this->sourceFiles,
+            reviewedFiles: $this->reviewedFiles,
+            selectedFileId: $this->activeFileId,
+            fileFilter: $this->fileFilter,
+            hideReviewed: $this->hideReviewed,
+        );
+    }
+
+    /** @return list<array{id: string, path: string, badgeLabel: string, badgeClass: string}> */
+    #[Computed]
+    public function recentlyReviewedFiles(): array
+    {
+        $normalizedFilter = str($this->fileFilter)->trim()->lower()->toString();
+        $filesById = $this->reviewState()->filesById;
+
+        return collect($this->recentlyReviewedIds)
+            ->map(function (string $id) use ($filesById): ?array {
+                $file = $filesById[$id] ?? null;
+
+                if ($file === null) {
+                    return null;
+                }
+
+                return [
+                    'id' => $id,
+                    'path' => $file['path'],
+                    'badgeLabel' => $file['badgeLabel'],
+                    'badgeClass' => $file['badgeClass'],
+                ];
+            })
+            ->filter(function (?array $file) use ($normalizedFilter): bool {
+                if ($file === null) {
+                    return false;
+                }
+
+                return $normalizedFilter === ''
+                    || str_contains(strtolower($file['path']), $normalizedFilter);
+            })
+            ->values()
+            ->all();
+    }
+
+    private function reviewedChangeNeedsParentRender(): bool
+    {
+        return $this->hideReviewed || trim($this->fileFilter) !== '';
+    }
 
     /** @return array<string, array<int, array<string, mixed>>> */
     #[Computed]
@@ -1407,13 +1525,16 @@ new #[Layout('layouts.app')] class extends Component
 <script src="/js/diff-file.js"></script>
 @endassets
 
-@php
-    $reviewState = app(DeriveReviewStateAction::class)->handle($sourceFiles, $reviewedFiles, $activeFileId);
-@endphp
-
 <div
     data-testid="review-component"
     data-diff-refresh-token="{{ $diffRefreshToken }}"
+    data-file-filter="{{ $fileFilter }}"
+    data-hide-reviewed="{{ $hideReviewed ? '1' : '0' }}"
+    data-selected-file-id="{{ $this->reviewState->selectedFileId }}"
+    data-source-file-entries='@json($this->reviewState->sourceFileEntries)'
+    data-visible-file-entries='@json($this->reviewState->visibleFileEntries)'
+    data-visible-file-ids='@json((object) $this->reviewState->visibleFileMap)'
+    data-files-by-id='@json((object) $this->reviewState->filesById)'
     @refresh-completed.window="
         const n = $event.detail?.changedCount ?? 0;
         Flux.toast({
@@ -1434,13 +1555,34 @@ new #[Layout('layouts.app')] class extends Component
 
             this.pendingSavesGuard?.attach();
         },
-        activeFile: null,
-        reviewedFiles: @js((object) $reviewState->reviewedFileMap),
-        hideReviewed: false,
-        fileFilter: '',
-        sourceFileEntries: @js($reviewState->sourceFileEntries),
-        filesById: @js($reviewState->filesById),
+        activeFile: @js($this->reviewState->selectedFileId),
+        reviewedFiles: @js((object) $this->reviewState->reviewedFileMap),
         remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '', disabled: false, disabledReason: '' },
+        jsonData(name, fallback) {
+            try {
+                return JSON.parse(this.$root?.dataset?.[name] || '');
+            } catch (_) {
+                return fallback;
+            }
+        },
+        get fileFilter() {
+            return this.$root?.dataset?.fileFilter || '';
+        },
+        get hideReviewed() {
+            return this.$root?.dataset?.hideReviewed === '1';
+        },
+        get sourceFileEntries() {
+            return this.jsonData('sourceFileEntries', []);
+        },
+        get visibleFileEntries() {
+            return this.jsonData('visibleFileEntries', []);
+        },
+        get visibleFileIds() {
+            return this.jsonData('visibleFileIds', {});
+        },
+        get filesById() {
+            return this.jsonData('filesById', {});
+        },
         showRemoteMenu($event) {
             const d = $event.detail;
             const margin = 8;
@@ -1514,9 +1656,7 @@ new #[Layout('layouts.app')] class extends Component
             return Object.values(this.reviewedFiles).filter(Boolean).length;
         },
         fileMatchesFilter(path, fileId) {
-            if (this.fileFilter !== '' && !path.toLowerCase().includes(this.fileFilter.toLowerCase())) return false;
-            if (this.hideReviewed && this.reviewedFiles[fileId]) return false;
-            return true;
+            return Boolean(this.visibleFileIds[fileId]);
         },
         pathDir(path) {
             if (!path) return '';
@@ -1530,7 +1670,7 @@ new #[Layout('layouts.app')] class extends Component
         },
         repoPath: @js($repoPath),
         get visibleFileCount() {
-            return this.sourceFileEntries.filter(f => this.fileMatchesFilter(f.path, f.id)).length;
+            return this.visibleFileEntries.length;
         },
         buildFullPath(path) {
             const repo = this.repoPath || '';
@@ -1539,19 +1679,20 @@ new #[Layout('layouts.app')] class extends Component
         },
         scrollToFile(id) {
             this.activeFile = id;
+            $wire.selectFile(id);
             this.$dispatch('expand-file', { id });
             document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         },
-        scrollToComment(commentId, filePath) {
+        async scrollToComment(commentId, filePath) {
             const file = this.sourceFileEntries.find(f => f.path === filePath);
             if (!file) {
                 Flux.toast({ text: 'Comment is on a file not in this diff', variant: 'warning' });
                 return;
             }
             if (!this.fileMatchesFilter(file.path, file.id)) {
-                this.fileFilter = '';
-                this.hideReviewed = false;
+                await $wire.revealFile(file.id);
             }
+            this.activeFile = file.id;
             (window.__rfaPendingExpandFiles ??= new Set()).add(file.id);
             this.scrollToFile(file.id);
             clearTimeout(this.commentScrollPollId);
@@ -1587,7 +1728,7 @@ new #[Layout('layouts.app')] class extends Component
     @open-remote-menu.window="showRemoteMenu($event)"
     @keydown.window="
         if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {
-            if ($event.key === 'Escape' && !$event.target.closest('[data-comment-form]')) { fileFilter = ''; $event.target.blur(); $event.preventDefault(); }
+            if ($event.key === 'Escape' && !$event.target.closest('[data-comment-form]')) { $wire.clearFileFilter(); $event.target.blur(); $event.preventDefault(); }
             return;
         }
         if ($event.key === '/') { $refs.fileFilterInput?.focus(); $event.preventDefault(); }
@@ -1714,18 +1855,19 @@ new #[Layout('layouts.app')] class extends Component
             <div class="flex items-center gap-2 text-xs">
                 {{-- Hide reviewed toggle --}}
                 <div x-show="reviewedCount > 0" x-cloak class="grid place-items-center">
-                    <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
-                        tooltip="Hide reviewed"
-                        aria-label="Hide reviewed"
-                        class="col-start-1 row-start-1"
-                        @click="hideReviewed = true"
-                        x-show="!hideReviewed" />
-                    <flux:button variant="ghost" size="sm" icon="eye" icon:variant="outline"
-                        tooltip="Show all files"
-                        aria-label="Show all files"
-                        class="col-start-1 row-start-1"
-                        @click="hideReviewed = false; $wire.clearRecentlyReviewed()"
-                        x-show="hideReviewed" x-cloak />
+                    @if($hideReviewed)
+                        <flux:button variant="ghost" size="sm" icon="eye" icon:variant="outline"
+                            tooltip="Show all files"
+                            aria-label="Show all files"
+                            class="col-start-1 row-start-1"
+                            wire:click="showAllFiles" />
+                    @else
+                        <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
+                            tooltip="Hide reviewed"
+                            aria-label="Hide reviewed"
+                            class="col-start-1 row-start-1"
+                            wire:click="hideReviewedFiles" />
+                    @endif
                 </div>
 
                 {{-- Expand/Collapse toggle --}}
@@ -1936,7 +2078,7 @@ new #[Layout('layouts.app')] class extends Component
             </div>
 
         <x-slot:below>
-            <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" :review-state="$reviewState" />
+            <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" :review-state="$this->reviewState" />
         </x-slot:below>
     </x-page-header>
 
@@ -1991,11 +2133,15 @@ new #[Layout('layouts.app')] class extends Component
                 <div class="flex items-center justify-between mb-3">
                     <span class="section-label text-gh-muted">Files</span>
                     @if(count($sourceFiles) > 0)
-                        <x-copy-paths-button testid-prefix="sidebar-copy-paths" />
+                        <x-copy-paths-button
+                            testid-prefix="sidebar-copy-paths"
+                            :entries="$this->reviewState->visibleFileEntries"
+                            :visible-count="$this->reviewState->visibleFileCount"
+                        />
                     @endif
                 </div>
                 <flux:input
-                    x-model.debounce.150ms="fileFilter"
+                    wire:model.live.debounce.150ms="fileFilter"
                     placeholder="Filter files..."
                     icon="magnifying-glass"
                     icon:variant="outline"
@@ -2005,45 +2151,43 @@ new #[Layout('layouts.app')] class extends Component
                     variant="filled"
                     class="mb-3"
                     x-ref="fileFilterInput"
-                    @keydown.escape="fileFilter = ''; $el.blur()"
+                    @keydown.escape="$wire.clearFileFilter(); $el.blur()"
                 />
                 {{-- Recently reviewed: surfaces just-marked files in Hide-reviewed mode so the user can un-mark in place --}}
-                <template x-if="hideReviewed && $wire.recentlyReviewedIds.length">
+                @if($hideReviewed && count($this->recentlyReviewedFiles) > 0)
                     <div data-testid="recently-reviewed-group" class="mb-3">
                         <div class="flex items-center justify-between mb-2">
                             <span class="section-label text-gh-muted">Recently reviewed</span>
                             <button type="button"
-                                @click="$wire.clearRecentlyReviewed()"
+                                wire:click="clearRecentlyReviewed"
                                 class="text-[10px] uppercase tracking-wider text-gh-muted hover:text-gh-text transition-colors"
                                 title="Clear recently reviewed list"
                                 aria-label="Clear recently reviewed list">Clear</button>
                         </div>
-                        <template x-for="id in $wire.recentlyReviewedIds" :key="id">
-                            <div
-                                x-show="filesById[id] && (fileFilter === '' || filesById[id].path.toLowerCase().includes(fileFilter.toLowerCase()))"
-                                x-collapse.duration.200ms
-                                class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-opacity duration-150 ease-out text-gh-muted/70"
-                            >
-                                <button type="button" @click="scrollToFile(id)" class="flex items-center gap-2.5 min-w-0 flex-1">
-                                    <span class="font-mono font-medium shrink-0" :class="filesById[id]?.badgeClass" x-text="filesById[id]?.badgeLabel"></span>
-                                    <span class="font-mono line-through opacity-80 inline-flex items-baseline min-w-0 max-w-full" :title="filesById[id]?.path">
-                                        <span class="min-w-0 truncate text-gh-muted/70" x-text="pathDir(filesById[id]?.path)"></span><span class="shrink-0 text-gh-text" x-text="pathBase(filesById[id]?.path)"></span>
-                                    </span>
+                        @foreach($this->recentlyReviewedFiles as $recentlyReviewedFile)
+                            <div class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-opacity duration-150 ease-out text-gh-muted/70">
+                                <button type="button" @click="scrollToFile('{{ $recentlyReviewedFile['id'] }}')" class="flex items-center gap-2.5 min-w-0 flex-1">
+                                    <span class="font-mono font-medium shrink-0 {{ $recentlyReviewedFile['badgeClass'] }}">{{ $recentlyReviewedFile['badgeLabel'] }}</span>
+                                    <x-file-path
+                                        :path="$recentlyReviewedFile['path']"
+                                        class="text-xs line-through opacity-80"
+                                        :collapse="true"
+                                    />
                                 </button>
                                 <flux:tooltip content="Un-mark as reviewed">
                                     <button type="button"
-                                        @click="$wire.dispatch('toggle-reviewed', { filePath: filesById[id]?.path })"
+                                        wire:click="toggleReviewed(@js($recentlyReviewedFile['path']))"
                                         class="shrink-0 size-3.5 flex items-center justify-center text-gh-green hover:text-gh-text transition-colors"
                                         aria-label="Un-mark as reviewed">
                                         <flux:icon icon="check" variant="outline" class="!size-3.5" />
                                     </button>
                                 </flux:tooltip>
                             </div>
-                        </template>
+                        @endforeach
                         <div class="border-b border-gh-border my-3"></div>
                     </div>
-                </template>
-                @foreach($sourceFiles as $file)
+                @endif
+                @foreach($this->reviewState->visibleFiles as $file)
                     @php
                         // Single source of truth: status → [color class, letter]. M and R get
                         // distinct hues so modified vs renamed are glanceable in the column.
@@ -2057,8 +2201,6 @@ new #[Layout('layouts.app')] class extends Component
                         $remoteStatus = ($file['isUntracked'] ?? false) ? 'added' : ($file['status'] ?? 'modified');
                     @endphp
                     <div
-                        x-show="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}')"
-                        x-collapse.duration.200ms
                         @if($hasRemote)
                             @contextmenu.prevent="$dispatch('open-remote-menu', {
                                 target: 'file',
@@ -2072,8 +2214,7 @@ new #[Layout('layouts.app')] class extends Component
                         @endif
                         class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-[opacity,colors] duration-150 ease-out focus-within:outline focus-within:outline-1 focus-within:-outline-offset-1 focus-within:outline-gh-accent"
                         :class="[
-                            activeFile === '{{ $file['id'] }}' ? 'bg-gh-text/10 text-gh-text' : 'text-gh-muted',
-                            fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}') ? 'opacity-100' : 'opacity-0',
+                            activeFile === '{{ $file['id'] }}' ? 'bg-gh-text/10 text-gh-text' : '{{ $this->reviewState->selectedFileId === $file['id'] ? 'bg-gh-text/10 text-gh-text' : 'text-gh-muted' }}',
                         ]"
                     >
                         <button @click="scrollToFile('{{ $file['id'] }}')" class="flex items-center gap-2.5 min-w-0 flex-1">
@@ -2140,10 +2281,15 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                 @endforeach
                 {{-- No-match feedback so an active filter never leaves a blank void. --}}
-                <div x-show="fileFilter.trim() !== '' && visibleFileCount === 0" x-cloak
-                     class="px-2.5 py-6 text-center text-xs text-gh-muted font-mono">
-                    No files match "<span class="text-gh-text" x-text="fileFilter"></span>"
-                </div>
+                @if($this->reviewState->emptyStateReason === \App\DTOs\ReviewState::EMPTY_FILTER)
+                    <div class="px-2.5 py-6 text-center text-xs text-gh-muted font-mono">
+                        No files match "<span class="text-gh-text">{{ trim($fileFilter) }}</span>"
+                    </div>
+                @elseif($this->reviewState->emptyStateReason === \App\DTOs\ReviewState::EMPTY_ALL_REVIEWED)
+                    <div class="px-2.5 py-6 text-center text-xs text-gh-muted font-mono">
+                        All files reviewed
+                    </div>
+                @endif
                 @if(! empty($trashedFiles))
                     <div class="border-t border-gh-border mt-3 pt-3">
                         <span class="section-label text-gh-muted mb-3 block">Trash</span>
@@ -2263,13 +2409,10 @@ new #[Layout('layouts.app')] class extends Component
                 @endif
 
                 {{-- Source Files --}}
-                @php $singleFile = count($sourceFiles) === 1 && count($reviewPairs) === 0; @endphp
-                @foreach($sourceFiles as $file)
+                @php $singleFile = $this->reviewState->visibleFileCount === 1 && count($reviewPairs) === 0; @endphp
+                @forelse($this->reviewState->visibleFiles as $file)
                     <div id="{{ $file['id'] }}"
-                         class="border-b border-gh-border transition-opacity duration-150 ease-out"
-                         x-show="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}')"
-                         x-collapse.duration.200ms
-                         :class="fileMatchesFilter(@js($file['path']), '{{ $file['id'] }}') ? 'opacity-100' : 'opacity-0'">
+                         class="border-b border-gh-border transition-opacity duration-150 ease-out">
                         <livewire:diff-file
                             lazy
                             :key="$file['id'].'-'.$file['refreshFingerprint']"
@@ -2285,7 +2428,21 @@ new #[Layout('layouts.app')] class extends Component
                             :diff-to="$diffTo"
                         />
                     </div>
-                @endforeach
+                @empty
+                    @if(count($reviewPairs) === 0)
+                        @if($this->reviewState->emptyStateReason === \App\DTOs\ReviewState::EMPTY_FILTER)
+                            <x-empty-state>
+                                <x-slot:heading>No files match</x-slot:heading>
+                                <p class="text-sm text-gh-muted">Clear the filter to show all changed files</p>
+                            </x-empty-state>
+                        @elseif($this->reviewState->emptyStateReason === \App\DTOs\ReviewState::EMPTY_ALL_REVIEWED)
+                            <x-empty-state>
+                                <x-slot:heading>All files reviewed</x-slot:heading>
+                                <p class="text-sm text-gh-muted">Show all files to revisit reviewed changes</p>
+                            </x-empty-state>
+                        @endif
+                    @endif
+                @endforelse
             @endif
     </x-resizable-sidebar-shell>
 
@@ -2295,6 +2452,9 @@ new #[Layout('layouts.app')] class extends Component
     <x-feedback-submit-bar
         :submitted="$submitted"
         :export-result="$exportResult"
+        secondary-label="Export snapshot"
+        secondary-action="exportSnapshot"
+        secondary-icon="arrow-down-tray"
         copy-again-tooltip="Already on your clipboard - re-copy if you've copied something else since"
     />
 </div>

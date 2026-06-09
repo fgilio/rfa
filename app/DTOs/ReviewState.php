@@ -23,6 +23,8 @@ final readonly class ReviewState
      * @param  list<string>  $reviewedFileIds
      * @param  array<string, bool>  $reviewedFileMap
      * @param  list<array{id: string, path: string}>  $sourceFileEntries
+     * @param  list<array{id: string, path: string}>  $visibleFileEntries
+     * @param  array<string, bool>  $visibleFileMap
      * @param  array<string, array{path: string, badgeLabel: string, badgeClass: string}>  $filesById
      * @param  array<string, int>  $countsByStatus
      */
@@ -36,6 +38,8 @@ final readonly class ReviewState
         public array $reviewedFileIds,
         public array $reviewedFileMap,
         public array $sourceFileEntries,
+        public array $visibleFileEntries,
+        public array $visibleFileMap,
         public array $filesById,
         public array $countsByStatus,
         public int $totalFileCount,
@@ -63,6 +67,8 @@ final readonly class ReviewState
      *     reviewedFileIds: list<string>,
      *     reviewedFileMap: array<string, bool>,
      *     sourceFileEntries: list<array{id: string, path: string}>,
+     *     visibleFileEntries: list<array{id: string, path: string}>,
+     *     visibleFileMap: array<string, bool>,
      *     filesById: array<string, array{path: string, badgeLabel: string, badgeClass: string}>,
      *     countsByStatus: array<string, int>,
      *     totalFileCount: int,
@@ -86,6 +92,8 @@ final readonly class ReviewState
             'reviewedFileIds' => $this->reviewedFileIds,
             'reviewedFileMap' => $this->reviewedFileMap,
             'sourceFileEntries' => $this->sourceFileEntries,
+            'visibleFileEntries' => $this->visibleFileEntries,
+            'visibleFileMap' => $this->visibleFileMap,
             'filesById' => $this->filesById,
             'countsByStatus' => $this->countsByStatus,
             'totalFileCount' => $this->totalFileCount,

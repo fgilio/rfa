@@ -8,8 +8,8 @@
 //                repoPath so it works on pages without the ⚡review-page root
 //                (e.g. ⚡context-page, which doesn't expose pathBase /
 //                buildFullPath).
-//   - 'bulk'   — inherits sourceFileEntries / fileMatchesFilter /
-//                visibleFileCount / repoPath from the ⚡review-page root.
+//   - 'bulk'   — reads server-visible entries from data attributes when
+//                present. Falls back to the ⚡review-page Alpine root.
 (function (root, factory) {
     const api = factory();
     if (typeof module !== 'undefined' && module.exports) {
@@ -26,17 +26,41 @@
             _singlePath: singlePath,
             _repoPath: repoPath,
 
+            _jsonAttr(name, fallback) {
+                try {
+                    return JSON.parse(this.$root?.dataset?.[name] || '');
+                } catch (_) {
+                    return fallback;
+                }
+            },
+
+            get bulkEntries() {
+                const entries = this._jsonAttr('sourceFileEntries', null);
+                if (Array.isArray(entries)) return entries;
+
+                return (this.sourceFileEntries || [])
+                    .filter((f) => this.fileMatchesFilter(f.path, f.id));
+            },
+
+            get bulkVisibleCount() {
+                const rawCount = this.$root?.dataset?.visibleFileCount;
+                if (rawCount !== undefined && rawCount !== '') {
+                    const count = Number(rawCount);
+                    if (Number.isFinite(count)) return count;
+                }
+
+                return this.visibleFileCount || 0;
+            },
+
             paths() {
                 if (this._mode === 'single') {
                     return this._singlePath ? [this._singlePath] : [];
                 }
-                return this.sourceFileEntries
-                    .filter((f) => this.fileMatchesFilter(f.path, f.id))
-                    .map((f) => f.path);
+                return this.bulkEntries.map((f) => f.path);
             },
 
             _label(noun) {
-                const c = this._mode === 'single' ? 1 : this.visibleFileCount;
+                const c = this._mode === 'single' ? 1 : this.bulkVisibleCount;
                 return c <= 1 ? `Copy ${noun}` : `Copy ${c} ${noun}s`;
             },
             get nameLabel() { return this._label('file name'); },

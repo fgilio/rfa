@@ -184,6 +184,44 @@ test('diff file lazy loads stay isolated to avoid Livewire max component payload
         ->and($html)->not->toContain('lazyIsolated&quot;:false');
 });
 
+test('server file filter renders only matching diff-file children', function () {
+    $files = collect(range(1, 25))
+        ->map(fn (int $index): array => [
+            'id' => "file-{$index}",
+            'path' => "src/File{$index}.php",
+            'status' => 'modified',
+            'oldPath' => null,
+            'additions' => 1,
+            'deletions' => 1,
+            'isBinary' => false,
+            'isUntracked' => false,
+            'isImage' => false,
+            'lastModified' => null,
+            'isSymlink' => false,
+            'symlinkTarget' => null,
+            'fileSize' => null,
+        ])
+        ->all();
+
+    app()->bind(GetFileListAction::class, fn () => new class($files)
+    {
+        public function __construct(private array $files) {}
+
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        {
+            return $this->files;
+        }
+    });
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->set('fileFilter', 'File25.php');
+
+    expect($component->instance()->reviewState()->visibleFileEntries)->toBe([
+        ['id' => 'file-25', 'path' => 'src/File25.php'],
+    ])
+        ->and(substr_count($component->html(), '__lazyLoad'))->toBe(1);
+});
+
 test('mount backfills null gitignore path from git config', function () {
     $this->project->update(['global_gitignore_path' => null]);
 

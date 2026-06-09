@@ -178,7 +178,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `clearAllComments` | Yes | Dispatches comment-updated + undo-available events |
 | `restoreComments` | Yes | Dispatches comment-updated events to affected files |
 | `updatedGlobalComment` | Yes | No UI change needed server-side |
-| `toggleReviewed` | Yes | Sidebar state managed client-side via Alpine |
+| `toggleReviewed` | Conditional | Skips in full-list mode; renders when filter / hide-reviewed changes the server-visible list |
 | `submitReview` | No | Replaces entire submit bar UI (submitted state) |
 | `discardFileChanges` | No | Structural change: file removed from list, trash updated |
 | `restoreDiscardedFile` | No | Structural change: file reappears in list |

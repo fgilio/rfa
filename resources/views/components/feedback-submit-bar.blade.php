@@ -4,6 +4,9 @@
     'submittedHeading' => 'Review submitted',
     'submitLabel' => 'Submit review',
     'submitAction' => 'submitReview',
+    'secondaryLabel' => null,
+    'secondaryAction' => null,
+    'secondaryIcon' => 'arrow-down-tray',
     'newRoundLabel' => 'Start a new review',
     'newRoundAction' => 'startNewReview',
     'placeholder' => 'Overall review comment (optional)',
@@ -101,6 +104,19 @@
                     </div>
                 </template>
                 {{-- Drafts won't be included: arm-to-confirm inline (no native confirm() dialog). --}}
+                @if($secondaryLabel !== null && $secondaryAction !== null)
+                    <flux:button
+                        variant="ghost"
+                        icon="{{ $secondaryIcon }}"
+                        icon:variant="outline"
+                        wire:click="{{ $secondaryAction }}"
+                        wire:loading.attr="disabled"
+                        wire:target="{{ $secondaryAction }}"
+                    >
+                        {{ $secondaryLabel }}
+                    </flux:button>
+                @endif
+
                 <flux:button
                     variant="primary"
                     @click="if (draftCount > 0 && !armed) { armed = true; return; } $wire.{{ $submitAction }}()"

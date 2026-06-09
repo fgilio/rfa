@@ -29,6 +29,15 @@ function attach(scope, mode = 'bulk', singlePath = '', repoPath = '') {
     return scope;
 }
 
+function attrRoot(entries, visibleCount) {
+    return {
+        dataset: {
+            sourceFileEntries: JSON.stringify(entries),
+            visibleFileCount: String(visibleCount),
+        },
+    };
+}
+
 describe('copyPathsButton — bulk mode', () => {
     let component;
 
@@ -81,6 +90,16 @@ describe('copyPathsButton — bulk mode', () => {
         expect(component.nameLabel).toBe('Copy 3 file names');
         expect(component.relativeLabel).toBe('Copy 3 relative paths');
         expect(component.fullLabel).toBe('Copy 3 full paths');
+    });
+
+    it('uses server-visible entries from root data attributes when present', () => {
+        component.$root = attrRoot([{ id: 'b', path: 'app/Bar.php' }], 1);
+
+        component.copyAs('relative');
+
+        expect(component._dispatched[0].detail.text).toBe('app/Bar.php');
+        expect(component._dispatched[0].detail.toast).toBe('Copied relative path');
+        expect(component.primaryLabel).toBe('Copy relative path');
     });
 });
 
