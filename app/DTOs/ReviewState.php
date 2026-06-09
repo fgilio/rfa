@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use Illuminate\Support\Str;
+
 final readonly class ReviewState
 {
     public const EMPTY_NONE = 'none';
@@ -54,6 +56,18 @@ final readonly class ReviewState
     public function hasVisibleFiles(): bool
     {
         return $this->visibleFileCount > 0;
+    }
+
+    /**
+     * Whether a path matches the sidebar file filter. Owns the matching rule
+     * (trimmed, multibyte case-insensitive substring) so every surface that
+     * filters by path agrees with the visible file list.
+     */
+    public static function pathMatchesFilter(string $path, string $fileFilter): bool
+    {
+        $normalizedFilter = Str::lower(trim($fileFilter));
+
+        return $normalizedFilter === '' || str_contains(Str::lower($path), $normalizedFilter);
     }
 
     /**

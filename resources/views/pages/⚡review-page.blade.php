@@ -34,6 +34,7 @@ use App\Concerns\InteractsWithRemoteLinks;
 use App\DTOs\CurrentHeadResult;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\DTOs\ReviewState;
 use App\Enums\DiffSide;
 use App\Enums\DivergenceState;
 use App\Enums\GitRef;
@@ -1237,6 +1238,8 @@ new #[Layout('layouts.app')] class extends Component
     {
         $this->activeFileId = $fileId;
 
+        // Method-call form on purpose: the property form would cache this
+        // pre-mutation state for the render that follows the resets below.
         if ($this->reviewState()->visibleFileMap[$fileId] ?? false) {
             $this->skipRender();
 
@@ -1343,8 +1346,7 @@ new #[Layout('layouts.app')] class extends Component
     #[Computed]
     public function recentlyReviewedFiles(): array
     {
-        $normalizedFilter = str($this->fileFilter)->trim()->lower()->toString();
-        $filesById = $this->reviewState()->filesById;
+        $filesById = $this->reviewState->filesById;
 
         return collect($this->recentlyReviewedIds)
             ->map(function (string $id) use ($filesById): ?array {
@@ -1361,14 +1363,8 @@ new #[Layout('layouts.app')] class extends Component
                     'badgeClass' => $file['badgeClass'],
                 ];
             })
-            ->filter(function (?array $file) use ($normalizedFilter): bool {
-                if ($file === null) {
-                    return false;
-                }
-
-                return $normalizedFilter === ''
-                    || str_contains(strtolower($file['path']), $normalizedFilter);
-            })
+            ->filter(fn (?array $file): bool => $file !== null
+                && ReviewState::pathMatchesFilter($file['path'], $this->fileFilter))
             ->values()
             ->all();
     }
@@ -2189,15 +2185,11 @@ new #[Layout('layouts.app')] class extends Component
                 @endif
                 @foreach($this->reviewState->visibleFiles as $file)
                     @php
-                        // Single source of truth: status → [color class, letter]. M and R get
-                        // distinct hues so modified vs renamed are glanceable in the column.
-                        [$badgeClass, $badgeLabel] = match($file['status']) {
-                            'added' => ['text-gh-green', 'A'],
-                            'deleted' => ['text-gh-red', 'D'],
-                            'renamed' => ['text-gh-link', 'R'],
-                            'commented' => ['text-gh-muted', 'C'],
-                            default => ['text-gh-attention', 'M'],
-                        };
+                        // Badge label and color come from ReviewState so this list and the
+                        // Recently-reviewed group render the same status treatment.
+                        $badge = $this->reviewState->filesById[$file['id']] ?? null;
+                        $badgeLabel = $badge['badgeLabel'] ?? 'M';
+                        $badgeClass = $badge['badgeClass'] ?? 'text-gh-attention';
                         $remoteStatus = ($file['isUntracked'] ?? false) ? 'added' : ($file['status'] ?? 'modified');
                     @endphp
                     <div
@@ -2213,8 +2205,12 @@ new #[Layout('layouts.app')] class extends Component
                             })"
                         @endif
                         class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-[opacity,colors] duration-150 ease-out focus-within:outline focus-within:outline-1 focus-within:-outline-offset-1 focus-within:outline-gh-accent"
+                        {{-- Highlight is Alpine-only: activeFile is seeded from the server's
+                             selectedFileId at init, and selectFile() skips render, so baking
+                             the server value into the else-branch would leave the previous
+                             row highlighted after every client-side selection change. --}}
                         :class="[
-                            activeFile === '{{ $file['id'] }}' ? 'bg-gh-text/10 text-gh-text' : '{{ $this->reviewState->selectedFileId === $file['id'] ? 'bg-gh-text/10 text-gh-text' : 'text-gh-muted' }}',
+                            activeFile === '{{ $file['id'] }}' ? 'bg-gh-text/10 text-gh-text' : 'text-gh-muted',
                         ]"
                     >
                         <button @click="scrollToFile('{{ $file['id'] }}')" class="flex items-center gap-2.5 min-w-0 flex-1">

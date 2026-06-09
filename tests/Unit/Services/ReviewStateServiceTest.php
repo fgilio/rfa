@@ -100,3 +100,30 @@ test('hiding reviewed files returns all reviewed empty state when all source fil
         ->and($state->visibleFileCount)->toBe(0)
         ->and($state->reviewedFileCount)->toBe(3);
 });
+
+test('renamed files get the link badge color', function () {
+    $state = $this->service->derive([
+        ['id' => 'file-r', 'path' => 'src/Renamed.php', 'status' => 'renamed', 'additions' => 1, 'deletions' => 1],
+    ]);
+
+    expect($state->filesById['file-r']['badgeLabel'])->toBe('R')
+        ->and($state->filesById['file-r']['badgeClass'])->toBe('text-gh-link');
+});
+
+test('pathMatchesFilter is trimmed and multibyte case-insensitive', function () {
+    expect(ReviewState::pathMatchesFilter('app/Ñandu.php', 'ñandu'))->toBeTrue()
+        ->and(ReviewState::pathMatchesFilter('app/Ñandu.php', '  ÑANDU  '))->toBeTrue()
+        ->and(ReviewState::pathMatchesFilter('app/Ñandu.php', 'xyz'))->toBeFalse()
+        ->and(ReviewState::pathMatchesFilter('app/Foo.php', ''))->toBeTrue();
+});
+
+test('pathMatchesFilter agrees with the visible file list', function () {
+    $files = [
+        ['id' => 'file-n', 'path' => 'app/Ñandu.php', 'status' => 'modified', 'additions' => 1, 'deletions' => 0],
+    ];
+
+    $state = $this->service->derive($files, fileFilter: 'ñandu');
+
+    expect($state->visibleFileCount)->toBe(1)
+        ->and(ReviewState::pathMatchesFilter('app/Ñandu.php', 'ñandu'))->toBeTrue();
+});

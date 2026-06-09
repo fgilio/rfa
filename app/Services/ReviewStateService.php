@@ -100,7 +100,7 @@ class ReviewStateService
         $id = (string) ($file['id'] ?? '');
         $path = (string) ($file['path'] ?? '');
 
-        if ($normalizedFilter !== '' && ! str_contains(Str::lower($path), $normalizedFilter)) {
+        if (! ReviewState::pathMatchesFilter($path, $normalizedFilter)) {
             return false;
         }
 
@@ -239,6 +239,7 @@ class ReviewStateService
         return match ($status) {
             'added' => 'text-gh-green',
             'deleted' => 'text-gh-red',
+            'renamed' => 'text-gh-link',
             'commented' => 'text-gh-muted',
             default => 'text-gh-attention',
         };
