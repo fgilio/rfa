@@ -17,9 +17,8 @@
        - 'single' — copies one path; requires :path. Pass :repo-path so
                     "Copy full paths" works on pages without the ⚡review-page
                     Alpine root.
-       - 'bulk'   — copies the currently server-visible files. Prefer passing
-                    :entries and :visible-count; falls back to the review-page
-                    Alpine root for older call sites.
+       - 'bulk'   — copies the currently server-visible files; requires
+                    :entries and :visible-count.
 
      Left-click on the trigger should copy directly, not toggle the dropdown
      (Flux's default for any trigger inside `<flux:dropdown>`). The wrapper
@@ -27,16 +26,11 @@
      wraps only the trigger — menu items are siblings, so their clicks aren't
      captured and reach Flux normally.
 --}}
-@php
-    $serverVisibleCount = $mode === 'bulk' && $visibleCount !== null ? (int) $visibleCount : null;
-@endphp
-
 <div data-testid="{{ $testidPrefix }}"
     @if ($mode === 'bulk')
         data-source-file-entries='@json($entries)'
         data-visible-file-count="{{ $visibleCount }}"
-        @if($serverVisibleCount === null) x-show="bulkVisibleCount > 0" x-cloak @endif
-        @if($serverVisibleCount !== null && $serverVisibleCount <= 0) hidden @endif
+        @if((int) $visibleCount <= 0) hidden @endif
     @endif
     x-data="copyPathsButton({ mode: @js($mode), singlePath: @js($path), repoPath: @js($repoPath) })"
     class="inline-flex">

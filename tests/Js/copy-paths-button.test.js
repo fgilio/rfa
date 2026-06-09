@@ -6,13 +6,6 @@ const { copyPathsButton: factory } = copyPathsButton;
 function bulkScope(extra = {}) {
     const dispatched = [];
     return {
-        sourceFileEntries: [
-            { id: 'a', path: 'app/Foo.php' },
-            { id: 'b', path: 'app/Bar.php' },
-            { id: 'c', path: 'tests/Baz.php' },
-        ],
-        fileMatchesFilter: () => true,
-        visibleFileCount: 3,
         repoPath: '/repo',
         $dispatch: (name, detail) => dispatched.push({ name, detail }),
         ...extra,
@@ -43,6 +36,11 @@ describe('copyPathsButton — bulk mode', () => {
 
     beforeEach(() => {
         component = attach(bulkScope(), 'bulk');
+        component.$root = attrRoot([
+            { id: 'a', path: 'app/Foo.php' },
+            { id: 'b', path: 'app/Bar.php' },
+            { id: 'c', path: 'tests/Baz.php' },
+        ], 3);
     });
 
     it('left-click copies relative paths joined by newlines', () => {
@@ -72,27 +70,27 @@ describe('copyPathsButton — bulk mode', () => {
         expect(component._dispatched[0].detail.toast).toBe('Copied 3 full paths');
     });
 
-    it('primaryLabel pluralises by visibleFileCount', () => {
-        component.visibleFileCount = 1;
+    it('primaryLabel pluralises by the visible-count data attribute', () => {
+        component.$root.dataset.visibleFileCount = '1';
         expect(component.primaryLabel).toBe('Copy relative path');
 
-        component.visibleFileCount = 5;
+        component.$root.dataset.visibleFileCount = '5';
         expect(component.primaryLabel).toBe('Copy 5 relative paths');
     });
 
-    it('menu labels singularise when visibleFileCount === 1 and pluralise + show count when > 1', () => {
-        component.visibleFileCount = 1;
+    it('menu labels singularise when the visible count is 1 and pluralise + show count when > 1', () => {
+        component.$root.dataset.visibleFileCount = '1';
         expect(component.nameLabel).toBe('Copy file name');
         expect(component.relativeLabel).toBe('Copy relative path');
         expect(component.fullLabel).toBe('Copy full path');
 
-        component.visibleFileCount = 3;
+        component.$root.dataset.visibleFileCount = '3';
         expect(component.nameLabel).toBe('Copy 3 file names');
         expect(component.relativeLabel).toBe('Copy 3 relative paths');
         expect(component.fullLabel).toBe('Copy 3 full paths');
     });
 
-    it('uses server-visible entries from root data attributes when present', () => {
+    it('reflects narrowed server-visible entries from the data attributes', () => {
         component.$root = attrRoot([{ id: 'b', path: 'app/Bar.php' }], 1);
 
         component.copyAs('relative');
@@ -100,6 +98,16 @@ describe('copyPathsButton — bulk mode', () => {
         expect(component._dispatched[0].detail.text).toBe('app/Bar.php');
         expect(component._dispatched[0].detail.toast).toBe('Copied relative path');
         expect(component.primaryLabel).toBe('Copy relative path');
+    });
+
+    it('copies nothing and reports zero when the data attributes are missing', () => {
+        component.$root = { dataset: {} };
+
+        component.copyAs('relative');
+
+        expect(component._dispatched).toHaveLength(0);
+        expect(component.bulkEntries).toEqual([]);
+        expect(component.bulkVisibleCount).toBe(0);
     });
 });
 

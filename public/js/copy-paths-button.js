@@ -8,8 +8,8 @@
 //                repoPath so it works on pages without the ⚡review-page root
 //                (e.g. ⚡context-page, which doesn't expose pathBase /
 //                buildFullPath).
-//   - 'bulk'   — reads server-visible entries from data attributes when
-//                present. Falls back to the ⚡review-page Alpine root.
+//   - 'bulk'   — reads server-visible entries and count from the component's
+//                own data attributes (:entries / :visible-count are required).
 (function (root, factory) {
     const api = factory();
     if (typeof module !== 'undefined' && module.exports) {
@@ -36,20 +36,12 @@
 
             get bulkEntries() {
                 const entries = this._jsonAttr('sourceFileEntries', null);
-                if (Array.isArray(entries)) return entries;
-
-                return (this.sourceFileEntries || [])
-                    .filter((f) => this.fileMatchesFilter(f.path, f.id));
+                return Array.isArray(entries) ? entries : [];
             },
 
             get bulkVisibleCount() {
-                const rawCount = this.$root?.dataset?.visibleFileCount;
-                if (rawCount !== undefined && rawCount !== '') {
-                    const count = Number(rawCount);
-                    if (Number.isFinite(count)) return count;
-                }
-
-                return this.visibleFileCount || 0;
+                const count = Number(this.$root?.dataset?.visibleFileCount);
+                return Number.isFinite(count) ? count : 0;
             },
 
             paths() {
