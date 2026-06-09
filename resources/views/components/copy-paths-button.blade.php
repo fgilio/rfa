@@ -27,12 +27,16 @@
      wraps only the trigger — menu items are siblings, so their clicks aren't
      captured and reach Flux normally.
 --}}
+@php
+    $serverVisibleCount = $mode === 'bulk' && $visibleCount !== null ? (int) $visibleCount : null;
+@endphp
+
 <div data-testid="{{ $testidPrefix }}"
     @if ($mode === 'bulk')
         data-source-file-entries='@json($entries)'
         data-visible-file-count="{{ $visibleCount }}"
-        x-show="bulkVisibleCount > 0"
-        x-cloak
+        @if($serverVisibleCount === null) x-show="bulkVisibleCount > 0" x-cloak @endif
+        @if($serverVisibleCount !== null && $serverVisibleCount <= 0) hidden @endif
     @endif
     x-data="copyPathsButton({ mode: @js($mode), singlePath: @js($path), repoPath: @js($repoPath) })"
     class="inline-flex">

@@ -39,7 +39,7 @@ test('exports review snapshot json under .rfa', function () {
         comments: $comments,
         globalComment: 'overall note',
         reviewedFiles: ['src.php' => 'content-hash'],
-        target: DiffTarget::range('base', 'head'),
+        target: DiffTarget::range('HEAD', 'HEAD'),
         sourceLabel: 'snapshot repo',
     );
 
@@ -53,13 +53,14 @@ test('exports review snapshot json under .rfa', function () {
 
     expect($payload['schemaVersion'])->toBe(1)
         ->and($payload['sourceLabel'])->toBe('snapshot repo')
-        ->and($payload['target'])->toBe(['from' => 'base', 'to' => 'head'])
+        ->and($payload['target'])->toBe(['from' => 'HEAD', 'to' => 'HEAD'])
         ->and($payload['files'])->toHaveCount(1)
         ->and($payload['files'][0]['id'])->toBe($fileId)
-        ->and($payload['files'][0]['oldSource'])->toMatchArray(['type' => 'git', 'ref' => 'base', 'path' => 'src.php'])
-        ->and($payload['files'][0]['newSource'])->toMatchArray(['type' => 'git', 'ref' => 'head', 'path' => 'src.php'])
-        ->and($payload['files'][0]['oldSourceText']['status'])->toBe('missing')
+        ->and($payload['files'][0]['oldSource'])->toMatchArray(['type' => 'git', 'ref' => 'HEAD', 'path' => 'src.php'])
+        ->and($payload['files'][0]['newSource'])->toMatchArray(['type' => 'git', 'ref' => 'HEAD', 'path' => 'src.php'])
+        ->and($payload['files'][0]['oldSourceText']['status'])->toBe('loaded')
         ->and($payload['files'][0]['newSourceText']['status'])->toBe('loaded')
+        ->and($payload['files'][0]['oldSourceText']['content'])->toBe("<?php\n")
         ->and($payload['files'][0]['newSourceText']['content'])->toBe("<?php\n")
         ->and($payload['comments'])->toBe($comments)
         ->and($payload['reviewedFileIds'])->toBe([$fileId])
