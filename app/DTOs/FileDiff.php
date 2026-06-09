@@ -62,8 +62,6 @@ class FileDiff
         string $status,
         bool $tooLarge,
         ?string $skipReason = null,
-        ?FileSourceSpec $oldSource = null,
-        ?FileSourceSpec $newSource = null,
     ): array {
         return [
             'path' => $path,
@@ -78,12 +76,10 @@ class FileDiff
             'tooLarge' => $tooLarge,
             'skipReason' => $skipReason,
             'syntaxHighlighter' => 'none',
-            'oldSource' => $oldSource?->toArray(),
-            'newSource' => $newSource?->toArray(),
         ];
     }
 
-    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, isSymlink: bool, symlinkTarget: ?string, oldSource: ?array{type: string, ref: ?string, path: ?string, absolutePath: ?string}, newSource: ?array{type: string, ref: ?string, path: ?string, absolutePath: ?string}} */
+    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, isSymlink: bool, symlinkTarget: ?string} */
     public function toArray(): array
     {
         return [
@@ -96,8 +92,6 @@ class FileDiff
             'isBinary' => $this->isBinary,
             'isSymlink' => $this->isSymlink,
             'symlinkTarget' => $this->symlinkTarget,
-            'oldSource' => $this->oldSource?->toArray(),
-            'newSource' => $this->newSource?->toArray(),
         ];
     }
 }

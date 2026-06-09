@@ -56,6 +56,11 @@ test('exports review snapshot json under .rfa', function () {
         ->and($payload['target'])->toBe(['from' => 'base', 'to' => 'head'])
         ->and($payload['files'])->toHaveCount(1)
         ->and($payload['files'][0]['id'])->toBe($fileId)
+        ->and($payload['files'][0]['oldSource'])->toMatchArray(['type' => 'git', 'ref' => 'base', 'path' => 'src.php'])
+        ->and($payload['files'][0]['newSource'])->toMatchArray(['type' => 'git', 'ref' => 'head', 'path' => 'src.php'])
+        ->and($payload['files'][0]['oldSourceText']['status'])->toBe('missing')
+        ->and($payload['files'][0]['newSourceText']['status'])->toBe('loaded')
+        ->and($payload['files'][0]['newSourceText']['content'])->toBe("<?php\n")
         ->and($payload['comments'])->toBe($comments)
         ->and($payload['reviewedFileIds'])->toBe([$fileId])
         ->and($payload['reviewedFiles'])->toBe(['src.php' => 'content-hash'])
@@ -82,4 +87,20 @@ test('exporting snapshot does not mark comments submitted', function () {
     );
 
     expect($comment->fresh()->submitted_at)->toBeNull();
+});
+
+test('exporting snapshot substitutes malformed utf8 in json payload', function () {
+    $result = app(ExportReviewSnapshotAction::class)->handle(
+        repoPath: $this->repoPath,
+        files: [[
+            'id' => 'file-invalid',
+            'path' => "bad-\xff.php",
+            'status' => 'added',
+            'isUntracked' => true,
+        ]],
+    );
+
+    $json = File::get($result['json']);
+
+    expect($json)->toContain('\ufffd');
 });

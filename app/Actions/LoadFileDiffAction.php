@@ -6,8 +6,6 @@ namespace App\Actions;
 
 use App\DTOs\DiffTarget;
 use App\DTOs\FileDiff;
-use App\DTOs\FileSourceSpec;
-use App\Enums\GitRef;
 use App\Exceptions\GitCommandException;
 use App\Services\CsvAlignerService;
 use App\Services\DiffParser;
@@ -38,21 +36,13 @@ final readonly class LoadFileDiffAction
 
     private readonly ReviewConfigService $reviewConfigService;
 
-    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool, skipReason?: ?string, syntaxStyles: string, oldSource?: ?array<string, mixed>, newSource?: ?array<string, mixed>} */
+    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool, skipReason?: ?string, syntaxStyles: string} */
     public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
     {
         $target ??= DiffTarget::workingDirectory();
+        $reviewConfig = $this->reviewConfigService->resolve();
 
-        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target, $oldPath, $externalAbsolutePath): array {
-            [$fallbackOldSource, $fallbackNewSource] = $this->sourceSpecs(
-                path: $path,
-                target: $target,
-                status: 'modified',
-                isUntracked: $isUntracked,
-                oldPath: $oldPath,
-                externalAbsolutePath: $externalAbsolutePath,
-            );
-
+        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target, $oldPath, $externalAbsolutePath, $reviewConfig): array {
             try {
                 $rawDiff = $externalAbsolutePath !== null
                     ? $this->externalFilesService->buildDiff($externalAbsolutePath, $path)
@@ -64,34 +54,23 @@ final readonly class LoadFileDiffAction
                     'stderr' => $e->stderr,
                 ]);
 
-                return FileDiff::emptyArray($path, 'modified', tooLarge: false, oldSource: $fallbackOldSource, newSource: $fallbackNewSource)
+                return FileDiff::emptyArray($path, 'modified', tooLarge: false)
                     + ['error' => 'Failed to load diff for this file.', 'syntaxStyles' => '', 'headingsAnnotated' => true];
             }
 
             if ($rawDiff === null) {
-                return FileDiff::emptyArray($path, 'modified', tooLarge: true, skipReason: 'too-large', oldSource: $fallbackOldSource, newSource: $fallbackNewSource) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
+                return FileDiff::emptyArray($path, 'modified', tooLarge: true, skipReason: 'too-large') + ['syntaxStyles' => '', 'headingsAnnotated' => true];
             }
 
             if (trim($rawDiff) === '') {
-                return FileDiff::emptyArray($path, 'modified', tooLarge: false, oldSource: $fallbackOldSource, newSource: $fallbackNewSource) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
+                return FileDiff::emptyArray($path, 'modified', tooLarge: false) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
             }
 
-            $fileDiff = $this->diffParser->parseSingle($rawDiff);
+            $fileDiff = $this->diffParser->parseSingle($rawDiff, detectMovedLines: $reviewConfig->movedLineDetection);
 
             if (! $fileDiff) {
-                return FileDiff::emptyArray($path, 'modified', tooLarge: false, oldSource: $fallbackOldSource, newSource: $fallbackNewSource) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
+                return FileDiff::emptyArray($path, 'modified', tooLarge: false) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
             }
-
-            [$oldSource, $newSource] = $this->sourceSpecs(
-                path: $fileDiff->path,
-                target: $target,
-                status: $fileDiff->status,
-                isUntracked: $isUntracked,
-                oldPath: $fileDiff->oldPath ?? $oldPath,
-                externalAbsolutePath: $externalAbsolutePath,
-            );
-
-            $fileDiff = $fileDiff->withSourceSpecs($oldSource, $newSource);
 
             $fileDiff = $fileDiff->withHunks(
                 $this->markdownTableAligner->alignTables($fileDiff->hunks, $fileDiff->path)
@@ -142,7 +121,7 @@ final readonly class LoadFileDiffAction
             $result = $compute();
             $ttlHours = $target->isImmutable()
                 ? 720
-                : $this->reviewConfigService->resolve()->cacheTtlHours;
+                : $reviewConfig->cacheTtlHours;
 
             Cache::put($cacheKey, $result, now()->addHours($ttlHours));
 
@@ -150,26 +129,5 @@ final readonly class LoadFileDiffAction
         }
 
         return $compute();
-    }
-
-    /** @return array{0: FileSourceSpec, 1: FileSourceSpec} */
-    private function sourceSpecs(string $path, DiffTarget $target, string $status, bool $isUntracked, ?string $oldPath, ?string $externalAbsolutePath): array
-    {
-        if ($externalAbsolutePath !== null) {
-            return [
-                FileSourceSpec::none(),
-                FileSourceSpec::absolute($externalAbsolutePath),
-            ];
-        }
-
-        $oldSource = $status === 'added' || $isUntracked
-            ? FileSourceSpec::none()
-            : FileSourceSpec::git($target->from(), $oldPath ?? $path);
-
-        $newSource = $status === 'deleted'
-            ? FileSourceSpec::none()
-            : FileSourceSpec::git($target->to() ?? GitRef::Working->value, $path);
-
-        return [$oldSource, $newSource];
     }
 }

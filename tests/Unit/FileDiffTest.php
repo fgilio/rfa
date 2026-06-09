@@ -32,7 +32,7 @@ test('toArray returns all expected keys', function () {
 
     $result = $fileDiff->toArray();
 
-    expect($result)->toHaveKeys(['path', 'status', 'oldPath', 'hunks', 'additions', 'deletions', 'isBinary', 'oldSource', 'newSource'])
+    expect($result)->toHaveKeys(['path', 'status', 'oldPath', 'hunks', 'additions', 'deletions', 'isBinary'])
         ->and($result['path'])->toBe($path)
         ->and($result['status'])->toBe('modified')
         ->and($result['oldPath'])->toBeNull()
@@ -43,8 +43,7 @@ test('toArray returns all expected keys', function () {
         ->and($result['additions'])->toBe(1)
         ->and($result['deletions'])->toBe(0)
         ->and($result['isBinary'])->toBeFalse()
-        ->and($result['oldSource'])->toBeNull()
-        ->and($result['newSource'])->toBeNull();
+        ->and($result)->not->toHaveKeys(['oldSource', 'newSource']);
 });
 
 test('toArray handles empty hunks', function () {
@@ -83,8 +82,7 @@ test('withSourceSpecs returns new instance with source metadata', function () {
     expect($updated)->not->toBe($original)
         ->and($updated->oldSource)->toBe($oldSource)
         ->and($updated->newSource)->toBe($newSource)
-        ->and($updated->toArray()['oldSource'])->toBe($oldSource->toArray())
-        ->and($updated->toArray()['newSource'])->toBe($newSource->toArray());
+        ->and($updated->toArray())->not->toHaveKeys(['oldSource', 'newSource']);
 });
 
 test('emptyArray returns tooLarge array structure', function () {
@@ -103,8 +101,6 @@ test('emptyArray returns tooLarge array structure', function () {
         'tooLarge' => true,
         'skipReason' => null,
         'syntaxHighlighter' => 'none',
-        'oldSource' => null,
-        'newSource' => null,
     ]);
 });
 
@@ -123,12 +119,13 @@ test('emptyArray preserves skipped reason', function () {
         ->and($result['skipReason'])->toBe('too-large');
 });
 
-test('emptyArray can include source specs', function () {
+test('emptyArray does not serialize source specs', function () {
     $oldSource = FileSourceSpec::git('HEAD', 'big.php');
     $newSource = FileSourceSpec::working('big.php');
 
-    $result = FileDiff::emptyArray('big.php', 'modified', tooLarge: true, oldSource: $oldSource, newSource: $newSource);
+    $result = (new FileDiff('big.php', 'modified', null, [], 0, 0))
+        ->withSourceSpecs($oldSource, $newSource)
+        ->toArray();
 
-    expect($result['oldSource'])->toBe($oldSource->toArray())
-        ->and($result['newSource'])->toBe($newSource->toArray());
+    expect($result)->not->toHaveKeys(['oldSource', 'newSource']);
 });
