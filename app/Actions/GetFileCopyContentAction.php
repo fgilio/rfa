@@ -19,7 +19,9 @@ final readonly class GetFileCopyContentAction
     public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null): ?string
     {
         return match ($kind) {
-            'diff' => $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, target: $target, oldPath: $oldPath),
+            // The clipboard needs a clean unified diff, so skip the moved-line
+            // colorization that getFileDiff produces for the parser.
+            'diff' => $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, target: $target, oldPath: $oldPath, detectMovedLines: false),
             'original' => $this->gitMetadataService->getFileContent($repoPath, $oldPath ?? $path, $target->from()),
             'new' => $this->gitMetadataService->getFileContent($repoPath, $path, $target->to() ?? GitRef::Working->value),
             default => null,

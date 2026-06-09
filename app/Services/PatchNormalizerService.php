@@ -52,6 +52,27 @@ class PatchNormalizerService
     }
 
     /**
+     * Extract the prefix-stripped old and new paths from a `diff --git`
+     * header line. Prefers splits validated by matching remainders, so a
+     * path that itself contains ` b/` does not split at the wrong spot.
+     *
+     * @return array{string, string}|null
+     */
+    public function headerPaths(string $line): ?array
+    {
+        if (! str_starts_with($line, 'diff --git ')) {
+            return null;
+        }
+
+        $paths = $this->parseDiffGitPaths($line);
+        if ($paths === null) {
+            return null;
+        }
+
+        return $this->bodyPaths($paths[0], $paths[1]);
+    }
+
+    /**
      * @return array{string, string}|null
      */
     private function parseDiffGitPaths(string $line): ?array
@@ -62,16 +83,19 @@ class PatchNormalizerService
             return [stripcslashes($matches[1]), stripcslashes($matches[2])];
         }
 
+        $splitPaths = $this->splitUnquotedPaths($tail);
+        if ($splitPaths !== null) {
+            return $splitPaths;
+        }
+
+        // Renames with spaces in both paths defeat the validated split above
+        // (the two sides share no remainder), so fall back to the first ' b/'
+        // boundary. Same-path headers never reach this branch.
         if (str_starts_with($tail, 'a/')) {
             $separator = strpos($tail, ' b/');
             if ($separator !== false) {
                 return [substr($tail, 0, $separator), substr($tail, $separator + 1)];
             }
-        }
-
-        $splitPaths = $this->splitUnquotedPaths($tail);
-        if ($splitPaths !== null) {
-            return $splitPaths;
         }
 
         if (preg_match('/^(\S+) (\S+)$/', $tail, $matches) === 1) {

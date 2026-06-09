@@ -61,3 +61,19 @@ test('forces parseable diff prefixes over repo config', function () {
         ->and($output)->not->toContain('custom-old/')
         ->and($output)->not->toContain('custom-new/');
 });
+
+test('pins plain diff colors so user themes cannot mimic moved-line codes', function () {
+    $this->runTestRepoCommand($this->repoPath, [
+        'git config color.diff.old magenta',
+        'git config color.diff.new cyan',
+    ]);
+
+    File::put($this->repoPath.'/file.txt', "changed\n");
+
+    $output = $this->service->run($this->repoPath, ['diff', '--no-ext-diff', '--color=always', '--', 'file.txt']);
+
+    expect($output)->toContain("\x1b[31m-hello")
+        ->and($output)->toContain("\x1b[32m+")
+        ->and($output)->not->toContain("\x1b[35m-")
+        ->and($output)->not->toContain("\x1b[36m+");
+});

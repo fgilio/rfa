@@ -257,3 +257,22 @@ test('regular new file is not detected as symlink', function () {
     expect($files[0]->isSymlink)->toBeFalse();
     expect($files[0]->symlinkTarget)->toBeNull();
 });
+
+test('parses paths containing " b/" without splitting at the wrong boundary', function () {
+    $diff = <<<'DIFF'
+diff --git a/lib b/util.js b/lib b/util.js
+index abc1234..def5678 100644
+--- a/lib b/util.js
++++ b/lib b/util.js
+@@ -1 +1 @@
+-old
++new
+DIFF;
+
+    $files = $this->parser->parse($diff);
+
+    expect($files)->toHaveCount(1)
+        ->and($files[0]->path)->toBe('lib b/util.js')
+        ->and($files[0]->oldPath)->toBeNull()
+        ->and($files[0]->status)->toBe('modified');
+});

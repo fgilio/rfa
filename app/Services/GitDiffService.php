@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\Support\AnsiText;
 use App\Support\PathGuard;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\File;
@@ -320,16 +321,20 @@ class GitDiffService
         return $parts[1] ?? null;
     }
 
-    public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null): ?string
+    public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, bool $detectMovedLines = true): ?string
     {
         $target ??= DiffTarget::workingDirectory();
         $maxBytes ??= $this->reviewConfigService->resolve()->diffMaxBytes;
 
-        if (PathGuard::tryResolveWithinRepo($repoPath, $path, followLeaf: false) === null) {
+        // Paths only reach git as pathspecs here, so a lexical traversal check
+        // is the right guard. Requiring on-disk resolution would wrongly blank
+        // commit-range diffs of files that no longer exist in the worktree or
+        // that sit under a directory symlinked outside the repository.
+        if (! PathGuard::isRelative($path)) {
             return '';
         }
 
-        if ($oldPath !== null && PathGuard::tryResolveWithinRepo($repoPath, $oldPath, followLeaf: false) === null) {
+        if ($oldPath !== null && ! PathGuard::isRelative($oldPath)) {
             return '';
         }
 
@@ -344,11 +349,14 @@ class GitDiffService
         $renamePaths = $oldPath !== null && $oldPath !== $path ? [$oldPath] : [];
 
         $raw = $this->git->run($repoPath, [
-            ...$this->diffArgs($target, ["--unified={$contextLines}", '--text'], detectMovedLines: true),
+            ...$this->diffArgs($target, ["--unified={$contextLines}", '--text'], detectMovedLines: $detectMovedLines),
             '--', $path, ...$renamePaths, ...$excludes,
         ]);
 
-        if (strlen($raw) > $maxBytes) {
+        // The size cap protects the parser and renderer from oversized diffs,
+        // so measure the text that survives parsing: ANSI color codes added
+        // for moved-line detection are stripped and must not count.
+        if (strlen(AnsiText::strip($raw)) > $maxBytes) {
             return null;
         }
 

@@ -8,12 +8,11 @@ use App\DTOs\DiffLine;
 use App\DTOs\FileDiff;
 use App\DTOs\Hunk;
 use App\Enums\LineType;
+use App\Support\AnsiText;
 
 class DiffParser
 {
     private const SYMLINK_MODE = '120000';
-
-    private const ANSI_SEQUENCE_PATTERN = '/\x1b\[[0-9;]*m/';
 
     private const MOVED_OLD_MARKER = "\0rfa-moved-old\0";
 
@@ -62,13 +61,15 @@ class DiffParser
         $lines = explode("\n", $section);
         $headerLine = $lines[0]; // diff --git a/path b/path
 
-        // Extract file path from header
-        if (! preg_match('#^diff --git [a-z]/(.+?) [a-z]/(.+)$#', $headerLine, $m)) {
+        // The normalizer owns header-path extraction: its validated split
+        // handles paths containing spaces (even ` b/`) that a lazy regex
+        // would cut at the wrong boundary.
+        $paths = $this->patchNormalizer->headerPaths($headerLine);
+        if ($paths === null) {
             return null;
         }
 
-        $oldPath = $m[1];
-        $newPath = $m[2];
+        [$oldPath, $newPath] = $paths;
 
         // Detect status from subsequent header lines
         $status = 'modified';
@@ -279,9 +280,8 @@ class DiffParser
 
         return implode("\n", array_map(function (string $line): string {
             $marker = $this->movedMarkerForAnsiLine($line);
-            $strippedLine = preg_replace(self::ANSI_SEQUENCE_PATTERN, '', $line);
 
-            return $marker.($strippedLine ?? $line);
+            return $marker.AnsiText::strip($line);
         }, $lines));
     }
 

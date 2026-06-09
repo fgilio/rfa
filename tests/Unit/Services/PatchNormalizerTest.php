@@ -108,3 +108,31 @@ PATCH;
         ->and($normalized)->toContain('--- a/src/my file.php')
         ->and($normalized)->toContain('+++ b/src/my file.php');
 });
+
+test('splits same-path headers whose path itself contains " b/"', function () {
+    $patch = <<<'PATCH'
+diff --git a/lib b/util.js b/lib b/util.js
+index abc1234..def5678 100644
+--- a/lib b/util.js
++++ b/lib b/util.js
+@@ -1 +1 @@
+-old
++new
+PATCH;
+
+    $normalized = (new PatchNormalizerService)->normalize($patch);
+
+    expect($normalized)->toContain('diff --git a/lib b/util.js b/lib b/util.js')
+        ->and((new PatchNormalizerService)->headerPaths('diff --git a/lib b/util.js b/lib b/util.js'))
+        ->toBe(['lib b/util.js', 'lib b/util.js']);
+});
+
+test('headerPaths strips standard prefixes and rejects non-header lines', function () {
+    $normalizer = new PatchNormalizerService;
+
+    expect($normalizer->headerPaths('diff --git a/src/Foo.php b/src/Foo.php'))
+        ->toBe(['src/Foo.php', 'src/Foo.php'])
+        ->and($normalizer->headerPaths('diff --git a/old.txt b/new.txt'))
+        ->toBe(['old.txt', 'new.txt'])
+        ->and($normalizer->headerPaths('--- a/src/Foo.php'))->toBeNull();
+});

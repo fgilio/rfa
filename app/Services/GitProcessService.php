@@ -23,6 +23,13 @@ class GitProcessService
         'diff.mnemonicPrefix=false',
         'diff.srcPrefix=a/',
         'diff.dstPrefix=b/',
+        // Plain removed/added/context colors are pinned alongside the moved
+        // variants: DiffParser classifies moved lines by SGR code (2, 33-36),
+        // so a user gitconfig theme like `old = magenta` or `new = dim cyan`
+        // must not be able to recolor ordinary lines into that range.
+        'color.diff.old=red',
+        'color.diff.new=green',
+        'color.diff.context=normal',
         'color.diff.oldMoved=bold magenta',
         'color.diff.newMoved=bold cyan',
         'color.diff.oldMovedAlternative=bold blue',
