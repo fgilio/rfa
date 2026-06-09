@@ -39,6 +39,11 @@ test('rejects path traversal', function (string $path) {
     'foo/../bar',
 ])->throws(InvalidArgumentException::class);
 
+test('isRelative returns false instead of throwing for invalid paths', function () {
+    expect(PathGuard::isRelative('src/File.php'))->toBeTrue()
+        ->and(PathGuard::isRelative('../escape.php'))->toBeFalse();
+});
+
 // -- assertWithinRepo --
 
 test('assertWithinRepo accepts a path inside the repo', function () {
@@ -125,5 +130,16 @@ test('resolveWithinRepo can return a leaf symlink identity without following it'
             ->toBe(realpath($repo).'/leaf.txt');
     } finally {
         exec('rm -rf '.escapeshellarg($repo).' '.escapeshellarg($outside));
+    }
+});
+
+test('tryResolveWithinRepo returns null instead of throwing', function () {
+    $repo = sys_get_temp_dir().'/rfa_pathguard_'.getmypid().'_'.uniqid('', true);
+    mkdir($repo, 0755, true);
+
+    try {
+        expect(PathGuard::tryResolveWithinRepo($repo, '../escape.php'))->toBeNull();
+    } finally {
+        exec('rm -rf '.escapeshellarg($repo));
     }
 });

@@ -23,17 +23,20 @@ class DiffParser
         private readonly PatchNormalizerService $patchNormalizer = new PatchNormalizerService,
     ) {}
 
-    public function parseSingle(string $rawDiff): ?FileDiff
+    public function parseSingle(string $rawDiff, bool $detectMovedLines = false): ?FileDiff
     {
-        return $this->parse($rawDiff)[0] ?? null;
+        return $this->parse($rawDiff, $detectMovedLines)[0] ?? null;
     }
 
     /**
      * @return FileDiff[]
      */
-    public function parse(string $rawDiff): array
+    public function parse(string $rawDiff, bool $detectMovedLines = false): array
     {
-        $rawDiff = $this->stripAnsiAndMarkMovedLines($rawDiff);
+        if ($detectMovedLines) {
+            $rawDiff = $this->stripAnsiAndMarkMovedLines($rawDiff);
+        }
+
         $rawDiff = $this->patchNormalizer->normalize($rawDiff);
 
         if (trim($rawDiff) === '') {
@@ -284,15 +287,38 @@ class DiffParser
 
     private function movedMarkerForAnsiLine(string $line): string
     {
-        if (preg_match('/\x1b\[(?:1;35|35;1|1;34|34;1)m-/', $line) === 1) {
+        if (preg_match('/^((?:\x1b\[[0-9;]*m)+)([+-])/', $line, $matches) !== 1) {
+            return '';
+        }
+
+        preg_match_all('/\x1b\[([0-9;]*)m/', $matches[1], $codeMatches);
+
+        $codes = collect($codeMatches[1])
+            ->flatMap(fn (string $sequence): array => array_filter(explode(';', $sequence), fn (string $code): bool => $code !== ''))
+            ->map(fn (string $code): int => (int) $code)
+            ->all();
+
+        $sign = $matches[2];
+        $isFaintMovedLine = in_array(2, $codes, true);
+
+        if ($sign === '-' && ($isFaintMovedLine || $this->hasAnySgrCode($codes, [34, 35]))) {
             return self::MOVED_OLD_MARKER;
         }
 
-        if (preg_match('/\x1b\[(?:1;36|36;1|1;33|33;1)m\+/', $line) === 1) {
+        if ($sign === '+' && ($isFaintMovedLine || $this->hasAnySgrCode($codes, [33, 36]))) {
             return self::MOVED_NEW_MARKER;
         }
 
         return '';
+    }
+
+    /**
+     * @param  list<int>  $codes
+     * @param  list<int>  $expected
+     */
+    private function hasAnySgrCode(array $codes, array $expected): bool
+    {
+        return collect($expected)->contains(fn (int $code): bool => in_array($code, $codes, true));
     }
 
     /**

@@ -78,16 +78,33 @@ test('resolve accepts snake case settings from persisted storage', function () {
     ]);
 });
 
-test('resolve rejects invalid integer settings', function (array $settings) {
-    $this->service->resolve(runtimeOverrides: $settings);
+test('resolve falls back for invalid integer settings', function (array $settings) {
+    $config = $this->service->resolve(runtimeOverrides: $settings);
+
+    expect($config->diffMaxBytes)->toBe(512_000)
+        ->and($config->defaultContextLines)->toBe(3);
 })->with([
     'zero diff bytes' => [['diffMaxBytes' => 0]],
     'negative context' => [['defaultContextLines' => -1]],
-])->throws(InvalidArgumentException::class);
+]);
 
-test('resolve rejects invalid moved line settings', function (array $settings) {
-    $this->service->resolve(runtimeOverrides: $settings);
+test('resolve falls back for invalid moved line settings', function (array $settings) {
+    $config = $this->service->resolve(runtimeOverrides: $settings);
+
+    expect($config->movedLineDetection)->toBeFalse()
+        ->and($config->movedLineMode)->toBe('zebra');
 })->with([
     'invalid boolean' => [['movedLineDetection' => 'maybe']],
     'invalid mode' => [['movedLineMode' => 'rainbow']],
-])->throws(InvalidArgumentException::class);
+]);
+
+test('resolve memoizes default config for the request', function () {
+    config(['rfa.diff_max_bytes' => 123]);
+
+    $first = $this->service->resolve();
+
+    config(['rfa.diff_max_bytes' => 456]);
+
+    expect($this->service->resolve())->toBe($first)
+        ->and($first->diffMaxBytes)->toBe(123);
+});

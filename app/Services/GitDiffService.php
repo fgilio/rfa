@@ -171,7 +171,7 @@ class GitDiffService
                         continue;
                     }
 
-                    $fullPath = $this->readableRepoPath($repoPath, $file);
+                    $fullPath = PathGuard::tryResolveWithinRepo($repoPath, $file);
 
                     if ($fullPath === null || ! File::isFile($fullPath)) {
                         continue;
@@ -280,7 +280,7 @@ class GitDiffService
             return '';
         }
 
-        $fullPath = $this->readableRepoPath($repoPath, $path);
+        $fullPath = PathGuard::tryResolveWithinRepo($repoPath, $path);
 
         if ($fullPath === null || ! File::isFile($fullPath)) {
             return '';
@@ -325,11 +325,11 @@ class GitDiffService
         $target ??= DiffTarget::workingDirectory();
         $maxBytes ??= $this->reviewConfigService->resolve()->diffMaxBytes;
 
-        if ($this->repoPathForIdentity($repoPath, $path) === null) {
+        if (PathGuard::tryResolveWithinRepo($repoPath, $path, followLeaf: false) === null) {
             return '';
         }
 
-        if ($oldPath !== null && $this->repoPathForIdentity($repoPath, $oldPath) === null) {
+        if ($oldPath !== null && PathGuard::tryResolveWithinRepo($repoPath, $oldPath, followLeaf: false) === null) {
             return '';
         }
 
@@ -364,7 +364,7 @@ class GitDiffService
             return "diff --git a/{$path} b/{$path}\nnew file mode {$mode}\n--- /dev/null\n+++ b/{$path}\n@@ -0,0 +1 @@\n+{$symlinkTarget}\n\\ No newline at end of file\n";
         }
 
-        $fullPath = $this->readableRepoPath($repoPath, $path);
+        $fullPath = PathGuard::tryResolveWithinRepo($repoPath, $path);
         if ($fullPath === null) {
             return '';
         }
@@ -418,7 +418,7 @@ class GitDiffService
         $target ??= DiffTarget::workingDirectory();
 
         if ($target->isWorkingDirectory()) {
-            $fullPath = $this->readableRepoPath($repoPath, $path);
+            $fullPath = PathGuard::tryResolveWithinRepo($repoPath, $path);
 
             return $fullPath === null ? null : $this->countLinesInFile($fullPath);
         }
@@ -457,7 +457,7 @@ class GitDiffService
 
     private function getLastModified(string $repoPath, string $path): ?string
     {
-        $fullPath = $this->readableRepoPath($repoPath, $path);
+        $fullPath = PathGuard::tryResolveWithinRepo($repoPath, $path);
 
         if ($fullPath === null || ! File::isFile($fullPath)) {
             return null;
@@ -468,7 +468,7 @@ class GitDiffService
 
     private function getHumanFileSize(string $repoPath, string $path): ?string
     {
-        $fullPath = $this->readableRepoPath($repoPath, $path);
+        $fullPath = PathGuard::tryResolveWithinRepo($repoPath, $path);
 
         if ($fullPath === null || ! File::isFile($fullPath)) {
             return null;
@@ -479,45 +479,27 @@ class GitDiffService
 
     private function getRawMtime(string $repoPath, string $path): ?int
     {
-        $fullPath = $this->readableRepoPath($repoPath, $path);
+        $fullPath = PathGuard::tryResolveWithinRepo($repoPath, $path);
 
         return $fullPath !== null && File::isFile($fullPath) ? File::lastModified($fullPath) : null;
     }
 
     private function getRawByteSize(string $repoPath, string $path): ?int
     {
-        $fullPath = $this->readableRepoPath($repoPath, $path);
+        $fullPath = PathGuard::tryResolveWithinRepo($repoPath, $path);
 
         return $fullPath !== null && File::isFile($fullPath) ? File::size($fullPath) : null;
     }
 
     private function symlinkTarget(string $repoPath, string $path): ?string
     {
-        $fullPath = $this->repoPathForIdentity($repoPath, $path);
+        $fullPath = PathGuard::tryResolveWithinRepo($repoPath, $path, followLeaf: false);
 
         if ($fullPath === null) {
             return null;
         }
 
         return is_link($fullPath) ? readlink($fullPath) : null;
-    }
-
-    private function readableRepoPath(string $repoPath, string $path): ?string
-    {
-        return rescue(
-            fn (): ?string => PathGuard::resolveWithinRepo($repoPath, $path),
-            rescue: null,
-            report: false,
-        );
-    }
-
-    private function repoPathForIdentity(string $repoPath, string $path): ?string
-    {
-        return rescue(
-            fn (): ?string => PathGuard::resolveWithinRepo($repoPath, $path, followLeaf: false),
-            rescue: null,
-            report: false,
-        );
     }
 
     private function isBinary(string $path): bool

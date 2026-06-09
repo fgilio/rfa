@@ -126,12 +126,12 @@ class GitMetadataService
 
     public function getFileContent(string $repoPath, string $path, string $ref = GitRef::Working->value): ?string
     {
-        if ($this->looksLikeFlag($ref) || ! $this->isValidRepoPath($path)) {
+        if ($this->looksLikeFlag($ref) || ! PathGuard::isRelative($path)) {
             return null;
         }
 
         if ($ref === GitRef::Working->value) {
-            $fullPath = $this->readableRepoPath($repoPath, $path);
+            $fullPath = PathGuard::tryResolveWithinRepo($repoPath, $path);
 
             if ($fullPath === null || ! File::isFile($fullPath)) {
                 return null;
@@ -158,24 +158,6 @@ class GitMetadataService
 
             return null;
         }
-    }
-
-    private function isValidRepoPath(string $path): bool
-    {
-        return rescue(function () use ($path): bool {
-            PathGuard::assertRelative($path);
-
-            return true;
-        }, rescue: false, report: false);
-    }
-
-    private function readableRepoPath(string $repoPath, string $path): ?string
-    {
-        return rescue(
-            fn (): ?string => PathGuard::resolveWithinRepo($repoPath, $path),
-            rescue: null,
-            report: false,
-        );
     }
 
     public function resolveRef(string $repoPath, string $ref): ?string

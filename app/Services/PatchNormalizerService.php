@@ -62,8 +62,52 @@ class PatchNormalizerService
             return [stripcslashes($matches[1]), stripcslashes($matches[2])];
         }
 
+        if (str_starts_with($tail, 'a/')) {
+            $separator = strpos($tail, ' b/');
+            if ($separator !== false) {
+                return [substr($tail, 0, $separator), substr($tail, $separator + 1)];
+            }
+        }
+
+        $splitPaths = $this->splitUnquotedPaths($tail);
+        if ($splitPaths !== null) {
+            return $splitPaths;
+        }
+
         if (preg_match('/^(\S+) (\S+)$/', $tail, $matches) === 1) {
             return [$matches[1], $matches[2]];
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{string, string}|null
+     */
+    private function splitUnquotedPaths(string $tail): ?array
+    {
+        $offset = 0;
+
+        while (($position = strpos($tail, ' ', $offset)) !== false) {
+            $oldPath = substr($tail, 0, $position);
+            $newPath = substr($tail, $position + 1);
+
+            if ($oldPath === $newPath) {
+                return [$oldPath, $newPath];
+            }
+
+            $oldRemainder = $this->afterFirstSlash($oldPath);
+            $newRemainder = $this->afterFirstSlash($newPath);
+
+            if (
+                $oldRemainder !== null
+                && $oldRemainder === $newRemainder
+                && $this->firstSegment($oldPath) !== $this->firstSegment($newPath)
+            ) {
+                return [$oldPath, $newPath];
+            }
+
+            $offset = $position + 1;
         }
 
         return null;
@@ -74,20 +118,24 @@ class PatchNormalizerService
      */
     private function bodyPaths(string $oldPath, string $newPath): array
     {
-        $oldBody = $this->stripSingleLetterPrefix($oldPath);
-        $newBody = $this->stripSingleLetterPrefix($newPath);
-
-        if ($oldBody !== $oldPath || $newBody !== $newPath) {
-            return [$oldBody, $newBody];
-        }
-
+        $oldFirstSegment = $this->firstSegment($oldPath);
+        $newFirstSegment = $this->firstSegment($newPath);
         $oldAfterFirstSlash = $this->afterFirstSlash($oldPath);
         $newAfterFirstSlash = $this->afterFirstSlash($newPath);
 
         if (
+            $oldFirstSegment === 'a'
+            && $newFirstSegment === 'b'
+            && $oldAfterFirstSlash !== null
+            && $newAfterFirstSlash !== null
+        ) {
+            return [$oldAfterFirstSlash, $newAfterFirstSlash];
+        }
+
+        if (
             $oldAfterFirstSlash !== null
             && $oldAfterFirstSlash === $newAfterFirstSlash
-            && $this->firstSegment($oldPath) !== $this->firstSegment($newPath)
+            && $oldFirstSegment !== $newFirstSegment
         ) {
             return [$oldAfterFirstSlash, $newAfterFirstSlash];
         }
@@ -103,20 +151,15 @@ class PatchNormalizerService
             return $line;
         }
 
-        if ($headerPath !== null && $bodyPath !== null && $path === $headerPath) {
+        if ($headerPath === null || $bodyPath === null) {
+            return $line;
+        }
+
+        if ($path === $headerPath || $path === $bodyPath) {
             return $marker.$prefix.$bodyPath;
         }
 
-        return $marker.$prefix.$this->stripSingleLetterPrefix($path);
-    }
-
-    private function stripSingleLetterPrefix(string $path): string
-    {
-        if (preg_match('#^[A-Za-z]/(.+)$#', $path, $matches) !== 1) {
-            return $path;
-        }
-
-        return $matches[1];
+        return $line;
     }
 
     private function afterFirstSlash(string $path): ?string

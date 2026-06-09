@@ -72,3 +72,39 @@ PATCH;
 
     expect($normalized)->toContain(" --- not a file marker\n");
 });
+
+test('preserves one-letter directories in no-prefix patches', function () {
+    $patch = <<<'PATCH'
+diff --git x/Foo.php x/Foo.php
+index abc1234..def5678 100644
+--- x/Foo.php
++++ x/Foo.php
+@@ -1 +1 @@
+-old
++new
+PATCH;
+
+    $normalized = (new PatchNormalizerService)->normalize($patch);
+
+    expect($normalized)->toContain('diff --git a/x/Foo.php b/x/Foo.php')
+        ->and($normalized)->toContain('--- a/x/Foo.php')
+        ->and($normalized)->toContain('+++ b/x/Foo.php');
+});
+
+test('normalizes no-prefix paths that contain spaces', function () {
+    $patch = <<<'PATCH'
+diff --git src/my file.php src/my file.php
+index abc1234..def5678 100644
+--- src/my file.php
++++ src/my file.php
+@@ -1 +1 @@
+-old
++new
+PATCH;
+
+    $normalized = (new PatchNormalizerService)->normalize($patch);
+
+    expect($normalized)->toContain('diff --git a/src/my file.php b/src/my file.php')
+        ->and($normalized)->toContain('--- a/src/my file.php')
+        ->and($normalized)->toContain('+++ b/src/my file.php');
+});

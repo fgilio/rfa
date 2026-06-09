@@ -28,6 +28,15 @@ final class PathGuard
         );
     }
 
+    public static function isRelative(string $path): bool
+    {
+        return rescue(function () use ($path): bool {
+            self::assertRelative($path);
+
+            return true;
+        }, rescue: false, report: false);
+    }
+
     /**
      * Assert a repo-relative path resolves to a location *inside* the repo.
      *
@@ -114,5 +123,14 @@ final class PathGuard
         );
 
         return $pathReal;
+    }
+
+    public static function tryResolveWithinRepo(string $repoPath, string $relativePath, bool $followLeaf = true): ?string
+    {
+        return rescue(
+            fn (): ?string => self::resolveWithinRepo($repoPath, $relativePath, $followLeaf),
+            rescue: null,
+            report: false,
+        );
     }
 }

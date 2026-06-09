@@ -84,12 +84,19 @@ class GitFileContentService
             return $this->contentCache[$key];
         }
 
-        if (! $this->isValidRepoPath($path)) {
+        if (! PathGuard::isRelative($path)) {
             return $this->contentCache[$key] = null;
         }
 
         if ($ref === GitRef::Working->value) {
-            $absolute = $this->readableRepoPath($repoPath, $path);
+            $identityPath = PathGuard::tryResolveWithinRepo($repoPath, $path, followLeaf: false);
+            if ($identityPath !== null && is_link($identityPath)) {
+                $target = readlink($identityPath);
+
+                return $this->contentCache[$key] = $target === false ? null : $target;
+            }
+
+            $absolute = PathGuard::tryResolveWithinRepo($repoPath, $path);
             $content = $absolute !== null && is_file($absolute) ? @file_get_contents($absolute) : false;
 
             return $this->contentCache[$key] = $content === false ? null : $content;
@@ -126,23 +133,5 @@ class GitFileContentService
         $content = is_file($absolutePath) ? @file_get_contents($absolutePath) : false;
 
         return $this->contentCache[$key] = $content === false ? null : $content;
-    }
-
-    private function isValidRepoPath(string $path): bool
-    {
-        return rescue(function () use ($path): bool {
-            PathGuard::assertRelative($path);
-
-            return true;
-        }, rescue: false, report: false);
-    }
-
-    private function readableRepoPath(string $repoPath, string $path): ?string
-    {
-        return rescue(
-            fn (): ?string => PathGuard::resolveWithinRepo($repoPath, $path),
-            rescue: null,
-            report: false,
-        );
     }
 }

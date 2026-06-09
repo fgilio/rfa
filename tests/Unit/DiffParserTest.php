@@ -135,7 +135,7 @@ test('parses moved lines from ansi colored git diff', function () {
         '',
     ]);
 
-    $files = $this->parser->parse($diff);
+    $files = $this->parser->parse($diff, detectMovedLines: true);
 
     expect($files)->toHaveCount(1);
 
@@ -150,6 +150,49 @@ test('parses moved lines from ansi colored git diff', function () {
 
     expect(collect($lines)->pluck('content')->implode("\n"))->not->toContain("\e[");
     expect($files[0]->toArray()['hunks'][0]['lines'][1]['moved'])->toBe('old');
+});
+
+test('does not strip embedded ansi sequences unless moved line detection is enabled', function () {
+    $diff = implode("\n", [
+        'diff --git a/script.sh b/script.sh',
+        'index 1aa432c..9f8af6f 100644',
+        '--- a/script.sh',
+        '+++ b/script.sh',
+        '@@ -1 +1 @@',
+        "-printf '\e[1;35m-old\e[0m'",
+        "+printf '\e[1;36m+new\e[0m'",
+        '',
+    ]);
+
+    $files = $this->parser->parse($diff);
+
+    expect($files)->toHaveCount(1);
+
+    $lines = $files[0]->hunks[0]->lines;
+
+    expect($lines[0]->content)->toContain("\e[1;35m")
+        ->and($lines[0]->moved)->toBeNull()
+        ->and($lines[1]->content)->toContain("\e[1;36m")
+        ->and($lines[1]->moved)->toBeNull();
+});
+
+test('parses dimmed moved line markers when enabled', function () {
+    $diff = implode("\n", [
+        "\e[1mdiff --git a/file.txt b/file.txt\e[m",
+        "\e[1mindex 1aa432c..9f8af6f 100644\e[m",
+        "\e[1m--- a/file.txt\e[m",
+        "\e[1m+++ b/file.txt\e[m",
+        "\e[36m@@ -1 +1 @@\e[m",
+        "\e[2m-old\e[m",
+        "\e[2m+new\e[m",
+        '',
+    ]);
+
+    $files = $this->parser->parse($diff, detectMovedLines: true);
+
+    expect($files)->toHaveCount(1)
+        ->and($files[0]->hunks[0]->lines[0]->moved)->toBe('old')
+        ->and($files[0]->hunks[0]->lines[1]->moved)->toBe('new');
 });
 
 test('parses multiple files in one diff', function () {

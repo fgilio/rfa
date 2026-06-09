@@ -77,12 +77,15 @@ test('hashAt returns null when working copy file is missing', function () {
     expect($this->service->hashAt($this->tmpDir, GitRef::Working->value, 'missing.php'))->toBeNull();
 });
 
-test('contentAt returns null for working tree symlink escape', function () {
+test('contentAt hashes working tree symlink identity instead of followed content', function () {
     $outside = $this->createTempDirectory('rfa_gitfile_content_outside_');
     File::put($outside.'/secret.php', "<?php\necho 'outside';\n");
     symlink($outside.'/secret.php', $this->tmpDir.'/escape.php');
 
-    expect($this->service->contentAt($this->tmpDir, GitRef::Working->value, 'escape.php'))->toBeNull();
+    expect($this->service->contentAt($this->tmpDir, GitRef::Working->value, 'escape.php'))
+        ->toBe($outside.'/secret.php')
+        ->and($this->service->hashAt($this->tmpDir, GitRef::Working->value, 'escape.php'))
+        ->toBe(hash('xxh128', $outside.'/secret.php'));
 });
 
 test('hashAt memoizes repeated lookups for the same (repo, ref, path)', function () {
