@@ -75,6 +75,15 @@ class FileDiff
             'symlinkTarget' => null,
             'tooLarge' => $tooLarge,
             'skipReason' => $skipReason,
+            // Cache-shape markers: skip results (too-large/empty/no-parse) must
+            // carry the same keys DiffCacheKey::isCurrentShape() asserts, or they
+            // fail validation on every read and re-spawn git forever. Callers add
+            // syntaxStyles/headingsAnnotated; the rest live here.
+            'tableAligned' => true,
+            'newFileLineCount' => null,
+            'gridLayout' => true,
+            'lineTypesAreEnum' => true,
+            'renameAware' => true,
             'syntaxHighlighter' => 'none',
         ];
     }

@@ -10,6 +10,7 @@ const {
     rowContainsLinePoint,
     createDiffFile,
     install,
+    autoInstall,
 } = diffFile;
 
 describe('getScrollSpeed', () => {
@@ -553,5 +554,47 @@ describe('pending comment form persistence', () => {
 
         expect(third.showForm).toBe(false);
         expect(third.formBody).toBe('');
+    });
+});
+
+describe('pending comment form cleared on SPA navigation', () => {
+    beforeEach(() => {
+        // autoInstall needs Alpine present so install() runs and the
+        // livewire:navigating cleanup hook is registered.
+        globalThis.Alpine = { store: () => ({ collapseAll: false }), data: () => {} };
+        window.Alpine = globalThis.Alpine;
+    });
+
+    afterEach(() => {
+        delete globalThis.Alpine;
+        delete window.Alpine;
+        delete window.__diffFileAttached;
+        delete window.__diffFilePendingFormsCleanup;
+    });
+
+    function makeComponent(fileId) {
+        const component = createDiffFile({ fileId, filePath: 'app/Foo.php', isReviewed: false });
+        component.$dispatch = () => {};
+        return component;
+    }
+
+    it('drops an unsent draft when the page navigates away (so it cannot resurrect on a same-id file elsewhere)', () => {
+        // Registers the real production livewire:navigating cleanup hook.
+        autoInstall(window);
+
+        const first = makeComponent('nav-collide');
+        first.showForm = true;
+        first.formBody = 'unsent, must not cross the navigation boundary';
+        first.destroy(); // snapshots the draft into the page-lifetime Map
+
+        document.dispatchEvent(new window.Event('livewire:navigating'));
+
+        // A different page mounts a file whose content-hash id collides.
+        const second = makeComponent('nav-collide');
+        second.init();
+        second.destroy();
+
+        expect(second.showForm).toBe(false);
+        expect(second.formBody).toBe('');
     });
 });

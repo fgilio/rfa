@@ -39,6 +39,20 @@ test('handles nested rfa path', function () {
     expect($result)->toBe('20250115_143022_comments_Ab12Cd34');
 });
 
+// -- isArtifactPath --
+
+test('isArtifactPath recognizes comment exports and snapshots but not other files', function () {
+    expect(ReviewFilePair::isArtifactPath('.rfa/20250115_143022_comments_AbCd1234.md'))->toBeTrue()
+        ->and(ReviewFilePair::isArtifactPath('.rfa/20260101_120000_snapshot_AbCd1234.json'))->toBeTrue()
+        ->and(ReviewFilePair::isArtifactPath('some/repo/.rfa/20260101_120000_snapshot_ef12AB.json'))->toBeTrue()
+        // A source file that merely lives elsewhere is not an artifact.
+        ->and(ReviewFilePair::isArtifactPath('src/app/Foo.php'))->toBeFalse()
+        // A user's own .rfa/ file without the timestamped artifact naming stays visible.
+        ->and(ReviewFilePair::isArtifactPath('.rfa/notes.json'))->toBeFalse()
+        // A snapshot must be .json; the comment side must be .md.
+        ->and(ReviewFilePair::isArtifactPath('.rfa/20260101_120000_snapshot_AbCd1234.md'))->toBeFalse();
+});
+
 // -- parseTimestamp --
 
 test('parses timestamp from valid basename', function () {

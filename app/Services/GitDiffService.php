@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\DTOs\ReviewConfig;
 use App\Support\AnsiText;
 use App\Support\PathGuard;
 use Carbon\Carbon;
@@ -321,10 +322,12 @@ class GitDiffService
         return $parts[1] ?? null;
     }
 
-    public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, bool $detectMovedLines = true): ?string
+    public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, ?int $contextLines = null, ?DiffTarget $target = null, ?string $oldPath = null, bool $detectMovedLines = true): ?string
     {
         $target ??= DiffTarget::workingDirectory();
-        $maxBytes ??= $this->reviewConfigService->resolve()->diffMaxBytes;
+        $reviewConfig = $this->reviewConfigService->resolve();
+        $maxBytes ??= $reviewConfig->diffMaxBytes;
+        $contextLines ??= $reviewConfig->defaultContextLines;
 
         // Paths only reach git as pathspecs here, so a lexical traversal check
         // is the right guard. Requiring on-disk resolution would wrongly blank
@@ -349,7 +352,7 @@ class GitDiffService
         $renamePaths = $oldPath !== null && $oldPath !== $path ? [$oldPath] : [];
 
         $raw = $this->git->run($repoPath, [
-            ...$this->diffArgs($target, ["--unified={$contextLines}", '--text'], detectMovedLines: $detectMovedLines),
+            ...$this->diffArgs($target, ["--unified={$contextLines}", '--text'], detectMovedLines: $detectMovedLines, reviewConfig: $reviewConfig),
             '--', $path, ...$renamePaths, ...$excludes,
         ]);
 
@@ -521,9 +524,9 @@ class GitDiffService
      * @param  list<string>  $options
      * @return list<string>
      */
-    private function diffArgs(DiffTarget $target, array $options = [], bool $detectMovedLines = false): array
+    private function diffArgs(DiffTarget $target, array $options = [], bool $detectMovedLines = false, ?ReviewConfig $reviewConfig = null): array
     {
-        $reviewConfig = $this->reviewConfigService->resolve();
+        $reviewConfig ??= $this->reviewConfigService->resolve();
         $colorOptions = $detectMovedLines && $reviewConfig->movedLineDetection
             ? ['--color=always', "--color-moved={$reviewConfig->movedLineMode}"]
             : ['--no-color'];

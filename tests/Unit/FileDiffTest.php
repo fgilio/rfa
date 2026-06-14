@@ -5,6 +5,7 @@ use App\DTOs\FileDiff;
 use App\DTOs\FileSourceSpec;
 use App\DTOs\Hunk;
 use App\Enums\LineType;
+use App\Support\DiffCacheKey;
 use Faker\Factory as Faker;
 
 beforeEach(function () {
@@ -100,8 +101,23 @@ test('emptyArray returns tooLarge array structure', function () {
         'symlinkTarget' => null,
         'tooLarge' => true,
         'skipReason' => null,
+        'tableAligned' => true,
+        'newFileLineCount' => null,
+        'gridLayout' => true,
+        'lineTypesAreEnum' => true,
+        'renameAware' => true,
         'syntaxHighlighter' => 'none',
     ]);
+});
+
+test('emptyArray skip result carries the current cache shape so it is cacheable', function () {
+    // Skip results (too-large / empty / no-parse) get merged with the two keys
+    // their caller adds; the combined array must satisfy isCurrentShape() or it
+    // fails validation on every read and re-spawns git forever.
+    $skipResult = FileDiff::emptyArray('big.php', 'modified', tooLarge: true, skipReason: 'too-large')
+        + ['syntaxStyles' => '', 'headingsAnnotated' => true];
+
+    expect(DiffCacheKey::isCurrentShape($skipResult))->toBeTrue();
 });
 
 test('emptyArray returns non-tooLarge array structure', function () {

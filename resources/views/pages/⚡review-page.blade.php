@@ -1371,7 +1371,12 @@ new #[Layout('layouts.app')] class extends Component
 
     private function reviewedChangeNeedsParentRender(): bool
     {
-        return $this->hideReviewed || trim($this->fileFilter) !== '';
+        // Only Hide-reviewed mode lets a reviewed toggle change the server-visible
+        // list. A path filter is reviewed-independent (ReviewStateService only
+        // drops files for reviewed-ness when hideReviewed is on), so re-rendering
+        // the parent — and re-hydrating every mounted diff-file child — on a
+        // filter-only toggle is wasted work on a latency-sensitive path.
+        return $this->hideReviewed;
     }
 
     /** @return array<string, array<int, array<string, mixed>>> */
@@ -1524,13 +1529,9 @@ new #[Layout('layouts.app')] class extends Component
 <div
     data-testid="review-component"
     data-diff-refresh-token="{{ $diffRefreshToken }}"
-    data-file-filter="{{ $fileFilter }}"
-    data-hide-reviewed="{{ $hideReviewed ? '1' : '0' }}"
-    data-selected-file-id="{{ $this->reviewState->selectedFileId }}"
     data-source-file-entries='@json($this->reviewState->sourceFileEntries)'
     data-visible-file-entries='@json($this->reviewState->visibleFileEntries)'
     data-visible-file-ids='@json((object) $this->reviewState->visibleFileMap)'
-    data-files-by-id='@json((object) $this->reviewState->filesById)'
     @refresh-completed.window="
         const n = $event.detail?.changedCount ?? 0;
         Flux.toast({
@@ -1561,12 +1562,6 @@ new #[Layout('layouts.app')] class extends Component
                 return fallback;
             }
         },
-        get fileFilter() {
-            return this.$root?.dataset?.fileFilter || '';
-        },
-        get hideReviewed() {
-            return this.$root?.dataset?.hideReviewed === '1';
-        },
         get sourceFileEntries() {
             return this.jsonData('sourceFileEntries', []);
         },
@@ -1575,9 +1570,6 @@ new #[Layout('layouts.app')] class extends Component
         },
         get visibleFileIds() {
             return this.jsonData('visibleFileIds', {});
-        },
-        get filesById() {
-            return this.jsonData('filesById', {});
         },
         showRemoteMenu($event) {
             const d = $event.detail;
@@ -1673,9 +1665,14 @@ new #[Layout('layouts.app')] class extends Component
             if (!repo) return path;
             return repo.replace(/\/+$/, '') + '/' + path;
         },
-        scrollToFile(id) {
+        scrollToFile(id, persist = true) {
             this.activeFile = id;
-            $wire.selectFile(id);
+            // Persist the selection server-side so a later full parent re-render
+            // re-seeds the highlight. Skippable when the caller already persisted
+            // it (e.g. revealFile) to avoid a redundant round-trip.
+            if (persist) {
+                $wire.selectFile(id);
+            }
             this.$dispatch('expand-file', { id });
             document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         },
@@ -1685,12 +1682,14 @@ new #[Layout('layouts.app')] class extends Component
                 Flux.toast({ text: 'Comment is on a file not in this diff', variant: 'warning' });
                 return;
             }
-            if (!this.fileMatchesFilter(file.path, file.id)) {
+            const revealed = !this.fileMatchesFilter(file.path, file.id);
+            if (revealed) {
                 await $wire.revealFile(file.id);
             }
             this.activeFile = file.id;
             (window.__rfaPendingExpandFiles ??= new Set()).add(file.id);
-            this.scrollToFile(file.id);
+            // revealFile already set activeFileId server-side, so don't re-persist.
+            this.scrollToFile(file.id, !revealed);
             clearTimeout(this.commentScrollPollId);
             const target = 'comment-' + commentId;
             const start = performance.now();
@@ -2405,7 +2404,11 @@ new #[Layout('layouts.app')] class extends Component
                 @endif
 
                 {{-- Source Files --}}
-                @php $singleFile = $this->reviewState->visibleFileCount === 1 && count($reviewPairs) === 0; @endphp
+                {{-- Filter-independent: singleFile is read once at a diff-file child's
+                     Alpine init and its :key has no filter component, so a filtered
+                     1-of-N view can't re-init an already-mounted child. Key off the
+                     total source count so the value is stable across filtering. --}}
+                @php $singleFile = $this->reviewState->totalFileCount === 1 && count($reviewPairs) === 0; @endphp
                 @forelse($this->reviewState->visibleFiles as $file)
                     <div id="{{ $file['id'] }}"
                          class="border-b border-gh-border transition-opacity duration-150 ease-out">

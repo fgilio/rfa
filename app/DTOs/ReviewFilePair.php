@@ -14,6 +14,13 @@ class ReviewFilePair
     private const BASENAME_PATTERN = '/^(\d{8}_\d{6})_comments_[A-Za-z0-9]+$/';
 
     /**
+     * Regex for RFA snapshot artifact paths: .rfa/{YYYYMMDD}_{HHMMSS}_snapshot_{hash}.json
+     * (see ExportReviewSnapshotAction). Mirrors the comment-file naming so both
+     * RFA-generated artifacts are filtered out of the reviewed source list.
+     */
+    private const SNAPSHOT_PATH_PATTERN = '#(?:^|/)\.rfa/\d{8}_\d{6}_snapshot_[A-Za-z0-9]+\.json$#';
+
+    /**
      * @param  array<string, mixed>  $mdFile
      */
     public function __construct(
@@ -29,6 +36,17 @@ class ReviewFilePair
     public static function isValidBasename(string $basename): bool
     {
         return (bool) preg_match(self::BASENAME_PATTERN, $basename);
+    }
+
+    /**
+     * Whether a path is any RFA-generated artifact (comment export or snapshot)
+     * that should be hidden from the reviewed source-file list. Comment files
+     * pair up via {@see self::extractBasename()}; snapshots stand alone.
+     */
+    public static function isArtifactPath(string $path): bool
+    {
+        return self::extractBasename($path) !== null
+            || preg_match(self::SNAPSHOT_PATH_PATTERN, $path) === 1;
     }
 
     /**

@@ -37,7 +37,7 @@ final readonly class LoadFileDiffAction
     private readonly ReviewConfigService $reviewConfigService;
 
     /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool, skipReason?: ?string, syntaxStyles: string} */
-    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
+    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, ?int $contextLines = null, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
     {
         $target ??= DiffTarget::workingDirectory();
         $reviewConfig = $this->reviewConfigService->resolve();
@@ -66,7 +66,13 @@ final readonly class LoadFileDiffAction
                 return FileDiff::emptyArray($path, 'modified', tooLarge: false) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
             }
 
-            $fileDiff = $this->diffParser->parseSingle($rawDiff, detectMovedLines: $reviewConfig->movedLineDetection);
+            // Untracked and external diffs are hand-built (never git-colorized),
+            // so their content can hold literal ANSI escapes. Moved-line detection
+            // strips ANSI from the whole patch, which would corrupt that content;
+            // only enable it for real git-colorized diffs.
+            $isHandBuiltDiff = $externalAbsolutePath !== null || ($isUntracked && $target->isWorkingDirectory());
+
+            $fileDiff = $this->diffParser->parseSingle($rawDiff, detectMovedLines: $reviewConfig->movedLineDetection && ! $isHandBuiltDiff);
 
             if (! $fileDiff) {
                 return FileDiff::emptyArray($path, 'modified', tooLarge: false) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
@@ -119,11 +125,18 @@ final readonly class LoadFileDiffAction
                 return $cached;
             }
             $result = $compute();
-            $ttlHours = $target->isImmutable()
-                ? 720
-                : $reviewConfig->cacheTtlHours;
 
-            Cache::put($cacheKey, $result, now()->addHours($ttlHours));
+            // A git failure is transient, so don't persist it — the next read
+            // should retry rather than serve a cached error for the full TTL.
+            // Skip results (too-large/empty/no-parse) are deterministic and do
+            // carry the current cache shape, so they cache and stop re-spawning git.
+            if (! array_key_exists('error', $result)) {
+                $ttlHours = $target->isImmutable()
+                    ? 720
+                    : $reviewConfig->cacheTtlHours;
+
+                Cache::put($cacheKey, $result, now()->addHours($ttlHours));
+            }
 
             return $result;
         }

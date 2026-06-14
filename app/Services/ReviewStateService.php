@@ -71,7 +71,7 @@ class ReviewStateService
     public function sourceFiles(array $files): array
     {
         return collect($files)
-            ->reject(fn (array $file): bool => ReviewFilePair::extractBasename((string) ($file['path'] ?? '')) !== null)
+            ->reject(fn (array $file): bool => ReviewFilePair::isArtifactPath((string) ($file['path'] ?? '')))
             ->values()
             ->all();
     }

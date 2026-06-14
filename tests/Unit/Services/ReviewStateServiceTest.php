@@ -20,6 +20,18 @@ test('sourceFiles excludes review artifacts and preserves source order', functio
         ->and(array_column($sourceFiles, 'id'))->toBe(['file-a', 'file-b', 'file-c']);
 });
 
+test('sourceFiles also excludes snapshot artifacts (.rfa/*_snapshot_*.json)', function () {
+    $files = [
+        ['id' => 'file-a', 'path' => 'src/A.php', 'status' => 'modified', 'additions' => 1, 'deletions' => 0],
+        ['id' => 'file-s', 'path' => '.rfa/20260101_120000_snapshot_AbCd1234.json', 'status' => 'added', 'additions' => 9, 'deletions' => 0],
+    ];
+
+    $sourceFiles = $this->service->sourceFiles($files);
+
+    expect($sourceFiles)->toHaveCount(1)
+        ->and(array_column($sourceFiles, 'id'))->toBe(['file-a']);
+});
+
 test('derive builds deterministic sidebar payload and counts', function () {
     $state = $this->service->derive($this->files, ['src/B.php' => 'hash']);
 

@@ -19,7 +19,9 @@ test('diff kind delegates to GitDiffService::getFileDiff with the target', funct
 
     $diff = Mockery::mock(GitDiffService::class);
     $diff->shouldReceive('getFileDiff')
-        ->with('/tmp/repo', 'src/foo.php', true, null, 3, Mockery::on(fn ($t) => $t === $target), null, false)
+        // contextLines is null here: the caller omits it so getFileDiff resolves
+        // the configured default itself, rather than passing a hardcoded 3.
+        ->with('/tmp/repo', 'src/foo.php', true, null, null, Mockery::on(fn ($t) => $t === $target), null, false)
         ->once()
         ->andReturn('diff body');
 

@@ -579,6 +579,16 @@
         } else {
             root.document.addEventListener('alpine:init', () => install(root));
         }
+
+        // pendingCommentForms is page-lifetime by design — it survives a diff-file
+        // remount from filtering/hide-reviewed. But it must NOT outlive a
+        // wire:navigate to another page: file ids are content-path hashes, so a
+        // different review can mount a colliding id and resurrect a stale draft.
+        // Clear on navigation, registered once (see public/js/CLAUDE.md).
+        if (root.document && !root.__diffFilePendingFormsCleanup) {
+            root.__diffFilePendingFormsCleanup = true;
+            root.document.addEventListener('livewire:navigating', () => pendingCommentForms.clear());
+        }
     }
 
     return {

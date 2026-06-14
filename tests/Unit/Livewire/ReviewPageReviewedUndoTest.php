@@ -224,12 +224,17 @@ test('toggleReviewed renders when hide-reviewed visibility changes', function ()
         ->and($component->instance()->reviewState()->visibleFileMap)->toHaveKey('id-bar');
 });
 
-test('toggleReviewed renders when file filter is active', function () {
+test('toggleReviewed skips render when only a file filter is active (filter is reviewed-independent)', function () {
+    // A path filter never hides a file for being reviewed — only Hide-reviewed
+    // does (ReviewStateService::fileIsVisible). The server-visible list is
+    // therefore unchanged by the toggle, so re-rendering would needlessly
+    // re-hydrate every mounted diff-file child on a latency-sensitive path. The
+    // toggle must still persist the reviewed state.
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->set('fileFilter', 'Foo')
         ->dispatch('toggle-reviewed', filePath: 'src/Foo.php');
 
-    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeFalsy()
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
         ->and($component->instance()->reviewState()->reviewedFileIds)->toBe(['id-foo']);
 });
 

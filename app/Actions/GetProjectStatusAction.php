@@ -33,8 +33,8 @@ final readonly class GetProjectStatusAction
             return ['dirty' => false, 'fileCount' => 0, 'additions' => 0, 'deletions' => 0];
         }
 
-        // Exclude RFA's own review files from metrics
-        $sourceEntries = array_filter($entries, fn (FileListEntry $e) => ReviewFilePair::extractBasename($e->path) === null);
+        // Exclude RFA's own review files (comment exports + snapshots) from metrics
+        $sourceEntries = array_filter($entries, fn (FileListEntry $e) => ! ReviewFilePair::isArtifactPath($e->path));
 
         return [
             'dirty' => count($sourceEntries) > 0,
