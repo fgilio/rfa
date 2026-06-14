@@ -73,6 +73,57 @@ class PatchNormalizerService
     }
 
     /**
+     * Resolve old and new paths from a section's rename or copy markers.
+     *
+     * Each marker carries a single path alone on its line with git's C-style
+     * quoting, so they resolve unambiguously where the combined `diff --git`
+     * header cannot: git leaves spaces unquoted there and packs both paths
+     * onto one line, so a path containing a space or a ` b/` substring has no
+     * recoverable boundary. Returns null when the section is neither a rename
+     * nor a copy.
+     *
+     * @param  list<string>  $lines  Lines of one file section, header first.
+     * @return array{string, string}|null
+     */
+    public function renamePaths(array $lines): ?array
+    {
+        $old = null;
+        $new = null;
+
+        foreach ($lines as $line) {
+            if (str_starts_with($line, '@@ ')) {
+                break;
+            }
+
+            if (str_starts_with($line, 'rename from ')) {
+                $old = $this->decodePath(substr($line, strlen('rename from ')));
+            } elseif (str_starts_with($line, 'copy from ')) {
+                $old = $this->decodePath(substr($line, strlen('copy from ')));
+            } elseif (str_starts_with($line, 'rename to ')) {
+                $new = $this->decodePath(substr($line, strlen('rename to ')));
+            } elseif (str_starts_with($line, 'copy to ')) {
+                $new = $this->decodePath(substr($line, strlen('copy to ')));
+            }
+        }
+
+        return $old !== null && $new !== null ? [$old, $new] : null;
+    }
+
+    /**
+     * Unwrap the C-style quoting git applies to a path containing control
+     * characters, a double quote, or a backslash. Unquoted tokens (the common
+     * case, including plain spaces) pass through untouched.
+     */
+    private function decodePath(string $token): string
+    {
+        if (strlen($token) >= 2 && str_starts_with($token, '"') && str_ends_with($token, '"')) {
+            return stripcslashes(substr($token, 1, -1));
+        }
+
+        return $token;
+    }
+
+    /**
      * @return array{string, string}|null
      */
     private function parseDiffGitPaths(string $line): ?array

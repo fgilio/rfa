@@ -57,6 +57,66 @@ test('parses renamed file', function () {
     expect($files[0]->oldPath)->toBe('old_name.php');
 });
 
+test('resolves a rename whose new path needs control-char quoting', function () {
+    // Git quotes only the side with the tab, so the combined `diff --git` line
+    // is asymmetrically quoted and cannot be split apart. The rename markers
+    // carry each path alone and properly quoted.
+    $diff = 'diff --git a/normal.txt "b/has\ttab.txt"'."\n"
+        .'similarity index 90%'."\n"
+        .'rename from normal.txt'."\n"
+        .'rename to "has\ttab.txt"'."\n"
+        .'--- a/normal.txt'."\n"
+        .'+++ "b/has\ttab.txt"'."\n"
+        .'@@ -1 +1 @@'."\n"
+        .'-old'."\n"
+        .'+new'."\n";
+
+    $files = $this->parser->parse($diff);
+
+    expect($files)->toHaveCount(1)
+        ->and($files[0]->status)->toBe('renamed')
+        ->and($files[0]->oldPath)->toBe('normal.txt')
+        ->and($files[0]->path)->toBe("has\ttab.txt");
+});
+
+test('resolves a rename whose old path contains a " b/" substring', function () {
+    $diff = 'diff --git a/x y b/z b/p q'."\n"
+        .'similarity index 80%'."\n"
+        .'rename from x y b/z'."\n"
+        .'rename to p q'."\n"
+        .'--- a/x y b/z'."\n"
+        .'+++ b/p q'."\n"
+        .'@@ -1 +1 @@'."\n"
+        .'-old'."\n"
+        .'+new'."\n";
+
+    $files = $this->parser->parse($diff);
+
+    expect($files)->toHaveCount(1)
+        ->and($files[0]->oldPath)->toBe('x y b/z')
+        ->and($files[0]->path)->toBe('p q');
+});
+
+test('resolves a space-rename that shares an interior remainder', function () {
+    // `git mv "d/x yx" "d/x"`: an interior space yields matching after-slash
+    // remainders, so a heuristic split of the header lands at the wrong spot.
+    $diff = 'diff --git a/d/x yx b/d/x'."\n"
+        .'similarity index 70%'."\n"
+        .'rename from d/x yx'."\n"
+        .'rename to d/x'."\n"
+        .'--- a/d/x yx'."\n"
+        .'+++ b/d/x'."\n"
+        .'@@ -1 +1 @@'."\n"
+        .'-old'."\n"
+        .'+new'."\n";
+
+    $files = $this->parser->parse($diff);
+
+    expect($files)->toHaveCount(1)
+        ->and($files[0]->oldPath)->toBe('d/x yx')
+        ->and($files[0]->path)->toBe('d/x');
+});
+
 test('parses binary file', function () {
     $files = $this->parser->parse(File::get(fixture('binary.diff')));
 

@@ -71,6 +71,15 @@ class DiffParser
 
         [$oldPath, $newPath] = $paths;
 
+        // A rename or copy packs two distinct paths onto the `diff --git` line,
+        // where git leaves spaces unquoted, so that line cannot be split back
+        // apart reliably. The `rename`/`copy` markers carry each path alone and
+        // properly quoted, so they are the authoritative source when present.
+        $renamePaths = $this->patchNormalizer->renamePaths($lines);
+        if ($renamePaths !== null) {
+            [$oldPath, $newPath] = $renamePaths;
+        }
+
         // Detect status from subsequent header lines
         $status = 'modified';
         $isBinary = false;

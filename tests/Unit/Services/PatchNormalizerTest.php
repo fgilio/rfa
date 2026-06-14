@@ -136,3 +136,39 @@ test('headerPaths strips standard prefixes and rejects non-header lines', functi
         ->toBe(['old.txt', 'new.txt'])
         ->and($normalizer->headerPaths('--- a/src/Foo.php'))->toBeNull();
 });
+
+test('renamePaths reads each side from its own rename marker', function () {
+    $normalizer = new PatchNormalizerService;
+
+    expect($normalizer->renamePaths(['diff --git a/old.php b/new.php', 'rename from old.php', 'rename to new.php', '@@ -1 +1 @@']))
+        ->toBe(['old.php', 'new.php']);
+});
+
+test('renamePaths keeps spaces and " b/" substrings intact', function () {
+    $normalizer = new PatchNormalizerService;
+
+    expect($normalizer->renamePaths(['rename from x y b/z', 'rename to p q']))
+        ->toBe(['x y b/z', 'p q']);
+});
+
+test('renamePaths decodes git C-style quoting on a control-char path', function () {
+    $normalizer = new PatchNormalizerService;
+
+    expect($normalizer->renamePaths(['rename from normal.txt', 'rename to "has\ttab.txt"']))
+        ->toBe(['normal.txt', "has\ttab.txt"]);
+});
+
+test('renamePaths handles copy markers', function () {
+    $normalizer = new PatchNormalizerService;
+
+    expect($normalizer->renamePaths(['copy from src.php', 'copy to dest.php']))
+        ->toBe(['src.php', 'dest.php']);
+});
+
+test('renamePaths returns null when the section is neither a rename nor a copy', function () {
+    $normalizer = new PatchNormalizerService;
+
+    expect($normalizer->renamePaths(['diff --git a/foo.php b/foo.php', '@@ -1 +1 @@', '-old', '+new']))
+        ->toBeNull()
+        ->and($normalizer->renamePaths(['rename from only-one-side.php']))->toBeNull();
+});
