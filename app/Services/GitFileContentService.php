@@ -141,7 +141,7 @@ class GitFileContentService
             return $this->contentCache[$key];
         }
 
-        if (! PathGuard::isRelative($path)) {
+        if ($this->looksLikeFlag($ref) || ! PathGuard::isRelative($path)) {
             return $this->contentCache[$key] = null;
         }
 
@@ -175,7 +175,7 @@ class GitFileContentService
      */
     public function byteSizeAt(string $repoPath, string $ref, string $path): ?int
     {
-        if (! PathGuard::isRelative($path)) {
+        if ($this->looksLikeFlag($ref) || ! PathGuard::isRelative($path)) {
             return null;
         }
 
@@ -213,6 +213,19 @@ class GitFileContentService
         $size = @filesize($absolutePath);
 
         return $size === false ? null : $size;
+    }
+
+    /**
+     * Reject refs that git would parse as an option rather than a revision.
+     *
+     * A ref reaching this read path from a deep-link param is not guaranteed
+     * to be a resolved SHA, and `git show`/`git cat-file` compose it as
+     * `$ref:$path`. A leading dash (e.g. `--output=...`) would otherwise turn
+     * the whole token into a flag. Mirrors {@see GitMetadataService}.
+     */
+    private function looksLikeFlag(string $ref): bool
+    {
+        return str_starts_with($ref, '-');
     }
 
     /**

@@ -67,6 +67,17 @@ test('hashAt returns null when working copy file is missing', function () {
     expect($this->service->hashAt($this->tmpDir, GitRef::Working->value, 'missing.php'))->toBeNull();
 });
 
+test('reads never hand git an option-shaped ref', function () {
+    $gitProcess = Mockery::mock(GitProcessService::class);
+    $gitProcess->shouldNotReceive('run');
+
+    $service = new GitFileContentService($gitProcess);
+
+    expect($service->contentAt($this->tmpDir, '--output=/tmp/pwned', 'hello.php'))->toBeNull()
+        ->and($service->hashAt($this->tmpDir, '-x', 'hello.php'))->toBeNull()
+        ->and($service->byteSizeAt($this->tmpDir, '--output=/tmp/pwned', 'hello.php'))->toBeNull();
+});
+
 test('contentAt hashes working tree symlink identity instead of followed content', function () {
     $outside = $this->createTempDirectory('rfa_gitfile_content_outside_');
     File::put($outside.'/secret.php', "<?php\necho 'outside';\n");
