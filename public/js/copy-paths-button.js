@@ -51,14 +51,12 @@
                 return Array.isArray(entries) ? entries : [];
             },
 
+            // The label ("Copy N paths") and the copied lines must come from one
+            // source, or they can disagree. The entries are that source, so the
+            // count is their length rather than a separate count attribute that
+            // could drift from the list actually copied.
             get bulkVisibleCount() {
-                const live = this._liveBulkEntries;
-                if (live !== null) {
-                    return live.length;
-                }
-
-                const count = Number(this.$root?.dataset?.visibleFileCount);
-                return Number.isFinite(count) ? count : 0;
+                return this.bulkEntries.length;
             },
 
             paths() {
