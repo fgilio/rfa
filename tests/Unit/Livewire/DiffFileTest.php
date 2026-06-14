@@ -3,6 +3,7 @@
 use App\Actions\GetFileCopyContentAction;
 use App\Actions\LoadFileDiffAction;
 use App\Console\Benchmark\DiffFixtureFactory;
+use App\DTOs\CopyContentResult;
 use App\DTOs\DiffTarget;
 use App\Enums\LineType;
 use App\Support\DiffCacheKey;
@@ -528,12 +529,12 @@ test('copyContent forwards the file status to GetFileCopyContentAction', functio
     {
         public function __construct(private object $captured) {}
 
-        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): ?string
+        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
         {
             $this->captured->kind = $kind;
             $this->captured->status = $status;
 
-            return null;
+            return CopyContentResult::unavailable();
         }
     });
 
@@ -545,12 +546,26 @@ test('copyContent forwards the file status to GetFileCopyContentAction', functio
         ->and($captured->status)->toBe('deleted');
 });
 
-test('copyContent dispatches no clipboard event when the action returns null', function () {
+test('copyContent copies the content and toasts success when the result is ok', function () {
     app()->bind(GetFileCopyContentAction::class, fn () => new class
     {
-        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): ?string
+        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
         {
-            return null;
+            return CopyContentResult::ok('the new body');
+        }
+    });
+
+    mountDiffFile(DiffFixtureFactory::fileEntry('src/Foo.php'))
+        ->call('copyContent', 'new')
+        ->assertDispatched('copy-to-clipboard', text: 'the new body', toast: 'Copied new');
+});
+
+test('copyContent surfaces a feedback toast and no clipboard event when nothing is available', function () {
+    app()->bind(GetFileCopyContentAction::class, fn () => new class
+    {
+        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
+        {
+            return CopyContentResult::unavailable();
         }
     });
 
@@ -558,7 +573,27 @@ test('copyContent dispatches no clipboard event when the action returns null', f
 
     mountDiffFile($deletedFile)
         ->call('copyContent', 'original')
-        ->assertNotDispatched('copy-to-clipboard');
+        ->assertNotDispatched('copy-to-clipboard')
+        ->assertDispatched('toast-show');
+});
+
+test('copyContent reports a too-large source with its size', function () {
+    app()->bind(GetFileCopyContentAction::class, fn () => new class
+    {
+        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
+        {
+            return CopyContentResult::tooLarge(2_000_000);
+        }
+    });
+
+    mountDiffFile(DiffFixtureFactory::fileEntry('src/Big.php'))
+        ->call('copyContent', 'new')
+        ->assertNotDispatched('copy-to-clipboard')
+        ->assertDispatched(
+            'toast-show',
+            fn (string $event, array $params): bool => str_contains($params['slots']['text'] ?? '', 'too large')
+                && str_contains($params['slots']['text'] ?? '', 'MB'),
+        );
 });
 
 // -- Image diff source refs --

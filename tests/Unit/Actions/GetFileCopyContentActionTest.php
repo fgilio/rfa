@@ -1,19 +1,23 @@
 <?php
 
 use App\Actions\GetFileCopyContentAction;
+use App\DTOs\CopyContentResult;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileSourceSpec;
 use App\DTOs\SourceText;
 use App\Enums\GitRef;
+use App\Services\ExternalFilesService;
 use App\Services\FileSourceService;
 use App\Services\GitDiffService;
 use Tests\TestCase;
 
 uses(TestCase::class);
 
-function makeCopyAction(GitDiffService $diff, FileSourceService $fileSource): GetFileCopyContentAction
+function makeCopyAction(GitDiffService $diff, FileSourceService $fileSource, ?ExternalFilesService $external = null): GetFileCopyContentAction
 {
-    return new GetFileCopyContentAction($diff, $fileSource);
+    $external ??= Mockery::mock(ExternalFilesService::class);
+
+    return new GetFileCopyContentAction($diff, $fileSource, $external);
 }
 
 /** Match a git-type FileSourceSpec by ref and path. */
@@ -39,7 +43,40 @@ test('diff kind delegates to GitDiffService::getFileDiff with the target', funct
     $result = makeCopyAction($diff, $fileSource)
         ->handle('diff', '/tmp/repo', 'src/foo.php', true, $target);
 
-    expect($result)->toBe('diff body');
+    expect($result->isOk())->toBeTrue()
+        ->and($result->content)->toBe('diff body');
+});
+
+test('diff kind routes an external file through the external diff builder', function () {
+    $external = Mockery::mock(ExternalFilesService::class);
+    $external->shouldReceive('buildDiff')
+        ->with('/outside/spec.md', 'external/notes/spec.md')
+        ->once()
+        ->andReturn('external diff body');
+
+    $diff = Mockery::mock(GitDiffService::class);
+    $diff->shouldNotReceive('getFileDiff');
+
+    $fileSource = Mockery::mock(FileSourceService::class);
+
+    $result = makeCopyAction($diff, $fileSource, $external)
+        ->handle('diff', '/tmp/repo', 'external/notes/spec.md', false, DiffTarget::workingDirectory(), status: 'added', isExternal: true, externalAbsolutePath: '/outside/spec.md');
+
+    expect($result->isOk())->toBeTrue()
+        ->and($result->content)->toBe('external diff body');
+});
+
+test('diff kind reports unavailable when the diff is empty', function () {
+    $diff = Mockery::mock(GitDiffService::class);
+    $diff->shouldReceive('getFileDiff')->once()->andReturn('');
+
+    $fileSource = Mockery::mock(FileSourceService::class);
+
+    $result = makeCopyAction($diff, $fileSource)
+        ->handle('diff', '/tmp/repo', 'src/foo.php', false, DiffTarget::workingDirectory());
+
+    expect($result->status)->toBe(CopyContentResult::STATUS_UNAVAILABLE)
+        ->and($result->content)->toBeNull();
 });
 
 test('original kind fetches the from-side source', function () {
@@ -57,7 +94,7 @@ test('original kind fetches the from-side source', function () {
     $result = makeCopyAction($diff, $fileSource)
         ->handle('original', '/tmp/repo', 'src/foo.php', false, $target);
 
-    expect($result)->toBe('original body');
+    expect($result->content)->toBe('original body');
 });
 
 test('original kind prefers oldPath when provided (renames)', function () {
@@ -74,10 +111,10 @@ test('original kind prefers oldPath when provided (renames)', function () {
     $result = makeCopyAction($diff, $fileSource)
         ->handle('original', '/tmp/repo', 'src/new.php', false, $target, 'src/old.php');
 
-    expect($result)->toBe('original body');
+    expect($result->content)->toBe('original body');
 });
 
-test('original kind returns null for an added file without fetching', function () {
+test('original kind is unavailable for an added file without fetching', function () {
     $fileSource = Mockery::mock(FileSourceService::class);
     // An added file has no original side, so the source resolves to none and
     // the action short-circuits before reading any content.
@@ -89,10 +126,10 @@ test('original kind returns null for an added file without fetching', function (
     $result = makeCopyAction($diff, $fileSource)
         ->handle('original', '/tmp/repo', 'src/foo.php', false, DiffTarget::range('abc', 'def'), status: 'added');
 
-    expect($result)->toBeNull();
+    expect($result->status)->toBe(CopyContentResult::STATUS_UNAVAILABLE);
 });
 
-test('new kind returns null for a deleted file without fetching', function () {
+test('new kind is unavailable for a deleted file without fetching', function () {
     $fileSource = Mockery::mock(FileSourceService::class);
     $fileSource->shouldNotReceive('fetch');
 
@@ -102,7 +139,7 @@ test('new kind returns null for a deleted file without fetching', function () {
     $result = makeCopyAction($diff, $fileSource)
         ->handle('new', '/tmp/repo', 'src/foo.php', false, DiffTarget::range('abc', 'def'), status: 'deleted');
 
-    expect($result)->toBeNull();
+    expect($result->status)->toBe(CopyContentResult::STATUS_UNAVAILABLE);
 });
 
 test('new kind fetches the to-side source', function () {
@@ -119,7 +156,7 @@ test('new kind fetches the to-side source', function () {
     $result = makeCopyAction($diff, $fileSource)
         ->handle('new', '/tmp/repo', 'src/foo.php', false, $target);
 
-    expect($result)->toBe('new body');
+    expect($result->content)->toBe('new body');
 });
 
 test('new kind falls back to the working ref when target is the working directory', function () {
@@ -136,7 +173,7 @@ test('new kind falls back to the working ref when target is the working director
     $result = makeCopyAction($diff, $fileSource)
         ->handle('new', '/tmp/repo', 'src/foo.php', false, $target);
 
-    expect($result)->toBe('working body');
+    expect($result->content)->toBe('working body');
 });
 
 test('new kind reads an external file from its absolute path', function () {
@@ -153,10 +190,26 @@ test('new kind reads an external file from its absolute path', function () {
     $result = makeCopyAction($diff, $fileSource)
         ->handle('new', '/tmp/repo', '__external__/spec.md', false, DiffTarget::workingDirectory(), status: 'added', isExternal: true, externalAbsolutePath: '/outside/spec.md');
 
-    expect($result)->toBe('external body');
+    expect($result->content)->toBe('external body');
 });
 
-test('returns null when the source fetch is not loaded', function () {
+test('side kind reports too-large with the source byte size', function () {
+    $fileSource = Mockery::mock(FileSourceService::class);
+    $fileSource->shouldReceive('fetch')
+        ->once()
+        ->andReturn(SourceText::tooLarge(FileSourceSpec::git('def', 'src/foo.php'), 2_000_000));
+
+    $diff = Mockery::mock(GitDiffService::class);
+
+    $result = makeCopyAction($diff, $fileSource)
+        ->handle('new', '/tmp/repo', 'src/foo.php', false, DiffTarget::range('abc', 'def'));
+
+    expect($result->status)->toBe(CopyContentResult::STATUS_TOO_LARGE)
+        ->and($result->byteSize)->toBe(2_000_000)
+        ->and($result->content)->toBeNull();
+});
+
+test('is unavailable when the source fetch is missing', function () {
     $target = DiffTarget::range('abc', 'def');
 
     $fileSource = Mockery::mock(FileSourceService::class);
@@ -169,10 +222,10 @@ test('returns null when the source fetch is not loaded', function () {
     $result = makeCopyAction($diff, $fileSource)
         ->handle('new', '/tmp/repo', 'src/foo.php', false, $target);
 
-    expect($result)->toBeNull();
+    expect($result->status)->toBe(CopyContentResult::STATUS_UNAVAILABLE);
 });
 
-test('unknown kind returns null without calling either service', function () {
+test('unknown kind is unavailable without calling either service', function () {
     $diff = Mockery::mock(GitDiffService::class);
     $diff->shouldNotReceive('getFileDiff');
 
@@ -182,5 +235,5 @@ test('unknown kind returns null without calling either service', function () {
     $result = makeCopyAction($diff, $fileSource)
         ->handle('bogus', '/tmp/repo', 'src/foo.php', false, DiffTarget::workingDirectory());
 
-    expect($result)->toBeNull();
+    expect($result->status)->toBe(CopyContentResult::STATUS_UNAVAILABLE);
 });

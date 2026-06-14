@@ -110,7 +110,7 @@ HTML;
 
     public function copyContent(string $kind): void
     {
-        $text = app(GetFileCopyContentAction::class)->handle(
+        $result = app(GetFileCopyContentAction::class)->handle(
             $kind,
             $this->repoPath,
             $this->file['path'],
@@ -122,15 +122,34 @@ HTML;
             externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
         );
 
-        if ($text !== null) {
-            $toast = match ($kind) {
+        if ($result->isOk()) {
+            $this->dispatch('copy-to-clipboard', text: $result->content, toast: match ($kind) {
                 'diff' => 'Copied diff',
                 'original' => 'Copied original',
                 'new' => 'Copied new',
                 default => 'Copied',
-            };
-            $this->dispatch('copy-to-clipboard', text: $text, toast: $toast);
+            });
+
+            return;
         }
+
+        Flux::toast(variant: 'warning', text: $this->copyUnavailableMessage($kind, $result));
+    }
+
+    private function copyUnavailableMessage(string $kind, \App\DTOs\CopyContentResult $result): string
+    {
+        if ($result->status === \App\DTOs\CopyContentResult::STATUS_TOO_LARGE) {
+            $size = $result->byteSize !== null ? ' ('.\Illuminate\Support\Number::fileSize($result->byteSize).')' : '';
+
+            return 'File is too large to copy'.$size;
+        }
+
+        return match ($kind) {
+            'diff' => 'No diff available to copy',
+            'original' => 'Original content is unavailable to copy',
+            'new' => 'New content is unavailable to copy',
+            default => 'Nothing to copy',
+        };
     }
 
     public function expandContext(): void
