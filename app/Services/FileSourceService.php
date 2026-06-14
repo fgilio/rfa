@@ -48,27 +48,11 @@ class FileSourceService
 
     private function byteSize(string $repoPath, FileSourceSpec $source): ?int
     {
-        return match ($source->type) {
-            FileSourceSpec::TYPE_GIT => $source->ref === null || $source->path === null
-                ? null
-                : $this->gitFileContentService->byteSizeAt($repoPath, $source->ref, $source->path),
-            FileSourceSpec::TYPE_ABSOLUTE => $source->absolutePath === null
-                ? null
-                : $this->gitFileContentService->byteSizeAtAbsolute($source->absolutePath),
-            default => null,
-        };
+        return $this->gitFileContentService->byteSizeForSource($repoPath, $source);
     }
 
     private function content(string $repoPath, FileSourceSpec $source): ?string
     {
-        return match ($source->type) {
-            FileSourceSpec::TYPE_GIT => $source->ref === null || $source->path === null
-                ? null
-                : $this->gitFileContentService->contentAt($repoPath, $source->ref, $source->path),
-            FileSourceSpec::TYPE_ABSOLUTE => $source->absolutePath === null
-                ? null
-                : $this->gitFileContentService->contentAtAbsolute($source->absolutePath),
-            default => null,
-        };
+        return $this->gitFileContentService->contentForSource($repoPath, $source);
     }
 }

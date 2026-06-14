@@ -1,5 +1,6 @@
 <?php
 
+use App\DTOs\FileSourceSpec;
 use App\Enums\GitRef;
 use App\Services\GitFileContentService;
 use App\Services\GitProcessService;
@@ -139,4 +140,42 @@ test('byteSizeAtAbsolute reports the on-disk size or null when missing', functio
     expect($this->service->byteSizeAtAbsolute($this->tmpDir.'/hello.php'))
         ->toBe(strlen("<?php\necho 'two';\n"))
         ->and($this->service->byteSizeAtAbsolute($this->tmpDir.'/nope.php'))->toBeNull();
+});
+
+// -- spec-aware readers --
+
+test('hashForSource dispatches a git source to hashAt', function () {
+    $source = FileSourceSpec::git($this->firstCommit, 'hello.php');
+
+    expect($this->service->hashForSource($this->tmpDir, $source))
+        ->toBe($this->service->hashAt($this->tmpDir, $this->firstCommit, 'hello.php'));
+});
+
+test('hashForSource dispatches an absolute source to hashAtAbsolute', function () {
+    $source = FileSourceSpec::absolute($this->tmpDir.'/hello.php');
+
+    expect($this->service->hashForSource($this->tmpDir, $source))
+        ->toBe($this->service->hashAtAbsolute($this->tmpDir.'/hello.php'));
+});
+
+test('hashForSource returns null for a none source', function () {
+    expect($this->service->hashForSource($this->tmpDir, FileSourceSpec::none()))->toBeNull();
+});
+
+test('contentForSource dispatches by source type', function () {
+    expect($this->service->contentForSource($this->tmpDir, FileSourceSpec::git($this->firstCommit, 'hello.php')))
+        ->toBe("<?php\necho 'one';\n")
+        ->and($this->service->contentForSource($this->tmpDir, FileSourceSpec::absolute($this->tmpDir.'/hello.php')))
+        ->toBe("<?php\necho 'two';\n")
+        ->and($this->service->contentForSource($this->tmpDir, FileSourceSpec::none()))
+        ->toBeNull();
+});
+
+test('byteSizeForSource dispatches by source type', function () {
+    expect($this->service->byteSizeForSource($this->tmpDir, FileSourceSpec::git($this->firstCommit, 'hello.php')))
+        ->toBe(strlen("<?php\necho 'one';\n"))
+        ->and($this->service->byteSizeForSource($this->tmpDir, FileSourceSpec::absolute($this->tmpDir.'/hello.php')))
+        ->toBe(strlen("<?php\necho 'two';\n"))
+        ->and($this->service->byteSizeForSource($this->tmpDir, FileSourceSpec::none()))
+        ->toBeNull();
 });

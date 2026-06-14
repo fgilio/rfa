@@ -2,6 +2,7 @@
 
 use App\DTOs\DiffTarget;
 use App\DTOs\FileSourceSpec;
+use App\Enums\DiffSide;
 use App\Enums\GitRef;
 
 test('none serializes without a ref or path', function () {
@@ -41,6 +42,45 @@ test('absolute source serializes an on disk path', function () {
         'path' => null,
         'absolutePath' => '/tmp/spec.md',
     ]);
+});
+
+// -- forSide --
+
+test('forSide resolves the left side to the from ref', function () {
+    $source = FileSourceSpec::forSide(DiffTarget::range('abc', 'def'), DiffSide::Left, 'src/Foo.php');
+
+    expect($source->toArray())->toMatchArray(['type' => FileSourceSpec::TYPE_GIT, 'ref' => 'abc', 'path' => 'src/Foo.php']);
+});
+
+test('forSide resolves the right side to the to ref', function () {
+    $source = FileSourceSpec::forSide(DiffTarget::range('abc', 'def'), DiffSide::Right, 'src/Foo.php');
+
+    expect($source->toArray())->toMatchArray(['type' => FileSourceSpec::TYPE_GIT, 'ref' => 'def', 'path' => 'src/Foo.php']);
+});
+
+test('forSide follows a rename through the old path on the left side', function () {
+    $source = FileSourceSpec::forSide(DiffTarget::range('abc', 'def'), DiffSide::Left, 'src/New.php', oldPath: 'src/Old.php');
+
+    expect($source->path)->toBe('src/Old.php');
+});
+
+test('forSide ignores the old path on the right side', function () {
+    $source = FileSourceSpec::forSide(DiffTarget::range('abc', 'def'), DiffSide::Right, 'src/New.php', oldPath: 'src/Old.php');
+
+    expect($source->path)->toBe('src/New.php');
+});
+
+test('forSide resolves a working-directory target to the working sentinel on the right side', function () {
+    $source = FileSourceSpec::forSide(DiffTarget::workingDirectory(), DiffSide::Right, 'src/Foo.php');
+
+    expect($source->ref)->toBe(GitRef::Working->value);
+});
+
+test('forSide treats the file side like the right side', function () {
+    $right = FileSourceSpec::forSide(DiffTarget::range('abc', 'def'), DiffSide::Right, 'src/Foo.php');
+    $file = FileSourceSpec::forSide(DiffTarget::range('abc', 'def'), DiffSide::File, 'src/Foo.php');
+
+    expect($file->toArray())->toBe($right->toArray());
 });
 
 // -- pairFor --

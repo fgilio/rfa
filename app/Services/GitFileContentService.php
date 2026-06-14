@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\DTOs\FileSourceSpec;
 use App\Enums\GitRef;
 use App\Support\PathGuard;
 
@@ -74,6 +75,62 @@ class GitFileContentService
     {
         $this->hashCache = [];
         $this->contentCache = [];
+    }
+
+    /**
+     * Hash the file a source spec points at, dispatching on its type.
+     *
+     * Git sources hash the blob at their ref, absolute sources hash the
+     * on-disk file, and none-sources (an absent side of a diff) hash to
+     * null. Mirrors {@see self::contentForSource()}.
+     */
+    public function hashForSource(string $repoPath, FileSourceSpec $source): ?string
+    {
+        return match ($source->type) {
+            FileSourceSpec::TYPE_GIT => $source->ref === null || $source->path === null
+                ? null
+                : $this->hashAt($repoPath, $source->ref, $source->path),
+            FileSourceSpec::TYPE_ABSOLUTE => $source->absolutePath === null
+                ? null
+                : $this->hashAtAbsolute($source->absolutePath),
+            default => null,
+        };
+    }
+
+    /**
+     * Read the file a source spec points at, dispatching on its type.
+     *
+     * The uncapped sibling of {@see FileSourceService::fetch()}: callers
+     * that need size limits should go through that service instead.
+     */
+    public function contentForSource(string $repoPath, FileSourceSpec $source): ?string
+    {
+        return match ($source->type) {
+            FileSourceSpec::TYPE_GIT => $source->ref === null || $source->path === null
+                ? null
+                : $this->contentAt($repoPath, $source->ref, $source->path),
+            FileSourceSpec::TYPE_ABSOLUTE => $source->absolutePath === null
+                ? null
+                : $this->contentAtAbsolute($source->absolutePath),
+            default => null,
+        };
+    }
+
+    /**
+     * Byte size of the file a source spec points at, without reading it,
+     * dispatching on its type. None-sources report null.
+     */
+    public function byteSizeForSource(string $repoPath, FileSourceSpec $source): ?int
+    {
+        return match ($source->type) {
+            FileSourceSpec::TYPE_GIT => $source->ref === null || $source->path === null
+                ? null
+                : $this->byteSizeAt($repoPath, $source->ref, $source->path),
+            FileSourceSpec::TYPE_ABSOLUTE => $source->absolutePath === null
+                ? null
+                : $this->byteSizeAtAbsolute($source->absolutePath),
+            default => null,
+        };
     }
 
     public function contentAt(string $repoPath, string $ref, string $path): ?string

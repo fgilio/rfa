@@ -31,11 +31,11 @@ test('a comment authored at commit B is visible when viewing range A..D if conte
         'body' => 'authored while viewing commit B',
     ]);
 
-    $this->gitFileContent->shouldReceive('hashAt')
-        ->with($repoPath, 'A', 'shared.php')
+    $this->gitFileContent->shouldReceive('hashForSource')
+        ->with($repoPath, gitSourceSpec('A', 'shared.php'))
         ->andReturn('different');
-    $this->gitFileContent->shouldReceive('hashAt')
-        ->with($repoPath, 'D', 'shared.php')
+    $this->gitFileContent->shouldReceive('hashForSource')
+        ->with($repoPath, gitSourceSpec('D', 'shared.php'))
         ->andReturn('stable-hash');
 
     $files = [['id' => 'file-shared', 'path' => 'shared.php', 'isUntracked' => false]];
@@ -68,7 +68,7 @@ test('a submitted comment is hidden from the default view but persists in the po
         'submitted_at' => now(),
     ]);
 
-    $this->gitFileContent->shouldReceive('hashAt')->andReturn(null);
+    $this->gitFileContent->shouldReceive('hashForSource')->andReturn(null);
 
     $files = [['id' => 'file-f', 'path' => 'f.php', 'isUntracked' => false]];
     $result = app(SessionStateAction::class)->handle($repoPath, $files);

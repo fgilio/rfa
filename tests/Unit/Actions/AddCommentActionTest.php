@@ -15,7 +15,7 @@ beforeEach(function () {
     $this->faker->seed(crc32(static::class.$this->name()));
 
     $this->gitFileContent = Mockery::mock(GitFileContentService::class);
-    $this->gitFileContent->shouldReceive('hashAt')->byDefault()->andReturn('content-hash');
+    $this->gitFileContent->shouldReceive('hashForSource')->byDefault()->andReturn('content-hash');
     app()->instance(GitFileContentService::class, $this->gitFileContent);
 
     $this->action = app(AddCommentAction::class);
@@ -133,8 +133,8 @@ test('returns null when startLine exceeds endLine', function () {
 
 test('hashes left-side comments on renamed files using oldPath', function () {
     $gitFileContent = Mockery::mock(GitFileContentService::class);
-    $gitFileContent->shouldReceive('hashAt')
-        ->with('/tmp/repo', 'parent-sha', 'src/old.php')
+    $gitFileContent->shouldReceive('hashForSource')
+        ->with('/tmp/repo', gitSourceSpec('parent-sha', 'src/old.php'))
         ->andReturn('left-hash');
     app()->instance(GitFileContentService::class, $gitFileContent);
 
@@ -148,8 +148,8 @@ test('hashes left-side comments on renamed files using oldPath', function () {
 
 test('hashes right-side comments on renamed files using the post-rename path', function () {
     $gitFileContent = Mockery::mock(GitFileContentService::class);
-    $gitFileContent->shouldReceive('hashAt')
-        ->with('/tmp/repo', 'abc123', 'src/new.php')
+    $gitFileContent->shouldReceive('hashForSource')
+        ->with('/tmp/repo', gitSourceSpec('abc123', 'src/new.php'))
         ->andReturn('right-hash');
     app()->instance(GitFileContentService::class, $gitFileContent);
 
@@ -188,8 +188,8 @@ test('hashes external-file comments off disk and stamps origin_ref=external', fu
 
 test('file-level comments on renamed files hash the post-rename path at `to`', function () {
     $gitFileContent = Mockery::mock(GitFileContentService::class);
-    $gitFileContent->shouldReceive('hashAt')
-        ->with('/tmp/repo', 'abc123', 'src/new.php')
+    $gitFileContent->shouldReceive('hashForSource')
+        ->with('/tmp/repo', gitSourceSpec('abc123', 'src/new.php'))
         ->andReturn('file-hash');
     app()->instance(GitFileContentService::class, $gitFileContent);
 

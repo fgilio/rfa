@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use App\Enums\DiffSide;
 use App\Enums\GitRef;
 
 class FileSourceSpec
@@ -42,6 +43,30 @@ class FileSourceSpec
     }
 
     /**
+     * Resolve the git source for one side of a diff target.
+     *
+     * The left side reads the target's from-ref, following a rename
+     * through $oldPath when one is given. Every other side reads the
+     * to-ref, or the working copy when the target compares against the
+     * working tree. Status-driven absent sides (added/deleted/external)
+     * are the concern of {@see self::pairFor()}, not this resolver.
+     */
+    public static function forSide(
+        DiffTarget $target,
+        DiffSide $side,
+        string $path,
+        ?string $oldPath = null,
+    ): self {
+        if ($side === DiffSide::Left) {
+            return self::git($target->from(), $oldPath ?? $path);
+        }
+
+        return $target->to() === null
+            ? self::working($path)
+            : self::git($target->to(), $path);
+    }
+
+    /**
      * Resolve the old- and new-side sources for a file under a diff target.
      *
      * Added and untracked files have no old side, deleted files have no
@@ -66,13 +91,11 @@ class FileSourceSpec
 
         $oldSource = $status === 'added' || $isUntracked
             ? self::none()
-            : self::git($target->from(), $oldPath ?? $path);
+            : self::forSide($target, DiffSide::Left, $path, $oldPath);
 
-        $newSource = match (true) {
-            $status === 'deleted' => self::none(),
-            $target->to() === null => self::working($path),
-            default => self::git($target->to(), $path),
-        };
+        $newSource = $status === 'deleted'
+            ? self::none()
+            : self::forSide($target, DiffSide::Right, $path);
 
         return [$oldSource, $newSource];
     }

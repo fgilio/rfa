@@ -24,8 +24,8 @@ test('resolves left-side comments on renamed files using the pre-rename path', f
     // current file list reports the new name. Without oldPath, the hash lookup
     // against `src/new.php` at `from-sha` returns null and the comment would fall
     // to unplaced even though the content is in the diff.
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'from-sha', 'src/old.php')->andReturn('pre-rename-hash');
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'to-sha', 'src/new.php')->andReturn('post-rename-hash');
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('from-sha', 'src/old.php'))->andReturn('pre-rename-hash');
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('to-sha', 'src/new.php'))->andReturn('post-rename-hash');
 
     $result = $this->action->handle(
         '/tmp/repo',
@@ -45,8 +45,8 @@ test('resolves left-side comments on renamed files using the pre-rename path', f
 });
 
 test('marks comment as placed when the stored hash matches the right side of the diff', function () {
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'from-sha', 'f.php')->andReturn('old');
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'to-sha', 'f.php')->andReturn('new-match');
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('from-sha', 'f.php'))->andReturn('old');
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('to-sha', 'f.php'))->andReturn('new-match');
 
     $result = $this->action->handle(
         '/tmp/repo',
@@ -69,8 +69,8 @@ test('marks comment as placed when the stored hash matches the right side of the
 });
 
 test('marks comment as placed when the stored hash matches the left side of the diff', function () {
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'from-sha', 'f.php')->andReturn('old-match');
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'to-sha', 'f.php')->andReturn('new');
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('from-sha', 'f.php'))->andReturn('old-match');
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('to-sha', 'f.php'))->andReturn('new');
 
     $result = $this->action->handle(
         '/tmp/repo',
@@ -91,7 +91,7 @@ test('marks comment as placed when the stored hash matches the left side of the 
 });
 
 test('marks comment as unplaced when the stored hash matches neither side', function () {
-    $this->gitFileContent->shouldReceive('hashAt')->andReturn('something-else');
+    $this->gitFileContent->shouldReceive('hashForSource')->andReturn('something-else');
 
     $result = $this->action->handle(
         '/tmp/repo',
@@ -149,8 +149,8 @@ test('marks comment as unplaced when the file is not in the current diff', funct
 test('flips side to right when a left-side comment now matches the right-side hash', function () {
     // Post-rebase: stored left hash no longer appears on left, but the right side of
     // the current diff has identical content (e.g. the reviewed commit now sits on top).
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'from-sha', 'f.php')->andReturn('some-other-left');
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'to-sha', 'f.php')->andReturn('stored-hash');
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('from-sha', 'f.php'))->andReturn('some-other-left');
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('to-sha', 'f.php'))->andReturn('stored-hash');
 
     $result = $this->action->handle(
         '/tmp/repo',
@@ -173,8 +173,8 @@ test('flips side to right when a left-side comment now matches the right-side ha
 });
 
 test('flips side to left when a right-side comment now matches the left-side hash', function () {
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'from-sha', 'f.php')->andReturn('stored-hash');
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'to-sha', 'f.php')->andReturn('some-other-right');
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('from-sha', 'f.php'))->andReturn('stored-hash');
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('to-sha', 'f.php'))->andReturn('some-other-right');
 
     $result = $this->action->handle(
         '/tmp/repo',
@@ -195,8 +195,8 @@ test('flips side to left when a right-side comment now matches the left-side has
 });
 
 test('keeps stored side when stored hash matches that same side', function () {
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'from-sha', 'f.php')->andReturn('unchanged');
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'to-sha', 'f.php')->andReturn('unchanged');
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('from-sha', 'f.php'))->andReturn('unchanged');
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('to-sha', 'f.php'))->andReturn('unchanged');
 
     $result = $this->action->handle(
         '/tmp/repo',
@@ -378,9 +378,9 @@ test('stays unplaced when the snippet itself is gone from every side', function 
 });
 
 test('uses the working copy as the right side when the target has no `to`', function () {
-    $this->gitFileContent->shouldReceive('hashAt')->with('/tmp/repo', 'HEAD', 'f.php')->andReturn('old');
-    $this->gitFileContent->shouldReceive('hashAt')
-        ->with('/tmp/repo', GitRef::Working->value, 'f.php')
+    $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('HEAD', 'f.php'))->andReturn('old');
+    $this->gitFileContent->shouldReceive('hashForSource')
+        ->with('/tmp/repo', gitSourceSpec(GitRef::Working->value, 'f.php'))
         ->andReturn('working-match');
 
     $result = $this->action->handle(

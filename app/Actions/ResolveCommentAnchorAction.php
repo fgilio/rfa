@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\DTOs\FileSourceSpec;
 use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use App\Enums\GitRef;
@@ -46,7 +47,6 @@ final readonly class ResolveCommentAnchorAction
         }
 
         $resolved = [];
-        $rightRef = $target->to() ?? GitRef::Working->value;
 
         foreach ($rawComments as $row) {
             $filePath = (string) ($row['file_path'] ?? $row['file'] ?? '');
@@ -70,16 +70,17 @@ final readonly class ResolveCommentAnchorAction
                 $absolute = $externalPathByPath[$filePath] ?? null;
 
                 if ($absolute !== null) {
+                    $source = FileSourceSpec::absolute($absolute);
                     $hasHash = $storedHash !== null && $storedHash !== '';
 
-                    if (! $hasHash || $storedHash === $this->gitFileContentService->hashAtAbsolute($absolute)) {
+                    if (! $hasHash || $storedHash === $this->gitFileContentService->hashForSource($repoPath, $source)) {
                         $anchorStatus = AnchorStatus::Placed;
                     } elseif ($lineSnippet !== null && $startLine !== null) {
                         // Hash drifted but the snippet may still occur — re-anchor
-                        // instead of dropping. contentAtAbsolute returns null when the
+                        // instead of dropping. The content read returns null when the
                         // file is gone, which the matcher rejects.
                         $shifted = $this->snippetMatcher->shiftedLines(
-                            (string) $this->gitFileContentService->contentAtAbsolute($absolute),
+                            (string) $this->gitFileContentService->contentForSource($repoPath, $source),
                             $lineSnippet,
                             $startLine,
                         );
@@ -91,12 +92,14 @@ final readonly class ResolveCommentAnchorAction
                     }
                 }
             } elseif ($storedHash !== null && $storedHash !== '' && isset($fileIdByPath[$filePath])) {
-                // Renamed files: left-side content lives at `oldPath`; right-side stays
-                // at `path`. Without this, left comments on rename+edit diffs would be
-                // stamped unplaced and then silently dropped from submit.
-                $leftPath = $oldPathByPath[$filePath] ?? $filePath;
-                $leftHash = $this->gitFileContentService->hashAt($repoPath, $target->from(), $leftPath);
-                $rightHash = $this->gitFileContentService->hashAt($repoPath, $rightRef, $filePath);
+                // forSide() resolves the rename: left-side content lives at the
+                // pre-rename `oldPath`, the right side stays at `path`. Without it,
+                // left comments on rename+edit diffs would be stamped unplaced and
+                // then silently dropped from submit.
+                $leftSource = FileSourceSpec::forSide($target, DiffSide::Left, $filePath, $oldPathByPath[$filePath] ?? null);
+                $rightSource = FileSourceSpec::forSide($target, DiffSide::Right, $filePath);
+                $leftHash = $this->gitFileContentService->hashForSource($repoPath, $leftSource);
+                $rightHash = $this->gitFileContentService->hashForSource($repoPath, $rightSource);
 
                 $matchesStoredSide = ($storedSide === DiffSide::Left->value && $storedHash === $leftHash)
                     || ($storedSide === DiffSide::Right->value && $storedHash === $rightHash)
@@ -115,7 +118,7 @@ final readonly class ResolveCommentAnchorAction
                     // edit elsewhere in the file. Locate the stored line snippet in the
                     // current content so the comment survives and re-anchors, instead of
                     // being stamped unplaced and silently dropped at submit.
-                    $recovered = $this->recoverBySnippet($repoPath, $target, $storedSide, $filePath, $leftPath, $rightRef, $lineSnippet, $startLine);
+                    $recovered = $this->recoverBySnippet($repoPath, $leftSource, $rightSource, $storedSide, $lineSnippet, $startLine);
 
                     if ($recovered !== null) {
                         [$resolvedSide, $startLine, $endLine] = $recovered;
@@ -155,7 +158,7 @@ final readonly class ResolveCommentAnchorAction
      *
      * @return array{0: string, 1: int, 2: int}|null
      */
-    private function recoverBySnippet(string $repoPath, DiffTarget $target, string $storedSide, string $filePath, string $leftPath, string $rightRef, ?string $snippet, ?int $startLine): ?array
+    private function recoverBySnippet(string $repoPath, FileSourceSpec $leftSource, FileSourceSpec $rightSource, string $storedSide, ?string $snippet, ?int $startLine): ?array
     {
         // No snippet means nothing to search for — skip the content fetch entirely
         // (avoids a `git show` per drifted comment that could never re-anchor).
@@ -163,8 +166,8 @@ final readonly class ResolveCommentAnchorAction
             return null;
         }
 
-        $left = fn (): ?string => $this->gitFileContentService->contentAt($repoPath, $target->from(), $leftPath);
-        $right = fn (): ?string => $this->gitFileContentService->contentAt($repoPath, $rightRef, $filePath);
+        $left = fn (): ?string => $this->gitFileContentService->contentForSource($repoPath, $leftSource);
+        $right = fn (): ?string => $this->gitFileContentService->contentForSource($repoPath, $rightSource);
 
         $order = $storedSide === DiffSide::Left->value
             ? [[DiffSide::Left->value, $left], [DiffSide::Right->value, $right]]

@@ -77,12 +77,11 @@ test('fetch returns too large without content when source exceeds max bytes', fu
 
 test('fetch skips oversized sources without reading their content', function () {
     $contentService = Mockery::mock(GitFileContentService::class);
-    $contentService->shouldReceive('byteSizeAt')
-        ->with($this->repoPath, 'working', 'huge.bin')
+    $contentService->shouldReceive('byteSizeForSource')
+        ->with($this->repoPath, gitSourceSpec('working', 'huge.bin'))
         ->once()
         ->andReturn(5_000_000_000);
-    $contentService->shouldNotReceive('contentAt');
-    $contentService->shouldNotReceive('contentAtAbsolute');
+    $contentService->shouldNotReceive('contentForSource');
 
     $text = (new FileSourceService($contentService))
         ->fetch($this->repoPath, FileSourceSpec::working('huge.bin'), maxBytes: 1_048_576);
@@ -94,11 +93,11 @@ test('fetch skips oversized sources without reading their content', function () 
 
 test('fetch skips oversized absolute sources without reading their content', function () {
     $contentService = Mockery::mock(GitFileContentService::class);
-    $contentService->shouldReceive('byteSizeAtAbsolute')
-        ->with('/mnt/huge.iso')
+    $contentService->shouldReceive('byteSizeForSource')
+        ->with($this->repoPath, absoluteSourceSpec('/mnt/huge.iso'))
         ->once()
         ->andReturn(5_000_000_000);
-    $contentService->shouldNotReceive('contentAtAbsolute');
+    $contentService->shouldNotReceive('contentForSource');
 
     $text = (new FileSourceService($contentService))
         ->fetch($this->repoPath, FileSourceSpec::absolute('/mnt/huge.iso'), maxBytes: 1_048_576);

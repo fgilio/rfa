@@ -18,7 +18,7 @@ beforeEach(function () {
     $this->faker->seed(crc32(static::class.$this->name()));
 
     $this->gitFileContentMock = Mockery::mock(GitFileContentService::class);
-    $this->gitFileContentMock->shouldReceive('hashAt')->byDefault()->andReturn(null);
+    $this->gitFileContentMock->shouldReceive('hashForSource')->byDefault()->andReturn(null);
     app()->instance(GitFileContentService::class, $this->gitFileContentMock);
 });
 
@@ -143,11 +143,11 @@ test('restores reviewed files when current content hash matches stored record', 
         ['id' => 'id-b', 'path' => 'b.php', 'isUntracked' => false],
     ];
 
-    $this->gitFileContentMock->shouldReceive('hashAt')
-        ->with($repoPath, GitRef::Working->value, 'a.php')
+    $this->gitFileContentMock->shouldReceive('hashForSource')
+        ->with($repoPath, gitSourceSpec(GitRef::Working->value, 'a.php'))
         ->andReturn('hash-a');
-    $this->gitFileContentMock->shouldReceive('hashAt')
-        ->with($repoPath, GitRef::Working->value, 'b.php')
+    $this->gitFileContentMock->shouldReceive('hashForSource')
+        ->with($repoPath, gitSourceSpec(GitRef::Working->value, 'b.php'))
         ->andReturn('different-hash');
 
     $result = app(SessionStateAction::class)->handle($repoPath, $files);
@@ -232,11 +232,11 @@ test('marks comment as placed when content hash matches right side', function ()
     $target = DiffTarget::commit('abc123');
     $files = [['id' => 'file-new', 'path' => 'f.php', 'isUntracked' => false]];
 
-    $this->gitFileContentMock->shouldReceive('hashAt')
-        ->with($repoPath, $target->from(), 'f.php')
+    $this->gitFileContentMock->shouldReceive('hashForSource')
+        ->with($repoPath, gitSourceSpec($target->from(), 'f.php'))
         ->andReturn('different-hash');
-    $this->gitFileContentMock->shouldReceive('hashAt')
-        ->with($repoPath, 'abc123', 'f.php')
+    $this->gitFileContentMock->shouldReceive('hashForSource')
+        ->with($repoPath, gitSourceSpec('abc123', 'f.php'))
         ->andReturn('matching-hash');
 
     $result = app(SessionStateAction::class)->handle($repoPath, $files, null, $target);
@@ -268,9 +268,11 @@ test('rehydrates external reviewed files via on-disk hash, not git refs', functi
         'externalAbsolutePath' => $absolute,
     ]];
 
-    // Use the real hashAtAbsolute; mock the git-side hashAt as before.
-    $this->gitFileContentMock->shouldReceive('hashAtAbsolute')->andReturnUsing(
-        fn (string $p) => is_file($p) ? hash_file('xxh128', $p) : null,
+    // Resolve the absolute source for real. The git-side seam stays mocked.
+    $this->gitFileContentMock->shouldReceive('hashForSource')->andReturnUsing(
+        fn (string $repoPath, $source) => is_file((string) $source->absolutePath)
+            ? hash_file('xxh128', (string) $source->absolutePath)
+            : null,
     );
 
     $result = app(SessionStateAction::class)->handle($repoPath, $files);
@@ -299,11 +301,11 @@ test('rehydrates reviewed files via left-side hash when the right ref has no con
 
     $files = [['id' => 'id-d', 'path' => 'deleted.php', 'isUntracked' => false]];
 
-    $this->gitFileContentMock->shouldReceive('hashAt')
-        ->with($repoPath, 'abc123', 'deleted.php')
+    $this->gitFileContentMock->shouldReceive('hashForSource')
+        ->with($repoPath, gitSourceSpec('abc123', 'deleted.php'))
         ->andReturn(null);
-    $this->gitFileContentMock->shouldReceive('hashAt')
-        ->with($repoPath, 'parent123', 'deleted.php')
+    $this->gitFileContentMock->shouldReceive('hashForSource')
+        ->with($repoPath, gitSourceSpec('parent123', 'deleted.php'))
         ->andReturn('left-hash');
 
     $result = app(SessionStateAction::class)->handle(
@@ -327,8 +329,8 @@ test('rehydrates legacy reviewed_files rows that were migrated with an empty con
 
     $files = [['id' => 'id-legacy', 'path' => 'legacy.php', 'isUntracked' => false]];
 
-    $this->gitFileContentMock->shouldReceive('hashAt')
-        ->with($repoPath, GitRef::Working->value, 'legacy.php')
+    $this->gitFileContentMock->shouldReceive('hashForSource')
+        ->with($repoPath, gitSourceSpec(GitRef::Working->value, 'legacy.php'))
         ->andReturn('current-hash');
 
     $result = app(SessionStateAction::class)->handle($repoPath, $files);
@@ -352,7 +354,7 @@ test('marks comment as unplaced when content hash does not match either side', f
     $target = DiffTarget::commit('abc123');
     $files = [['id' => 'file-new', 'path' => 'f.php', 'isUntracked' => false]];
 
-    $this->gitFileContentMock->shouldReceive('hashAt')->andReturn('different-hash');
+    $this->gitFileContentMock->shouldReceive('hashForSource')->andReturn('different-hash');
 
     $result = app(SessionStateAction::class)->handle($repoPath, $files, null, $target);
 
