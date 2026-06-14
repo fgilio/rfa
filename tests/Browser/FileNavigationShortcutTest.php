@@ -102,3 +102,45 @@ test('j and k recover to an end when no visible file is active', function () {
     $page->page()->locator('body')->press('j');
     $page->page()->waitForFunction(activeFileExpression().' === '.json_encode($first));
 });
+
+test('the selection follows the server clamp when a filter hides the active file', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    $page->page()->getByTestId('review-component')->first()->waitFor();
+
+    $page->page()->waitForFunction(<<<'JS'
+        () => {
+            const root = document.querySelector('[data-testid="review-component"]');
+            if (!root) return false;
+            const data = Alpine.$data(root);
+            return data.visibleFileEntries.length >= 2 && data.activeFile != null;
+        }
+    JS);
+
+    // Select a file the upcoming filter will hide (its path lacks "hello").
+    $hiddenId = $page->page()->evaluate(<<<'JS'
+        (() => {
+            const data = Alpine.$data(document.querySelector('[data-testid="review-component"]'));
+            const target = data.visibleFileEntries.find(entry => !entry.path.includes('hello'));
+            data.activeFile = target.id;
+            return target.id;
+        })()
+    JS);
+
+    expect($page->page()->evaluate(activeFileExpression()))->toBe($hiddenId);
+
+    // Filter down to only hello.php, dropping the selected file from the list.
+    $page->page()->getByPlaceholder('Filter files...')->fill('hello');
+
+    // The morph would leave activeFile on the now-hidden file; the commit sync
+    // moves it onto a still-visible row instead.
+    $page->page()->waitForFunction(<<<'JS'
+        () => {
+            const data = Alpine.$data(document.querySelector('[data-testid="review-component"]'));
+            const ids = data.visibleFileEntries.map(entry => entry.id);
+            return ids.length >= 1 && ids.includes(data.activeFile);
+        }
+    JS);
+
+    expect($page->page()->evaluate(activeFileExpression()))->not->toBe($hiddenId);
+});
