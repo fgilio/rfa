@@ -96,6 +96,8 @@ test('resolve falls back for invalid moved line settings', function (array $sett
 })->with([
     'invalid boolean' => [['movedLineDetection' => 'maybe']],
     'invalid mode' => [['movedLineMode' => 'rainbow']],
+    'array mode' => [['movedLineMode' => ['blocks']]],
+    'array mode via alias' => [['moved_line_mode' => ['zebra']]],
 ]);
 
 test('resolve memoizes default config for the request', function () {

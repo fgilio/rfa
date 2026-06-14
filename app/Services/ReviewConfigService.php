@@ -55,7 +55,7 @@ class ReviewConfigService
             cacheTtlHours: $this->positiveInt($settings, 'cacheTtlHours', self::FALLBACKS['cacheTtlHours']),
             defaultContextLines: $this->nonNegativeInt($settings, 'defaultContextLines', self::FALLBACKS['defaultContextLines']),
             movedLineDetection: $movedLineDetection,
-            movedLineMode: $this->movedLineMode((string) $settings['movedLineMode'], self::FALLBACKS['movedLineMode']),
+            movedLineMode: $this->movedLineMode($settings, 'movedLineMode', self::FALLBACKS['movedLineMode']),
         );
 
         if ($userSettings === [] && $repoSettings === [] && $runtimeOverrides === []) {
@@ -122,9 +122,12 @@ class ReviewConfigService
         return is_int($value) && $value >= 0 ? $value : $fallback;
     }
 
-    private function movedLineMode(string $mode, string $fallback): string
+    /** @param array<string, mixed> $settings */
+    private function movedLineMode(array $settings, string $key, string $fallback): string
     {
-        return in_array($mode, self::MOVED_LINE_MODES, true) ? $mode : $fallback;
+        $value = $settings[$key] ?? null;
+
+        return is_string($value) && in_array($value, self::MOVED_LINE_MODES, true) ? $value : $fallback;
     }
 
     /** @param array<string, mixed> $settings */
