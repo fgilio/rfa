@@ -6,6 +6,7 @@ use App\Actions\LoadFileDiffAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\DTOs\DiffTarget;
 use App\Enums\DiffSide;
+use App\Enums\GitRef;
 use App\Support\DiffCacheKey;
 use App\View\DiffFileViewModel;
 use Illuminate\Support\Facades\Cache;
@@ -116,6 +117,9 @@ HTML;
             $this->file['isUntracked'] ?? false,
             $this->buildDiffTarget(),
             oldPath: $this->file['oldPath'] ?? null,
+            status: $this->file['status'] ?? 'modified',
+            isExternal: $this->file['isExternal'] ?? false,
+            externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
         );
 
         if ($text !== null) {
@@ -468,8 +472,11 @@ HTML;
                 $hasBeforeImage = in_array($status, ['modified', 'binary', 'renamed', 'deleted']);
                 $hasAfterImage = in_array($status, ['modified', 'binary', 'renamed', 'added']);
                 $beforePath = $file['oldPath'] ?? $file['path'];
-                $beforeRef = $diffTo === null ? 'HEAD' : $diffFrom;
-                $afterRef = $diffTo ?? 'working';
+                // The before side is always the target's from-ref. Hardcoding HEAD
+                // when $diffTo is null breaks "review since base" (base..working),
+                // where $diffFrom is the base SHA, not HEAD.
+                $beforeRef = $diffFrom;
+                $afterRef = $diffTo ?? GitRef::Working->value;
             @endphp
             <div class="px-4 py-6 flex items-start justify-center gap-6">
                 @if($hasBeforeImage)

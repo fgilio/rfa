@@ -38,18 +38,6 @@ test('fetch loads content from the working tree', function () {
         ->and($text->content)->toBe("working\n");
 });
 
-test('fetch loads content from the staged index', function () {
-    File::put($this->repoPath.'/notes.txt', "staged\n");
-    $this->runTestRepoCommand($this->repoPath, 'git add notes.txt');
-    File::put($this->repoPath.'/notes.txt', "working\n");
-
-    $staged = $this->service->fetch($this->repoPath, FileSourceSpec::index('notes.txt'));
-    $working = $this->service->fetch($this->repoPath, FileSourceSpec::working('notes.txt'));
-
-    expect($staged->content)->toBe("staged\n")
-        ->and($working->content)->toBe("working\n");
-});
-
 test('fetch loads content from an absolute path', function () {
     $directory = $this->createTempDirectory('rfa_file_source_absolute_test_');
     $absolutePath = $directory.'/external.md';

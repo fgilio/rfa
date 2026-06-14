@@ -102,14 +102,6 @@ class GitFileContentService
             return $this->contentCache[$key] = $content === false ? null : $content;
         }
 
-        if ($ref === GitRef::Index->value) {
-            return $this->contentCache[$key] = rescue(
-                fn (): string => $this->gitProcessService->run($repoPath, ['show', ':'.$path]),
-                rescue: null,
-                report: false,
-            );
-        }
-
         return $this->contentCache[$key] = rescue(
             fn (): string => $this->gitProcessService->run($repoPath, ['show', $ref.':'.$path]),
             rescue: null,
@@ -143,10 +135,8 @@ class GitFileContentService
             return $absolute !== null && is_file($absolute) ? $this->fileSize($absolute) : null;
         }
 
-        $objectSpec = $ref === GitRef::Index->value ? ':'.$path : $ref.':'.$path;
-
         return rescue(
-            fn (): int => (int) trim($this->gitProcessService->run($repoPath, ['cat-file', '-s', $objectSpec])),
+            fn (): int => (int) trim($this->gitProcessService->run($repoPath, ['cat-file', '-s', $ref.':'.$path])),
             rescue: null,
             report: false,
         );

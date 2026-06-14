@@ -66,8 +66,12 @@ Always excluded: `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`,
 | Shortcut | Action |
 |----------|--------|
 | `Cmd+O` | Open repository |
+| `j` / `k` | Next / previous file |
+| `/` | Focus the file filter |
+| `Shift+C` / `Shift+E` | Collapse / expand all files |
 | `Cmd+Enter` | Save comment |
-| `Esc` | Cancel comment |
+| `Cmd+Z` | Undo |
+| `Esc` | Cancel comment / clear filter |
 
 ## Development
 

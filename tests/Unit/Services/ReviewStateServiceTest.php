@@ -47,28 +47,23 @@ test('derive builds deterministic sidebar payload and counts', function () {
             'badgeLabel' => 'A',
             'badgeClass' => 'text-gh-green',
         ])
-        ->and($state->countsByStatus)->toBe(['modified' => 1, 'added' => 1, 'deleted' => 1])
         ->and($state->totalFileCount)->toBe(3)
         ->and($state->visibleFileCount)->toBe(3)
         ->and($state->reviewedFileCount)->toBe(1)
-        ->and($state->unreviewedFileCount)->toBe(2)
         ->and($state->additions)->toBe(13)
         ->and($state->deletions)->toBe(5);
 });
 
-test('selected file remains valid after filtering', function () {
+test('selected file falls back to a visible file when the selection is filtered out', function () {
     $state = $this->service->derive($this->files, selectedFileId: 'file-a', fileFilter: 'guide');
 
     expect($state->visibleFiles)->toHaveCount(1)
         ->and($state->visibleFileEntries)->toBe([['id' => 'file-c', 'path' => 'docs/Guide.md']])
         ->and($state->visibleFileMap)->toBe(['file-c' => true])
-        ->and($state->selectedFileId)->toBe('file-c')
-        ->and($state->selectedFile['path'])->toBe('docs/Guide.md')
-        ->and($state->previousFileId)->toBeNull()
-        ->and($state->nextFileId)->toBeNull();
+        ->and($state->selectedFileId)->toBe('file-c');
 });
 
-test('file navigation neighbors skip hidden reviewed files', function () {
+test('hidden reviewed files drop out of the visible list', function () {
     $state = $this->service->derive(
         $this->files,
         reviewedFiles: ['src/B.php' => 'hash'],
@@ -77,9 +72,7 @@ test('file navigation neighbors skip hidden reviewed files', function () {
     );
 
     expect(array_column($state->visibleFiles, 'id'))->toBe(['file-a', 'file-c'])
-        ->and($state->selectedFileId)->toBe('file-c')
-        ->and($state->previousFileId)->toBe('file-a')
-        ->and($state->nextFileId)->toBeNull();
+        ->and($state->selectedFileId)->toBe('file-c');
 });
 
 test('empty changeset returns no files empty state', function () {

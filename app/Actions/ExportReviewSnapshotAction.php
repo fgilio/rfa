@@ -7,7 +7,6 @@ namespace App\Actions;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileSourceSpec;
 use App\DTOs\ReviewSnapshot;
-use App\Enums\GitRef;
 use App\Services\FileSourceService;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -92,7 +91,15 @@ final readonly class ExportReviewSnapshotAction
     {
         return collect($files)
             ->map(function (array $file) use ($repoPath, $target): array {
-                [$oldSource, $newSource] = $this->sourceSpecs($file, $target);
+                [$oldSource, $newSource] = FileSourceSpec::pairFor(
+                    target: $target,
+                    path: (string) ($file['path'] ?? ''),
+                    status: (string) ($file['status'] ?? 'modified'),
+                    oldPath: isset($file['oldPath']) ? (string) $file['oldPath'] : null,
+                    isUntracked: (bool) ($file['isUntracked'] ?? false),
+                    isExternal: (bool) ($file['isExternal'] ?? false),
+                    externalAbsolutePath: isset($file['externalAbsolutePath']) ? (string) $file['externalAbsolutePath'] : null,
+                );
 
                 return $file + [
                     'oldSource' => $oldSource->toArray(),
@@ -103,32 +110,5 @@ final readonly class ExportReviewSnapshotAction
             })
             ->values()
             ->all();
-    }
-
-    /**
-     * @param  array<string, mixed>  $file
-     * @return array{0: FileSourceSpec, 1: FileSourceSpec}
-     */
-    private function sourceSpecs(array $file, DiffTarget $target): array
-    {
-        $path = (string) ($file['path'] ?? '');
-        $status = (string) ($file['status'] ?? 'modified');
-
-        if (($file['isExternal'] ?? false) && ! empty($file['externalAbsolutePath'])) {
-            return [
-                FileSourceSpec::none(),
-                FileSourceSpec::absolute((string) $file['externalAbsolutePath']),
-            ];
-        }
-
-        $oldSource = $status === 'added' || ($file['isUntracked'] ?? false)
-            ? FileSourceSpec::none()
-            : FileSourceSpec::git($target->from(), (string) ($file['oldPath'] ?? $path));
-
-        $newSource = $status === 'deleted'
-            ? FileSourceSpec::none()
-            : FileSourceSpec::git($target->to() ?? GitRef::Working->value, $path);
-
-        return [$oldSource, $newSource];
     }
 }

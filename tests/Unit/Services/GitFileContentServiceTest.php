@@ -62,17 +62,6 @@ test('hashAt reads the working copy for the GitRef::Working sentinel', function 
     expect($workingHash)->not->toBe($headHash);
 });
 
-test('contentAt reads the staged index for the GitRef::Index sentinel', function () {
-    File::put($this->tmpDir.'/hello.php', "<?php\necho 'staged';\n");
-    $this->runTestRepoCommand($this->tmpDir, 'git add hello.php');
-    File::put($this->tmpDir.'/hello.php', "<?php\necho 'working';\n");
-
-    expect($this->service->contentAt($this->tmpDir, GitRef::Index->value, 'hello.php'))
-        ->toBe("<?php\necho 'staged';\n")
-        ->and($this->service->contentAt($this->tmpDir, GitRef::Working->value, 'hello.php'))
-        ->toBe("<?php\necho 'working';\n");
-});
-
 test('hashAt returns null when working copy file is missing', function () {
     expect($this->service->hashAt($this->tmpDir, GitRef::Working->value, 'missing.php'))->toBeNull();
 });

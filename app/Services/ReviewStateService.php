@@ -28,7 +28,6 @@ class ReviewStateService
 
         $selectedFile = $this->selectedFile($visibleFiles, $selectedFileId);
         $selectedFileId = $selectedFile === null ? null : (string) $selectedFile['id'];
-        [$previousFileId, $nextFileId] = $this->neighbors($visibleFiles, $selectedFileId);
 
         $totalFileCount = count($sourceFiles);
         $visibleFileCount = count($visibleFiles);
@@ -37,10 +36,7 @@ class ReviewStateService
         return new ReviewState(
             sourceFiles: $sourceFiles,
             visibleFiles: $visibleFiles,
-            selectedFile: $selectedFile,
             selectedFileId: $selectedFileId,
-            previousFileId: $previousFileId,
-            nextFileId: $nextFileId,
             reviewedFileIds: $reviewedFileIds,
             reviewedFileMap: $reviewedIdSet,
             sourceFileEntries: $this->sourceFileEntries($sourceFiles),
@@ -53,11 +49,9 @@ class ReviewStateService
                 true,
             ),
             filesById: $this->filesById($sourceFiles),
-            countsByStatus: $this->countsByStatus($sourceFiles),
             totalFileCount: $totalFileCount,
             visibleFileCount: $visibleFileCount,
             reviewedFileCount: $reviewedFileCount,
-            unreviewedFileCount: max(0, $totalFileCount - $reviewedFileCount),
             additions: (int) collect($sourceFiles)->sum(fn (array $file): int => (int) ($file['additions'] ?? 0)),
             deletions: (int) collect($sourceFiles)->sum(fn (array $file): int => (int) ($file['deletions'] ?? 0)),
             emptyStateReason: $this->emptyStateReason($totalFileCount, $visibleFileCount, $reviewedFileCount, $normalizedFilter, $hideReviewed),
@@ -129,33 +123,6 @@ class ReviewStateService
     }
 
     /**
-     * @param  list<array<string, mixed>>  $visibleFiles
-     * @return array{0: ?string, 1: ?string}
-     */
-    private function neighbors(array $visibleFiles, ?string $selectedFileId): array
-    {
-        if ($selectedFileId === null) {
-            return [null, null];
-        }
-
-        $ids = collect($visibleFiles)
-            ->pluck('id')
-            ->map(fn (mixed $id): string => (string) $id)
-            ->values()
-            ->all();
-
-        $index = array_search($selectedFileId, $ids, true);
-        if ($index === false) {
-            return [null, null];
-        }
-
-        return [
-            $ids[$index - 1] ?? null,
-            $ids[$index + 1] ?? null,
-        ];
-    }
-
-    /**
      * @param  list<array<string, mixed>>  $sourceFiles
      * @return list<array{id: string, path: string}>
      */
@@ -188,17 +155,6 @@ class ReviewStateService
                     ],
                 ];
             })
-            ->all();
-    }
-
-    /**
-     * @param  list<array<string, mixed>>  $sourceFiles
-     * @return array<string, int>
-     */
-    private function countsByStatus(array $sourceFiles): array
-    {
-        return collect($sourceFiles)
-            ->countBy(fn (array $file): string => (string) ($file['status'] ?? 'modified'))
             ->all();
     }
 

@@ -184,6 +184,28 @@ test('diff file lazy loads stay isolated to avoid Livewire max component payload
         ->and($html)->not->toContain('lazyIsolated&quot;:false');
 });
 
+// -- File navigation shortcut hint --
+
+test('shows the j/k navigation keycaps when more than one file is visible', function () {
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->assertSeeHtml('aria-label="Press j for the next file, k for the previous file"');
+});
+
+test('hides the j/k navigation keycaps when only one file is visible', function () {
+    app()->bind(GetFileListAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        {
+            return [
+                ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 5, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false],
+            ];
+        }
+    });
+
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->assertDontSeeHtml('aria-label="Press j for the next file, k for the previous file"');
+});
+
 test('server file filter renders only matching diff-file children', function () {
     $files = collect(range(1, 25))
         ->map(fn (int $index): array => [

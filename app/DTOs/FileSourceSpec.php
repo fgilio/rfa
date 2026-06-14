@@ -36,14 +36,45 @@ class FileSourceSpec
         return self::git(GitRef::Working->value, $path);
     }
 
-    public static function index(string $path): self
-    {
-        return self::git(GitRef::Index->value, $path);
-    }
-
     public static function absolute(string $absolutePath): self
     {
         return new self(type: self::TYPE_ABSOLUTE, absolutePath: $absolutePath);
+    }
+
+    /**
+     * Resolve the old- and new-side sources for a file under a diff target.
+     *
+     * Added and untracked files have no old side, deleted files have no
+     * new side, and external files resolve to their absolute on-disk path.
+     * Everything else maps to the target's from/to refs, following a
+     * rename through $oldPath when one is given.
+     *
+     * @return array{0: self, 1: self}
+     */
+    public static function pairFor(
+        DiffTarget $target,
+        string $path,
+        string $status,
+        ?string $oldPath = null,
+        bool $isUntracked = false,
+        bool $isExternal = false,
+        ?string $externalAbsolutePath = null,
+    ): array {
+        if ($isExternal && $externalAbsolutePath !== null && $externalAbsolutePath !== '') {
+            return [self::none(), self::absolute($externalAbsolutePath)];
+        }
+
+        $oldSource = $status === 'added' || $isUntracked
+            ? self::none()
+            : self::git($target->from(), $oldPath ?? $path);
+
+        $newSource = match (true) {
+            $status === 'deleted' => self::none(),
+            $target->to() === null => self::working($path),
+            default => self::git($target->to(), $path),
+        };
+
+        return [$oldSource, $newSource];
     }
 
     public function isNone(): bool

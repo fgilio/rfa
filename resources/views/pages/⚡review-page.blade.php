@@ -1676,6 +1676,20 @@ new #[Layout('layouts.app')] class extends Component
             this.$dispatch('expand-file', { id });
             document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         },
+        focusAdjacentFile(delta) {
+            // Move the selection between visible files (j/k). Computed client-side
+            // off the visible list so rapid presses stay instant; selection clamps
+            // at the ends rather than wrapping.
+            const entries = this.visibleFileEntries;
+            if (entries.length === 0) {
+                return;
+            }
+            const current = entries.findIndex(file => file.id === this.activeFile);
+            const target = current === -1
+                ? (delta > 0 ? 0 : entries.length - 1)
+                : Math.min(entries.length - 1, Math.max(0, current + delta));
+            this.scrollToFile(entries[target].id);
+        },
         async scrollToComment(commentId, filePath) {
             const file = this.sourceFileEntries.find(f => f.path === filePath);
             if (!file) {
@@ -1727,6 +1741,7 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
         if ($event.key === '/') { $refs.fileFilterInput?.focus(); $event.preventDefault(); }
+        if (($event.key === 'j' || $event.key === 'k') && !$event.metaKey && !$event.ctrlKey && !$event.altKey) { focusAdjacentFile($event.key === 'j' ? 1 : -1); $event.preventDefault(); }
         if ($event.shiftKey && $event.key === 'C') { $store.settings.collapseAll = true; $dispatch('collapse-all-files'); $event.preventDefault(); }
         if ($event.shiftKey && $event.key === 'E') { $store.settings.collapseAll = false; $dispatch('expand-all-files'); $event.preventDefault(); }
         @if($commitInfo)
@@ -2126,7 +2141,17 @@ new #[Layout('layouts.app')] class extends Component
                 @endif
 
                 <div class="flex items-center justify-between mb-3">
-                    <span class="section-label text-gh-muted">Files</span>
+                    <div class="flex items-center gap-2">
+                        <span class="section-label text-gh-muted">Files</span>
+                        @if($this->reviewState->visibleFileCount > 1)
+                            <x-kbd-hint
+                                :keys="['j', 'k']"
+                                class="text-gh-muted/70"
+                                title="j next file · k previous file"
+                                aria-label="Press j for the next file, k for the previous file"
+                            />
+                        @endif
+                    </div>
                     @if(count($sourceFiles) > 0)
                         <x-copy-paths-button
                             testid-prefix="sidebar-copy-paths"

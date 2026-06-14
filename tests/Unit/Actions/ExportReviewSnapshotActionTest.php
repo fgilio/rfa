@@ -69,6 +69,37 @@ test('exports review snapshot json under .rfa', function () {
         ->and($payload['exportedAt'])->toBeString();
 });
 
+test('exports an external file through its absolute source', function () {
+    $externalDir = $this->createTempDirectory('rfa_snapshot_external_');
+    $absolutePath = $externalDir.'/spec.md';
+    File::put($absolutePath, "# External spec\n");
+
+    $files = [[
+        'id' => 'file-ext',
+        'path' => '__external__/spec.md',
+        'status' => 'added',
+        'additions' => 1,
+        'deletions' => 0,
+        'isExternal' => true,
+        'externalAbsolutePath' => $absolutePath,
+    ]];
+
+    $result = app(ExportReviewSnapshotAction::class)->handle(
+        repoPath: $this->repoPath,
+        files: $files,
+        target: DiffTarget::workingDirectory(),
+    );
+
+    $payload = json_decode(File::get($result['json']), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($payload['files'])->toHaveCount(1)
+        ->and($payload['files'][0]['oldSource'])->toMatchArray(['type' => 'none'])
+        ->and($payload['files'][0]['newSource'])->toMatchArray(['type' => 'absolute', 'absolutePath' => $absolutePath])
+        ->and($payload['files'][0]['oldSourceText']['status'])->toBe('none')
+        ->and($payload['files'][0]['newSourceText']['status'])->toBe('loaded')
+        ->and($payload['files'][0]['newSourceText']['content'])->toBe("# External spec\n");
+});
+
 test('exporting snapshot does not mark comments submitted', function () {
     $comment = Comment::create([
         'id' => 'comment-pending',

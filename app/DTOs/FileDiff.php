@@ -17,8 +17,6 @@ class FileDiff
         public readonly bool $isBinary = false,
         public readonly bool $isSymlink = false,
         public readonly ?string $symlinkTarget = null,
-        public readonly ?FileSourceSpec $oldSource = null,
-        public readonly ?FileSourceSpec $newSource = null,
     ) {}
 
     /** @param Hunk[] $hunks */
@@ -34,25 +32,6 @@ class FileDiff
             isBinary: $this->isBinary,
             isSymlink: $this->isSymlink,
             symlinkTarget: $this->symlinkTarget,
-            oldSource: $this->oldSource,
-            newSource: $this->newSource,
-        );
-    }
-
-    public function withSourceSpecs(FileSourceSpec $oldSource, FileSourceSpec $newSource): self
-    {
-        return new self(
-            path: $this->path,
-            status: $this->status,
-            oldPath: $this->oldPath,
-            hunks: $this->hunks,
-            additions: $this->additions,
-            deletions: $this->deletions,
-            isBinary: $this->isBinary,
-            isSymlink: $this->isSymlink,
-            symlinkTarget: $this->symlinkTarget,
-            oldSource: $oldSource,
-            newSource: $newSource,
         );
     }
 
