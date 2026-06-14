@@ -121,7 +121,7 @@ test('flushCache forces a second git lookup for the same (repo, ref, path)', fun
     $service->hashAt($this->tmpDir, $this->firstCommit, 'hello.php');
 });
 
-test('byteSizeAt reports sizes without reading content for working, index, and commit refs', function () {
+test('byteSizeAt reports sizes without reading content for the working copy and commit refs', function () {
     File::put($this->tmpDir.'/hello.php', "<?php\necho 'working';\n");
 
     expect($this->service->byteSizeAt($this->tmpDir, GitRef::Working->value, 'hello.php'))
