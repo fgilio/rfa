@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\BuildDiffContextAction;
+use App\DTOs\DiffTarget;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
@@ -108,6 +109,37 @@ test('left-side context excludes added lines whose new-line number lands in the 
     expect($snippet)->toContain("echo 'BBB'");
     expect($snippet)->toContain("echo 'CCC'");
     expect($snippet)->not->toContain("echo 'INS'");
+});
+
+test('reads snippets from the commit range target, not the working tree', function () {
+    $firstCommit = trim(shell_exec('git -C '.escapeshellarg($this->tmpDir).' rev-parse HEAD'));
+
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'committed-change';\necho 'world';\n");
+    $this->commitTestRepo($this->tmpDir, 'second');
+    $secondCommit = trim(shell_exec('git -C '.escapeshellarg($this->tmpDir).' rev-parse HEAD'));
+
+    // The working tree diverges from the reviewed range, so a snippet built
+    // from the working tree would leak this content instead of the range's.
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'working-change';\necho 'world';\n");
+
+    $fileId = 'file-'.hash('xxh128', 'hello.php');
+    $files = [['id' => $fileId, 'path' => 'hello.php', 'isUntracked' => false]];
+    $comments = [[
+        'id' => 'c-1',
+        'fileId' => $fileId,
+        'file' => 'hello.php',
+        'side' => 'right',
+        'startLine' => 2,
+        'endLine' => 2,
+        'body' => 'test',
+    ]];
+
+    $action = app(BuildDiffContextAction::class);
+    $context = $action->handle($this->tmpDir, $comments, $files, DiffTarget::range($firstCommit, $secondCommit));
+
+    expect($context['hello.php:right:2:2'])
+        ->toContain("echo 'committed-change'")
+        ->not->toContain("echo 'working-change'");
 });
 
 test('skips comments for unknown file ids', function () {
