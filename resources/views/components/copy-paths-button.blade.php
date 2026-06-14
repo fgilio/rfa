@@ -17,8 +17,11 @@
        - 'single' — copies one path; requires :path. Pass :repo-path so
                     "Copy full paths" works on pages without the ⚡review-page
                     Alpine root.
-       - 'bulk'   — copies the currently server-visible files; requires
-                    :entries and :visible-count.
+       - 'bulk'   — copies the currently server-visible files. Inside the
+                    review page it reads the root's live `visibleFileEntries`
+                    (the morph keeps that in sync with the filter); the
+                    :entries / :visible-count attributes here are the
+                    standalone fallback.
 
      Left-click on the trigger should copy directly, not toggle the dropdown
      (Flux's default for any trigger inside `<flux:dropdown>`). The wrapper

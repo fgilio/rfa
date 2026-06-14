@@ -26,20 +26,37 @@
             _singlePath: singlePath,
             _repoPath: repoPath,
 
-            _jsonAttr(name, fallback) {
+            _jsonAttr(name, fallback, el) {
                 try {
-                    return JSON.parse(this.$root?.dataset?.[name] || '');
+                    return JSON.parse((el ?? this.$root)?.dataset?.[name] || '');
                 } catch (_) {
                     return fallback;
                 }
             },
 
+            // The review page republishes the visible (filtered) file list on its
+            // root element every Livewire update. This button's own data attribute
+            // lives in an Alpine island that the morph leaves stale after a filter
+            // narrows the list, so prefer the root's value and fall back to the
+            // button's attribute only when used standalone (no review root).
+            get _liveBulkEntries() {
+                const root = this.$el?.closest?.('[data-testid="review-component"]');
+                const live = root ? this._jsonAttr('visibleFileEntries', null, root) : null;
+
+                return Array.isArray(live) ? live : null;
+            },
+
             get bulkEntries() {
-                const entries = this._jsonAttr('sourceFileEntries', null);
+                const entries = this._liveBulkEntries ?? this._jsonAttr('sourceFileEntries', null);
                 return Array.isArray(entries) ? entries : [];
             },
 
             get bulkVisibleCount() {
+                const live = this._liveBulkEntries;
+                if (live !== null) {
+                    return live.length;
+                }
+
                 const count = Number(this.$root?.dataset?.visibleFileCount);
                 return Number.isFinite(count) ? count : 0;
             },

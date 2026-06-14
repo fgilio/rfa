@@ -35,6 +35,7 @@ describe('copyPathsButton — bulk mode', () => {
     let component;
 
     beforeEach(() => {
+        document.body.innerHTML = '';
         component = attach(bulkScope(), 'bulk');
         component.$root = attrRoot([
             { id: 'a', path: 'app/Foo.php' },
@@ -98,6 +99,35 @@ describe('copyPathsButton — bulk mode', () => {
         expect(component._dispatched[0].detail.text).toBe('app/Bar.php');
         expect(component._dispatched[0].detail.toast).toBe('Copied relative path');
         expect(component.primaryLabel).toBe('Copy relative path');
+    });
+
+    it('prefers the review root live visible entries over its own stale attribute', () => {
+        // The review root reliably reflects the filter; the button's own
+        // attribute can lag inside its Alpine island after a morph. Bulk copy
+        // must follow the root so a filtered copy never includes hidden files.
+        const root = document.createElement('div');
+        root.setAttribute('data-testid', 'review-component');
+        root.dataset.visibleFileEntries = JSON.stringify([{ id: 'a', path: 'app/Foo.php' }]);
+
+        const buttonEl = document.createElement('div');
+        buttonEl.dataset.sourceFileEntries = JSON.stringify([
+            { id: 'a', path: 'app/Foo.php' },
+            { id: 'b', path: 'app/Bar.php' },
+        ]);
+        buttonEl.dataset.visibleFileCount = '2';
+        root.appendChild(buttonEl);
+        document.body.appendChild(root);
+
+        const c = attach(bulkScope(), 'bulk');
+        c.$el = buttonEl;
+        c.$root = buttonEl;
+
+        c.copyAs('relative');
+
+        expect(c._dispatched[0].detail.text).toBe('app/Foo.php');
+        expect(c._dispatched[0].detail.toast).toBe('Copied relative path');
+        expect(c.bulkVisibleCount).toBe(1);
+        expect(c.primaryLabel).toBe('Copy relative path');
     });
 
     it('copies nothing and reports zero when the data attributes are missing', () => {
