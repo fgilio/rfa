@@ -283,6 +283,16 @@ class DiffParser
         );
     }
 
+    /**
+     * Mark moved lines from git's color output, then strip every SGR sequence.
+     *
+     * Moved-line detection only exists in git's colorized diff, so the diff is
+     * generated with `--color=always` and the move state is read from the color
+     * codes before they are removed. A tracked file whose content holds literal
+     * ANSI escapes is indistinguishable from git's own coloring here, so those
+     * bytes are stripped too. The feature is off by default and this path runs
+     * only when it is enabled, so the cost is confined to that opt-in.
+     */
     private function stripAnsiAndMarkMovedLines(string $rawDiff): string
     {
         $lines = explode("\n", str_replace(["\r\n", "\r"], "\n", $rawDiff));
