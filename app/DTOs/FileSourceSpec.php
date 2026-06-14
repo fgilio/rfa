@@ -74,6 +74,11 @@ class FileSourceSpec
      * Everything else maps to the target's from/to refs, following a
      * rename through $oldPath when one is given.
      *
+     * An external file carries a synthetic mount path that does not exist in
+     * the repo, so it never falls through to git resolution: a missing
+     * absolute path yields no source rather than reading the mount path as a
+     * tracked file.
+     *
      * @return array{0: self, 1: self}
      */
     public static function pairFor(
@@ -85,8 +90,12 @@ class FileSourceSpec
         bool $isExternal = false,
         ?string $externalAbsolutePath = null,
     ): array {
-        if ($isExternal && $externalAbsolutePath !== null && $externalAbsolutePath !== '') {
-            return [self::none(), self::absolute($externalAbsolutePath)];
+        if ($isExternal) {
+            $newSource = $externalAbsolutePath !== null && $externalAbsolutePath !== ''
+                ? self::absolute($externalAbsolutePath)
+                : self::none();
+
+            return [self::none(), $newSource];
         }
 
         $oldSource = $status === 'added' || $isUntracked

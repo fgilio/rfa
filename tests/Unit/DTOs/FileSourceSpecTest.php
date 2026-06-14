@@ -138,3 +138,18 @@ test('pairFor points an external file at its absolute path', function () {
     expect($old->isNone())->toBeTrue()
         ->and($new->toArray())->toMatchArray(['type' => FileSourceSpec::TYPE_ABSOLUTE, 'absolutePath' => '/tmp/spec.md']);
 });
+
+test('pairFor never resolves an external file with a missing absolute path to its mount path', function () {
+    foreach ([null, ''] as $missing) {
+        [$old, $new] = FileSourceSpec::pairFor(
+            DiffTarget::workingDirectory(),
+            'external/notes/spec.md',
+            'added',
+            isExternal: true,
+            externalAbsolutePath: $missing,
+        );
+
+        expect($old->isNone())->toBeTrue()
+            ->and($new->isNone())->toBeTrue();
+    }
+});
