@@ -45,7 +45,6 @@
             <x-copy-paths-button
                 testid-prefix="status-strip-copy-paths"
                 :entries="$visibleFileEntries"
-                :visible-count="$visibleFileCount"
             />
         @endif
     </div>

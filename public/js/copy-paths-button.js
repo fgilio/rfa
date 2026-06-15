@@ -8,8 +8,12 @@
 //                repoPath so it works on pages without the ⚡review-page root
 //                (e.g. ⚡context-page, which doesn't expose pathBase /
 //                buildFullPath).
-//   - 'bulk'   — reads server-visible entries and count from the component's
-//                own data attributes (:entries / :visible-count are required).
+//   - 'bulk'   — copies the currently server-visible (filtered) files. Inside
+//                the review page it reads the review root's live
+//                `visibleFileEntries`, the authoritative filtered list. The
+//                button's own `data-source-file-entries` is the standalone
+//                fallback for pages without a review root. The count always
+//                derives from those entries.
 (function (root, factory) {
     const api = factory();
     if (typeof module !== 'undefined' && module.exports) {
@@ -34,12 +38,13 @@
                 }
             },
 
-            // The review page republishes the visible (filtered) file list on its
-            // root element every Livewire update. This button's own data attribute
-            // lives in an Alpine island that the morph leaves stale after a filter
-            // narrows the list, so prefer the root's value and fall back to the
-            // button's attribute only when used standalone (no review root).
-            get _liveBulkEntries() {
+            // The review root carries wire:id and is the element Livewire's
+            // morph always updates, so its republished `visibleFileEntries` is
+            // the authoritative filtered file list. This button sits inside a
+            // Flux dropdown island the morph does not re-patch, so its own
+            // attribute is read only as the standalone fallback for pages that
+            // have no review root.
+            get _rootVisibleEntries() {
                 const root = this.$el?.closest?.('[data-testid="review-component"]');
                 const live = root ? this._jsonAttr('visibleFileEntries', null, root) : null;
 
@@ -47,7 +52,7 @@
             },
 
             get bulkEntries() {
-                const entries = this._liveBulkEntries ?? this._jsonAttr('sourceFileEntries', null);
+                const entries = this._rootVisibleEntries ?? this._jsonAttr('sourceFileEntries', null);
                 return Array.isArray(entries) ? entries : [];
             },
 

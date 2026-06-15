@@ -246,9 +246,10 @@ test('server file filter renders only matching diff-file children', function () 
 
 test('the bulk copy-paths button copies only the filtered files under a partial filter', function () {
     // The button copies whatever lives in its own data-source-file-entries
-    // attribute (locked by the copy-paths-button JS unit test). This guards the
-    // wiring above it: the sidebar feeds the *visible* (filtered) entries, not
-    // the full source set, so a partial filter copies what the user sees.
+    // attribute (locked by the copy-paths-button JS unit test) and derives its
+    // count from those entries. This guards the wiring above it: the sidebar
+    // feeds the *visible* (filtered) entries, not the full source set, so a
+    // partial filter copies exactly what the user sees.
     $html = Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->set('fileFilter', 'Foo')
         ->html();
@@ -260,7 +261,10 @@ test('the bulk copy-paths button copies only the filtered files under a partial 
     expect($matches[0])
         ->toContain('Foo.php')
         ->not->toContain('Bar.php')
-        ->toContain('data-visible-file-count="1"');
+        ->toContain('data-source-file-entries=');
+
+    // Exactly one entry survives the filter, so the button carries one path.
+    expect(substr_count($matches[0], '"path"'))->toBe(1);
 });
 
 test('mount backfills null gitignore path from git config', function () {

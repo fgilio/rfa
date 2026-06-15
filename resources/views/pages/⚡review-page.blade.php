@@ -2156,7 +2156,6 @@ new #[Layout('layouts.app')] class extends Component
                         <x-copy-paths-button
                             testid-prefix="sidebar-copy-paths"
                             :entries="$this->reviewState->visibleFileEntries"
-                            :visible-count="$this->reviewState->visibleFileCount"
                         />
                     @endif
                 </div>

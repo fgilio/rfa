@@ -5,7 +5,6 @@
     'testidPrefix' => null,
     'size' => 'xs',
     'entries' => null,
-    'visibleCount' => null,
 ])
 
 {{-- Unified copy-paths affordance.
@@ -17,11 +16,12 @@
        - 'single' — copies one path; requires :path. Pass :repo-path so
                     "Copy full paths" works on pages without the ⚡review-page
                     Alpine root.
-       - 'bulk'   — copies the currently server-visible files. Inside the
-                    review page it reads the root's live `visibleFileEntries`
-                    (the morph keeps that in sync with the filter); the
-                    :entries / :visible-count attributes here are the
-                    standalone fallback.
+       - 'bulk'   — copies the currently server-visible (filtered) files.
+                    Inside the review page it reads the review root's live
+                    `visibleFileEntries`, the authoritative filtered list the
+                    morph keeps in sync. The :entries attribute here is the
+                    standalone fallback for pages without a review root. The
+                    count is derived from the entries, so none is passed in.
 
      Left-click on the trigger should copy directly, not toggle the dropdown
      (Flux's default for any trigger inside `<flux:dropdown>`). The wrapper
@@ -32,8 +32,7 @@
 <div data-testid="{{ $testidPrefix }}"
     @if ($mode === 'bulk')
         data-source-file-entries='@json($entries)'
-        data-visible-file-count="{{ $visibleCount }}"
-        @if((int) $visibleCount <= 0) hidden @endif
+        @if(count($entries ?? []) <= 0) hidden @endif
     @endif
     x-data="copyPathsButton({ mode: @js($mode), singlePath: @js($path), repoPath: @js($repoPath) })"
     class="inline-flex">
