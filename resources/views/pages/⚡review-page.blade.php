@@ -162,15 +162,19 @@ new #[Layout('layouts.app')] class extends Component
 
     /*
     |----------------------------------------------------------------------
-    | Responsibility clusters (5):
-    |   1. Initialization & Diff Context  (mount..refreshFileList)
-    |   2. Comment Management             (addComment..restoreComments)
-    |   3. Trash & Discard                (discardFileChanges..undo)
-    |   4. Review State & Export           (toggleReviewed..submitReview)
-    |   5. Computed, Helpers & Persistence (groupedComments..loadTrashedFiles)
+    | Responsibility clusters (6):
+    |   1. Initialization & Diff Context   (mount..fileFingerprint)
+    |   2. Branch Divergence               (checkHeadDivergence..persistedCommentQuery)
+    |   3. Comment Management              (addComment..restoreComments)
+    |   4. Trash & Discard                 (discardFileChanges..unmarkReviewed)
+    |   5. Review State & Export           (toggleReviewed..startNewReview)
+    |   6. Computed, Helpers & Persistence (reviewState..loadTrashedFiles)
     |
     | Shared deps: $files, $comments, $reviewedFiles, saveSession()
-    | Extraction blocker: 1+N hydration (see resources/CLAUDE.md)
+    | Extraction blocker: 1+N hydration (see resources/CLAUDE.md). The page
+    | stays one Livewire component; pure decision and write logic lives in
+    | Actions (ResolveDivergenceStateAction, ReviewCommentWorkflowAction),
+    | leaving this class as the event and render coordinator.
     |----------------------------------------------------------------------
     */
 
@@ -426,7 +430,7 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $this->externalPaths = $updated;
-        $this->reloadAfterExternalPathsChange();
+        $this->reloadSessionAfterFileListChange();
         Flux::toast(variant: 'success', text: 'Linked '.basename($picked));
     }
 
@@ -442,14 +446,20 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $this->externalPaths = $updated;
-        $this->reloadAfterExternalPathsChange();
+        $this->reloadSessionAfterFileListChange();
 
         if ($removed !== null) {
             Flux::toast(text: 'Unlinked '.$removed);
         }
     }
 
-    private function reloadAfterExternalPathsChange(): void
+    /**
+     * Reload the file list and re-derive session state after a change that
+     * only affects which files are listed (external paths, global .gitignore).
+     * Lighter than rehydrateForTarget: it leaves the review-pair scan and trash
+     * untouched because neither is sensitive to file-list filtering.
+     */
+    private function reloadSessionAfterFileListChange(): void
     {
         $this->refreshFileList();
 
@@ -469,16 +479,7 @@ new #[Layout('layouts.app')] class extends Component
             'respect_global_gitignore' => $this->respectGlobalGitignore,
         ]);
 
-        $this->refreshFileList();
-
-        $target = $this->buildDiffTarget();
-        $session = app(SessionStateAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target);
-        $this->comments = $session['comments'];
-        $this->reviewedFiles = $session['reviewedFiles'];
-
-        if (! empty($session['orphanedPaths'])) {
-            $this->injectOrphanedFiles($session['orphanedPaths']);
-        }
+        $this->reloadSessionAfterFileListChange();
     }
 
     /**
