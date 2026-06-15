@@ -1,9 +1,7 @@
 <?php
 
-use App\Actions\AddCommentAction;
 use App\Actions\BackfillGlobalGitignoreAction;
 use App\Actions\CleanExpiredTrashAction;
-use App\Actions\DeleteCommentAction;
 use App\Actions\DeleteReviewFilesAction;
 use App\Actions\DeleteTrashedFileAction;
 use App\Actions\DeriveReviewStateAction;
@@ -19,23 +17,27 @@ use App\Actions\LoadCommitMetadataAction;
 use App\Actions\PersistProjectViewAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveCommitAction;
+use App\Actions\ResolveDivergenceStateAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\ResolveRangeAction;
 use App\Actions\ResolveRangeToWorkingAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\RestoreDiscardedFileAction;
+use App\Actions\ReviewCommentWorkflowAction;
 use App\Actions\ScanReviewFilesAction;
 use App\Actions\SessionStateAction;
 use App\Actions\ToggleReviewedAction;
 use App\Actions\UnlinkExternalPathAction;
-use App\Actions\UpdateCommentAction;
 use App\Actions\UpdateProjectSettingAction;
 use App\Concerns\InteractsWithRemoteLinks;
 use App\DTOs\CurrentHeadResult;
 use App\DTOs\DiffTarget;
+use App\DTOs\DivergenceDecision;
 use App\DTOs\FileListEntry;
+use App\DTOs\ReviewCommentMutation;
 use App\DTOs\ReviewState;
 use App\Enums\DiffSide;
+use App\Enums\DivergenceDecisionKind;
 use App\Enums\DivergenceState;
 use App\Enums\GitRef;
 use App\Enums\LastViewKind;
@@ -663,78 +665,27 @@ new #[Layout('layouts.app')] class extends Component
 
     private function resolveDivergenceState(CurrentHeadResult $head): void
     {
-        // Sentinel: GetCurrentHeadAction returns sha='' when git fails transiently
-        // (e.g. mid-rebase). Leave state untouched and retry next tick.
-        if ($head->sha === '') {
-            return;
-        }
+        $decision = app(ResolveDivergenceStateAction::class)->handle(
+            $head,
+            $this->projectBranch,
+            $this->dismissedAtHead,
+            $this->dismissedAtBranch,
+            fn (): bool => $this->hasPersistedComments(),
+            fn (): int => $this->persistedCommentCount(),
+        );
 
-        if (! $head->detached && $head->branch === $this->projectBranch) {
-            $this->markAligned();
+        match ($decision->kind) {
+            DivergenceDecisionKind::Noop => null,
+            DivergenceDecisionKind::Aligned => $this->markAligned(),
+            DivergenceDecisionKind::AutoFollow => $this->autoFollowToHead((string) $decision->autoFollowBranch),
+            DivergenceDecisionKind::Show => $this->showDivergence($decision),
+        };
+    }
 
-            return;
-        }
-
-        $target = $this->projectBranch;
-
-        if ($head->detached) {
-            if ($this->dismissedAtHead === $head->sha) {
-                $this->markAligned();
-
-                return;
-            }
-
-            $this->divergenceState = DivergenceState::Detached;
-            $this->divergenceContext = [
-                'target' => $target,
-                'currentBranch' => null,
-                'currentSha' => $head->sha,
-                'shortSha' => substr($head->sha, 0, 7),
-            ];
-
-            return;
-        }
-
-        if ($target !== '' && $head->targetExists === false) {
-            if ($this->dismissedAtBranch === $head->branch) {
-                $this->markAligned();
-
-                return;
-            }
-
-            $this->divergenceState = DivergenceState::MissingTarget;
-            $this->divergenceContext = [
-                'target' => $target,
-                'currentBranch' => $head->branch,
-                'currentSha' => $head->sha,
-                'shortSha' => substr($head->sha, 0, 7),
-            ];
-
-            return;
-        }
-
-        if (! $this->hasPersistedComments()) {
-            $this->autoFollowToHead((string) $head->branch);
-
-            return;
-        }
-
-        // Suppress by branch identity, not sha: once the user opts to keep reviewing
-        // their target, committing on the diverged branch shouldn't re-nag every commit.
-        if ($this->dismissedAtBranch === $head->branch) {
-            $this->markAligned();
-
-            return;
-        }
-
-        $this->divergenceState = DivergenceState::Diverged;
-        $this->divergenceContext = [
-            'target' => $target,
-            'currentBranch' => $head->branch,
-            'currentSha' => $head->sha,
-            'shortSha' => substr($head->sha, 0, 7),
-            'commentCount' => $this->persistedCommentCount(),
-        ];
+    private function showDivergence(DivergenceDecision $decision): void
+    {
+        $this->divergenceState = $decision->state ?? DivergenceState::Aligned;
+        $this->divergenceContext = $decision->context;
     }
 
     public function switchReviewToHead(): void
@@ -870,81 +821,80 @@ new #[Layout('layouts.app')] class extends Component
 
     private function createComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, ?string $lineSnippet, bool $isDraft): void
     {
-        $comment = app(AddCommentAction::class)->handle(
-            $this->repoPath,
-            $this->projectId ?: null,
-            $this->buildDiffTarget(),
-            $this->files,
-            $fileId,
-            $side,
-            $startLine,
-            $endLine,
-            $body,
-            $isDraft,
-            $lineSnippet,
+        $this->applyCommentMutation(
+            app(ReviewCommentWorkflowAction::class)->handle(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $this->buildDiffTarget(),
+                $this->files,
+                $this->comments,
+                $fileId,
+                $side,
+                $startLine,
+                $endLine,
+                $body,
+                $isDraft,
+                $lineSnippet,
+            )
         );
-
-        if (! $comment) {
-            return;
-        }
-
-        $this->comments[] = $comment;
-        $this->dispatchFileComments($fileId);
-        $this->checkHeadDivergence();
-
-        // The new comment reaches its diff-file child via the comment-updated event
-        // (dispatchFileComments), so the parent never needs to re-render. Skipping it
-        // is the documented contract (CLAUDE.md skipRender table) and avoids a full
-        // parent render re-hydrating every diff-file child, the TooManyComponentsException
-        // hazard. Divergence transitions are surfaced by the head-divergence poller's
-        // own render path, not by piggybacking on comment writes.
-        $this->skipRender();
     }
 
     #[On('update-comment')]
     public function updateComment(string $commentId, string $body, bool $isDraft = false): void
     {
-        $index = collect($this->comments)->search(fn ($c) => $c['id'] === $commentId);
-
-        if ($index === false) {
-            return;
-        }
-
-        if (! app(UpdateCommentAction::class)->handle($commentId, $body, $isDraft)) {
-            return;
-        }
-
-        $this->comments[$index]['body'] = $body;
-        $this->comments[$index]['isDraft'] = $isDraft;
-        $fileId = $this->comments[$index]['fileId'];
-
-        $this->dispatchFileComments($fileId);
-        $this->skipRender();
+        $this->applyCommentMutation(
+            app(ReviewCommentWorkflowAction::class)->update($this->comments, $commentId, $body, $isDraft)
+        );
     }
 
     #[On('delete-comment')]
     public function deleteComment(string $commentId): void
     {
-        $deletedComment = collect($this->comments)->firstWhere('id', $commentId);
-        $fileId = $deletedComment['fileId'] ?? null;
+        $this->applyCommentMutation(
+            app(ReviewCommentWorkflowAction::class)->delete($this->comments, $commentId)
+        );
+    }
 
-        $result = app(DeleteCommentAction::class)->handle($this->comments, $commentId);
-
-        if ($result === null) {
+    /**
+     * Apply a comment-write result: swap in the new comments, push the change
+     * to each affected diff-file child via comment-updated, offer undo, and
+     * settle the render. A null mutation means the write was rejected, so the
+     * page renders its current state unchanged.
+     *
+     * The new comment reaches its child through the event, so the parent skips
+     * its own render where the mutation allows. That avoids re-hydrating every
+     * diff-file child (the TooManyComponentsException hazard) and keeps the 1+N
+     * contract. Divergence transitions surface through the head-divergence
+     * poller, not by piggybacking on comment writes.
+     */
+    private function applyCommentMutation(?ReviewCommentMutation $mutation): void
+    {
+        if ($mutation === null) {
             return;
         }
 
-        $this->comments = $result;
+        $this->comments = $mutation->comments;
 
-        if ($fileId) {
+        foreach ($mutation->affectedFileIds as $fileId) {
             $this->dispatchFileComments($fileId);
         }
 
-        if ($deletedComment) {
-            $this->dispatch('undo-available', type: 'delete', payload: [$deletedComment], message: 'Comment deleted');
+        if ($mutation->undo !== null) {
+            $this->dispatch(
+                'undo-available',
+                type: $mutation->undo['type'],
+                payload: $mutation->undo['payload'],
+                message: $mutation->undo['message'],
+            );
         }
 
-        $this->checkHeadDivergence();
+        if ($mutation->checksDivergence) {
+            $this->checkHeadDivergence();
+        }
+
+        if ($mutation->skipsRender) {
+            $this->skipRender();
+        }
     }
 
     public function clearAllComments(): void
