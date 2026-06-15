@@ -29,7 +29,7 @@ class FileSourceService
         // Probe the size before reading so an oversized source is skipped
         // without ever materializing its content; reading first would load
         // the whole file or blob into memory just to discard it.
-        $byteSize = $this->byteSize($repoPath, $source);
+        $byteSize = $this->gitFileContentService->byteSizeForSource($repoPath, $source);
         if ($byteSize === null) {
             return SourceText::missing($source);
         }
@@ -38,21 +38,11 @@ class FileSourceService
             return SourceText::tooLarge($source, $byteSize);
         }
 
-        $content = $this->content($repoPath, $source);
+        $content = $this->gitFileContentService->contentForSource($repoPath, $source);
         if ($content === null) {
             return SourceText::missing($source);
         }
 
         return SourceText::loaded($source, $content);
-    }
-
-    private function byteSize(string $repoPath, FileSourceSpec $source): ?int
-    {
-        return $this->gitFileContentService->byteSizeForSource($repoPath, $source);
-    }
-
-    private function content(string $repoPath, FileSourceSpec $source): ?string
-    {
-        return $this->gitFileContentService->contentForSource($repoPath, $source);
     }
 }
