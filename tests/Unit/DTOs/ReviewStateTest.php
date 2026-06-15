@@ -11,7 +11,6 @@ test('toArray returns review state payload', function () {
         reviewedFileMap: ['file-a' => true],
         sourceFileEntries: [['id' => 'file-a', 'path' => 'src/A.php']],
         visibleFileEntries: [['id' => 'file-a', 'path' => 'src/A.php']],
-        visibleFileMap: ['file-a' => true],
         filesById: ['file-a' => ['path' => 'src/A.php', 'badgeLabel' => 'M', 'badgeClass' => 'text-gh-attention']],
         totalFileCount: 1,
         visibleFileCount: 1,
@@ -26,7 +25,6 @@ test('toArray returns review state payload', function () {
             'reviewedFileIds' => ['file-a'],
             'reviewedFileMap' => ['file-a' => true],
             'visibleFileEntries' => [['id' => 'file-a', 'path' => 'src/A.php']],
-            'visibleFileMap' => ['file-a' => true],
             'totalFileCount' => 1,
             'visibleFileCount' => 1,
             'reviewedFileCount' => 1,
@@ -41,7 +39,29 @@ test('toArray returns review state payload', function () {
         ->not->toContain('previousFileId')
         ->not->toContain('nextFileId')
         ->not->toContain('countsByStatus')
-        ->not->toContain('unreviewedFileCount');
+        ->not->toContain('unreviewedFileCount')
+        ->not->toContain('visibleFileMap');
+});
+
+test('isFileVisible reads membership from the visible entries', function () {
+    $state = new ReviewState(
+        sourceFiles: [['id' => 'file-a', 'path' => 'src/A.php'], ['id' => 'file-b', 'path' => 'src/B.php']],
+        visibleFiles: [['id' => 'file-a', 'path' => 'src/A.php']],
+        selectedFileId: 'file-a',
+        reviewedFileIds: [],
+        reviewedFileMap: [],
+        sourceFileEntries: [['id' => 'file-a', 'path' => 'src/A.php'], ['id' => 'file-b', 'path' => 'src/B.php']],
+        visibleFileEntries: [['id' => 'file-a', 'path' => 'src/A.php']],
+        filesById: [],
+        totalFileCount: 2,
+        visibleFileCount: 1,
+        reviewedFileCount: 0,
+        additions: 0,
+        deletions: 0,
+    );
+
+    expect($state->isFileVisible('file-a'))->toBeTrue()
+        ->and($state->isFileVisible('file-b'))->toBeFalse();
 });
 
 test('hasVisibleFiles is false when no files are visible', function () {
@@ -53,7 +73,6 @@ test('hasVisibleFiles is false when no files are visible', function () {
         reviewedFileMap: [],
         sourceFileEntries: [],
         visibleFileEntries: [],
-        visibleFileMap: [],
         filesById: [],
         totalFileCount: 0,
         visibleFileCount: 0,

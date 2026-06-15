@@ -39,13 +39,6 @@ class ReviewStateService
             reviewedFileMap: $reviewedIdSet,
             sourceFileEntries: $this->sourceFileEntries($sourceFiles),
             visibleFileEntries: $this->sourceFileEntries($visibleFiles),
-            visibleFileMap: array_fill_keys(
-                collect($visibleFiles)
-                    ->pluck('id')
-                    ->map(fn (mixed $id): string => (string) $id)
-                    ->all(),
-                true,
-            ),
             filesById: $this->filesById($sourceFiles),
             totalFileCount: $totalFileCount,
             visibleFileCount: $visibleFileCount,

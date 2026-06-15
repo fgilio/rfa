@@ -162,8 +162,8 @@ describe('copyPathsButton — bulk mode', () => {
 describe('copyPathsButton — single mode', () => {
     function singleScope() {
         const dispatched = [];
-        // No sourceFileEntries / fileMatchesFilter / repoPath — single mode
-        // must work on pages without the ⚡review-page Alpine root.
+        // No review-root visibleFileEntries / repoPath — single mode must
+        // work on pages without the ⚡review-page Alpine root.
         return {
             $dispatch: (name, detail) => dispatched.push({ name, detail }),
             _dispatched: dispatched,

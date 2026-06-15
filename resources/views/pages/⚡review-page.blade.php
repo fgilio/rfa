@@ -1240,7 +1240,7 @@ new #[Layout('layouts.app')] class extends Component
 
         // Method-call form on purpose: the property form would cache this
         // pre-mutation state for the render that follows the resets below.
-        if ($this->reviewState()->visibleFileMap[$fileId] ?? false) {
+        if ($this->reviewState()->isFileVisible($fileId)) {
             $this->skipRender();
 
             return;
@@ -1531,7 +1531,6 @@ new #[Layout('layouts.app')] class extends Component
     data-diff-refresh-token="{{ $diffRefreshToken }}"
     data-source-file-entries='@json($this->reviewState->sourceFileEntries)'
     data-visible-file-entries='@json($this->reviewState->visibleFileEntries)'
-    data-visible-file-ids='@json((object) $this->reviewState->visibleFileMap)'
     @refresh-completed.window="
         const n = $event.detail?.changedCount ?? 0;
         Flux.toast({
@@ -1567,9 +1566,6 @@ new #[Layout('layouts.app')] class extends Component
         },
         get visibleFileEntries() {
             return this.jsonData('visibleFileEntries', []);
-        },
-        get visibleFileIds() {
-            return this.jsonData('visibleFileIds', {});
         },
         showRemoteMenu($event) {
             const d = $event.detail;
@@ -1643,8 +1639,8 @@ new #[Layout('layouts.app')] class extends Component
         get reviewedCount() {
             return Object.values(this.reviewedFiles).filter(Boolean).length;
         },
-        fileMatchesFilter(path, fileId) {
-            return Boolean(this.visibleFileIds[fileId]);
+        isFileVisible(fileId) {
+            return this.visibleFileEntries.some(entry => entry.id === fileId);
         },
         pathDir(path) {
             if (!path) return '';
@@ -1696,7 +1692,7 @@ new #[Layout('layouts.app')] class extends Component
                 Flux.toast({ text: 'Comment is on a file not in this diff', variant: 'warning' });
                 return;
             }
-            const revealed = !this.fileMatchesFilter(file.path, file.id);
+            const revealed = !this.isFileVisible(file.id);
             if (revealed) {
                 await $wire.revealFile(file.id);
             }

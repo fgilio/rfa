@@ -59,7 +59,8 @@ test('selected file falls back to a visible file when the selection is filtered 
 
     expect($state->visibleFiles)->toHaveCount(1)
         ->and($state->visibleFileEntries)->toBe([['id' => 'file-c', 'path' => 'docs/Guide.md']])
-        ->and($state->visibleFileMap)->toBe(['file-c' => true])
+        ->and($state->isFileVisible('file-c'))->toBeTrue()
+        ->and($state->isFileVisible('file-a'))->toBeFalse()
         ->and($state->selectedFileId)->toBe('file-c');
 });
 

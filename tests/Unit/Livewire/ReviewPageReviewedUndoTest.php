@@ -220,8 +220,8 @@ test('toggleReviewed renders when hide-reviewed visibility changes', function ()
         ->dispatch('toggle-reviewed', filePath: 'src/Foo.php');
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeFalsy()
-        ->and($component->instance()->reviewState()->visibleFileMap)->not->toHaveKey('id-foo')
-        ->and($component->instance()->reviewState()->visibleFileMap)->toHaveKey('id-bar');
+        ->and($component->instance()->reviewState()->isFileVisible('id-foo'))->toBeFalse()
+        ->and($component->instance()->reviewState()->isFileVisible('id-bar'))->toBeTrue();
 });
 
 test('toggleReviewed skips render when only a file filter is active (filter is reviewed-independent)', function () {

@@ -25,7 +25,6 @@ final readonly class ReviewState
      * @param  array<string, bool>  $reviewedFileMap
      * @param  list<array{id: string, path: string}>  $sourceFileEntries
      * @param  list<array{id: string, path: string}>  $visibleFileEntries
-     * @param  array<string, bool>  $visibleFileMap
      * @param  array<string, array{path: string, badgeLabel: string, badgeClass: string}>  $filesById
      */
     public function __construct(
@@ -36,7 +35,6 @@ final readonly class ReviewState
         public array $reviewedFileMap,
         public array $sourceFileEntries,
         public array $visibleFileEntries,
-        public array $visibleFileMap,
         public array $filesById,
         public int $totalFileCount,
         public int $visibleFileCount,
@@ -49,6 +47,17 @@ final readonly class ReviewState
     public function hasVisibleFiles(): bool
     {
         return $this->visibleFileCount > 0;
+    }
+
+    /**
+     * Whether the given file id survived the current filter and hide-reviewed
+     * rules. Membership is read from the visible entries, the single source of
+     * truth for the filtered list.
+     */
+    public function isFileVisible(string $fileId): bool
+    {
+        return collect($this->visibleFileEntries)
+            ->contains(fn (array $entry): bool => $entry['id'] === $fileId);
     }
 
     /**
@@ -72,7 +81,6 @@ final readonly class ReviewState
      *     reviewedFileMap: array<string, bool>,
      *     sourceFileEntries: list<array{id: string, path: string}>,
      *     visibleFileEntries: list<array{id: string, path: string}>,
-     *     visibleFileMap: array<string, bool>,
      *     filesById: array<string, array{path: string, badgeLabel: string, badgeClass: string}>,
      *     totalFileCount: int,
      *     visibleFileCount: int,
@@ -92,7 +100,6 @@ final readonly class ReviewState
             'reviewedFileMap' => $this->reviewedFileMap,
             'sourceFileEntries' => $this->sourceFileEntries,
             'visibleFileEntries' => $this->visibleFileEntries,
-            'visibleFileMap' => $this->visibleFileMap,
             'filesById' => $this->filesById,
             'totalFileCount' => $this->totalFileCount,
             'visibleFileCount' => $this->visibleFileCount,
