@@ -131,9 +131,7 @@ final readonly class LoadFileDiffAction
             // Skip results (too-large/empty/no-parse) are deterministic and do
             // carry the current cache shape, so they cache and stop re-spawning git.
             if (! array_key_exists('error', $result)) {
-                $ttlHours = $target->isImmutable()
-                    ? 720
-                    : $reviewConfig->cacheTtlHours;
+                $ttlHours = $target->cacheTtlHours($reviewConfig->cacheTtlHours);
 
                 Cache::put($cacheKey, $result, now()->addHours($ttlHours));
             }
