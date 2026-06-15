@@ -68,13 +68,16 @@ class ReviewConfigService
     /** @return array<string, mixed> */
     private function defaults(): array
     {
+        // A missing config key resolves to null here and the coercion helpers
+        // in resolve() substitute the matching FALLBACKS value, so the fallback
+        // lives in one place rather than being repeated as a second argument.
         return [
-            'diffMaxBytes' => config('rfa.diff_max_bytes', self::FALLBACKS['diffMaxBytes']),
-            'sourceMaxBytes' => config('rfa.source_max_bytes', self::FALLBACKS['sourceMaxBytes']),
-            'cacheTtlHours' => config('rfa.cache_ttl_hours', self::FALLBACKS['cacheTtlHours']),
-            'defaultContextLines' => config('rfa.default_context_lines', self::FALLBACKS['defaultContextLines']),
-            'movedLineDetection' => config('rfa.moved_lines.enabled', self::FALLBACKS['movedLineDetection']),
-            'movedLineMode' => config('rfa.moved_lines.mode', self::FALLBACKS['movedLineMode']),
+            'diffMaxBytes' => config('rfa.diff_max_bytes'),
+            'sourceMaxBytes' => config('rfa.source_max_bytes'),
+            'cacheTtlHours' => config('rfa.cache_ttl_hours'),
+            'defaultContextLines' => config('rfa.default_context_lines'),
+            'movedLineDetection' => config('rfa.moved_lines.enabled'),
+            'movedLineMode' => config('rfa.moved_lines.mode'),
         ];
     }
 
