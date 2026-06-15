@@ -215,6 +215,16 @@ test('checking reviewed updates sidebar indicator', function () {
     $page->assertSee('1/3 reviewed');
 });
 
+test('marking a file flips its sidebar button to the reviewed state via the island', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    // Mark via the diff-file checkbox; the sidebar button is server-rendered in
+    // the file-list island and must re-render into its un-mark state.
+    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
+
+    $page->page()->getByRole('button', ['name' => 'Un-mark as reviewed'])->first()->waitFor(['state' => 'visible']);
+});
+
 test('marking a file reveals the Hide reviewed toggle', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 

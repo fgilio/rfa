@@ -1431,11 +1431,12 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         // Other modes skip the full render for latency and refresh just the
-        // island. Bust the computed cache first so the island reflects the
-        // reviewedFiles change just made rather than a value memoized earlier.
+        // islands. Bust the computed cache first so they reflect the reviewedFiles
+        // change just made rather than a value memoized earlier.
         unset($this->reviewState);
         $this->skipRender();
         $this->renderIsland('reviewed-summary');
+        $this->renderIsland('file-list');
     }
 
     /** @return array<string, array<int, array<string, mixed>>> */
@@ -1611,7 +1612,6 @@ new #[Layout('layouts.app')] class extends Component
             this.pendingSavesGuard?.attach();
         },
         activeFile: @js($this->reviewState->selectedFileId),
-        reviewedFiles: @js((object) $this->reviewState->reviewedFileMap),
         remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '', disabled: false, disabledReason: '' },
         jsonData(name, fallback) {
             try {
@@ -1783,9 +1783,6 @@ new #[Layout('layouts.app')] class extends Component
         }
     }"
     @scroll-to-comment.window="scrollToComment($event.detail.commentId, $event.detail.filePath)"
-    @file-reviewed-changed.window="reviewedFiles[$event.detail.id] = $event.detail.reviewed"
-    @reset-reviewed-files.window="reviewedFiles = {}"
-    @reviewed-files-reverted.window="($event.detail.fileIds || []).forEach(id => { reviewedFiles[id] = false })"
     @open-remote-menu.window="showRemoteMenu($event)"
     @keydown.window="
         if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {
@@ -2285,6 +2282,11 @@ new #[Layout('layouts.app')] class extends Component
                         <div class="border-b border-gh-border my-3"></div>
                     </div>
                 @endif
+                {{-- File list as an island so a reviewed mark/un-mark refreshes the
+                     sidebar checkmarks via renderIsland('file-list') without a full
+                     page render. always:true keeps it current on full renders too
+                     (filtering, discard, hide-reviewed mode). --}}
+                @island(name: 'file-list', always: true)
                 @foreach($this->reviewState->visibleFiles as $file)
                     @php
                         // Badge label and color come from ReviewState so this list and the
@@ -2293,6 +2295,7 @@ new #[Layout('layouts.app')] class extends Component
                         $badgeLabel = $badge['badgeLabel'] ?? 'M';
                         $badgeClass = $badge['badgeClass'] ?? 'text-gh-attention';
                         $remoteStatus = ($file['isUntracked'] ?? false) ? 'added' : ($file['status'] ?? 'modified');
+                        $isReviewed = array_key_exists($file['path'], $reviewedFiles);
                     @endphp
                     <div
                         @if($hasRemote)
@@ -2337,23 +2340,20 @@ new #[Layout('layouts.app')] class extends Component
                             />
                         </button>
                         <flux:tooltip>
+                            {{-- Reviewed state is server-rendered inside the file-list island.
+                                 The click tells DiffFile's checkbox mirror the new state and
+                                 asks the parent to toggle, which refreshes this island. --}}
                             <button type="button"
                                 @click.stop="
-                                    const next = !reviewedFiles['{{ $file['id'] }}'];
-                                    $dispatch('file-reviewed-changed', { id: '{{ $file['id'] }}', reviewed: next });
+                                    $dispatch('file-reviewed-changed', { id: '{{ $file['id'] }}', reviewed: {{ $isReviewed ? 'false' : 'true' }} });
                                     $wire.dispatch('toggle-reviewed', { filePath: @js($file['path']) });
                                 "
-                                class="shrink-0 size-3.5 flex items-center justify-center transition-[opacity,colors]"
-                                :class="reviewedFiles['{{ $file['id'] }}']
-                                    ? 'text-gh-green hover:text-gh-text'
-                                    : 'text-gh-muted/40 opacity-0 group-hover:opacity-100 hover:text-gh-text'"
-                                x-bind:aria-label="reviewedFiles['{{ $file['id'] }}'] ? 'Un-mark as reviewed' : 'Mark as reviewed'"
+                                class="shrink-0 size-3.5 flex items-center justify-center transition-[opacity,colors] {{ $isReviewed ? 'text-gh-green hover:text-gh-text' : 'text-gh-muted/40 opacity-0 group-hover:opacity-100 hover:text-gh-text' }}"
+                                aria-label="{{ $isReviewed ? 'Un-mark as reviewed' : 'Mark as reviewed' }}"
                             >
                                 <flux:icon icon="check" variant="outline" class="!size-3.5" />
                             </button>
-                            <flux:tooltip.content>
-                                <span x-text="reviewedFiles['{{ $file['id'] }}'] ? 'Un-mark as reviewed' : 'Mark as reviewed'"></span>
-                            </flux:tooltip.content>
+                            <flux:tooltip.content>{{ $isReviewed ? 'Un-mark as reviewed' : 'Mark as reviewed' }}</flux:tooltip.content>
                         </flux:tooltip>
                         <span class="shrink-0 size-3.5 flex items-center justify-center">
                             @if(! $this->isCommitMode() && $file['status'] !== 'commented' && ! ($file['isExternal'] ?? false))
@@ -2388,6 +2388,7 @@ new #[Layout('layouts.app')] class extends Component
                         All files reviewed
                     </div>
                 @endif
+                @endisland
                 @if(! empty($trashedFiles))
                     <div class="border-t border-gh-border mt-3 pt-3">
                         <span class="section-label text-gh-muted mb-3 block">Trash</span>
