@@ -4,6 +4,7 @@
     'repoPath' => '',
     'testidPrefix' => null,
     'size' => 'xs',
+    'visibleCount' => null,
 ])
 
 {{-- Unified copy-paths affordance.
@@ -12,13 +13,14 @@
      Right-click / Shift+F10 → open menu with name / relative / full options
 
      Modes:
-       - 'single' — copies one path; requires :path. Pass :repo-path so
-                    "Copy full paths" works on pages without the ⚡review-page
+       - 'single' — copies one path client-side; requires :path. Pass :repo-path
+                    so "Copy full path" works on pages without the ⚡review-page
                     Alpine root.
-       - 'bulk'   — copies the currently filter-visible files. Inherits
-                    `sourceFileEntries`, `fileMatchesFilter`, `visibleFileCount`,
-                    `repoPath` from the ⚡review-page Alpine root. Hidden when
-                    nothing matches the filter.
+       - 'bulk'   — copies the currently server-visible (filtered) files. The copy
+                    is server-owned (ReviewPage::copyVisiblePaths), so it always
+                    matches the active filter. Pass :visible-count so the trigger
+                    hides when nothing is visible; the menu count is read live from
+                    the review root.
 
      Left-click on the trigger should copy directly, not toggle the dropdown
      (Flux's default for any trigger inside `<flux:dropdown>`). The wrapper
@@ -27,7 +29,7 @@
      captured and reach Flux normally.
 --}}
 <div data-testid="{{ $testidPrefix }}"
-    @if ($mode === 'bulk') x-show="visibleFileCount > 0" x-cloak @endif
+    @if ($mode === 'bulk' && ($visibleCount ?? 0) <= 0) hidden @endif
     x-data="copyPathsButton({ mode: @js($mode), singlePath: @js($path), repoPath: @js($repoPath) })"
     class="inline-flex">
     <flux:dropdown position="bottom" align="end" x-ref="dropdown">
@@ -47,13 +49,13 @@
             </flux:tooltip>
         </div>
         <flux:menu>
-            <flux:menu.item icon="document" icon:variant="outline" @click="copyAs('name')">
+            <flux:menu.item icon="document" icon:variant="outline" @click="copy('name')">
                 <span x-text="nameLabel">Copy file name</span>
             </flux:menu.item>
-            <flux:menu.item icon="document-duplicate" icon:variant="outline" @click="copyAs('relative')">
+            <flux:menu.item icon="document-duplicate" icon:variant="outline" @click="copy('relative')">
                 <span x-text="relativeLabel">Copy relative path</span>
             </flux:menu.item>
-            <flux:menu.item icon="link" icon:variant="outline" @click="copyAs('full')">
+            <flux:menu.item icon="link" icon:variant="outline" @click="copy('full')">
                 <span x-text="fullLabel">Copy full path</span>
             </flux:menu.item>
         </flux:menu>

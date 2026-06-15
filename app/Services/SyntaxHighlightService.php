@@ -289,8 +289,8 @@ class SyntaxHighlightService
      * Tempest highlights the whole block at once and wraps multi-line constructs
      * (PHPDoc, block comments, template literals) in `<span>`s that open on one
      * line and close on a later one. Splitting naively on "\n" leaves each cell's
-     * HTML unbalanced — emitted raw via {!! !!}, the browser auto-closes the open
-     * span (color bleed) and orphan `</span>`s corrupt structure. Here we track
+     * HTML unbalanced. Emitted raw via {!! !!}, the browser auto-closes the open
+     * span and orphan `</span>`s corrupt structure. Here we track
      * the open-span stack: at each newline we close all open spans to end the
      * line, then re-open them (with their exact tags/classes) to start the next.
      *
@@ -487,7 +487,17 @@ class SyntaxHighlightService
 
         $newLines = array_map(
             fn (int $i, DiffLine $line) => array_key_exists($i, $highlighted)
-                ? new DiffLine($line->type, $line->content, $line->oldLineNum, $line->newLineNum, $highlighted[$i])
+                ? new DiffLine(
+                    type: $line->type,
+                    content: $line->content,
+                    oldLineNum: $line->oldLineNum,
+                    newLineNum: $line->newLineNum,
+                    highlightedContent: $highlighted[$i],
+                    headingLevel: $line->headingLevel,
+                    headingId: $line->headingId,
+                    headingAncestors: $line->headingAncestors,
+                    moved: $line->moved,
+                )
                 : $line,
             array_keys($lines),
             $lines,

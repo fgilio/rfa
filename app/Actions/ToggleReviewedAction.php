@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
-use App\Enums\GitRef;
+use App\DTOs\FileSourceSpec;
+use App\Enums\DiffSide;
 use App\Models\ReviewedFile;
 use App\Services\GitFileContentService;
 
@@ -35,7 +36,7 @@ final readonly class ToggleReviewedAction
         }
 
         $contentHash = ($file['isExternal'] ?? false) && ! empty($file['externalAbsolutePath'])
-            ? ($this->gitFileContentService->hashAtAbsolute((string) $file['externalAbsolutePath']) ?? '')
+            ? ($this->gitFileContentService->hashForSource($repoPath, FileSourceSpec::absolute((string) $file['externalAbsolutePath'])) ?? '')
             : ($repoPath !== '' ? ($this->resolveContentHash($repoPath, $target, $filePath) ?? '') : '');
 
         if (array_key_exists($filePath, $reviewedFiles)) {
@@ -69,16 +70,29 @@ final readonly class ToggleReviewedAction
      */
     private function resolveContentHash(string $repoPath, ?DiffTarget $target, string $filePath): ?string
     {
-        $rightRef = $target?->to() ?? GitRef::Working->value;
-        $rightHash = $this->gitFileContentService->hashAt($repoPath, $rightRef, $filePath);
+        $rightSource = $this->sideSource($target, DiffSide::Right, $filePath);
+        $rightHash = $this->gitFileContentService->hashForSource($repoPath, $rightSource);
         if ($rightHash !== null) {
             return $rightHash;
         }
 
-        $leftRef = $target?->from() ?? GitRef::Working->value;
+        $leftSource = $this->sideSource($target, DiffSide::Left, $filePath);
 
-        return $leftRef === $rightRef
+        // The two sides collapse to the same blob when comparing the working
+        // tree against itself, so there is nothing new to read on the left.
+        return $leftSource->ref === $rightSource->ref
             ? null
-            : $this->gitFileContentService->hashAt($repoPath, $leftRef, $filePath);
+            : $this->gitFileContentService->hashForSource($repoPath, $leftSource);
+    }
+
+    /**
+     * Resolve one side's source, treating a null target (raw working-tree
+     * review without a diff) as the working copy on both sides.
+     */
+    private function sideSource(?DiffTarget $target, DiffSide $side, string $filePath): FileSourceSpec
+    {
+        return $target === null
+            ? FileSourceSpec::working($filePath)
+            : FileSourceSpec::forSide($target, $side, $filePath);
     }
 }

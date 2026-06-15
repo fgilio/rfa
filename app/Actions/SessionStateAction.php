@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
-use App\Enums\GitRef;
+use App\DTOs\FileSourceSpec;
+use App\Enums\DiffSide;
 use App\Models\Comment;
 use App\Models\ReviewedFile;
 use App\Models\ReviewSession;
@@ -123,8 +124,6 @@ final readonly class SessionStateAction
             ->map(fn ($rows) => $rows->pluck('content_hash')->all())
             ->all();
 
-        $rightRef = $target->to() ?? GitRef::Working->value;
-        $leftRef = $target->from();
         $reviewed = [];
 
         foreach ($currentFiles as $file) {
@@ -139,7 +138,7 @@ final readonly class SessionStateAction
             // hash must come from the absolute on-disk path rather than a
             // git ref. Mismatch → un-review, matching the diff-anchor model.
             if (($file['isExternal'] ?? false) && ! empty($file['externalAbsolutePath'])) {
-                $currentHash = $this->gitFileContentService->hashAtAbsolute((string) $file['externalAbsolutePath']);
+                $currentHash = $this->gitFileContentService->hashForSource($repoPath, FileSourceSpec::absolute((string) $file['externalAbsolutePath']));
                 if ($currentHash !== null && in_array($currentHash, $storedHashes, true)) {
                     $reviewed[$path] = $currentHash;
                 }
@@ -147,11 +146,13 @@ final readonly class SessionStateAction
                 continue;
             }
 
+            $rightSource = FileSourceSpec::forSide($target, DiffSide::Right, $path);
+
             // Legacy rows (indexed `reviewed_files` arrays or immutable-context sessions)
             // were migrated with an empty `content_hash`. Treat those as "reviewed
             // regardless of content" so migrated users keep their state.
             if (in_array('', $storedHashes, true)) {
-                $reviewed[$path] = $this->gitFileContentService->hashAt($repoPath, $rightRef, $path) ?? '';
+                $reviewed[$path] = $this->gitFileContentService->hashForSource($repoPath, $rightSource) ?? '';
 
                 continue;
             }
@@ -159,20 +160,33 @@ final readonly class SessionStateAction
             // `ToggleReviewedAction` falls back to the left ref when the right side is
             // missing (deleted / left-only files). Check both sides on restore so the
             // reviewed flag survives for those files too.
-            $rightHash = $this->gitFileContentService->hashAt($repoPath, $rightRef, $path);
+            $rightHash = $this->gitFileContentService->hashForSource($repoPath, $rightSource);
             if ($rightHash !== null && in_array($rightHash, $storedHashes, true)) {
                 $reviewed[$path] = $rightHash;
 
                 continue;
             }
 
-            $leftPath = $file['oldPath'] ?? $path;
-            $leftHash = $this->gitFileContentService->hashAt($repoPath, $leftRef, $leftPath);
+            $leftSource = FileSourceSpec::forSide($target, DiffSide::Left, $path, $this->oldPathOf($file));
+            $leftHash = $this->gitFileContentService->hashForSource($repoPath, $leftSource);
             if ($leftHash !== null && in_array($leftHash, $storedHashes, true)) {
                 $reviewed[$path] = $leftHash;
             }
         }
 
         return $reviewed;
+    }
+
+    /**
+     * The pre-rename path a left-side anchor lives at, or null when the file
+     * was not renamed.
+     *
+     * @param  array<string, mixed>  $file
+     */
+    private function oldPathOf(array $file): ?string
+    {
+        $oldPath = $file['oldPath'] ?? null;
+
+        return is_string($oldPath) ? $oldPath : null;
     }
 }

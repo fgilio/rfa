@@ -8,21 +8,36 @@ use App\DTOs\DiffLine;
 use App\DTOs\FileDiff;
 use App\DTOs\Hunk;
 use App\Enums\LineType;
+use App\Support\AnsiText;
 
 class DiffParser
 {
     private const SYMLINK_MODE = '120000';
 
-    public function parseSingle(string $rawDiff): ?FileDiff
+    private const MOVED_OLD_MARKER = "\0rfa-moved-old\0";
+
+    private const MOVED_NEW_MARKER = "\0rfa-moved-new\0";
+
+    public function __construct(
+        private readonly PatchNormalizerService $patchNormalizer = new PatchNormalizerService,
+    ) {}
+
+    public function parseSingle(string $rawDiff, bool $detectMovedLines = false): ?FileDiff
     {
-        return $this->parse($rawDiff)[0] ?? null;
+        return $this->parse($rawDiff, $detectMovedLines)[0] ?? null;
     }
 
     /**
      * @return FileDiff[]
      */
-    public function parse(string $rawDiff): array
+    public function parse(string $rawDiff, bool $detectMovedLines = false): array
     {
+        if ($detectMovedLines) {
+            $rawDiff = $this->stripAnsiAndMarkMovedLines($rawDiff);
+        }
+
+        $rawDiff = $this->patchNormalizer->normalize($rawDiff);
+
         if (trim($rawDiff) === '') {
             return [];
         }
@@ -46,13 +61,24 @@ class DiffParser
         $lines = explode("\n", $section);
         $headerLine = $lines[0]; // diff --git a/path b/path
 
-        // Extract file path from header
-        if (! preg_match('#^diff --git [a-z]/(.+?) [a-z]/(.+)$#', $headerLine, $m)) {
+        // The normalizer owns header-path extraction: its validated split
+        // handles paths containing spaces (even ` b/`) that a lazy regex
+        // would cut at the wrong boundary.
+        $paths = $this->patchNormalizer->headerPaths($headerLine);
+        if ($paths === null) {
             return null;
         }
 
-        $oldPath = $m[1];
-        $newPath = $m[2];
+        [$oldPath, $newPath] = $paths;
+
+        // A rename or copy packs two distinct paths onto the `diff --git` line,
+        // where git leaves spaces unquoted, so that line cannot be split back
+        // apart reliably. The `rename`/`copy` markers carry each path alone and
+        // properly quoted, so they are the authoritative source when present.
+        $renamePaths = $this->patchNormalizer->renamePaths($lines);
+        if ($renamePaths !== null) {
+            [$oldPath, $newPath] = $renamePaths;
+        }
 
         // Detect status from subsequent header lines
         $status = 'modified';
@@ -200,6 +226,8 @@ class DiffParser
         $diffLines = [];
 
         foreach ($rawLines as $raw) {
+            [$raw, $moved] = $this->takeMovedMarker($raw);
+
             if ($raw === '\ No newline at end of file') {
                 continue;
             }
@@ -217,12 +245,24 @@ class DiffParser
             $content = substr($raw, 1);
 
             match ($prefix) {
-                '+' => (function () use (&$diffLines, $content, &$newLine) {
-                    $diffLines[] = new DiffLine(LineType::Add, $content, null, $newLine);
+                '+' => (function () use (&$diffLines, $content, &$newLine, $moved) {
+                    $diffLines[] = new DiffLine(
+                        type: LineType::Add,
+                        content: $content,
+                        oldLineNum: null,
+                        newLineNum: $newLine,
+                        moved: $moved === 'new' ? $moved : null,
+                    );
                     $newLine++;
                 })(),
-                '-' => (function () use (&$diffLines, $content, &$oldLine) {
-                    $diffLines[] = new DiffLine(LineType::Remove, $content, $oldLine, null);
+                '-' => (function () use (&$diffLines, $content, &$oldLine, $moved) {
+                    $diffLines[] = new DiffLine(
+                        type: LineType::Remove,
+                        content: $content,
+                        oldLineNum: $oldLine,
+                        newLineNum: null,
+                        moved: $moved === 'old' ? $moved : null,
+                    );
                     $oldLine++;
                 })(),
                 default => (function () use (&$diffLines, $content, &$oldLine, &$newLine) {
@@ -241,5 +281,78 @@ class DiffParser
             newCount: $newCount,
             lines: $diffLines,
         );
+    }
+
+    /**
+     * Mark moved lines from git's color output, then strip every SGR sequence.
+     *
+     * Moved-line detection only exists in git's colorized diff, so the diff is
+     * generated with `--color=always` and the move state is read from the color
+     * codes before they are removed. A tracked file whose content holds literal
+     * ANSI escapes is indistinguishable from git's own coloring here, so those
+     * bytes are stripped too. The feature is off by default and this path runs
+     * only when it is enabled, so the cost is confined to that opt-in.
+     */
+    private function stripAnsiAndMarkMovedLines(string $rawDiff): string
+    {
+        $lines = explode("\n", str_replace(["\r\n", "\r"], "\n", $rawDiff));
+
+        return implode("\n", array_map(function (string $line): string {
+            $marker = $this->movedMarkerForAnsiLine($line);
+
+            return $marker.AnsiText::strip($line);
+        }, $lines));
+    }
+
+    private function movedMarkerForAnsiLine(string $line): string
+    {
+        if (preg_match('/^((?:\x1b\[[0-9;]*m)+)([+-])/', $line, $matches) !== 1) {
+            return '';
+        }
+
+        preg_match_all('/\x1b\[([0-9;]*)m/', $matches[1], $codeMatches);
+
+        $codes = collect($codeMatches[1])
+            ->flatMap(fn (string $sequence): array => array_filter(explode(';', $sequence), fn (string $code): bool => $code !== ''))
+            ->map(fn (string $code): int => (int) $code)
+            ->all();
+
+        $sign = $matches[2];
+        $isFaintMovedLine = in_array(2, $codes, true);
+
+        if ($sign === '-' && ($isFaintMovedLine || $this->hasAnySgrCode($codes, [34, 35]))) {
+            return self::MOVED_OLD_MARKER;
+        }
+
+        if ($sign === '+' && ($isFaintMovedLine || $this->hasAnySgrCode($codes, [33, 36]))) {
+            return self::MOVED_NEW_MARKER;
+        }
+
+        return '';
+    }
+
+    /**
+     * @param  list<int>  $codes
+     * @param  list<int>  $expected
+     */
+    private function hasAnySgrCode(array $codes, array $expected): bool
+    {
+        return collect($expected)->contains(fn (int $code): bool => in_array($code, $codes, true));
+    }
+
+    /**
+     * @return array{0: string, 1: 'old'|'new'|null}
+     */
+    private function takeMovedMarker(string $line): array
+    {
+        if (str_starts_with($line, self::MOVED_OLD_MARKER)) {
+            return [substr($line, strlen(self::MOVED_OLD_MARKER)), 'old'];
+        }
+
+        if (str_starts_with($line, self::MOVED_NEW_MARKER)) {
+            return [substr($line, strlen(self::MOVED_NEW_MARKER)), 'new'];
+        }
+
+        return [$line, null];
     }
 }

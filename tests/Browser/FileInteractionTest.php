@@ -4,6 +4,26 @@ beforeEach(function () {
     $this->setUpTestRepo();
 });
 
+/**
+ * Poll the clipboard text captured by a `copy-to-clipboard` window listener.
+ * Bulk copy is a server round-trip, and the Pest-browser waitForFunction is a
+ * single evaluate (not a poll), so wait from PHP for the dispatched event.
+ */
+function waitForCopiedText($page, float $timeoutSec = 5.0): ?string
+{
+    $deadline = microtime(true) + $timeoutSec;
+
+    while (microtime(true) < $deadline) {
+        $text = $page->script('window.__copiedText');
+        if ($text !== null) {
+            return $text;
+        }
+        usleep(100_000);
+    }
+
+    return null;
+}
+
 test('clicking file name collapses and expands file diff', function () {
     $page = $this->visit($this->projectUrl());
 
@@ -247,7 +267,9 @@ test('sidebar copy paths trigger left-click copies relative paths', function () 
 
     $page->page()->getByTestId('sidebar-copy-paths-trigger')->click();
 
-    $result = $page->script('window.__copiedText');
+    // Bulk copy is a server round-trip now. The Pest-browser waitForFunction is a
+    // single evaluate, not a poll, so poll the captured text from PHP instead.
+    $result = waitForCopiedText($page);
     expect($result)->not->toBeNull();
     expect(explode("\n", $result))->toEqualCanonicalizing(['hello.php', 'utils.php', 'config.php']);
 });
@@ -263,7 +285,7 @@ test('sidebar copy paths right-click opens menu with file-name option', function
     $page->page()->getByTestId('sidebar-copy-paths-trigger')->click(['button' => 'right']);
     $page->page()->getByRole('menuitem', ['name' => 'Copy 3 file names'])->first()->click();
 
-    $result = $page->script('window.__copiedText');
+    $result = waitForCopiedText($page);
     expect($result)->not->toBeNull();
     expect(explode("\n", $result))->toEqualCanonicalizing(['hello.php', 'utils.php', 'config.php']);
 });
@@ -278,7 +300,7 @@ test('status strip copy paths trigger left-click copies relative paths', functio
 
     $page->page()->getByTestId('status-strip-copy-paths-trigger')->click();
 
-    $result = $page->script('window.__copiedText');
+    $result = waitForCopiedText($page);
     expect($result)->not->toBeNull();
     expect(explode("\n", $result))->toEqualCanonicalizing(['hello.php', 'utils.php', 'config.php']);
 });
@@ -294,7 +316,7 @@ test('right-click copy full paths prepends repo path to each entry', function ()
     $page->page()->getByTestId('sidebar-copy-paths-trigger')->click(['button' => 'right']);
     $page->page()->getByRole('menuitem', ['name' => 'Copy 3 full paths'])->first()->click();
 
-    $result = $page->script('window.__copiedText');
+    $result = waitForCopiedText($page);
     expect($result)->not->toBeNull();
 
     $expectedRepoPath = realpath($this->testRepoPath) ?: $this->testRepoPath;

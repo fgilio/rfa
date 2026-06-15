@@ -74,7 +74,7 @@ beforeEach(function () {
 
     // Mock GitFileContentService to avoid real git calls
     $gitFileContentMock = Mockery::mock(GitFileContentService::class);
-    $gitFileContentMock->shouldReceive('hashAt')->andReturn('mock-hash');
+    $gitFileContentMock->shouldReceive('hashForSource')->andReturn('mock-hash');
     app()->instance(GitFileContentService::class, $gitFileContentMock);
 
     // Prevent backfill from calling real git
@@ -182,6 +182,86 @@ test('diff file lazy loads stay isolated to avoid Livewire max component payload
     expect($lazyLoadCount)
         ->toBeGreaterThan($maxComponents)
         ->and($html)->not->toContain('lazyIsolated&quot;:false');
+});
+
+// -- File navigation shortcut hint --
+
+test('shows the j/k navigation keycaps when more than one file is visible', function () {
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->assertSeeHtml('aria-label="Press j for the next file, k for the previous file"');
+});
+
+test('hides the j/k navigation keycaps when only one file is visible', function () {
+    app()->bind(GetFileListAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        {
+            return [
+                ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 5, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false],
+            ];
+        }
+    });
+
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->assertDontSeeHtml('aria-label="Press j for the next file, k for the previous file"');
+});
+
+test('server file filter renders only matching diff-file children', function () {
+    $files = collect(range(1, 25))
+        ->map(fn (int $index): array => [
+            'id' => "file-{$index}",
+            'path' => "src/File{$index}.php",
+            'status' => 'modified',
+            'oldPath' => null,
+            'additions' => 1,
+            'deletions' => 1,
+            'isBinary' => false,
+            'isUntracked' => false,
+            'isImage' => false,
+            'lastModified' => null,
+            'isSymlink' => false,
+            'symlinkTarget' => null,
+            'fileSize' => null,
+        ])
+        ->all();
+
+    app()->bind(GetFileListAction::class, fn () => new class($files)
+    {
+        public function __construct(private array $files) {}
+
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        {
+            return $this->files;
+        }
+    });
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->set('fileFilter', 'File25.php');
+
+    expect($component->instance()->reviewState()->visibleFileEntries)->toBe([
+        ['id' => 'file-25', 'path' => 'src/File25.php'],
+    ])
+        ->and(substr_count($component->html(), '__lazyLoad'))->toBe(1);
+});
+
+test('copyVisiblePaths copies only the filtered files under a partial filter', function () {
+    // Bulk copy is server-owned: ReviewPage builds the clipboard text from its
+    // authoritative visible set, so a partial filter copies exactly what the user
+    // sees and never the files the filter hid.
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->set('fileFilter', 'Foo')
+        ->call('copyVisiblePaths', 'relative')
+        ->assertDispatched('copy-to-clipboard', text: 'src/Foo.php', toast: 'Copied relative path');
+});
+
+test('copyVisiblePaths formats bare names and absolute paths', function () {
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->call('copyVisiblePaths', 'name')
+        ->assertDispatched('copy-to-clipboard', text: "Foo.php\nBar.php", toast: 'Copied 2 file names');
+
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->call('copyVisiblePaths', 'full')
+        ->assertDispatched('copy-to-clipboard', text: "/tmp/repo/src/Foo.php\n/tmp/repo/src/Bar.php", toast: 'Copied 2 full paths');
 });
 
 test('mount backfills null gitignore path from git config', function () {

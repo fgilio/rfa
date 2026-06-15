@@ -53,6 +53,15 @@ test('toDiffArgs emits single-arg diff for range-to-working', function () {
         ->and(DiffTarget::range('from', 'to')->toDiffArgs())->toBe(['diff', 'from', 'to']);
 });
 
+test('cacheTtlHours caps immutable targets and passes the configured TTL through for working-tree targets', function () {
+    expect(DiffTarget::range('from', 'to')->cacheTtlHours(24))->toBe(720)
+        // Immutable targets short-circuit, so the arg is optional for callers
+        // (e.g. SFCs) that can't supply the coerced TTL.
+        ->and(DiffTarget::range('from', 'to')->cacheTtlHours())->toBe(720)
+        ->and(DiffTarget::workingDirectory()->cacheTtlHours(24))->toBe(24)
+        ->and(DiffTarget::rangeToWorking('abc123')->cacheTtlHours(12))->toBe(12);
+});
+
 test('contextKey disambiguates working-tree targets by their from ref', function () {
     $workingFromHead = DiffTarget::workingDirectory()->contextKey();
     $workingFromCommit = DiffTarget::rangeToWorking('abc123')->contextKey();

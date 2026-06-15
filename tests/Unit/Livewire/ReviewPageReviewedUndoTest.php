@@ -71,7 +71,7 @@ beforeEach(function () {
     });
 
     $gitFileContentMock = Mockery::mock(GitFileContentService::class);
-    $gitFileContentMock->shouldReceive('hashAt')->andReturn('mock-hash');
+    $gitFileContentMock->shouldReceive('hashForSource')->andReturn('mock-hash');
     app()->instance(GitFileContentService::class, $gitFileContentMock);
 
     app()->bind(BackfillGlobalGitignoreAction::class, fn () => new class
@@ -214,11 +214,45 @@ test('toggleReviewed still skips parent re-render after these changes', function
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
 });
 
+test('toggleReviewed renders when hide-reviewed visibility changes', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->call('hideReviewedFiles')
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php');
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeFalsy()
+        ->and($component->instance()->reviewState()->isFileVisible('id-foo'))->toBeFalse()
+        ->and($component->instance()->reviewState()->isFileVisible('id-bar'))->toBeTrue();
+});
+
+test('toggleReviewed skips render when only a file filter is active (filter is reviewed-independent)', function () {
+    // A path filter never hides a file for being reviewed — only Hide-reviewed
+    // does (ReviewStateService::fileIsVisible). The server-visible list is
+    // therefore unchanged by the toggle, so re-rendering would needlessly
+    // re-hydrate every mounted diff-file child on a latency-sensitive path. The
+    // toggle must still persist the reviewed state.
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->set('fileFilter', 'Foo')
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php');
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
+        ->and($component->instance()->reviewState()->reviewedFileIds)->toBe(['id-foo']);
+});
+
 test('clearRecentlyReviewed skips parent re-render', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->call('clearRecentlyReviewed');
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+});
+
+test('clearRecentlyReviewed renders while hide-reviewed group is visible', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
+        ->call('hideReviewedFiles')
+        ->call('clearRecentlyReviewed');
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeFalsy()
+        ->and($component->get('recentlyReviewedIds'))->toBe([]);
 });
 
 test('unmarkReviewed skips parent re-render to avoid 1+N child hydration', function () {

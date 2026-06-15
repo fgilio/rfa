@@ -42,3 +42,38 @@ test('passes core.quotepath=false so unicode paths come back unquoted', function
 
     expect($output)->toContain('日本語.txt');
 });
+
+test('forces parseable diff prefixes over repo config', function () {
+    $this->runTestRepoCommand($this->repoPath, [
+        'git config diff.noprefix true',
+        'git config diff.mnemonicPrefix true',
+        'git config diff.srcPrefix custom-old/',
+        'git config diff.dstPrefix custom-new/',
+    ]);
+
+    File::put($this->repoPath.'/file.txt', "changed\n");
+
+    $output = $this->service->run($this->repoPath, ['diff', '--no-ext-diff', '--no-color', '--', 'file.txt']);
+
+    expect($output)->toContain('diff --git a/file.txt b/file.txt')
+        ->and($output)->toContain('--- a/file.txt')
+        ->and($output)->toContain('+++ b/file.txt')
+        ->and($output)->not->toContain('custom-old/')
+        ->and($output)->not->toContain('custom-new/');
+});
+
+test('pins plain diff colors so user themes cannot mimic moved-line codes', function () {
+    $this->runTestRepoCommand($this->repoPath, [
+        'git config color.diff.old magenta',
+        'git config color.diff.new cyan',
+    ]);
+
+    File::put($this->repoPath.'/file.txt', "changed\n");
+
+    $output = $this->service->run($this->repoPath, ['diff', '--no-ext-diff', '--color=always', '--', 'file.txt']);
+
+    expect($output)->toContain("\x1b[31m-hello")
+        ->and($output)->toContain("\x1b[32m+")
+        ->and($output)->not->toContain("\x1b[35m-")
+        ->and($output)->not->toContain("\x1b[36m+");
+});

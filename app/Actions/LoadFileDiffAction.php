@@ -13,6 +13,7 @@ use App\Services\ExternalFilesService;
 use App\Services\GitDiffService;
 use App\Services\MarkdownRegionService;
 use App\Services\MarkdownTableAlignerService;
+use App\Services\ReviewConfigService;
 use App\Services\SyntaxHighlightService;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
@@ -28,14 +29,20 @@ final readonly class LoadFileDiffAction
         private CsvAlignerService $csvAligner,
         private MarkdownRegionService $markdownRegionService,
         private ExternalFilesService $externalFilesService,
-    ) {}
+        ?ReviewConfigService $reviewConfigService = null,
+    ) {
+        $this->reviewConfigService = $reviewConfigService ?? new ReviewConfigService;
+    }
 
-    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool, syntaxStyles: string} */
-    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
+    private readonly ReviewConfigService $reviewConfigService;
+
+    /** @return array{path: string, status: string, oldPath: ?string, hunks: array<int, array<string, mixed>>, additions: int, deletions: int, isBinary: bool, tooLarge: bool, skipReason?: ?string, syntaxStyles: string} */
+    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, ?int $contextLines = null, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
     {
         $target ??= DiffTarget::workingDirectory();
+        $reviewConfig = $this->reviewConfigService->resolve();
 
-        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target, $oldPath, $externalAbsolutePath): array {
+        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target, $oldPath, $externalAbsolutePath, $reviewConfig): array {
             try {
                 $rawDiff = $externalAbsolutePath !== null
                     ? $this->externalFilesService->buildDiff($externalAbsolutePath, $path)
@@ -52,14 +59,20 @@ final readonly class LoadFileDiffAction
             }
 
             if ($rawDiff === null) {
-                return FileDiff::emptyArray($path, 'modified', tooLarge: true) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
+                return FileDiff::emptyArray($path, 'modified', tooLarge: true, skipReason: 'too-large') + ['syntaxStyles' => '', 'headingsAnnotated' => true];
             }
 
             if (trim($rawDiff) === '') {
                 return FileDiff::emptyArray($path, 'modified', tooLarge: false) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
             }
 
-            $fileDiff = $this->diffParser->parseSingle($rawDiff);
+            // Untracked and external diffs are hand-built (never git-colorized),
+            // so their content can hold literal ANSI escapes. Moved-line detection
+            // strips ANSI from the whole patch, which would corrupt that content;
+            // only enable it for real git-colorized diffs.
+            $isHandBuiltDiff = $externalAbsolutePath !== null || ($isUntracked && $target->isWorkingDirectory());
+
+            $fileDiff = $this->diffParser->parseSingle($rawDiff, detectMovedLines: $reviewConfig->movedLineDetection && ! $isHandBuiltDiff);
 
             if (! $fileDiff) {
                 return FileDiff::emptyArray($path, 'modified', tooLarge: false) + ['syntaxStyles' => '', 'headingsAnnotated' => true];
@@ -94,6 +107,7 @@ final readonly class LoadFileDiffAction
 
             return $fileDiff->withHunks($annotatedHunks)->toArray() + [
                 'tooLarge' => false,
+                'skipReason' => null,
                 'syntaxStyles' => $css,
                 'tableAligned' => true,
                 'newFileLineCount' => $newFileLineCount,
@@ -111,7 +125,16 @@ final readonly class LoadFileDiffAction
                 return $cached;
             }
             $result = $compute();
-            Cache::put($cacheKey, $result, now()->addHours($target->cacheTtlHours()));
+
+            // A git failure is transient, so don't persist it — the next read
+            // should retry rather than serve a cached error for the full TTL.
+            // Skip results (too-large/empty/no-parse) are deterministic and do
+            // carry the current cache shape, so they cache and stop re-spawning git.
+            if (! array_key_exists('error', $result)) {
+                $ttlHours = $target->cacheTtlHours($reviewConfig->cacheTtlHours);
+
+                Cache::put($cacheKey, $result, now()->addHours($ttlHours));
+            }
 
             return $result;
         }

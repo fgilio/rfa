@@ -10,6 +10,7 @@ const {
     rowContainsLinePoint,
     createDiffFile,
     install,
+    autoInstall,
 } = diffFile;
 
 describe('getScrollSpeed', () => {
@@ -465,5 +466,135 @@ describe('expand focus restoration', () => {
 
             component.destroy();
         });
+    });
+});
+
+describe('pending comment form persistence', () => {
+    beforeEach(() => {
+        globalThis.Alpine = { store: () => ({ collapseAll: false }) };
+    });
+
+    afterEach(() => {
+        delete globalThis.Alpine;
+    });
+
+    function makeComponent(fileId) {
+        const component = createDiffFile({
+            fileId,
+            filePath: 'app/Foo.php',
+            isReviewed: false,
+        });
+        component.$dispatch = () => {};
+        return component;
+    }
+
+    it('restores an unsent draft after unmount and remount', () => {
+        const first = makeComponent('persist-1');
+        first.showForm = true;
+        first.formBody = 'work in progress';
+        first.formSide = 'right';
+        first.formLine = 12;
+        first.formEndLine = 14;
+        first.formStartPoint = { line: 12, side: 'right' };
+        first.formEndPoint = { line: 14, side: 'right' };
+        first.destroy();
+
+        const second = makeComponent('persist-1');
+        second.collapsed = true;
+        second.init();
+        second.destroy();
+
+        expect(second.showForm).toBe(true);
+        expect(second.formBody).toBe('work in progress');
+        expect(second.formSide).toBe('right');
+        expect(second.formLine).toBe(12);
+        expect(second.formEndLine).toBe(14);
+        expect(second.formStartPoint).toEqual({ line: 12, side: 'right' });
+        expect(second.formEndPoint).toEqual({ line: 14, side: 'right' });
+        expect(second.collapsed).toBe(false);
+    });
+
+    it('does not persist a closed or empty form', () => {
+        const closed = makeComponent('persist-2');
+        closed.formBody = 'typed then closed';
+        closed.showForm = false;
+        closed.destroy();
+
+        const blank = makeComponent('persist-3');
+        blank.showForm = true;
+        blank.formBody = '   ';
+        blank.destroy();
+
+        const remountClosed = makeComponent('persist-2');
+        remountClosed.init();
+        remountClosed.destroy();
+        const remountBlank = makeComponent('persist-3');
+        remountBlank.init();
+        remountBlank.destroy();
+
+        expect(remountClosed.showForm).toBe(false);
+        expect(remountClosed.formBody).toBe('');
+        expect(remountBlank.showForm).toBe(false);
+    });
+
+    it('consumes the snapshot on restore so it does not resurrect twice', () => {
+        const first = makeComponent('persist-4');
+        first.showForm = true;
+        first.formBody = 'only once';
+        first.destroy();
+
+        const second = makeComponent('persist-4');
+        second.init();
+        second.cancelForm();
+        second.destroy();
+
+        const third = makeComponent('persist-4');
+        third.init();
+        third.destroy();
+
+        expect(third.showForm).toBe(false);
+        expect(third.formBody).toBe('');
+    });
+});
+
+describe('pending comment form cleared on SPA navigation', () => {
+    beforeEach(() => {
+        // autoInstall needs Alpine present so install() runs and the
+        // livewire:navigating cleanup hook is registered.
+        globalThis.Alpine = { store: () => ({ collapseAll: false }), data: () => {} };
+        window.Alpine = globalThis.Alpine;
+    });
+
+    afterEach(() => {
+        delete globalThis.Alpine;
+        delete window.Alpine;
+        delete window.__diffFileAttached;
+        delete window.__diffFilePendingFormsCleanup;
+    });
+
+    function makeComponent(fileId) {
+        const component = createDiffFile({ fileId, filePath: 'app/Foo.php', isReviewed: false });
+        component.$dispatch = () => {};
+        return component;
+    }
+
+    it('drops an unsent draft when the page navigates away (so it cannot resurrect on a same-id file elsewhere)', () => {
+        // Registers the real production livewire:navigating cleanup hook.
+        autoInstall(window);
+
+        const first = makeComponent('nav-collide');
+        first.showForm = true;
+        first.formBody = 'unsent, must not cross the navigation boundary';
+        first.destroy(); // snapshots the draft into the page-lifetime Map
+
+        document.dispatchEvent(new window.Event('livewire:navigating'));
+
+        // A different page mounts a file whose content-hash id collides.
+        const second = makeComponent('nav-collide');
+        second.init();
+        second.destroy();
+
+        expect(second.showForm).toBe(false);
+        expect(second.formBody).toBe('');
     });
 });

@@ -1,7 +1,9 @@
 <?php
 
+use App\Actions\GetFileCopyContentAction;
 use App\Actions\LoadFileDiffAction;
 use App\Console\Benchmark\DiffFixtureFactory;
+use App\DTOs\CopyContentResult;
 use App\DTOs\DiffTarget;
 use App\Enums\LineType;
 use App\Support\DiffCacheKey;
@@ -516,4 +518,117 @@ test('gap expand-control clears its loading spinner when the action completes', 
     // morph, so it survives the no-op early-return paths above — and is scoped to
     // this file's id so a sibling file's expand can't clear it.
     expect($html)->toContain('@rfa:diff-action-completed.window="if (String($event.detail.fileId) === String(fileId)) loading = false"');
+});
+
+// -- Copy content forwarding --
+
+test('copyContent forwards the file status to GetFileCopyContentAction', function () {
+    $captured = (object) ['kind' => null, 'status' => null];
+
+    app()->bind(GetFileCopyContentAction::class, fn () => new class($captured)
+    {
+        public function __construct(private object $captured) {}
+
+        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
+        {
+            $this->captured->kind = $kind;
+            $this->captured->status = $status;
+
+            return CopyContentResult::unavailable();
+        }
+    });
+
+    $deletedFile = DiffFixtureFactory::fileEntry('src/Gone.php', status: 'deleted');
+
+    mountDiffFile($deletedFile)->call('copyContent', 'original');
+
+    expect($captured->kind)->toBe('original')
+        ->and($captured->status)->toBe('deleted');
+});
+
+test('copyContent copies the content and toasts success when the result is ok', function () {
+    app()->bind(GetFileCopyContentAction::class, fn () => new class
+    {
+        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
+        {
+            return CopyContentResult::ok('the new body');
+        }
+    });
+
+    mountDiffFile(DiffFixtureFactory::fileEntry('src/Foo.php'))
+        ->call('copyContent', 'new')
+        ->assertDispatched('copy-to-clipboard', text: 'the new body', toast: 'Copied new');
+});
+
+test('copyContent surfaces a feedback toast and no clipboard event when nothing is available', function () {
+    app()->bind(GetFileCopyContentAction::class, fn () => new class
+    {
+        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
+        {
+            return CopyContentResult::unavailable();
+        }
+    });
+
+    $deletedFile = DiffFixtureFactory::fileEntry('src/Gone.php', status: 'deleted');
+
+    mountDiffFile($deletedFile)
+        ->call('copyContent', 'original')
+        ->assertNotDispatched('copy-to-clipboard')
+        ->assertDispatched('toast-show');
+});
+
+test('copyContent reports a too-large source with its size', function () {
+    app()->bind(GetFileCopyContentAction::class, fn () => new class
+    {
+        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
+        {
+            return CopyContentResult::tooLarge(2_000_000);
+        }
+    });
+
+    mountDiffFile(DiffFixtureFactory::fileEntry('src/Big.php'))
+        ->call('copyContent', 'new')
+        ->assertNotDispatched('copy-to-clipboard')
+        ->assertDispatched(
+            'toast-show',
+            fn (string $event, array $params): bool => str_contains($params['slots']['text'] ?? '', 'too large')
+                && str_contains($params['slots']['text'] ?? '', 'MB'),
+        );
+});
+
+// -- Image diff source refs --
+
+test('image diff before-image loads the base ref in a base..working review', function () {
+    $imageFile = [
+        'id' => 'img-1',
+        'path' => 'logo.png',
+        'oldPath' => null,
+        'status' => 'modified',
+        'additions' => 0,
+        'deletions' => 0,
+        'isBinary' => true,
+        'isImage' => true,
+        'isUntracked' => false,
+        'isSymlink' => false,
+        'symlinkTarget' => null,
+        'lastModified' => null,
+        'fileSize' => '12 KB',
+        'isExternal' => false,
+        'externalAbsolutePath' => null,
+    ];
+
+    $html = Livewire::test('diff-file', [
+        'file' => $imageFile,
+        'repoPath' => '/tmp/test',
+        'projectId' => 0,
+        'fileComments' => [],
+        'diffFrom' => 'base1234',
+        'diffTo' => null,
+    ])->html();
+
+    // Before side must resolve to the from-ref (the base SHA), not HEAD; after
+    // side is the working tree. Hardcoding HEAD broke "review since base".
+    expect($html)->toContain('/api/image/0/base1234/logo.png')
+        ->and($html)->toContain('/api/image/0/working/logo.png')
+        ->and($html)->not->toContain('/api/image/0/HEAD/');
 });

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\DiffTarget;
 use App\Enums\DiffSide;
 use App\Enums\LineType;
 use App\Support\DiffCacheKey;
@@ -16,15 +17,22 @@ final readonly class BuildDiffContextAction
     ) {}
 
     /**
+     * Build the snippet shown beside each exported comment.
+     *
+     * The target scopes the diff every snippet is read from, so a commit-range
+     * review exports context from that range rather than the working tree. A
+     * null target reads the working directory.
+     *
      * @param  array<int, array<string, mixed>>  $comments
      * @param  array<int, array<string, mixed>>  $files
      * @return array<string, string>
      */
-    public function handle(string $repoPath, array $comments, array $files): array
+    public function handle(string $repoPath, array $comments, array $files, ?DiffTarget $target = null): array
     {
         $context = [];
         $loaded = [];
         $filesById = collect($files)->keyBy('id');
+        $contextKey = ($target ?? DiffTarget::workingDirectory())->contextKey();
 
         foreach ($comments as $comment) {
             if ($comment['startLine'] === null) {
@@ -39,14 +47,23 @@ final readonly class BuildDiffContextAction
             $fileId = $file['id'];
 
             if (! array_key_exists($fileId, $loaded)) {
-                $cached = Cache::get(DiffCacheKey::for($repoPath, $fileId));
+                $cached = Cache::get(DiffCacheKey::for($repoPath, $fileId, $contextKey));
                 $loaded[$fileId] = DiffCacheKey::isCurrentShape($cached)
                     ? $cached
-                    : $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false, oldPath: $file['oldPath'] ?? null);
+                    : $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false, oldPath: $file['oldPath'] ?? null, target: $target);
             }
 
             $diffData = $loaded[$fileId];
-            if (($diffData['tooLarge'] ?? false) || array_key_exists('error', $diffData)) {
+            $key = "{$comment['file']}:{$comment['side']}:{$comment['startLine']}:{$comment['endLine']}";
+
+            if (($diffData['tooLarge'] ?? false)) {
+                $reason = $diffData['skipReason'] ?? 'too-large';
+                $context[$key] = "[Diff skipped: {$reason}]";
+
+                continue;
+            }
+
+            if (array_key_exists('error', $diffData)) {
                 continue;
             }
 
@@ -55,7 +72,7 @@ final readonly class BuildDiffContextAction
             foreach ($diffData['hunks'] as $hunk) {
                 foreach ($hunk['lines'] as $line) {
                     // Use the line number for the comment's own side only. Falling back
-                    // to the other side would pull in lines absent from this side — e.g.
+                    // to the other side would pull in lines absent from this side. For example,
                     // an Add line (oldLineNum=null, newLineNum=41) would match a left-side
                     // range of old lines 40-42 and be emitted into the old-side snippet,
                     // despite having no presence on the left at all.
@@ -74,7 +91,6 @@ final readonly class BuildDiffContextAction
                 }
             }
 
-            $key = "{$comment['file']}:{$comment['side']}:{$comment['startLine']}:{$comment['endLine']}";
             $context[$key] = implode("\n", $lines);
         }
 

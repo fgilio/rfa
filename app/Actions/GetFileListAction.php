@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
+use App\DTOs\ReviewChangeset;
 use App\Models\Project;
 use App\Services\ExternalFilesService;
 use App\Services\GitDiffService;
@@ -23,24 +24,14 @@ final readonly class GetFileListAction
     public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
     {
         $target ??= DiffTarget::workingDirectory();
+        $changeset = $this->changeset(
+            repoPath: $repoPath,
+            projectId: $projectId,
+            globalGitignorePath: $globalGitignorePath,
+            target: $target,
+        );
 
-        $fileList = $this->gitDiffService->getFileList($repoPath, $globalGitignorePath, $target);
-        $files = collect($fileList)
-            ->map(fn ($entry): array => $entry->toArray())
-            ->values()
-            ->all();
-
-        if ($target->isWorkingDirectory() && $projectId !== null) {
-            $project = Project::find($projectId);
-
-            if ($project !== null) {
-                $external = collect($this->externalFilesService->getEntries((array) ($project->external_paths ?? [])))
-                    ->map(fn ($entry): array => $entry->toArray())
-                    ->all();
-
-                $files = [...$files, ...$external];
-            }
-        }
+        $files = $changeset->filesToArray();
 
         if ($clearCache && ! $target->isImmutable()) {
             $projectKey = $projectId ?? $repoPath;
@@ -50,5 +41,30 @@ final readonly class GetFileListAction
         }
 
         return $files;
+    }
+
+    public function changeset(string $repoPath, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): ReviewChangeset
+    {
+        $target ??= DiffTarget::workingDirectory();
+
+        $files = $this->gitDiffService->getFileList($repoPath, $globalGitignorePath, $target);
+
+        if ($target->isWorkingDirectory() && $projectId !== null) {
+            $project = Project::find($projectId);
+
+            if ($project !== null) {
+                $files = [
+                    ...$files,
+                    ...$this->externalFilesService->getEntries((array) ($project->external_paths ?? [])),
+                ];
+            }
+        }
+
+        return new ReviewChangeset(
+            repoPath: $repoPath,
+            sourceLabel: $target->contextKey(),
+            target: $target,
+            files: $files,
+        );
     }
 }

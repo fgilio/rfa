@@ -11,6 +11,7 @@ use App\Services\IgnoreService;
 use App\Services\MarkdownRegionService;
 use App\Services\MarkdownTableAlignerService;
 use App\Services\SyntaxHighlightService;
+use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -36,7 +37,8 @@ test('returns full DTO array for modified file', function () {
         ->and($result['tooLarge'])->toBeFalse()
         ->and($result['path'])->toBe('hello.txt')
         ->and($result['hunks'])->toHaveCount(1)
-        ->and($result['hunks'][0])->toHaveKeys(['header', 'oldStart', 'newStart', 'lines']);
+        ->and($result['hunks'][0])->toHaveKeys(['header', 'oldStart', 'newStart', 'lines'])
+        ->and($result)->not->toHaveKeys(['oldSource', 'newSource']);
 });
 
 test('returns tooLarge true when diff exceeds limit', function () {
@@ -50,8 +52,10 @@ test('returns tooLarge true when diff exceeds limit', function () {
 
     expect($result)->toHaveKeys(['path', 'status', 'oldPath', 'hunks', 'additions', 'deletions', 'isBinary', 'tooLarge'])
         ->and($result['tooLarge'])->toBeTrue()
+        ->and($result['skipReason'])->toBe('too-large')
         ->and($result['hunks'])->toBe([])
         ->and($result['path'])->toBe('hello.txt')
+        ->and($result)->not->toHaveKeys(['oldSource', 'newSource'])
         ->and($result['additions'])->toBe(0)
         ->and($result['deletions'])->toBe(0)
         ->and($result['isBinary'])->toBeFalse();
@@ -62,7 +66,8 @@ test('returns empty array for empty diff', function () {
     $result = $action->handle($this->tmpDir, 'nonexistent.txt', isUntracked: true);
 
     expect($result['hunks'])->toBe([])
-        ->and($result['tooLarge'])->toBeFalse();
+        ->and($result['tooLarge'])->toBeFalse()
+        ->and($result['skipReason'])->toBeNull();
 });
 
 test('handles untracked file', function () {
@@ -74,7 +79,8 @@ test('handles untracked file', function () {
     expect($result)->not->toBeNull()
         ->and($result['hunks'])->toHaveCount(1)
         ->and($result['tooLarge'])->toBeFalse()
-        ->and($result['path'])->toBe('newfile.txt');
+        ->and($result['path'])->toBe('newfile.txt')
+        ->and($result)->not->toHaveKeys(['oldSource', 'newSource']);
 });
 
 test('renamed file passes oldPath so rename detection finds the source', function () {
@@ -85,7 +91,7 @@ test('renamed file passes oldPath so rename detection finds the source', functio
     File::put($this->tmpDir.'/old.txt', $original);
     $this->commitTestRepo($this->tmpDir, 'add old.txt');
 
-    // Rename + small modification (drop one line) — staying well above 50% similarity.
+    // Rename + small modification (drop one line), staying well above 50% similarity.
     $this->runTestRepoCommand($this->tmpDir, ['git mv old.txt new.txt']);
     $modified = implode("\n", array_map(fn ($i) => "line {$i}", range(1, 19)))."\n";
     File::put($this->tmpDir.'/new.txt', $modified);
@@ -95,8 +101,21 @@ test('renamed file passes oldPath so rename detection finds the source', functio
 
     expect($result['status'])->toBe('renamed')
         ->and($result['oldPath'])->toBe('old.txt')
+        ->and($result)->not->toHaveKeys(['oldSource', 'newSource'])
         ->and($result['additions'])->toBe(0)
         ->and($result['deletions'])->toBe(1);
+});
+
+test('external file diffs expose absolute source metadata', function () {
+    $externalDirectory = $this->createTempDirectory('rfa_external_source_test_');
+    $absolutePath = $externalDirectory.'/notes.md';
+    File::put($absolutePath, "# Notes\n");
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService, new CsvAlignerService, new MarkdownRegionService, app(ExternalFilesService::class));
+    $result = $action->handle($this->tmpDir, 'external/specs/notes.md', externalAbsolutePath: $absolutePath);
+
+    expect($result['status'])->toBe('added')
+        ->and($result)->not->toHaveKeys(['oldSource', 'newSource']);
 });
 
 test('without oldPath the rename diff degrades to all additions', function () {
@@ -442,4 +461,74 @@ test('returns error field when git command fails', function () {
     expect($result['error'])->toBe('Failed to load diff for this file.')
         ->and($result['hunks'])->toBe([])
         ->and($result['tooLarge'])->toBeFalse();
+});
+
+// -- skip-result caching --
+
+test('a too-large skip result carries the current cache shape and is cached (no git re-spawn on re-read)', function () {
+    File::put($this->tmpDir.'/hello.txt', str_repeat("long line\n", 500));
+    config(['rfa.diff_max_bytes' => 100]);
+
+    $cacheKey = 'test-too-large-cacheable';
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService, new CsvAlignerService, new MarkdownRegionService, app(ExternalFilesService::class));
+    $result = $action->handle($this->tmpDir, 'hello.txt', cacheKey: $cacheKey);
+
+    expect($result['tooLarge'])->toBeTrue()
+        ->and(DiffCacheKey::isCurrentShape($result))->toBeTrue()
+        ->and(DiffCacheKey::isCurrentShape(Cache::get($cacheKey)))->toBeTrue();
+});
+
+test('a transient git error is not cached so the next read can retry', function () {
+    $gitService = Mockery::mock(GitDiffService::class);
+    $gitService->shouldReceive('getFileDiff')
+        ->andThrow(new GitCommandException('git diff', 'fatal: bad revision', 128));
+
+    $cacheKey = 'test-error-not-cached';
+
+    $action = new LoadFileDiffAction($gitService, new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService, new CsvAlignerService, new MarkdownRegionService, app(ExternalFilesService::class));
+    $result = $action->handle($this->tmpDir, 'hello.txt', cacheKey: $cacheKey);
+
+    expect($result)->toHaveKey('error')
+        ->and(Cache::get($cacheKey))->toBeNull();
+});
+
+// -- moved-line detection vs hand-built diffs --
+
+test('literal ANSI in an untracked file survives moved-line detection', function () {
+    // Moved-line detection strips ANSI from git-colorized diffs, but an untracked
+    // file's diff is hand-built and uncolored — its content (here a literal escape
+    // sequence) must not be stripped when the feature is enabled.
+    config(['rfa.moved_lines.enabled' => true]);
+
+    File::put($this->tmpDir.'/log.txt', "\e[31mred\e[0m\n");
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService, new CsvAlignerService, new MarkdownRegionService, app(ExternalFilesService::class));
+    $result = $action->handle($this->tmpDir, 'log.txt', isUntracked: true);
+
+    $content = $result['hunks'][0]['lines'][0]['content'];
+
+    expect($content)->toContain("\e[31m")
+        ->and($content)->toContain("\e[0m");
+});
+
+// -- review config wiring --
+
+test('default context lines come from review config when the caller omits them', function () {
+    $lines = array_map(fn ($i) => "line{$i}", range(1, 20));
+    File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
+    $this->commitTestRepo($this->tmpDir, 'add many ctx');
+
+    $lines[0] = 'changed1';
+    $lines[19] = 'changed20';
+    File::put($this->tmpDir.'/many.txt', implode("\n", $lines)."\n");
+
+    // A huge configured context window merges the two distant edits into one hunk,
+    // proving the config default reaches the diff instead of the hardcoded 3.
+    config(['rfa.default_context_lines' => 99999]);
+
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService, new CsvAlignerService, new MarkdownRegionService, app(ExternalFilesService::class));
+    $result = $action->handle($this->tmpDir, 'many.txt');
+
+    expect($result['hunks'])->toHaveCount(1);
 });

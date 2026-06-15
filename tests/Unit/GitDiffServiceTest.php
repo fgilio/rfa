@@ -5,6 +5,7 @@ use App\Exceptions\GitCommandException;
 use App\Services\GitDiffService;
 use App\Services\GitProcessService;
 use App\Services\IgnoreService;
+use App\Support\AnsiText;
 use Faker\Factory as Faker;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -277,7 +278,7 @@ test('getFileList mtime advances after rewriting a working-tree file', function 
 /**
  * 1commit+WC and Since-base are both `rangeToWorking` targets. Same
  * branch as plain WT for `isWorkingDirectory()`, so mtime/byteSize must
- * still be populated — the fix relies on this.
+ * still be populated. The fix relies on this.
  */
 test('getFileList populates mtime/byteSize in rangeToWorking (1commit+WC / Since-base) mode', function () {
     $this->initTestRepo($this->tmpDir);
@@ -329,6 +330,83 @@ test('getFileDiff returns raw diff for tracked file', function () {
     expect($diff)->toContain('+line2');
 });
 
+test('getFileDiff keeps git prefixes parseable despite repo diff config', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "line1\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+    $this->runTestRepoCommand($this->tmpDir, [
+        'git config diff.noprefix true',
+        'git config diff.mnemonicPrefix true',
+        'git config diff.srcPrefix custom-old/',
+        'git config diff.dstPrefix custom-new/',
+    ]);
+
+    File::put($this->tmpDir.'/hello.txt', "line1\nline2\n");
+
+    $diff = $this->service->getFileDiff($this->tmpDir, 'hello.txt');
+
+    expect($diff)->toStartWith('diff --git a/hello.txt b/hello.txt')
+        ->and($diff)->toContain('--- a/hello.txt')
+        ->and($diff)->toContain('+++ b/hello.txt')
+        ->and($diff)->not->toContain('custom-old/')
+        ->and($diff)->not->toContain('custom-new/');
+});
+
+test('getFileDiff keeps color disabled by default even when git color is forced', function () {
+    config([
+        'rfa.moved_lines.enabled' => false,
+    ]);
+
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "alpha\none\nbody-a\nbody-b\nfooter\nomega\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+    $this->runTestRepoCommand($this->tmpDir, 'git config color.ui always');
+
+    File::put($this->tmpDir.'/file.txt', "alpha\nbody-a\nbody-b\nfooter\none\nomega\n");
+
+    $diff = $this->service->getFileDiff($this->tmpDir, 'file.txt');
+
+    expect($diff)->not->toContain("\e[")
+        ->and($diff)->toContain('-one')
+        ->and($diff)->toContain('+one');
+});
+
+test('getFileDiff can emit moved line colors when enabled', function () {
+    config([
+        'rfa.moved_lines.enabled' => true,
+        'rfa.moved_lines.mode' => 'plain',
+    ]);
+
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "alpha\none\nbody-a\nbody-b\nfooter\nomega\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/file.txt', "alpha\nbody-a\nbody-b\nfooter\none\nomega\n");
+
+    $diff = $this->service->getFileDiff($this->tmpDir, 'file.txt');
+
+    expect($diff)->toContain("\e[1;35m-one")
+        ->and($diff)->toContain("\e[1;36m+\e[m\e[1;36mone");
+});
+
+test('getFileDiff ignores configured external diff commands', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "line1\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    $script = $this->tmpDir.'/external-diff.sh';
+    File::put($script, "#!/bin/sh\necho external-diff-ran\nexit 0\n");
+    chmod($script, 0755);
+    $this->runTestRepoCommand($this->tmpDir, 'git config diff.external '.escapeshellarg($script));
+
+    File::put($this->tmpDir.'/hello.txt', "line1\nline2\n");
+
+    $diff = $this->service->getFileDiff($this->tmpDir, 'hello.txt');
+
+    expect($diff)->toContain('+line2')
+        ->and($diff)->not->toContain('external-diff-ran');
+});
+
 test('getFileDiff returns synthetic diff for untracked file', function () {
     $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/readme.txt', "ok\n");
@@ -372,6 +450,16 @@ test('getFileDiff returns empty string for missing untracked file', function () 
     $this->commitTestRepo($this->tmpDir, 'initial');
 
     $diff = $this->service->getFileDiff($this->tmpDir, 'gone.txt', isUntracked: true);
+
+    expect($diff)->toBe('');
+});
+
+test('getFileDiff returns empty string for path traversal', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    $diff = $this->service->getFileDiff($this->tmpDir, '../outside.txt', isUntracked: true);
 
     expect($diff)->toBe('');
 });
@@ -475,6 +563,22 @@ test('buildUntrackedDiff generates mode 120000 for symlinks', function () {
     expect($diff)->toContain('+target.md');
 });
 
+test('buildUntrackedDiff represents escaping symlinks without following them', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/readme.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    $outside = $this->createTempDirectory('rfa_gitdiff_outside_');
+    File::put($outside.'/secret.md', "outside\n");
+    symlink($outside.'/secret.md', $this->tmpDir.'/link.md');
+
+    $diff = $this->service->getFileDiff($this->tmpDir, 'link.md', isUntracked: true);
+
+    expect($diff)->toContain('new file mode 120000');
+    expect($diff)->toContain('+'.$outside.'/secret.md');
+    expect($diff)->not->toContain('+outside');
+});
+
 // -- Unicode/emoji file path tests --
 
 test('getFileList returns correct path for modified file with unicode name', function () {
@@ -488,6 +592,21 @@ test('getFileList returns correct path for modified file with unicode name', fun
 
     expect($entries)->toHaveCount(1)
         ->and($entries[0]->path)->toBe('⚡show.blade.php')
+        ->and($entries[0]->status)->toBe('modified');
+});
+
+test('getFileList keeps status paths plain when git color is forced', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "line1\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+    $this->runTestRepoCommand($this->tmpDir, 'git config color.ui always');
+
+    File::put($this->tmpDir.'/hello.txt', "line1\nline2\n");
+
+    $entries = $this->service->getFileList($this->tmpDir);
+
+    expect($entries)->toHaveCount(1)
+        ->and($entries[0]->path)->toBe('hello.txt')
         ->and($entries[0]->status)->toBe('modified');
 });
 
@@ -551,6 +670,20 @@ test('getNewFileLineCount returns null for missing file', function () {
     $this->commitTestRepo($this->tmpDir, 'initial');
 
     $count = $this->service->getNewFileLineCount($this->tmpDir, 'nonexistent.txt');
+
+    expect($count)->toBeNull();
+});
+
+test('getNewFileLineCount returns null for working tree symlink escape', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "ok\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    $outside = $this->createTempDirectory('rfa_gitdiff_linecount_outside_');
+    File::put($outside.'/secret.txt', "outside\n");
+    symlink($outside.'/secret.txt', $this->tmpDir.'/escape.txt');
+
+    $count = $this->service->getNewFileLineCount($this->tmpDir, 'escape.txt');
 
     expect($count)->toBeNull();
 });
@@ -653,4 +786,76 @@ test('getWorkingDirectoryFingerprint is deterministic for same state', function 
     $hash2 = $this->service->getWorkingDirectoryFingerprint($this->tmpDir);
 
     expect($hash1)->toBe($hash2);
+});
+
+test('getFileDiff returns a plain diff when moved line colors are not requested', function () {
+    config([
+        'rfa.moved_lines.enabled' => true,
+        'rfa.moved_lines.mode' => 'plain',
+    ]);
+
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "alpha\none\nbody-a\nbody-b\nfooter\nomega\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/file.txt', "alpha\nbody-a\nbody-b\nfooter\none\nomega\n");
+
+    $diff = $this->service->getFileDiff($this->tmpDir, 'file.txt', detectMovedLines: false);
+
+    expect($diff)->not->toContain("\e[")
+        ->and($diff)->toContain('-one')
+        ->and($diff)->toContain('+one');
+});
+
+test('getFileDiff size cap ignores ANSI color overhead from moved line detection', function () {
+    config([
+        'rfa.moved_lines.enabled' => true,
+        'rfa.moved_lines.mode' => 'plain',
+    ]);
+
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/file.txt', "alpha\none\nbody-a\nbody-b\nfooter\nomega\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/file.txt', "alpha\nbody-a\nbody-b\nfooter\none\nomega\n");
+
+    $colorized = $this->service->getFileDiff($this->tmpDir, 'file.txt');
+    $plainLength = strlen(AnsiText::strip($colorized));
+
+    expect(strlen($colorized))->toBeGreaterThan($plainLength)
+        ->and($this->service->getFileDiff($this->tmpDir, 'file.txt', maxBytes: $plainLength))->not->toBeNull()
+        ->and($this->service->getFileDiff($this->tmpDir, 'file.txt', maxBytes: $plainLength - 1))->toBeNull();
+});
+
+test('getFileDiff serves commit-range diffs for paths under a directory symlinked outside the repo', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::makeDirectory($this->tmpDir.'/lib');
+    File::put($this->tmpDir.'/lib/file.txt', "one\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/lib/file.txt', "one\ntwo\n");
+    $this->commitTestRepo($this->tmpDir, 'second');
+
+    $from = trim($this->runTestRepoCommand($this->tmpDir, 'git rev-parse HEAD~1'));
+    $to = trim($this->runTestRepoCommand($this->tmpDir, 'git rev-parse HEAD'));
+
+    // Replace the committed directory with a symlink resolving outside the
+    // repo; the historical diff must not depend on worktree resolution.
+    $outside = $this->createTempDirectory('rfa_outside_');
+    File::deleteDirectory($this->tmpDir.'/lib');
+    symlink($outside, $this->tmpDir.'/lib');
+
+    $diff = $this->service->getFileDiff($this->tmpDir, 'lib/file.txt', target: DiffTarget::range($from, $to));
+
+    expect($diff)->toContain('diff --git a/lib/file.txt b/lib/file.txt')
+        ->and($diff)->toContain('+two');
+});
+
+test('getFileDiff still rejects traversal paths', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/hello.txt', "line1\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    expect($this->service->getFileDiff($this->tmpDir, '../outside.txt'))->toBe('')
+        ->and($this->service->getFileDiff($this->tmpDir, 'hello.txt', oldPath: '/etc/passwd'))->toBe('');
 });

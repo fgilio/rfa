@@ -6,6 +6,7 @@ use App\Actions\LoadFileDiffAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\DTOs\DiffTarget;
 use App\Enums\DiffSide;
+use App\Enums\GitRef;
 use App\Support\DiffCacheKey;
 use App\View\DiffFileViewModel;
 use Illuminate\Support\Facades\Cache;
@@ -109,24 +110,46 @@ HTML;
 
     public function copyContent(string $kind): void
     {
-        $text = app(GetFileCopyContentAction::class)->handle(
+        $result = app(GetFileCopyContentAction::class)->handle(
             $kind,
             $this->repoPath,
             $this->file['path'],
             $this->file['isUntracked'] ?? false,
             $this->buildDiffTarget(),
             oldPath: $this->file['oldPath'] ?? null,
+            status: $this->file['status'] ?? 'modified',
+            isExternal: $this->file['isExternal'] ?? false,
+            externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
         );
 
-        if ($text !== null) {
-            $toast = match ($kind) {
+        if ($result->isOk()) {
+            $this->dispatch('copy-to-clipboard', text: $result->content, toast: match ($kind) {
                 'diff' => 'Copied diff',
                 'original' => 'Copied original',
                 'new' => 'Copied new',
                 default => 'Copied',
-            };
-            $this->dispatch('copy-to-clipboard', text: $text, toast: $toast);
+            });
+
+            return;
         }
+
+        Flux::toast(variant: 'warning', text: $this->copyUnavailableMessage($kind, $result));
+    }
+
+    private function copyUnavailableMessage(string $kind, \App\DTOs\CopyContentResult $result): string
+    {
+        if ($result->status === \App\DTOs\CopyContentResult::STATUS_TOO_LARGE) {
+            $size = $result->byteSize !== null ? ' ('.\Illuminate\Support\Number::fileSize($result->byteSize).')' : '';
+
+            return 'File is too large to copy'.$size;
+        }
+
+        return match ($kind) {
+            'diff' => 'No diff available to copy',
+            'original' => 'Original content is unavailable to copy',
+            'new' => 'New content is unavailable to copy',
+            default => 'Nothing to copy',
+        };
     }
 
     public function expandContext(): void
@@ -468,8 +491,11 @@ HTML;
                 $hasBeforeImage = in_array($status, ['modified', 'binary', 'renamed', 'deleted']);
                 $hasAfterImage = in_array($status, ['modified', 'binary', 'renamed', 'added']);
                 $beforePath = $file['oldPath'] ?? $file['path'];
-                $beforeRef = $diffTo === null ? 'HEAD' : $diffFrom;
-                $afterRef = $diffTo ?? 'working';
+                // The before side is always the target's from-ref. Hardcoding HEAD
+                // when $diffTo is null breaks "review since base" (base..working),
+                // where $diffFrom is the base SHA, not HEAD.
+                $beforeRef = $diffFrom;
+                $afterRef = $diffTo ?? GitRef::Working->value;
             @endphp
             <div class="px-4 py-6 flex items-start justify-center gap-6">
                 @if($hasBeforeImage)

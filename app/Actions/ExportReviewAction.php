@@ -29,7 +29,7 @@ final readonly class ExportReviewAction
 
         $commentDTOs = array_map(fn ($c) => Comment::fromArray($c), $inScope);
 
-        $diffContext = $this->buildDiffContextAction->handle($repoPath, $inScope, $files);
+        $diffContext = $this->buildDiffContextAction->handle($repoPath, $inScope, $files, $target);
 
         $result = $this->commentExporter->export($repoPath, $commentDTOs, $globalComment, $diffContext);
 

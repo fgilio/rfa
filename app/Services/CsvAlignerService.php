@@ -127,6 +127,7 @@ class CsvAlignerService
                     content: $newContent,
                     oldLineNum: $line->oldLineNum,
                     newLineNum: $line->newLineNum,
+                    moved: $line->moved,
                 );
             }
         }

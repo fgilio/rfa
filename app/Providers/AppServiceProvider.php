@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Services\GitFileContentService;
+use App\Services\ReviewConfigService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -24,6 +25,12 @@ class AppServiceProvider extends ServiceProvider
         // so the cache can't go stale mid-request. Under Octane et al., callers
         // must invoke GitFileContentService::flushCache() between requests.
         $this->app->singleton(GitFileContentService::class);
+
+        // Singleton for the same reason: one request resolves effective review
+        // config (config/rfa.php) once and shares the memoized ReviewConfig across
+        // every consumer (GitDiffService, FileSourceService, LoadFileDiffAction, …)
+        // instead of each rebuilding its own copy.
+        $this->app->singleton(ReviewConfigService::class);
     }
 
     public function boot(): void

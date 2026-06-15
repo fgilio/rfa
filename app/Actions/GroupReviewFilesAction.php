@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
-use App\DTOs\ReviewFilePair;
+use App\Services\ReviewStateService;
 
 final readonly class GroupReviewFilesAction
 {
+    public function __construct(
+        private ReviewStateService $reviewStateService,
+    ) {}
+
     /**
      * Filter review-file artifacts (.rfa/{timestamp}_comments_{hash}.md) out
      * of a flat file list, returning only the source files.
@@ -17,9 +21,6 @@ final readonly class GroupReviewFilesAction
      */
     public function handle(array $files): array
     {
-        return array_values(array_filter(
-            $files,
-            fn (array $file) => ReviewFilePair::extractBasename($file['path']) === null,
-        ));
+        return $this->reviewStateService->sourceFiles($files);
     }
 }

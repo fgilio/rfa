@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
+use App\DTOs\FileSourceSpec;
 use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use App\Enums\GitRef;
@@ -59,9 +60,10 @@ final readonly class AddCommentAction
         $filePath = (string) $file['path'];
         $oldPath = ! empty($file['oldPath']) ? (string) $file['oldPath'] : null;
         $isExternal = (bool) ($file['isExternal'] ?? false);
-        $contentHash = $isExternal
-            ? $this->gitFileContentService->hashAtAbsolute((string) ($file['externalAbsolutePath'] ?? ''))
-            : $this->resolveContentHash($repoPath, $target, $side, $filePath, $oldPath);
+        $source = $isExternal
+            ? FileSourceSpec::absolute((string) ($file['externalAbsolutePath'] ?? ''))
+            : FileSourceSpec::forSide($target, DiffSide::from($side), $filePath, $oldPath);
+        $contentHash = $this->gitFileContentService->hashForSource($repoPath, $source);
         $originRef = $isExternal
             ? GitRef::External->value
             : ($target->to() ?? GitRef::Working->value);
@@ -98,19 +100,5 @@ final readonly class AddCommentAction
             'submittedAt' => null,
             'anchorStatus' => AnchorStatus::Placed->value,
         ];
-    }
-
-    private function resolveContentHash(string $repoPath, DiffTarget $target, string $side, string $filePath, ?string $oldPath): ?string
-    {
-        if ($side === DiffSide::Left->value) {
-            // For renames the file exists at `from` under its pre-rename path only.
-            $leftPath = $oldPath ?? $filePath;
-
-            return $this->gitFileContentService->hashAt($repoPath, $target->from(), $leftPath);
-        }
-
-        $ref = $target->to() ?? GitRef::Working->value;
-
-        return $this->gitFileContentService->hashAt($repoPath, $ref, $filePath);
     }
 }

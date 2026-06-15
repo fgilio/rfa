@@ -1,5 +1,6 @@
 <?php
 
+use App\DTOs\FileSourceSpec;
 use App\Enums\GitRef;
 use App\Services\GitFileContentService;
 use App\Services\GitProcessService;
@@ -66,6 +67,28 @@ test('hashAt returns null when working copy file is missing', function () {
     expect($this->service->hashAt($this->tmpDir, GitRef::Working->value, 'missing.php'))->toBeNull();
 });
 
+test('reads never hand git an option-shaped ref', function () {
+    $gitProcess = Mockery::mock(GitProcessService::class);
+    $gitProcess->shouldNotReceive('run');
+
+    $service = new GitFileContentService($gitProcess);
+
+    expect($service->contentAt($this->tmpDir, '--output=/tmp/pwned', 'hello.php'))->toBeNull()
+        ->and($service->hashAt($this->tmpDir, '-x', 'hello.php'))->toBeNull()
+        ->and($service->byteSizeAt($this->tmpDir, '--output=/tmp/pwned', 'hello.php'))->toBeNull();
+});
+
+test('contentAt hashes working tree symlink identity instead of followed content', function () {
+    $outside = $this->createTempDirectory('rfa_gitfile_content_outside_');
+    File::put($outside.'/secret.php', "<?php\necho 'outside';\n");
+    symlink($outside.'/secret.php', $this->tmpDir.'/escape.php');
+
+    expect($this->service->contentAt($this->tmpDir, GitRef::Working->value, 'escape.php'))
+        ->toBe($outside.'/secret.php')
+        ->and($this->service->hashAt($this->tmpDir, GitRef::Working->value, 'escape.php'))
+        ->toBe(hash('xxh128', $outside.'/secret.php'));
+});
+
 test('hashAt memoizes repeated lookups for the same (repo, ref, path)', function () {
     $gitProcess = Mockery::mock(GitProcessService::class);
     $gitProcess->shouldReceive('run')->once()->andReturn("stable content\n");
@@ -96,4 +119,74 @@ test('flushCache forces a second git lookup for the same (repo, ref, path)', fun
     $service->hashAt($this->tmpDir, $this->firstCommit, 'hello.php');
     $service->flushCache();
     $service->hashAt($this->tmpDir, $this->firstCommit, 'hello.php');
+});
+
+test('byteSizeAt reports sizes without reading content for the working copy and commit refs', function () {
+    File::put($this->tmpDir.'/hello.php', "<?php\necho 'working';\n");
+
+    expect($this->service->byteSizeAt($this->tmpDir, GitRef::Working->value, 'hello.php'))
+        ->toBe(strlen("<?php\necho 'working';\n"))
+        ->and($this->service->byteSizeAt($this->tmpDir, $this->firstCommit, 'hello.php'))
+        ->toBe(strlen("<?php\necho 'one';\n"))
+        ->and($this->service->byteSizeAt($this->tmpDir, $this->secondCommit, 'hello.php'))
+        ->toBe(strlen("<?php\necho 'two';\n"));
+});
+
+test('byteSizeAt returns null for files missing at the ref', function () {
+    expect($this->service->byteSizeAt($this->tmpDir, $this->firstCommit, 'missing.php'))->toBeNull()
+        ->and($this->service->byteSizeAt($this->tmpDir, GitRef::Working->value, 'missing.php'))->toBeNull();
+});
+
+test('byteSizeAt matches contentAt for working symlink leaves', function () {
+    symlink('hello.php', $this->tmpDir.'/link.php');
+
+    $content = $this->service->contentAt($this->tmpDir, GitRef::Working->value, 'link.php');
+
+    expect($content)->toBe('hello.php')
+        ->and($this->service->byteSizeAt($this->tmpDir, GitRef::Working->value, 'link.php'))
+        ->toBe(strlen($content));
+});
+
+test('byteSizeAtAbsolute reports the on-disk size or null when missing', function () {
+    expect($this->service->byteSizeAtAbsolute($this->tmpDir.'/hello.php'))
+        ->toBe(strlen("<?php\necho 'two';\n"))
+        ->and($this->service->byteSizeAtAbsolute($this->tmpDir.'/nope.php'))->toBeNull();
+});
+
+// -- spec-aware readers --
+
+test('hashForSource dispatches a git source to hashAt', function () {
+    $source = FileSourceSpec::git($this->firstCommit, 'hello.php');
+
+    expect($this->service->hashForSource($this->tmpDir, $source))
+        ->toBe($this->service->hashAt($this->tmpDir, $this->firstCommit, 'hello.php'));
+});
+
+test('hashForSource dispatches an absolute source to hashAtAbsolute', function () {
+    $source = FileSourceSpec::absolute($this->tmpDir.'/hello.php');
+
+    expect($this->service->hashForSource($this->tmpDir, $source))
+        ->toBe($this->service->hashAtAbsolute($this->tmpDir.'/hello.php'));
+});
+
+test('hashForSource returns null for a none source', function () {
+    expect($this->service->hashForSource($this->tmpDir, FileSourceSpec::none()))->toBeNull();
+});
+
+test('contentForSource dispatches by source type', function () {
+    expect($this->service->contentForSource($this->tmpDir, FileSourceSpec::git($this->firstCommit, 'hello.php')))
+        ->toBe("<?php\necho 'one';\n")
+        ->and($this->service->contentForSource($this->tmpDir, FileSourceSpec::absolute($this->tmpDir.'/hello.php')))
+        ->toBe("<?php\necho 'two';\n")
+        ->and($this->service->contentForSource($this->tmpDir, FileSourceSpec::none()))
+        ->toBeNull();
+});
+
+test('byteSizeForSource dispatches by source type', function () {
+    expect($this->service->byteSizeForSource($this->tmpDir, FileSourceSpec::git($this->firstCommit, 'hello.php')))
+        ->toBe(strlen("<?php\necho 'one';\n"))
+        ->and($this->service->byteSizeForSource($this->tmpDir, FileSourceSpec::absolute($this->tmpDir.'/hello.php')))
+        ->toBe(strlen("<?php\necho 'two';\n"))
+        ->and($this->service->byteSizeForSource($this->tmpDir, FileSourceSpec::none()))
+        ->toBeNull();
 });

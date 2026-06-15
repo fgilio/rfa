@@ -34,3 +34,27 @@ test('forget clears every variant of a file diff', function () {
 test('VARIANTS includes the base and full-context shapes', function () {
     expect(DiffCacheKey::VARIANTS)->toContain('')->toContain(':full-context');
 });
+
+test('for varies by the moved-line detection settings', function () {
+    config(['rfa.moved_lines.enabled' => false]);
+    $off = DiffCacheKey::for(1, 'file-a');
+
+    config(['rfa.moved_lines.enabled' => true, 'rfa.moved_lines.mode' => 'zebra']);
+    $onZebra = DiffCacheKey::for(1, 'file-a');
+
+    config(['rfa.moved_lines.mode' => 'blocks']);
+    $onBlocks = DiffCacheKey::for(1, 'file-a');
+
+    expect($off)->not->toBe($onZebra)
+        ->and($onZebra)->not->toBe($onBlocks);
+});
+
+test('for ignores the moved-line mode while detection is off', function () {
+    config(['rfa.moved_lines.enabled' => false, 'rfa.moved_lines.mode' => 'zebra']);
+    $zebra = DiffCacheKey::for(1, 'file-a');
+
+    config(['rfa.moved_lines.mode' => 'blocks']);
+    $blocks = DiffCacheKey::for(1, 'file-a');
+
+    expect($zebra)->toBe($blocks);
+});

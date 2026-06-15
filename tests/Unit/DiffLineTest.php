@@ -50,3 +50,22 @@ test('toArray omits highlightedContent when null', function () {
 
     expect($line->toArray())->not->toHaveKey('highlightedContent');
 });
+
+test('toArray includes moved marker when set', function () {
+    $line = new DiffLine(
+        type: LineType::Add,
+        content: 'moved line',
+        oldLineNum: null,
+        newLineNum: 12,
+        moved: 'new',
+    );
+
+    expect($line->toArray())
+        ->toHaveKey('moved', 'new');
+});
+
+test('toArray omits moved marker when null', function () {
+    $line = new DiffLine(LineType::Context, 'code', 1, 1);
+
+    expect($line->toArray())->not->toHaveKey('moved');
+});

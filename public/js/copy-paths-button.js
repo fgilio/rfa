@@ -4,12 +4,15 @@
 // Right-click / Shift+F10 → open the 3-option menu (name / relative / full).
 //
 // Modes:
-//   - 'single' — fixed path via init param. Self-contained: takes its own
-//                repoPath so it works on pages without the ⚡review-page root
-//                (e.g. ⚡context-page, which doesn't expose pathBase /
-//                buildFullPath).
-//   - 'bulk'   — inherits sourceFileEntries / fileMatchesFilter /
-//                visibleFileCount / repoPath from the ⚡review-page root.
+//   - 'single' — fixed path via init param. Copies client-side so it works on
+//                pages without the ⚡review-page root (e.g. ⚡context-page, which
+//                doesn't expose pathBase / buildFullPath). Takes its own repoPath.
+//   - 'bulk'   — copies the currently server-visible (filtered) files. The copy
+//                is server-owned: ReviewPage::copyVisiblePaths builds the list
+//                from its authoritative visible set, so a filtered copy can never
+//                include hidden files and the button never scrapes the DOM for
+//                paths. The menu count is read from the review root's live
+//                visibleFileEntries, which the morph keeps current.
 (function (root, factory) {
     const api = factory();
     if (typeof module !== 'undefined' && module.exports) {
@@ -26,17 +29,22 @@
             _singlePath: singlePath,
             _repoPath: repoPath,
 
-            paths() {
-                if (this._mode === 'single') {
-                    return this._singlePath ? [this._singlePath] : [];
+            // Visible (filtered) file count, read from the review root the morph
+            // keeps current. This button sits in a Flux dropdown island the morph
+            // does not re-patch, so its own DOM can't be trusted for the count.
+            get bulkVisibleCount() {
+                const root = this.$el?.closest?.('[data-testid="review-component"]');
+                if (!root) return 0;
+                try {
+                    const entries = JSON.parse(root.dataset.visibleFileEntries || '[]');
+                    return Array.isArray(entries) ? entries.length : 0;
+                } catch (_) {
+                    return 0;
                 }
-                return this.sourceFileEntries
-                    .filter((f) => this.fileMatchesFilter(f.path, f.id))
-                    .map((f) => f.path);
             },
 
             _label(noun) {
-                const c = this._mode === 'single' ? 1 : this.visibleFileCount;
+                const c = this._mode === 'single' ? 1 : this.bulkVisibleCount;
                 return c <= 1 ? `Copy ${noun}` : `Copy ${c} ${noun}s`;
             },
             get nameLabel() { return this._label('file name'); },
@@ -44,31 +52,38 @@
             get fullLabel() { return this._label('full path'); },
             get primaryLabel() { return this.relativeLabel; },
 
+            copy(kind) {
+                if (this._mode === 'single') {
+                    this.copyAs(kind);
+                    return;
+                }
+                // Bulk: the server owns the visible set, so it builds and copies.
+                this.$wire.copyVisiblePaths(kind);
+            },
+
             copyAs(kind) {
-                const paths = this.paths();
-                if (paths.length === 0) return;
+                // Single-mode client copy of the one fixed path.
+                if (!this._singlePath) return;
                 const repo = (this._repoPath || this.repoPath || '').replace(/\/+$/, '');
-                const lines = paths.map((p) => {
-                    if (kind === 'name') {
-                        const i = p.lastIndexOf('/');
-                        return i >= 0 ? p.slice(i + 1) : p;
-                    }
-                    if (kind === 'full') return repo ? `${repo}/${p}` : p;
-                    return p;
-                });
-                const label = KIND_LABEL[kind] || 'path';
-                const toast = paths.length === 1
-                    ? `Copied ${label}`
-                    : `Copied ${paths.length} ${label}s`;
+                const p = this._singlePath;
+                let line;
+                if (kind === 'name') {
+                    const i = p.lastIndexOf('/');
+                    line = i >= 0 ? p.slice(i + 1) : p;
+                } else if (kind === 'full') {
+                    line = repo ? `${repo}/${p}` : p;
+                } else {
+                    line = p;
+                }
                 this.$dispatch('copy-to-clipboard', {
-                    text: lines.join('\n'),
-                    toast,
+                    text: line,
+                    toast: `Copied ${KIND_LABEL[kind] || 'path'}`,
                 });
             },
 
             onClick(event) {
                 if (event.button !== undefined && event.button !== 0) return;
-                this.copyAs('relative');
+                this.copy('relative');
             },
 
             openMenu() {

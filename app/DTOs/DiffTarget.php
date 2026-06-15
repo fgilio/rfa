@@ -10,6 +10,9 @@ final readonly class DiffTarget
 {
     public const EMPTY_TREE_HASH = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
+    /** Cache lifetime for an immutable target's diffs (30 days in hours). */
+    private const IMMUTABLE_TTL_HOURS = 720;
+
     private function __construct(
         private string $from,
         private ?string $to,
@@ -58,9 +61,13 @@ final readonly class DiffTarget
         return $this->to === null;
     }
 
+    /**
+     * Whether this target compares two fixed refs. A pinned to-ref never
+     * changes, so the resulting diff is safe to cache indefinitely.
+     */
     public function isImmutable(): bool
     {
-        return $this->to !== null;
+        return ! $this->isWorkingDirectory();
     }
 
     public function contextKey(): string
@@ -80,9 +87,20 @@ final readonly class DiffTarget
         return $args;
     }
 
-    public function cacheTtlHours(): int
+    /**
+     * Cache lifetime in hours for this target's diffs. An immutable target
+     * caches for IMMUTABLE_TTL_HOURS since its diff never changes; a
+     * working-directory target uses the given TTL, falling back to the
+     * configured value when a caller (e.g. an SFC, which may not depend on
+     * ReviewConfigService) cannot supply the coerced one.
+     */
+    public function cacheTtlHours(?int $workingDirectoryTtlHours = null): int
     {
-        return $this->isImmutable() ? 720 : (int) config('rfa.cache_ttl_hours', 24);
+        if ($this->isImmutable()) {
+            return self::IMMUTABLE_TTL_HOURS;
+        }
+
+        return $workingDirectoryTtlHours ?? (int) config('rfa.cache_ttl_hours', 24);
     }
 
     /** @return array{from: string, to: ?string} */

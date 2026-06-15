@@ -73,7 +73,7 @@ beforeEach(function () {
     });
 
     $gitFileContentMock = Mockery::mock(GitFileContentService::class);
-    $gitFileContentMock->shouldReceive('hashAt')->andReturn('mock-hash');
+    $gitFileContentMock->shouldReceive('hashForSource')->andReturn('mock-hash');
     app()->instance(GitFileContentService::class, $gitFileContentMock);
 
     app()->bind(BackfillGlobalGitignoreAction::class, fn () => new class

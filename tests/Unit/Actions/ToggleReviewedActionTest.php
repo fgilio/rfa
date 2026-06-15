@@ -21,7 +21,7 @@ beforeEach(function () {
     ];
 
     $mock = Mockery::mock(GitFileContentService::class);
-    $mock->shouldReceive('hashAt')->byDefault()->andReturn('mock-hash');
+    $mock->shouldReceive('hashForSource')->byDefault()->andReturn('mock-hash');
     app()->instance(GitFileContentService::class, $mock);
 
     $this->action = app(ToggleReviewedAction::class);
@@ -69,11 +69,11 @@ test('falls back to the left ref when the right side hash is unavailable', funct
     $target = DiffTarget::commit('abc123', 'parent123');
 
     $this->gitFileContent = Mockery::mock(GitFileContentService::class);
-    $this->gitFileContent->shouldReceive('hashAt')
-        ->with('/tmp/repo', 'abc123', 'deleted.php')
+    $this->gitFileContent->shouldReceive('hashForSource')
+        ->with('/tmp/repo', gitSourceSpec('abc123', 'deleted.php'))
         ->andReturn(null);
-    $this->gitFileContent->shouldReceive('hashAt')
-        ->with('/tmp/repo', 'parent123', 'deleted.php')
+    $this->gitFileContent->shouldReceive('hashForSource')
+        ->with('/tmp/repo', gitSourceSpec('parent123', 'deleted.php'))
         ->andReturn('parent-hash');
     app()->instance(GitFileContentService::class, $this->gitFileContent);
 
@@ -94,7 +94,7 @@ test('updates content_hash in place instead of inserting a new row when the file
     ReviewedFile::create(['repo_path' => '/tmp/repo', 'file_path' => 'a.php', 'content_hash' => 'old-hash']);
 
     $mock = Mockery::mock(GitFileContentService::class);
-    $mock->shouldReceive('hashAt')->andReturn('new-hash');
+    $mock->shouldReceive('hashForSource')->andReturn('new-hash');
     app()->instance(GitFileContentService::class, $mock);
 
     app(ToggleReviewedAction::class)->handle([], 'a.php', $this->knownFiles, '/tmp/repo');

@@ -78,6 +78,12 @@
         return false;
     }
 
+    // In-progress comment form state, keyed by file id. Filtering or hiding
+    // reviewed files unmounts diff-file components that leave the server-visible
+    // list; snapshotting the open form on destroy lets a later remount restore
+    // the user's unsent text instead of dropping it. Page-lifetime by design.
+    const pendingCommentForms = new Map();
+
     function createDiffFile({ fileId, filePath, oldPath = null, status = 'modified', isReviewed, singleFile = false }) {
         const pending = window.__rfaPendingExpandFiles;
         const wantsExpand = pending && pending.has(fileId);
@@ -320,7 +326,33 @@
                 this.dragStartPoint = null;
             },
 
+            restorePendingCommentForm() {
+                const pendingForm = pendingCommentForms.get(this.fileId);
+                if (!pendingForm) return;
+
+                pendingCommentForms.delete(this.fileId);
+                Object.assign(this, pendingForm);
+                this.showForm = true;
+                this.collapsed = false;
+            },
+
+            persistPendingCommentForm() {
+                if (!this.showForm || this.formBody.trim() === '') return;
+
+                pendingCommentForms.set(this.fileId, {
+                    formLine: this.formLine,
+                    formEndLine: this.formEndLine,
+                    formSide: this.formSide,
+                    formStartPoint: this.formStartPoint ? { ...this.formStartPoint } : null,
+                    formEndPoint: this.formEndPoint ? { ...this.formEndPoint } : null,
+                    formBody: this.formBody,
+                    editingCommentId: this.editingCommentId,
+                });
+            },
+
             init() {
+                this.restorePendingCommentForm();
+
                 // expandGap/expandContext dispatch rfa:diff-action-completed after
                 // their re-render. We attach imperatively rather than via @-binding
                 // because the colon in the event name is awkward in Alpine's @
@@ -336,6 +368,7 @@
             },
 
             destroy() {
+                this.persistPendingCommentForm();
                 this.stopDragTracking();
                 if (this.escTimer) { clearTimeout(this.escTimer); this.escTimer = null; }
                 this.escHint = false;
@@ -545,6 +578,16 @@
             install(root);
         } else {
             root.document.addEventListener('alpine:init', () => install(root));
+        }
+
+        // pendingCommentForms is page-lifetime by design — it survives a diff-file
+        // remount from filtering/hide-reviewed. But it must NOT outlive a
+        // wire:navigate to another page: file ids are content-path hashes, so a
+        // different review can mount a colliding id and resurrect a stale draft.
+        // Clear on navigation, registered once (see public/js/CLAUDE.md).
+        if (root.document && !root.__diffFilePendingFormsCleanup) {
+            root.__diffFilePendingFormsCleanup = true;
+            root.document.addEventListener('livewire:navigating', () => pendingCommentForms.clear());
         }
     }
 
