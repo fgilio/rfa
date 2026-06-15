@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+/**
+ * A normalized changeset: the file list plus the metadata an export or
+ * snapshot consumes as one unit.
+ *
+ * The warnings and skippedFiles arrays are reserved for the large and
+ * binary file safety pass and stay empty until a producer populates
+ * them.
+ */
 class ReviewChangeset
 {
     /**
