@@ -244,27 +244,24 @@ test('server file filter renders only matching diff-file children', function () 
         ->and(substr_count($component->html(), '__lazyLoad'))->toBe(1);
 });
 
-test('the bulk copy-paths button copies only the filtered files under a partial filter', function () {
-    // The button copies whatever lives in its own data-source-file-entries
-    // attribute (locked by the copy-paths-button JS unit test) and derives its
-    // count from those entries. This guards the wiring above it: the sidebar
-    // feeds the *visible* (filtered) entries, not the full source set, so a
-    // partial filter copies exactly what the user sees.
-    $html = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+test('copyVisiblePaths copies only the filtered files under a partial filter', function () {
+    // Bulk copy is server-owned: ReviewPage builds the clipboard text from its
+    // authoritative visible set, so a partial filter copies exactly what the user
+    // sees and never the files the filter hid.
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->set('fileFilter', 'Foo')
-        ->html();
+        ->call('copyVisiblePaths', 'relative')
+        ->assertDispatched('copy-to-clipboard', text: 'src/Foo.php', toast: 'Copied relative path');
+});
 
-    // Isolate the button's opening tag. @json hex-escapes quotes and angle
-    // brackets, so the JSON payload never contains a literal '>' to overrun.
-    expect(preg_match('/data-testid="sidebar-copy-paths"[^>]*/', $html, $matches))->toBe(1);
+test('copyVisiblePaths formats bare names and absolute paths', function () {
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->call('copyVisiblePaths', 'name')
+        ->assertDispatched('copy-to-clipboard', text: "Foo.php\nBar.php", toast: 'Copied 2 file names');
 
-    expect($matches[0])
-        ->toContain('Foo.php')
-        ->not->toContain('Bar.php')
-        ->toContain('data-source-file-entries=');
-
-    // Exactly one entry survives the filter, so the button carries one path.
-    expect(substr_count($matches[0], '"path"'))->toBe(1);
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->call('copyVisiblePaths', 'full')
+        ->assertDispatched('copy-to-clipboard', text: "/tmp/repo/src/Foo.php\n/tmp/repo/src/Bar.php", toast: 'Copied 2 full paths');
 });
 
 test('mount backfills null gitignore path from git config', function () {

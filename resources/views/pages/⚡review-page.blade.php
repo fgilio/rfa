@@ -1320,6 +1320,44 @@ new #[Layout('layouts.app')] class extends Component
         $this->dispatch('copy-to-clipboard', text: $result['clipboard'], toast: 'Snapshot path copied');
     }
 
+    /**
+     * Copy the currently visible (filtered) file paths to the clipboard as bare
+     * names, repo-relative paths, or absolute paths. The visible set is derived
+     * server-side, so a filtered copy always matches what the user sees without
+     * the client reconstructing the list from the DOM.
+     */
+    public function copyVisiblePaths(string $kind = 'relative'): void
+    {
+        $this->skipRender();
+
+        $paths = collect($this->reviewState->visibleFileEntries)
+            ->pluck('path')
+            ->filter()
+            ->values();
+
+        if ($paths->isEmpty()) {
+            return;
+        }
+
+        $repoPath = rtrim($this->repoPath, '/');
+
+        $lines = $paths->map(fn (string $path): string => match ($kind) {
+            'name' => basename($path),
+            'full' => $repoPath === '' ? $path : $repoPath.'/'.$path,
+            default => $path,
+        });
+
+        $noun = match ($kind) {
+            'name' => 'file name',
+            'full' => 'full path',
+            default => 'relative path',
+        };
+        $count = $lines->count();
+        $toast = $count === 1 ? "Copied {$noun}" : "Copied {$count} {$noun}s";
+
+        $this->dispatch('copy-to-clipboard', text: $lines->implode("\n"), toast: $toast);
+    }
+
     public function startNewReview(): void
     {
         $this->submitted = false;
@@ -2151,7 +2189,7 @@ new #[Layout('layouts.app')] class extends Component
                     @if(count($sourceFiles) > 0)
                         <x-copy-paths-button
                             testid-prefix="sidebar-copy-paths"
-                            :entries="$this->reviewState->visibleFileEntries"
+                            :visible-count="$this->reviewState->visibleFileCount"
                         />
                     @endif
                 </div>

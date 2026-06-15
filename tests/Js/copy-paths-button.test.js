@@ -4,12 +4,11 @@ import copyPathsButton from '../../public/js/copy-paths-button.js';
 const { copyPathsButton: factory } = copyPathsButton;
 
 function bulkScope(extra = {}) {
-    const dispatched = [];
+    const wireCalls = [];
     return {
-        repoPath: '/repo',
-        $dispatch: (name, detail) => dispatched.push({ name, detail }),
+        $wire: { copyVisiblePaths: (kind) => wireCalls.push(kind) },
+        _wireCalls: wireCalls,
         ...extra,
-        _dispatched: dispatched,
     };
 }
 
@@ -22,140 +21,69 @@ function attach(scope, mode = 'bulk', singlePath = '', repoPath = '') {
     return scope;
 }
 
-function attrRoot(entries) {
-    return {
-        dataset: {
-            sourceFileEntries: JSON.stringify(entries),
-        },
-    };
+// Fakes the $el.closest('[data-testid="review-component"]') lookup so the
+// button reads its visible count from the review root the morph keeps current.
+function elInReviewRoot(entries) {
+    const root = { dataset: { visibleFileEntries: JSON.stringify(entries) } };
+    return { closest: (sel) => (sel === '[data-testid="review-component"]' ? root : null) };
 }
 
 describe('copyPathsButton — bulk mode', () => {
     let component;
 
     beforeEach(() => {
-        document.body.innerHTML = '';
         component = attach(bulkScope(), 'bulk');
-        component.$root = attrRoot([
+        component.$el = elInReviewRoot([
             { id: 'a', path: 'app/Foo.php' },
             { id: 'b', path: 'app/Bar.php' },
             { id: 'c', path: 'tests/Baz.php' },
         ]);
     });
 
-    it('left-click copies relative paths joined by newlines', () => {
+    it('left-click delegates the relative copy to the server', () => {
         component.onClick({ button: 0 });
 
-        expect(component._dispatched).toHaveLength(1);
-        expect(component._dispatched[0].name).toBe('copy-to-clipboard');
-        expect(component._dispatched[0].detail.text).toBe(
-            'app/Foo.php\napp/Bar.php\ntests/Baz.php',
-        );
-        expect(component._dispatched[0].detail.toast).toBe('Copied 3 relative paths');
+        expect(component._wireCalls).toEqual(['relative']);
     });
 
-    it('copyAs("name") emits basenames', () => {
-        component.copyAs('name');
+    it('menu items delegate each kind to the server without building text client-side', () => {
+        component.copy('name');
+        component.copy('relative');
+        component.copy('full');
 
-        expect(component._dispatched[0].detail.text).toBe('Foo.php\nBar.php\nBaz.php');
-        expect(component._dispatched[0].detail.toast).toBe('Copied 3 file names');
+        expect(component._wireCalls).toEqual(['name', 'relative', 'full']);
     });
 
-    it('copyAs("full") prepends the repo root', () => {
-        component.copyAs('full');
+    it('ignores non-left clicks', () => {
+        component.onClick({ button: 2 });
 
-        expect(component._dispatched[0].detail.text).toBe(
-            '/repo/app/Foo.php\n/repo/app/Bar.php\n/repo/tests/Baz.php',
-        );
-        expect(component._dispatched[0].detail.toast).toBe('Copied 3 full paths');
+        expect(component._wireCalls).toEqual([]);
     });
 
-    it('primaryLabel pluralises by the number of visible entries', () => {
-        component.$root = attrRoot([{ id: 'a', path: 'app/Foo.php' }]);
-        expect(component.primaryLabel).toBe('Copy relative path');
-
-        component.$root = attrRoot(
-            ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, path: `${id}.php` })),
-        );
-        expect(component.primaryLabel).toBe('Copy 5 relative paths');
-    });
-
-    it('menu labels singularise for one entry and pluralise + show count for more', () => {
-        component.$root = attrRoot([{ id: 'a', path: 'app/Foo.php' }]);
-        expect(component.nameLabel).toBe('Copy file name');
-        expect(component.relativeLabel).toBe('Copy relative path');
-        expect(component.fullLabel).toBe('Copy full path');
-
-        component.$root = attrRoot(
-            ['a', 'b', 'c'].map((id) => ({ id, path: `${id}.php` })),
-        );
+    it('labels pluralise by the live visible count read from the review root', () => {
+        expect(component.primaryLabel).toBe('Copy 3 relative paths');
         expect(component.nameLabel).toBe('Copy 3 file names');
-        expect(component.relativeLabel).toBe('Copy 3 relative paths');
         expect(component.fullLabel).toBe('Copy 3 full paths');
     });
 
-    it('derives the count from the entries so the label matches the copied lines', () => {
-        // The count and the copied lines share one source (the entries), so the
-        // label can never claim a different number than what lands on the clipboard.
-        component.$root = attrRoot([
-            { id: 'a', path: 'app/Foo.php' },
-            { id: 'b', path: 'app/Bar.php' },
-        ]);
+    it('labels singularise for one visible file', () => {
+        component.$el = elInReviewRoot([{ id: 'a', path: 'app/Foo.php' }]);
 
-        component.copyAs('relative');
-
-        expect(component.primaryLabel).toBe('Copy 2 relative paths');
-        expect(component._dispatched[0].detail.text).toBe('app/Foo.php\napp/Bar.php');
-        expect(component._dispatched[0].detail.toast).toBe('Copied 2 relative paths');
-    });
-
-    it('reflects narrowed server-visible entries from the data attributes', () => {
-        component.$root = attrRoot([{ id: 'b', path: 'app/Bar.php' }]);
-
-        component.copyAs('relative');
-
-        expect(component._dispatched[0].detail.text).toBe('app/Bar.php');
-        expect(component._dispatched[0].detail.toast).toBe('Copied relative path');
         expect(component.primaryLabel).toBe('Copy relative path');
+        expect(component.nameLabel).toBe('Copy file name');
+        expect(component.relativeLabel).toBe('Copy relative path');
+        expect(component.fullLabel).toBe('Copy full path');
     });
 
-    it('prefers the review root live visible entries over its own fallback attribute', () => {
-        // The review root is the authoritative filtered list (the morph keeps it
-        // in sync); the button's own attribute is only the standalone fallback.
-        // Bulk copy must follow the root so a filtered copy never includes files
-        // the filter hid.
-        const root = document.createElement('div');
-        root.setAttribute('data-testid', 'review-component');
-        root.dataset.visibleFileEntries = JSON.stringify([{ id: 'a', path: 'app/Foo.php' }]);
+    it('reports zero when no review root is present and still delegates the copy', () => {
+        component.$el = { closest: () => null };
 
-        const buttonEl = document.createElement('div');
-        buttonEl.dataset.sourceFileEntries = JSON.stringify([
-            { id: 'a', path: 'app/Foo.php' },
-            { id: 'b', path: 'app/Bar.php' },
-        ]);
-        root.appendChild(buttonEl);
-        document.body.appendChild(root);
-
-        const c = attach(bulkScope(), 'bulk');
-        c.$el = buttonEl;
-        c.$root = buttonEl;
-
-        c.copyAs('relative');
-
-        expect(c._dispatched[0].detail.text).toBe('app/Foo.php');
-        expect(c._dispatched[0].detail.toast).toBe('Copied relative path');
-        expect(c.bulkVisibleCount).toBe(1);
-        expect(c.primaryLabel).toBe('Copy relative path');
-    });
-
-    it('copies nothing and reports zero when the data attributes are missing', () => {
-        component.$root = { dataset: {} };
-
-        component.copyAs('relative');
-
-        expect(component._dispatched).toHaveLength(0);
-        expect(component.bulkEntries).toEqual([]);
         expect(component.bulkVisibleCount).toBe(0);
+
+        // The server owns the visible set, so the button delegates regardless of
+        // the locally-read count; the server no-ops when nothing is visible.
+        component.onClick({ button: 0 });
+        expect(component._wireCalls).toEqual(['relative']);
     });
 });
 
@@ -213,15 +141,15 @@ describe('copyPathsButton — single mode', () => {
         expect(c._dispatched[0].detail.text).toBe('/repo/src/widget.ts');
     });
 
-    it('primaryLabel stays singular in single mode regardless of bulk entries', () => {
-        const c = attach(bulkScope(), 'single', 'src/widget.ts');
-        c.$root = attrRoot([{ id: 'a', path: 'a.php' }, { id: 'b', path: 'b.php' }]);
+    it('primaryLabel stays singular in single mode regardless of the visible count', () => {
+        const c = attach({}, 'single', 'src/widget.ts');
+        c.$el = elInReviewRoot([{ id: 'a', path: 'a.php' }, { id: 'b', path: 'b.php' }]);
         expect(c.primaryLabel).toBe('Copy relative path');
     });
 
-    it('menu labels stay singular in single mode regardless of bulk entries', () => {
-        const c = attach(bulkScope(), 'single', 'src/widget.ts');
-        c.$root = attrRoot([{ id: 'a', path: 'a.php' }, { id: 'b', path: 'b.php' }]);
+    it('menu labels stay singular in single mode regardless of the visible count', () => {
+        const c = attach({}, 'single', 'src/widget.ts');
+        c.$el = elInReviewRoot([{ id: 'a', path: 'a.php' }, { id: 'b', path: 'b.php' }]);
         expect(c.nameLabel).toBe('Copy file name');
         expect(c.relativeLabel).toBe('Copy relative path');
         expect(c.fullLabel).toBe('Copy full path');

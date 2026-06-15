@@ -10,10 +10,6 @@
     $totalAdditions = $reviewState?->additions ?? collect($sourceFiles)->sum('additions');
     $totalDeletions = $reviewState?->deletions ?? collect($sourceFiles)->sum('deletions');
     $reviewedFileCount = $reviewState?->reviewedFileCount ?? 0;
-    $visibleFileEntries = $reviewState?->visibleFileEntries ?? collect($sourceFiles)
-        ->map(fn (array $file): array => ['id' => (string) ($file['id'] ?? ''), 'path' => (string) ($file['path'] ?? '')])
-        ->values()
-        ->all();
 @endphp
 
 {{-- State band under the page header: file count, +/- totals, review count,
@@ -44,7 +40,7 @@
         @if($visibleFileCount > 0)
             <x-copy-paths-button
                 testid-prefix="status-strip-copy-paths"
-                :entries="$visibleFileEntries"
+                :visible-count="$visibleFileCount"
             />
         @endif
     </div>
