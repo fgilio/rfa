@@ -215,6 +215,19 @@ test('checking reviewed updates sidebar indicator', function () {
     $page->assertSee('1/3 reviewed');
 });
 
+test('marking a file reveals the Hide reviewed toggle', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    // The toggle lives in the reviewed-summary island and is absent until at
+    // least one file is reviewed.
+    $page->page()->getByRole('button', ['name' => 'Hide reviewed'])->waitFor(['state' => 'hidden']);
+
+    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
+
+    // The mark refreshes the island, which renders the toggle into view.
+    $page->page()->getByRole('button', ['name' => 'Hide reviewed'])->waitFor(['state' => 'visible']);
+});
+
 test('clicking sidebar file scrolls to it', function () {
     $page = $this->visit($this->projectUrl());
 

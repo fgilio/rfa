@@ -1693,9 +1693,6 @@ new #[Layout('layouts.app')] class extends Component
             };
         },
         closeRemoteMenu() { this.remoteMenu.open = false; },
-        get reviewedCount() {
-            return Object.values(this.reviewedFiles).filter(Boolean).length;
-        },
         isFileVisible(fileId) {
             return this.visibleFileEntries.some(entry => entry.id === fileId);
         },
@@ -1916,22 +1913,28 @@ new #[Layout('layouts.app')] class extends Component
                 <livewire:comments-drawer :repo-path="$repoPath" :project-id="$projectId ?: null" />
             </div>
             <div class="flex items-center gap-2 text-xs">
-                {{-- Hide reviewed toggle --}}
-                <div x-show="reviewedCount > 0" x-cloak class="grid place-items-center">
-                    @if($hideReviewed)
-                        <flux:button variant="ghost" size="sm" icon="eye" icon:variant="outline"
-                            tooltip="Show all files"
-                            aria-label="Show all files"
-                            class="col-start-1 row-start-1"
-                            wire:click="showAllFiles" />
-                    @else
-                        <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
-                            tooltip="Hide reviewed"
-                            aria-label="Hide reviewed"
-                            class="col-start-1 row-start-1"
-                            wire:click="hideReviewedFiles" />
+                {{-- Hide reviewed toggle. Same-named island as the counter, so
+                     renderIsland('reviewed-summary') flips its visibility in step
+                     with the count on a mark/un-mark. --}}
+                @island(name: 'reviewed-summary')
+                    @if ($this->reviewState->reviewedFileCount > 0)
+                        <div class="grid place-items-center">
+                            @if($hideReviewed)
+                                <flux:button variant="ghost" size="sm" icon="eye" icon:variant="outline"
+                                    tooltip="Show all files"
+                                    aria-label="Show all files"
+                                    class="col-start-1 row-start-1"
+                                    wire:click="showAllFiles" />
+                            @else
+                                <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
+                                    tooltip="Hide reviewed"
+                                    aria-label="Hide reviewed"
+                                    class="col-start-1 row-start-1"
+                                    wire:click="hideReviewedFiles" />
+                            @endif
+                        </div>
                     @endif
-                </div>
+                @endisland
 
                 {{-- Expand/Collapse toggle --}}
                 <div class="grid place-items-center">
