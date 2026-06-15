@@ -1543,6 +1543,7 @@ new #[Layout('layouts.app')] class extends Component
 
 @assets
 <script src="/js/diff-file.js"></script>
+<script src="/js/review-page.js"></script>
 @endassets
 
 <div
@@ -1557,190 +1558,14 @@ new #[Layout('layouts.app')] class extends Component
             variant: n === 0 ? 'info' : 'success',
         });
     "
-    x-data="{
-        pendingSaves: 0,
-        pendingSavesGuard: null,
-        init() {
-            this.pendingSavesGuard = window.rfaPendingSaves?.createPendingSavesGuard({
-                root: window,
-                livewire: Livewire,
-                getWireId: () => this.$root.getAttribute('wire:id'),
-                onPendingSavesChanged: (count) => { this.pendingSaves = count; },
-            });
-
-            this.pendingSavesGuard?.attach();
-        },
+    x-data="reviewPage({
         activeFile: @js($this->reviewState->selectedFileId),
-        remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '', disabled: false, disabledReason: '' },
-        jsonData(name, fallback) {
-            try {
-                return JSON.parse(this.$root?.dataset?.[name] || '');
-            } catch (_) {
-                return fallback;
-            }
-        },
-        get sourceFileEntries() {
-            return this.jsonData('sourceFileEntries', []);
-        },
-        get visibleFileEntries() {
-            return this.jsonData('visibleFileEntries', []);
-        },
-        showRemoteMenu($event) {
-            const d = $event.detail;
-            const margin = 8;
-
-            if (d.target === 'direct') {
-                const menuW = 220;
-                const menuH = 80;
-                this.remoteMenu = {
-                    open: true,
-                    x: Math.min(d.clientX, window.innerWidth - menuW - margin),
-                    y: Math.min(d.clientY, window.innerHeight - menuH - margin),
-                    projectSlug: d.projectSlug || @js($projectSlug),
-                    type: d.type,
-                    params: d.params || {},
-                    label: d.label || 'on remote',
-                    disabled: false,
-                    disabledReason: '',
-                };
-
-                return;
-            }
-
-            const projectBranch = @js($projectBranch);
-            const diffFrom = @js($diffFrom);
-            const diffTo = @js($diffTo);
-            const refNew = diffTo || projectBranch || 'HEAD';
-            const refOld = diffTo !== null ? diffFrom : (projectBranch || 'HEAD');
-            const pathOld = d.oldPath || d.filePath;
-            let type, params, label;
-            if (d.target === 'file') {
-                type = 'file';
-                params = { ref: refNew, path: d.filePath };
-                label = 'file';
-            } else {
-                type = 'line';
-                params = {
-                    ref: d.side === 'old' ? refOld : refNew,
-                    path: d.side === 'old' ? pathOld : d.filePath,
-                    start: d.start,
-                    end: d.end,
-                };
-                label = (d.end === null || d.end === d.start) ? 'line ' + d.start : 'lines ' + d.start + '-' + d.end;
-            }
-            // Old-side line links always resolve (refOld is where the file existed).
-            // For new-side links we only disable when we're sure: pure working-tree
-            // mode for `added`, commit/range mode for `deleted`. /rw/{from} mixes
-            // working tree and committed history, so we can't tell which side a
-            // status belongs to, so leave it enabled rather than mis-disable.
-            const isWorkingTreeOnly = diffTo === null && diffFrom === 'HEAD';
-            const isCommitOrRange = diffTo !== null;
-            const usesNewSideRef = d.target === 'file' || d.side !== 'old';
-            const newSideBroken =
-                (d.status === 'added'   && isWorkingTreeOnly) ||
-                (d.status === 'deleted' && isCommitOrRange);
-            const disabled = usesNewSideRef && newSideBroken;
-            const disabledReason = disabled
-                ? (d.status === 'added' ? 'File not pushed to remote yet' : 'File was removed at this commit')
-                : '';
-            const menuW = 220;
-            const menuH = disabled ? 110 : 80;
-            this.remoteMenu = {
-                open: true,
-                x: Math.min(d.clientX, window.innerWidth - menuW - margin),
-                y: Math.min(d.clientY, window.innerHeight - menuH - margin),
-                projectSlug: @js($projectSlug),
-                type, params, label, disabled, disabledReason,
-            };
-        },
-        closeRemoteMenu() { this.remoteMenu.open = false; },
-        isFileVisible(fileId) {
-            return this.visibleFileEntries.some(entry => entry.id === fileId);
-        },
-        pathDir(path) {
-            if (!path) return '';
-            const i = path.lastIndexOf('/');
-            return i === -1 ? '' : path.slice(0, i + 1);
-        },
-        pathBase(path) {
-            if (!path) return '';
-            const i = path.lastIndexOf('/');
-            return i === -1 ? path : path.slice(i + 1);
-        },
+        projectSlug: @js($projectSlug),
+        projectBranch: @js($projectBranch),
+        diffFrom: @js($diffFrom),
+        diffTo: @js($diffTo),
         repoPath: @js($repoPath),
-        get visibleFileCount() {
-            return this.visibleFileEntries.length;
-        },
-        buildFullPath(path) {
-            const repo = this.repoPath || '';
-            if (!repo) return path;
-            return repo.replace(/\/+$/, '') + '/' + path;
-        },
-        scrollToFile(id, persist = true) {
-            this.activeFile = id;
-            // Persist the selection server-side so a later full parent re-render
-            // re-seeds the highlight. Skippable when the caller already persisted
-            // it (e.g. revealFile) to avoid a redundant round-trip.
-            if (persist) {
-                $wire.selectFile(id);
-            }
-            this.$dispatch('expand-file', { id });
-            document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        },
-        focusAdjacentFile(delta) {
-            // Move the selection between visible files (j/k). Computed client-side
-            // off the visible list so rapid presses stay instant; selection clamps
-            // at the ends rather than wrapping.
-            const entries = this.visibleFileEntries;
-            if (entries.length === 0) {
-                return;
-            }
-            const current = entries.findIndex(file => file.id === this.activeFile);
-            const target = current === -1
-                ? (delta > 0 ? 0 : entries.length - 1)
-                : Math.min(entries.length - 1, Math.max(0, current + delta));
-            this.scrollToFile(entries[target].id);
-        },
-        async scrollToComment(commentId, filePath) {
-            const file = this.sourceFileEntries.find(f => f.path === filePath);
-            if (!file) {
-                Flux.toast({ text: 'Comment is on a file not in this diff', variant: 'warning' });
-                return;
-            }
-            const revealed = !this.isFileVisible(file.id);
-            if (revealed) {
-                await $wire.revealFile(file.id);
-            }
-            this.activeFile = file.id;
-            (window.__rfaPendingExpandFiles ??= new Set()).add(file.id);
-            // revealFile already set activeFileId server-side, so don't re-persist.
-            this.scrollToFile(file.id, !revealed);
-            clearTimeout(this.commentScrollPollId);
-            const target = 'comment-' + commentId;
-            const start = performance.now();
-            const tryScroll = () => {
-                if (!this.$el?.isConnected) return;
-                {{-- Re-dispatch every tick: the diff-file may be lazy and hydrate after the first dispatch, --}}
-                {{-- in which case its listeners weren't yet registered to receive the initial expand-file. --}}
-                this.$dispatch('expand-file', { id: file.id });
-                this.$dispatch('unfold-for-comment', { fileId: file.id });
-                const el = document.getElementById(target);
-                if (el && el.offsetParent !== null) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    return;
-                }
-                if (performance.now() - start < 4000) {
-                    this.commentScrollPollId = setTimeout(tryScroll, 100);
-                }
-            };
-            tryScroll();
-        },
-        destroy() {
-            this.pendingSavesGuard?.detach();
-            this.pendingSavesGuard = null;
-            clearTimeout(this.commentScrollPollId);
-        }
-    }"
+    })"
     @scroll-to-comment.window="scrollToComment($event.detail.commentId, $event.detail.filePath)"
     @open-remote-menu.window="showRemoteMenu($event)"
     @keydown.window="
@@ -1928,52 +1753,12 @@ new #[Layout('layouts.app')] class extends Component
                 <span class="w-px h-4 bg-gh-border" aria-hidden="true"></span>
 
                 @if(! $this->isCommitMode())
-                    <div data-testid="change-polling" x-data="{
-                        hasChanges: false,
-                        fingerprint: null,
-                        currentCount: 0,
-                        stopPoll: null,
-                        async check() {
-                            try {
-                                const res = await fetch('/api/changes/{{ $projectId }}');
-                                const data = await res.json();
-                                if (this.fingerprint === null) {
-                                    this.fingerprint = data.fingerprint;
-                                } else if (data.fingerprint !== this.fingerprint) {
-                                    const newCount = data.count ?? 0;
-                                    if (! this.hasChanges || this.currentCount !== newCount) {
-                                        this.hasChanges = true;
-                                        this.currentCount = newCount;
-                                    }
-                                }
-                            } catch {}
-                        },
-                        softRefresh() { $wire.softRefresh(); },
-                        hardReload() { window.location.reload(); },
-                        get tooltip() {
-                            if (!this.hasChanges) return 'Refresh · ⌘R · ⌘⇧R to hard reload';
-                            const n = this.currentCount;
-                            const noun = n === 1 ? 'file' : 'files';
-                            return `${n} ${noun} changed externally - click to refresh`;
-                        },
-                        init() {
-                            this.check();
-                            this.stopPoll = window.smartPoll.startSmartPoll({
-                                window,
-                                document,
-                                getInterval: () => window.smartPoll.isFocused(document) ? 60000 : (document.hidden ? null : 300000),
-                                onTick: () => this.check(),
-                            });
-                            @browser
-                            $store.keymap.register('⌘R', () => this.softRefresh(), { allowInEditable: true });
-                            $store.keymap.register('⌘⇧R', () => this.hardReload(), { allowInEditable: true });
-                            @endbrowser
-                        },
-                        destroy() {
-                            if (this.stopPoll) this.stopPoll();
-                        },
-                    }"
-                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; currentCount = 0; check();"
+                    <div data-testid="change-polling"
+                        x-data="reviewChangePoller({
+                            projectId: {{ $projectId }},
+                            keymapEnabled: @js(! config('nativephp-internal.running')),
+                        })"
+                    @fingerprint-reset.window="reset()"
                     class="relative flex items-center">
                         <flux:tooltip>
                             <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
