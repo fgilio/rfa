@@ -1190,9 +1190,10 @@ new #[Layout('layouts.app')] class extends Component
                 fn (string $id): bool => $id !== $fileId,
             ));
 
-            // Single un-mark transition uses the same broadcast as bulk undo so the
-            // sidebar's reviewedFiles map and DiffFile's `reviewed` mirror flip in lockstep
-            // Callers (e.g. the "Recently reviewed" group) don't have to dual-dispatch.
+            // Single un-mark transition uses the same broadcast as bulk undo so
+            // DiffFile's `reviewed` flag flips in step with the server state.
+            // The sidebar and counter refresh through their islands (see
+            // settleReviewedRender), so callers don't have to dual-dispatch.
             $this->dispatch('reviewed-files-reverted', fileIds: [$fileId]);
         }
 
