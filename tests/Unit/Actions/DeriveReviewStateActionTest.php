@@ -20,6 +20,5 @@ test('handle returns derived review state', function () {
     expect($state->totalFileCount)->toBe(2)
         ->and($state->visibleFileEntries)->toBe([['id' => 'file-b', 'path' => 'src/B.php']])
         ->and($state->selectedFileId)->toBe('file-b')
-        ->and($state->reviewedFileIds)->toBe(['file-a'])
-        ->and($state->reviewedFileMap)->toBe(['file-a' => true]);
+        ->and($state->reviewedFileIds)->toBe(['file-a']);
 });

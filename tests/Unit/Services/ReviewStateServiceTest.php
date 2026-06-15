@@ -41,7 +41,6 @@ test('derive builds deterministic sidebar payload and counts', function () {
         ['id' => 'file-c', 'path' => 'docs/Guide.md'],
     ])
         ->and($state->reviewedFileIds)->toBe(['file-b'])
-        ->and($state->reviewedFileMap)->toBe(['file-b' => true])
         ->and($state->filesById['file-b'])->toBe([
             'path' => 'src/B.php',
             'badgeLabel' => 'A',

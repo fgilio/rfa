@@ -22,7 +22,6 @@ final readonly class ReviewState
      * @param  list<array<string, mixed>>  $sourceFiles
      * @param  list<array<string, mixed>>  $visibleFiles
      * @param  list<string>  $reviewedFileIds
-     * @param  array<string, bool>  $reviewedFileMap
      * @param  list<array{id: string, path: string}>  $sourceFileEntries
      * @param  list<array{id: string, path: string}>  $visibleFileEntries
      * @param  array<string, array{path: string, badgeLabel: string, badgeClass: string}>  $filesById
@@ -32,7 +31,6 @@ final readonly class ReviewState
         public array $visibleFiles,
         public ?string $selectedFileId,
         public array $reviewedFileIds,
-        public array $reviewedFileMap,
         public array $sourceFileEntries,
         public array $visibleFileEntries,
         public array $filesById,
@@ -78,7 +76,6 @@ final readonly class ReviewState
      *     visibleFiles: list<array<string, mixed>>,
      *     selectedFileId: ?string,
      *     reviewedFileIds: list<string>,
-     *     reviewedFileMap: array<string, bool>,
      *     sourceFileEntries: list<array{id: string, path: string}>,
      *     visibleFileEntries: list<array{id: string, path: string}>,
      *     filesById: array<string, array{path: string, badgeLabel: string, badgeClass: string}>,
@@ -97,7 +94,6 @@ final readonly class ReviewState
             'visibleFiles' => $this->visibleFiles,
             'selectedFileId' => $this->selectedFileId,
             'reviewedFileIds' => $this->reviewedFileIds,
-            'reviewedFileMap' => $this->reviewedFileMap,
             'sourceFileEntries' => $this->sourceFileEntries,
             'visibleFileEntries' => $this->visibleFileEntries,
             'filesById' => $this->filesById,

@@ -8,7 +8,6 @@ test('toArray returns review state payload', function () {
         visibleFiles: [['id' => 'file-a', 'path' => 'src/A.php']],
         selectedFileId: 'file-a',
         reviewedFileIds: ['file-a'],
-        reviewedFileMap: ['file-a' => true],
         sourceFileEntries: [['id' => 'file-a', 'path' => 'src/A.php']],
         visibleFileEntries: [['id' => 'file-a', 'path' => 'src/A.php']],
         filesById: ['file-a' => ['path' => 'src/A.php', 'badgeLabel' => 'M', 'badgeClass' => 'text-gh-attention']],
@@ -23,7 +22,6 @@ test('toArray returns review state payload', function () {
         ->and($state->toArray())->toMatchArray([
             'selectedFileId' => 'file-a',
             'reviewedFileIds' => ['file-a'],
-            'reviewedFileMap' => ['file-a' => true],
             'visibleFileEntries' => [['id' => 'file-a', 'path' => 'src/A.php']],
             'totalFileCount' => 1,
             'visibleFileCount' => 1,
@@ -40,7 +38,8 @@ test('toArray returns review state payload', function () {
         ->not->toContain('nextFileId')
         ->not->toContain('countsByStatus')
         ->not->toContain('unreviewedFileCount')
-        ->not->toContain('visibleFileMap');
+        ->not->toContain('visibleFileMap')
+        ->not->toContain('reviewedFileMap');
 });
 
 test('isFileVisible reads membership from the visible entries', function () {
@@ -49,7 +48,6 @@ test('isFileVisible reads membership from the visible entries', function () {
         visibleFiles: [['id' => 'file-a', 'path' => 'src/A.php']],
         selectedFileId: 'file-a',
         reviewedFileIds: [],
-        reviewedFileMap: [],
         sourceFileEntries: [['id' => 'file-a', 'path' => 'src/A.php'], ['id' => 'file-b', 'path' => 'src/B.php']],
         visibleFileEntries: [['id' => 'file-a', 'path' => 'src/A.php']],
         filesById: [],
@@ -70,7 +68,6 @@ test('hasVisibleFiles is false when no files are visible', function () {
         visibleFiles: [],
         selectedFileId: null,
         reviewedFileIds: [],
-        reviewedFileMap: [],
         sourceFileEntries: [],
         visibleFileEntries: [],
         filesById: [],
