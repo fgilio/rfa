@@ -1137,9 +1137,7 @@ new #[Layout('layouts.app')] class extends Component
             $this->dispatch('reviewed-files-reverted', fileIds: $revertedIds);
         }
 
-        if (! $this->reviewedChangeNeedsParentRender()) {
-            $this->skipRender();
-        }
+        $this->settleReviewedRender();
     }
 
     // endregion: Trash & Discard
@@ -1198,9 +1196,7 @@ new #[Layout('layouts.app')] class extends Component
             $this->dispatch('reviewed-files-reverted', fileIds: [$fileId]);
         }
 
-        if (! $this->reviewedChangeNeedsParentRender()) {
-            $this->skipRender();
-        }
+        $this->settleReviewedRender();
     }
 
     public function clearRecentlyReviewed(): void
@@ -1415,6 +1411,29 @@ new #[Layout('layouts.app')] class extends Component
         // the parent — and re-hydrating every mounted diff-file child — on a
         // filter-only toggle is wasted work on a latency-sensitive path.
         return $this->hideReviewed;
+    }
+
+    /**
+     * Settle the response after a reviewed-state change. Hide-reviewed mode needs
+     * a full parent render because the toggle drops the file from the visible
+     * list. Every other mode re-renders only the reviewed-summary island, so the
+     * counter and meter update without re-rendering the page or re-hydrating the
+     * mounted diff-file children.
+     */
+    private function settleReviewedRender(): void
+    {
+        if ($this->reviewedChangeNeedsParentRender()) {
+            return;
+        }
+
+        $this->skipRender();
+
+        // The island reads $this->reviewState. Bust the computed cache so it
+        // reflects the reviewedFiles change just made rather than a value
+        // memoized earlier in this request.
+        unset($this->reviewState);
+
+        $this->renderIsland('reviewed-summary');
     }
 
     /** @return array<string, array<int, array<string, mixed>>> */
@@ -2122,7 +2141,24 @@ new #[Layout('layouts.app')] class extends Component
             </div>
 
         <x-slot:below>
-            <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" :review-state="$this->reviewState" />
+            <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" :review-state="$this->reviewState">
+                {{-- Reviewed-progress summary. Wrapped in a Livewire island so a
+                     mark/un-mark re-renders just this counter and meter, not the
+                     2200-line review page. Reads only $this state (island scope
+                     can't see template locals). --}}
+                <x-slot:reviewedSummary>
+                    @island(name: 'reviewed-summary')
+                        @if ($this->reviewState->reviewedFileCount > 0)
+                            <div class="flex items-center gap-2">
+                                <span data-testid="reviewed-counter">{{ $this->reviewState->reviewedFileCount }}/{{ $this->reviewState->totalFileCount }} reviewed</span>
+                                <div class="w-24 h-0.5 bg-gh-border/50 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gh-green/70 rounded-full transition-all duration-200" style="width: {{ round($this->reviewState->reviewedFileCount / max(1, $this->reviewState->totalFileCount) * 100) }}%"></div>
+                                </div>
+                            </div>
+                        @endif
+                    @endisland
+                </x-slot:reviewedSummary>
+            </x-status-strip>
         </x-slot:below>
     </x-page-header>
 

@@ -87,7 +87,8 @@ test('reviewed files persist after page reload', function () {
     JS);
 
     $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
-    // Alpine updates the counter on the next microtask; poll until it renders.
+    // The reviewed-summary island re-renders the counter on the toggle round-trip;
+    // poll until it renders.
     $page->page()->waitForFunction("document.querySelector('[data-testid=\"reviewed-counter\"]')?.textContent?.includes('1/3 reviewed')");
     $page->page()->waitForFunction('window.__reviewedPersisted === true && window.__reviewedPendingCommits === 0');
 
