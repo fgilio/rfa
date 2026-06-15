@@ -1532,7 +1532,6 @@ new #[Layout('layouts.app')] class extends Component
     data-source-file-entries='@json($this->reviewState->sourceFileEntries)'
     data-visible-file-entries='@json($this->reviewState->visibleFileEntries)'
     data-visible-file-ids='@json((object) $this->reviewState->visibleFileMap)'
-    data-selected-file-id="{{ $this->reviewState->selectedFileId }}"
     @refresh-completed.window="
         const n = $event.detail?.changedCount ?? 0;
         Flux.toast({
@@ -1552,33 +1551,6 @@ new #[Layout('layouts.app')] class extends Component
             });
 
             this.pendingSavesGuard?.attach();
-
-            // A filter or hide-reviewed re-render can drop the active file from
-            // the visible list, and the morph leaves activeFile pointing at the
-            // now-hidden row, so the sidebar highlight and j/k cursor lose their
-            // anchor. The selection-sync guard mirrors the server's clamp after
-            // each of this component's commits.
-            this.selectionSync = window.rfaSelectionSync?.createSelectionSync({
-                livewire: Livewire,
-                getWireId: () => this.$root.getAttribute('wire:id'),
-                onResync: () => this.syncSelectionToVisible(),
-            });
-
-            this.selectionSync?.attach();
-        },
-        destroy() {
-            this.selectionSync?.detach();
-        },
-        syncSelectionToVisible() {
-            const entries = this.visibleFileEntries;
-            if (entries.length === 0 || entries.some(file => file.id === this.activeFile)) {
-                return;
-            }
-
-            const serverSelected = this.$root?.dataset?.selectedFileId || '';
-            this.activeFile = entries.some(file => file.id === serverSelected)
-                ? serverSelected
-                : entries[0].id;
         },
         activeFile: @js($this->reviewState->selectedFileId),
         reviewedFiles: @js((object) $this->reviewState->reviewedFileMap),
