@@ -6,7 +6,6 @@ namespace App\Services;
 
 use App\DTOs\ReviewFilePair;
 use App\DTOs\ReviewState;
-use Illuminate\Support\Str;
 
 class ReviewStateService
 {
@@ -19,10 +18,9 @@ class ReviewStateService
         $sourceFiles = $this->sourceFiles($files);
         $reviewedFileIds = $this->reviewedFileIds($sourceFiles, $reviewedFiles);
         $reviewedIdSet = array_fill_keys($reviewedFileIds, true);
-        $normalizedFilter = Str::lower(trim($fileFilter));
 
         $visibleFiles = collect($sourceFiles)
-            ->filter(fn (array $file): bool => $this->fileIsVisible($file, $reviewedIdSet, $normalizedFilter, $hideReviewed))
+            ->filter(fn (array $file): bool => $this->fileIsVisible($file, $reviewedIdSet, $fileFilter, $hideReviewed))
             ->values()
             ->all();
 
@@ -54,7 +52,7 @@ class ReviewStateService
             reviewedFileCount: $reviewedFileCount,
             additions: (int) collect($sourceFiles)->sum(fn (array $file): int => (int) ($file['additions'] ?? 0)),
             deletions: (int) collect($sourceFiles)->sum(fn (array $file): int => (int) ($file['deletions'] ?? 0)),
-            emptyStateReason: $this->emptyStateReason($totalFileCount, $visibleFileCount, $reviewedFileCount, $normalizedFilter, $hideReviewed),
+            emptyStateReason: $this->emptyStateReason($totalFileCount, $visibleFileCount, $reviewedFileCount, trim($fileFilter) !== '', $hideReviewed),
         );
     }
 
@@ -89,12 +87,12 @@ class ReviewStateService
      * @param  array<string, mixed>  $file
      * @param  array<string, bool>  $reviewedIdSet
      */
-    private function fileIsVisible(array $file, array $reviewedIdSet, string $normalizedFilter, bool $hideReviewed): bool
+    private function fileIsVisible(array $file, array $reviewedIdSet, string $fileFilter, bool $hideReviewed): bool
     {
         $id = (string) ($file['id'] ?? '');
         $path = (string) ($file['path'] ?? '');
 
-        if (! ReviewState::pathMatchesFilter($path, $normalizedFilter)) {
+        if (! ReviewState::pathMatchesFilter($path, $fileFilter)) {
             return false;
         }
 
@@ -158,7 +156,7 @@ class ReviewStateService
             ->all();
     }
 
-    private function emptyStateReason(int $totalFileCount, int $visibleFileCount, int $reviewedFileCount, string $normalizedFilter, bool $hideReviewed): string
+    private function emptyStateReason(int $totalFileCount, int $visibleFileCount, int $reviewedFileCount, bool $hasActiveFilter, bool $hideReviewed): string
     {
         if ($totalFileCount === 0) {
             return ReviewState::EMPTY_NO_FILES;
@@ -168,7 +166,7 @@ class ReviewStateService
             return ReviewState::EMPTY_NONE;
         }
 
-        if ($normalizedFilter !== '') {
+        if ($hasActiveFilter) {
             return ReviewState::EMPTY_FILTER;
         }
 
