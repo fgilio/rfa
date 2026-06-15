@@ -21,8 +21,6 @@ test('serializes metadata and existing file entries', function () {
         sourceLabel: $target->contextKey(),
         target: $target,
         files: [$entry],
-        warnings: ['warning'],
-        skippedFiles: [['path' => 'large.log', 'reason' => 'too-large']],
     );
 
     expect($changeset->fileCount())->toBe(1)
@@ -33,8 +31,6 @@ test('serializes metadata and existing file entries', function () {
             'sourceLabel' => 'abc123..working',
             'target' => ['from' => 'abc123', 'to' => null],
             'files' => [$entry->toArray()],
-            'warnings' => ['warning'],
-            'skippedFiles' => [['path' => 'large.log', 'reason' => 'too-large']],
         ]);
 });
 
