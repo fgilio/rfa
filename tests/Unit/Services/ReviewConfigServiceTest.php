@@ -9,7 +9,7 @@ beforeEach(function () {
     $this->service = new ReviewConfigService;
 });
 
-test('resolve uses application defaults', function () {
+test('resolve reads effective config from config/rfa.php', function () {
     config([
         'rfa.diff_max_bytes' => 100,
         'rfa.source_max_bytes' => 200,
@@ -31,76 +31,33 @@ test('resolve uses application defaults', function () {
     ]);
 });
 
-test('repo settings override user settings and runtime overrides repo settings', function () {
-    $config = $this->service->resolve(
-        userSettings: [
-            'diffMaxBytes' => 100,
-            'sourceMaxBytes' => 200,
-            'cacheTtlHours' => 10,
-            'defaultContextLines' => 2,
-        ],
-        repoSettings: [
-            'diffMaxBytes' => 300,
-            'defaultContextLines' => 4,
-        ],
-        runtimeOverrides: [
-            'diffMaxBytes' => 400,
-            'movedLineDetection' => true,
-            'movedLineMode' => 'dimmed-zebra',
-        ],
-    );
+test('resolve falls back for invalid integer config', function (string $key, mixed $value) {
+    config([$key => $value]);
 
-    expect($config->diffMaxBytes)->toBe(400)
-        ->and($config->sourceMaxBytes)->toBe(200)
-        ->and($config->cacheTtlHours)->toBe(10)
-        ->and($config->defaultContextLines)->toBe(4)
-        ->and($config->movedLineDetection)->toBeTrue()
-        ->and($config->movedLineMode)->toBe('dimmed-zebra');
-});
-
-test('resolve accepts snake case settings from persisted storage', function () {
-    $config = $this->service->resolve(repoSettings: [
-        'diff_max_bytes' => 321,
-        'source_max_bytes' => 654,
-        'cache_ttl_hours' => 48,
-        'default_context_lines' => 7,
-        'moved_line_detection' => 'false',
-        'moved_line_mode' => 'plain',
-    ]);
-
-    expect($config->toArray())->toMatchArray([
-        'diffMaxBytes' => 321,
-        'sourceMaxBytes' => 654,
-        'cacheTtlHours' => 48,
-        'defaultContextLines' => 7,
-        'movedLineDetection' => false,
-        'movedLineMode' => 'plain',
-    ]);
-});
-
-test('resolve falls back for invalid integer settings', function (array $settings) {
-    $config = $this->service->resolve(runtimeOverrides: $settings);
+    $config = $this->service->resolve();
 
     expect($config->diffMaxBytes)->toBe(512_000)
         ->and($config->defaultContextLines)->toBe(3);
 })->with([
-    'zero diff bytes' => [['diffMaxBytes' => 0]],
-    'negative context' => [['defaultContextLines' => -1]],
+    'zero diff bytes' => ['rfa.diff_max_bytes', 0],
+    'negative context' => ['rfa.default_context_lines', -1],
+    'non-numeric diff bytes' => ['rfa.diff_max_bytes', 'abc'],
 ]);
 
-test('resolve falls back for invalid moved line settings', function (array $settings) {
-    $config = $this->service->resolve(runtimeOverrides: $settings);
+test('resolve falls back for invalid moved line config', function (string $key, mixed $value) {
+    config([$key => $value]);
+
+    $config = $this->service->resolve();
 
     expect($config->movedLineDetection)->toBeFalse()
         ->and($config->movedLineMode)->toBe('zebra');
 })->with([
-    'invalid boolean' => [['movedLineDetection' => 'maybe']],
-    'invalid mode' => [['movedLineMode' => 'rainbow']],
-    'array mode' => [['movedLineMode' => ['blocks']]],
-    'array mode via alias' => [['moved_line_mode' => ['zebra']]],
+    'invalid boolean' => ['rfa.moved_lines.enabled', 'maybe'],
+    'invalid mode' => ['rfa.moved_lines.mode', 'rainbow'],
+    'array mode' => ['rfa.moved_lines.mode', ['blocks']],
 ]);
 
-test('resolve memoizes default config for the request', function () {
+test('resolve memoizes the config for the request', function () {
     config(['rfa.diff_max_bytes' => 123]);
 
     $first = $this->service->resolve();

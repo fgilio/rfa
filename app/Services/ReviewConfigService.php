@@ -11,133 +11,50 @@ class ReviewConfigService
     /** @var list<string> */
     private const MOVED_LINE_MODES = ['plain', 'blocks', 'zebra', 'dimmed-zebra'];
 
-    /** @var array<string, mixed> */
-    private const FALLBACKS = [
-        'diffMaxBytes' => 512_000,
-        'sourceMaxBytes' => 1_048_576,
-        'cacheTtlHours' => 24,
-        'defaultContextLines' => 3,
-        'movedLineDetection' => false,
-        'movedLineMode' => 'zebra',
-    ];
-
-    private ?ReviewConfig $memoizedDefaults = null;
+    private ?ReviewConfig $memoized = null;
 
     /**
-     * Resolve effective review config.
+     * Resolve the effective review config from config/rfa.php.
      *
-     * Precedence is application defaults, user settings, repo settings, then
-     * runtime overrides. Callers can pass empty arrays for layers RFA does not
-     * persist yet.
-     *
-     * @param  array<string, mixed>  $userSettings
-     * @param  array<string, mixed>  $repoSettings
-     * @param  array<string, mixed>  $runtimeOverrides
+     * Each value is coerced and bounds-checked so a malformed config or env
+     * entry falls back to its safe default rather than reaching the diff
+     * pipeline. The result is memoized for the request.
      */
-    public function resolve(array $userSettings = [], array $repoSettings = [], array $runtimeOverrides = []): ReviewConfig
+    public function resolve(): ReviewConfig
     {
-        if ($userSettings === [] && $repoSettings === [] && $runtimeOverrides === [] && $this->memoizedDefaults !== null) {
-            return $this->memoizedDefaults;
-        }
-
-        $settings = array_replace(
-            $this->defaults(),
-            $this->normalize($userSettings),
-            $this->normalize($repoSettings),
-            $this->normalize($runtimeOverrides),
+        return $this->memoized ??= new ReviewConfig(
+            diffMaxBytes: $this->positiveInt(config('rfa.diff_max_bytes'), 512_000),
+            sourceMaxBytes: $this->positiveInt(config('rfa.source_max_bytes'), 1_048_576),
+            cacheTtlHours: $this->positiveInt(config('rfa.cache_ttl_hours'), 24),
+            defaultContextLines: $this->nonNegativeInt(config('rfa.default_context_lines'), 3),
+            movedLineDetection: $this->boolean(config('rfa.moved_lines.enabled'), false),
+            movedLineMode: $this->movedLineMode(config('rfa.moved_lines.mode'), 'zebra'),
         );
-
-        $movedLineDetection = $this->boolean($settings, 'movedLineDetection', self::FALLBACKS['movedLineDetection']);
-
-        $config = new ReviewConfig(
-            diffMaxBytes: $this->positiveInt($settings, 'diffMaxBytes', self::FALLBACKS['diffMaxBytes']),
-            sourceMaxBytes: $this->positiveInt($settings, 'sourceMaxBytes', self::FALLBACKS['sourceMaxBytes']),
-            cacheTtlHours: $this->positiveInt($settings, 'cacheTtlHours', self::FALLBACKS['cacheTtlHours']),
-            defaultContextLines: $this->nonNegativeInt($settings, 'defaultContextLines', self::FALLBACKS['defaultContextLines']),
-            movedLineDetection: $movedLineDetection,
-            movedLineMode: $this->movedLineMode($settings, 'movedLineMode', self::FALLBACKS['movedLineMode']),
-        );
-
-        if ($userSettings === [] && $repoSettings === [] && $runtimeOverrides === []) {
-            $this->memoizedDefaults = $config;
-        }
-
-        return $config;
     }
 
-    /** @return array<string, mixed> */
-    private function defaults(): array
+    private function positiveInt(mixed $value, int $fallback): int
     {
-        // A missing config key resolves to null here and the coercion helpers
-        // in resolve() substitute the matching FALLBACKS value, so the fallback
-        // lives in one place rather than being repeated as a second argument.
-        return [
-            'diffMaxBytes' => config('rfa.diff_max_bytes'),
-            'sourceMaxBytes' => config('rfa.source_max_bytes'),
-            'cacheTtlHours' => config('rfa.cache_ttl_hours'),
-            'defaultContextLines' => config('rfa.default_context_lines'),
-            'movedLineDetection' => config('rfa.moved_lines.enabled'),
-            'movedLineMode' => config('rfa.moved_lines.mode'),
-        ];
+        $int = filter_var($value, FILTER_VALIDATE_INT);
+
+        return is_int($int) && $int >= 1 ? $int : $fallback;
     }
 
-    /**
-     * @param  array<string, mixed>  $settings
-     * @return array<string, mixed>
-     */
-    private function normalize(array $settings): array
+    private function nonNegativeInt(mixed $value, int $fallback): int
     {
-        $aliases = [
-            'diff_max_bytes' => 'diffMaxBytes',
-            'source_max_bytes' => 'sourceMaxBytes',
-            'cache_ttl_hours' => 'cacheTtlHours',
-            'default_context_lines' => 'defaultContextLines',
-            'moved_line_detection' => 'movedLineDetection',
-            'moved_line_mode' => 'movedLineMode',
-        ];
+        $int = filter_var($value, FILTER_VALIDATE_INT);
 
-        return collect($settings)
-            ->mapWithKeys(fn (mixed $value, string $key): array => [$aliases[$key] ?? $key => $value])
-            ->only([
-                'diffMaxBytes',
-                'sourceMaxBytes',
-                'cacheTtlHours',
-                'defaultContextLines',
-                'movedLineDetection',
-                'movedLineMode',
-            ])
-            ->all();
+        return is_int($int) && $int >= 0 ? $int : $fallback;
     }
 
-    /** @param array<string, mixed> $settings */
-    private function positiveInt(array $settings, string $key, int $fallback): int
+    private function movedLineMode(mixed $value, string $fallback): string
     {
-        $value = filter_var($settings[$key] ?? null, FILTER_VALIDATE_INT);
-
-        return is_int($value) && $value >= 1 ? $value : $fallback;
-    }
-
-    /** @param array<string, mixed> $settings */
-    private function nonNegativeInt(array $settings, string $key, int $fallback): int
-    {
-        $value = filter_var($settings[$key] ?? null, FILTER_VALIDATE_INT);
-
-        return is_int($value) && $value >= 0 ? $value : $fallback;
-    }
-
-    /** @param array<string, mixed> $settings */
-    private function movedLineMode(array $settings, string $key, string $fallback): string
-    {
-        $value = $settings[$key] ?? null;
-
         return is_string($value) && in_array($value, self::MOVED_LINE_MODES, true) ? $value : $fallback;
     }
 
-    /** @param array<string, mixed> $settings */
-    private function boolean(array $settings, string $key, bool $fallback): bool
+    private function boolean(mixed $value, bool $fallback): bool
     {
-        $value = filter_var($settings[$key] ?? null, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+        $bool = filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
 
-        return is_bool($value) ? $value : $fallback;
+        return is_bool($bool) ? $bool : $fallback;
     }
 }
