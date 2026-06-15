@@ -1422,17 +1422,19 @@ new #[Layout('layouts.app')] class extends Component
      */
     private function settleReviewedRender(): void
     {
+        // Hide-reviewed mode does a full render because the toggle drops the
+        // newly-reviewed file from the visible list. The reviewed-summary island
+        // is declared always:true, so it re-renders inline as part of that full
+        // render rather than emitting a skip marker.
         if ($this->reviewedChangeNeedsParentRender()) {
             return;
         }
 
-        $this->skipRender();
-
-        // The island reads $this->reviewState. Bust the computed cache so it
-        // reflects the reviewedFiles change just made rather than a value
-        // memoized earlier in this request.
+        // Other modes skip the full render for latency and refresh just the
+        // island. Bust the computed cache first so the island reflects the
+        // reviewedFiles change just made rather than a value memoized earlier.
         unset($this->reviewState);
-
+        $this->skipRender();
         $this->renderIsland('reviewed-summary');
     }
 
@@ -1915,8 +1917,9 @@ new #[Layout('layouts.app')] class extends Component
             <div class="flex items-center gap-2 text-xs">
                 {{-- Hide reviewed toggle. Same-named island as the counter, so
                      renderIsland('reviewed-summary') flips its visibility in step
-                     with the count on a mark/un-mark. --}}
-                @island(name: 'reviewed-summary')
+                     with the count on a mark/un-mark. always:true keeps it in sync
+                     on full renders too. --}}
+                @island(name: 'reviewed-summary', always: true)
                     @if ($this->reviewState->reviewedFileCount > 0)
                         <div class="grid place-items-center">
                             @if($hideReviewed)
@@ -2150,7 +2153,10 @@ new #[Layout('layouts.app')] class extends Component
                      2200-line review page. Reads only $this state (island scope
                      can't see template locals). --}}
                 <x-slot:reviewedSummary>
-                    @island(name: 'reviewed-summary')
+                    {{-- always:true so a full render (e.g. hide-reviewed mode,
+                         filtering) re-renders the counter inline instead of
+                         skipping it; renderIsland still scopes the latency path. --}}
+                    @island(name: 'reviewed-summary', always: true)
                         @if ($this->reviewState->reviewedFileCount > 0)
                             <div class="flex items-center gap-2">
                                 <span data-testid="reviewed-counter">{{ $this->reviewState->reviewedFileCount }}/{{ $this->reviewState->totalFileCount }} reviewed</span>

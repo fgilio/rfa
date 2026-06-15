@@ -224,6 +224,19 @@ test('toggleReviewed renders when hide-reviewed visibility changes', function ()
         ->and($component->instance()->reviewState()->isFileVisible('id-bar'))->toBeTrue();
 });
 
+test('the reviewed counter reflects new marks in hide-reviewed mode', function () {
+    // Hide-reviewed mode does a full render, which emits only skip markers for
+    // islands. The reviewed-summary island is declared always:true so it
+    // re-renders inline rather than going stale: marking a second file while
+    // hidden must advance the counter to 2/6, not stick at 1/6.
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
+        ->call('hideReviewedFiles')
+        ->dispatch('toggle-reviewed', filePath: 'src/Bar.php');
+
+    $component->assertSee('2/6 reviewed');
+});
+
 test('toggleReviewed skips render when only a file filter is active (filter is reviewed-independent)', function () {
     // A path filter never hides a file for being reviewed — only Hide-reviewed
     // does (ReviewStateService::fileIsVisible). The server-visible list is
