@@ -237,6 +237,16 @@ test('the reviewed counter reflects new marks in hide-reviewed mode', function (
     $component->assertSee('2/6 reviewed');
 });
 
+test('marking a file broadcasts an authoritative file-reviewed-changed so DiffFile converges to the server state', function () {
+    // The sidebar button bakes its optimistic reviewed value at island-render
+    // time. A mark that lands on the server must echo the true state so a
+    // mounted DiffFile cannot stay desynced from a stale optimistic dispatch
+    // (e.g. a rapid double-click before the file-list island re-rendered).
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
+        ->assertDispatched('file-reviewed-changed', id: 'id-foo', reviewed: true);
+});
+
 test('toggleReviewed skips render when only a file filter is active (filter is reviewed-independent)', function () {
     // A path filter never hides a file for being reviewed — only Hide-reviewed
     // does (ReviewStateService::fileIsVisible). The server-visible list is

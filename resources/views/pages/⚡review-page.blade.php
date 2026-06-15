@@ -1176,6 +1176,13 @@ new #[Layout('layouts.app')] class extends Component
                     array_values(array_unique(array_merge([$fileId], $this->recentlyReviewedIds))),
                     0, 5,
                 );
+
+                // Authoritative mark broadcast, symmetric with the un-mark branch's
+                // reviewed-files-reverted. DiffFile's `reviewed` flag converges to the
+                // server state even when an optimistic dispatch carried a stale value
+                // (e.g. a rapid double-click on the sidebar button before the
+                // file-list island re-rendered with the fresh toggle direction).
+                $this->dispatch('file-reviewed-changed', id: $fileId, reviewed: true);
             }
 
             $this->dispatch(

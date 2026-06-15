@@ -215,6 +215,21 @@ test('checking reviewed updates sidebar indicator', function () {
     $page->assertSee('1/3 reviewed');
 });
 
+test('a second mark in normal mode advances the status-strip counter via the slot island', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    // First mark: 1/3. Second mark: 2/3. The counter lives in the
+    // reviewed-summary island nested inside the x-status-strip slot, refreshed
+    // by renderIsland on the skipRender path. This guards that the slot-scoped
+    // island actually re-renders (not just the first mark or the hide-mode
+    // full render).
+    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
+    $page->assertSee('1/3 reviewed');
+
+    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->nth(1)->click();
+    $page->assertSee('2/3 reviewed');
+});
+
 test('marking a file flips its sidebar button to the reviewed state via the island', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
