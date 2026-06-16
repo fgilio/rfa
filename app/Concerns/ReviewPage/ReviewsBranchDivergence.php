@@ -76,12 +76,12 @@ trait ReviewsBranchDivergence
             return $changed;
         }
 
-        $before = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->projectBranch];
+        $before = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->dismissedAtBranch, $this->projectBranch];
 
         $head = app(GetCurrentHeadAction::class)->handle($this->repoPath, $this->projectBranch ?: null);
         $this->resolveDivergenceState($head);
 
-        $after = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->projectBranch];
+        $after = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->dismissedAtBranch, $this->projectBranch];
 
         $changed = ! $this->divergenceChecked || $before !== $after;
         $this->divergenceChecked = true;
