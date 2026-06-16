@@ -379,7 +379,7 @@ HTML;
 ?>
 
 @assets
-<script src="/js/diff-file.js"></script>
+@localScript('js/diff-file.js')
 @endassets
 
 {{-- Single file diff rendering --}}

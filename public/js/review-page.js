@@ -81,6 +81,12 @@
         };
     }
 
+    const reviewedQueueKey = '__rfaReviewedActionQueue';
+
+    function reviewedQueueRoot() {
+        return typeof window !== 'undefined' ? window : globalThis;
+    }
+
     function createReviewPage(config = {}) {
         return {
             config,
@@ -136,6 +142,29 @@
             },
             get visibleFileCount() {
                 return this.visibleFileEntries.length;
+            },
+            queueReviewedAction(action) {
+                const root = reviewedQueueRoot();
+
+                root[reviewedQueueKey] = (root[reviewedQueueKey] || Promise.resolve())
+                    .catch(() => {})
+                    .then(action);
+
+                return root[reviewedQueueKey];
+            },
+            toggleReviewed(filePath) {
+                if (!filePath) return Promise.resolve();
+
+                return this.queueReviewedAction(() => this.$wire.toggleReviewed(filePath));
+            },
+            hideReviewedFiles() {
+                return this.queueReviewedAction(() => this.$wire.hideReviewedFiles());
+            },
+            showAllFiles() {
+                return this.queueReviewedAction(() => this.$wire.showAllFiles());
+            },
+            clearRecentlyReviewed() {
+                return this.queueReviewedAction(() => this.$wire.clearRecentlyReviewed());
             },
             buildFullPath(path) {
                 const repo = this.repoPath || '';
@@ -276,8 +305,7 @@
     }
 
     function install(root) {
-        if (typeof root.Alpine === 'undefined' || root.__reviewPageAttached) return false;
-        root.__reviewPageAttached = true;
+        if (typeof root.Alpine === 'undefined') return false;
         root.Alpine.data('reviewPage', createReviewPage);
         root.Alpine.data('reviewChangePoller', createChangePoller);
         return true;

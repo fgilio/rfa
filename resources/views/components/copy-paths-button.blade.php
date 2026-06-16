@@ -63,5 +63,5 @@
 </div>
 
 @once
-    <script src="/js/copy-paths-button.js"></script>
+    @localScript('js/copy-paths-button.js')
 @endonce

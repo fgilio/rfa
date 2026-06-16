@@ -253,10 +253,9 @@ describe('line comment anchors', () => {
 describe('install', () => {
     afterEach(() => {
         delete window.Alpine;
-        delete window.__diffFileAttached;
     });
 
-    it('registers the diffFile Alpine factory and is idempotent', () => {
+    it('registers the latest diffFile Alpine factory every time it loads', () => {
         const data = vi.fn();
         window.Alpine = { data };
 
@@ -264,19 +263,16 @@ describe('install', () => {
         expect(data).toHaveBeenCalledTimes(1);
         expect(data).toHaveBeenCalledWith('diffFile', expect.any(Function));
 
-        expect(install(window)).toBe(false);
-        expect(data).toHaveBeenCalledTimes(1);
+        expect(install(window)).toBe(true);
+        expect(data).toHaveBeenCalledTimes(2);
     });
 
     it('returns false when Alpine is not present', () => {
         expect(install(window)).toBe(false);
     });
 
-    it('does not poison the attached flag when called before Alpine loads', () => {
-        // First attempt with no Alpine must NOT set the flag, otherwise a
-        // later attempt would silently no-op.
+    it('returns false before Alpine loads and registers once Alpine is available', () => {
         expect(install(window)).toBe(false);
-        expect(window.__diffFileAttached).toBeUndefined();
 
         const data = vi.fn();
         window.Alpine = { data };
@@ -568,7 +564,6 @@ describe('pending comment form cleared on SPA navigation', () => {
     afterEach(() => {
         delete globalThis.Alpine;
         delete window.Alpine;
-        delete window.__diffFileAttached;
         delete window.__diffFilePendingFormsCleanup;
     });
 

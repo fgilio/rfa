@@ -110,7 +110,17 @@
         </div>
 
         <flux:tooltip content="Mark as reviewed">
-            <flux:checkbox x-model="reviewed" @change="onReviewedChange()" aria-label="Reviewed" class="cursor-pointer" />
+            <flux:checkbox
+                x-model="reviewed"
+                @change="
+                    reviewed = $event.target.checked;
+                    collapsed = reviewed;
+                    $dispatch('file-reviewed-changed', { id: fileId, reviewed });
+                    $dispatch('rfa-toggle-reviewed', { filePath });
+                "
+                aria-label="Reviewed"
+                class="cursor-pointer"
+            />
         </flux:tooltip>
     </div>
 </div>

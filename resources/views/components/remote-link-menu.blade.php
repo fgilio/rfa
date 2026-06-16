@@ -43,7 +43,7 @@
 @endphp
 
 @assets
-<script src="/js/context-menu.js"></script>
+@localScript('js/context-menu.js')
 @endassets
 
 <template x-teleport="body">

@@ -16,14 +16,14 @@
             processSampleIntervalMs: @js((int) config('rfa.diagnostics.process_sample_interval_ms')),
         };
     </script>
-    <script src="/js/runtime-diagnostics.js"></script>
-    <script src="/js/settings-store.js"></script>
-    <script src="/js/overlays-store.js"></script>
-    <script src="/js/keymap-store.js"></script>
-    <script src="/js/page-search.js"></script>
-    <script src="/js/session-recovery.js"></script>
-    <script src="/js/smart-poll.js"></script>
-    <script src="/js/pending-saves.js"></script>
+    @localScript('js/runtime-diagnostics.js')
+    @localScript('js/settings-store.js')
+    @localScript('js/overlays-store.js')
+    @localScript('js/keymap-store.js')
+    @localScript('js/page-search.js')
+    @localScript('js/session-recovery.js')
+    @localScript('js/smart-poll.js')
+    @localScript('js/pending-saves.js')
     <style>
         @font-face {
             font-family: 'Space Grotesk';

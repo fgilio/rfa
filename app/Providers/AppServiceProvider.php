@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use App\Services\GitFileContentService;
 use App\Services\ReviewConfigService;
+use App\Support\LocalAsset;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -39,6 +40,11 @@ class AppServiceProvider extends ServiceProvider
 
         Blade::if('native', fn () => (bool) config('nativephp-internal.running'));
         Blade::if('browser', fn () => ! config('nativephp-internal.running'));
+        Blade::directive('localScript', fn (string $expression): string => sprintf(
+            '<?php echo %s::script(%s); ?>',
+            LocalAsset::class,
+            $expression,
+        ));
 
         RateLimiter::for('diagnostics', fn (Request $request): Limit => Limit::perMinute(120)
             ->by($request->ip() ?: 'local'));
