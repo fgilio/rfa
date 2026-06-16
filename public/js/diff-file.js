@@ -561,7 +561,7 @@
             onReviewedChange() {
                 this.collapsed = this.reviewed;
                 this.$dispatch('file-reviewed-changed', { id: this.fileId, reviewed: this.reviewed });
-                this.$wire.dispatch('toggle-reviewed', { filePath: this.filePath });
+                this.$dispatch('rfa-toggle-reviewed', { filePath: this.filePath });
             },
         };
     }

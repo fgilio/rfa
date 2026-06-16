@@ -835,24 +835,23 @@ new #[Layout('layouts.app')] class extends Component
     public function clearRecentlyReviewed(): void
     {
         $this->recentlyReviewedIds = [];
-        $this->forgetReviewState();
 
-        if (! $this->hideReviewed) {
-            $this->skipRender();
-        }
+        $this->settleRecentlyReviewedRender();
     }
 
     public function hideReviewedFiles(): void
     {
         $this->hideReviewed = true;
-        $this->forgetReviewState();
+
+        $this->settleReviewedVisibilityRender();
     }
 
     public function showAllFiles(): void
     {
         $this->hideReviewed = false;
         $this->recentlyReviewedIds = [];
-        $this->forgetReviewState();
+
+        $this->settleReviewedVisibilityRender();
     }
 
     public function clearFileFilter(): void
@@ -934,40 +933,55 @@ new #[Layout('layouts.app')] class extends Component
             ->all();
     }
 
-    private function reviewedChangeNeedsParentRender(): bool
+    private function reviewedChangeNeedsSourceDiffListRender(): bool
     {
         // Only Hide-reviewed mode lets a reviewed toggle change the server-visible
         // list. A path filter is reviewed-independent (ReviewStateService only
-        // drops files for reviewed-ness when hideReviewed is on), so re-rendering
-        // the parent — and re-hydrating every mounted diff-file child — on a
-        // filter-only toggle is wasted work on a latency-sensitive path.
+        // drops files for reviewed-ness when hideReviewed is on), so refreshing
+        // the source diff list on a filter-only toggle is wasted work on a
+        // latency-sensitive path.
         return $this->hideReviewed;
     }
 
     /**
-     * Settle the response after a reviewed-state change. Hide-reviewed mode needs
-     * a full parent render because the toggle drops the file from the visible
-     * list. Every other mode re-renders only the reviewed-summary island, so the
-     * counter and meter update without re-rendering the page or re-hydrating the
-     * mounted diff-file children.
+     * Settle the response after a reviewed-state change.
+     *
+     * The affected regions are intentionally islands: summary controls, sidebar
+     * file list, and (only while hiding reviewed files) the source diff list.
      */
     private function settleReviewedRender(): void
     {
         $this->forgetReviewState();
 
-        // Hide-reviewed mode does a full render because the toggle drops the
-        // newly-reviewed file from the visible list. The reviewed-summary island
-        // is declared always:true, so it re-renders inline as part of that full
-        // render rather than emitting a skip marker.
-        if ($this->reviewedChangeNeedsParentRender()) {
+        $this->skipRender();
+        $this->renderIsland('reviewed-summary');
+        $this->renderIsland('file-list');
+
+        if ($this->reviewedChangeNeedsSourceDiffListRender()) {
+            $this->renderIsland('source-diff-list');
+        }
+    }
+
+    private function settleReviewedVisibilityRender(): void
+    {
+        $this->forgetReviewState();
+        $this->skipRender();
+        $this->renderIsland('reviewed-summary');
+        $this->renderIsland('file-list');
+        $this->renderIsland('source-diff-list');
+    }
+
+    private function settleRecentlyReviewedRender(): void
+    {
+        $this->forgetReviewState();
+
+        if (! $this->hideReviewed) {
+            $this->skipRender();
+
             return;
         }
 
-        // Other modes skip the full render for latency and refresh just the
-        // islands. The computed cache has already been busted so they reflect the
-        // reviewedFiles change just made rather than a value memoized earlier.
         $this->skipRender();
-        $this->renderIsland('reviewed-summary');
         $this->renderIsland('file-list');
     }
 
@@ -1136,6 +1150,10 @@ new #[Layout('layouts.app')] class extends Component
     })"
     @scroll-to-comment.window="scrollToComment($event.detail.commentId, $event.detail.filePath)"
     @open-remote-menu.window="showRemoteMenu($event)"
+    x-on:rfa-toggle-reviewed.window="$wire.toggleReviewed($event.detail.filePath)"
+    x-on:rfa-hide-reviewed.window="$wire.hideReviewedFiles()"
+    x-on:rfa-show-all-files.window="$wire.showAllFiles()"
+    x-on:rfa-clear-recently-reviewed.window="$wire.clearRecentlyReviewed()"
     @keydown.window="
         if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {
             if ($event.key === 'Escape' && !$event.target.closest('[data-comment-form]')) { $wire.clearFileFilter(); $event.target.blur(); $event.preventDefault(); }
@@ -1271,18 +1289,20 @@ new #[Layout('layouts.app')] class extends Component
                 @island(name: 'reviewed-summary', always: true)
                     @if ($this->reviewState->reviewedFileCount > 0)
                         <div class="grid place-items-center">
+                            {{-- Bridge through the page root so island children don't
+                                 scope reviewed-state actions to their own island. --}}
                             @if($hideReviewed)
                                 <flux:button variant="ghost" size="sm" icon="eye" icon:variant="outline"
                                     tooltip="Show all files"
                                     aria-label="Show all files"
                                     class="col-start-1 row-start-1"
-                                    wire:click="showAllFiles" />
+                                    @click="$dispatch('rfa-show-all-files')" />
                             @else
                                 <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
                                     tooltip="Hide reviewed"
                                     aria-label="Hide reviewed"
                                     class="col-start-1 row-start-1"
-                                    wire:click="hideReviewedFiles" />
+                                    @click="$dispatch('rfa-hide-reviewed')" />
                             @endif
                         </div>
                     @endif
@@ -1460,13 +1480,18 @@ new #[Layout('layouts.app')] class extends Component
                     x-ref="fileFilterInput"
                     @keydown.escape="$wire.clearFileFilter(); $el.blur()"
                 />
+                {{-- File list as an island so a reviewed mark/un-mark refreshes the
+                     sidebar checkmarks and recovery group without a full page render.
+                     always:true keeps it current on full renders too (filtering,
+                     discard, hide-reviewed mode). --}}
+                @island(name: 'file-list', always: true)
                 {{-- Recently reviewed: surfaces just-marked files in Hide-reviewed mode so the user can un-mark in place --}}
                 @if($hideReviewed && count($this->recentlyReviewedFiles) > 0)
                     <div data-testid="recently-reviewed-group" class="mb-3">
                         <div class="flex items-center justify-between mb-2">
                             <span class="section-label text-gh-muted">Recently reviewed</span>
                             <button type="button"
-                                wire:click="clearRecentlyReviewed"
+                                @click="$dispatch('rfa-clear-recently-reviewed')"
                                 class="text-[10px] uppercase tracking-wider text-gh-muted hover:text-gh-text transition-colors"
                                 title="Clear recently reviewed list"
                                 aria-label="Clear recently reviewed list">Clear</button>
@@ -1483,7 +1508,7 @@ new #[Layout('layouts.app')] class extends Component
                                 </button>
                                 <flux:tooltip content="Un-mark as reviewed">
                                     <button type="button"
-                                        wire:click="toggleReviewed(@js($recentlyReviewedFile['path']))"
+                                        @click.stop="$dispatch('rfa-toggle-reviewed', { filePath: @js($recentlyReviewedFile['path']) })"
                                         class="shrink-0 size-3.5 flex items-center justify-center text-gh-green hover:text-gh-text transition-colors"
                                         aria-label="Un-mark as reviewed">
                                         <flux:icon icon="check" variant="outline" class="!size-3.5" />
@@ -1494,11 +1519,6 @@ new #[Layout('layouts.app')] class extends Component
                         <div class="border-b border-gh-border my-3"></div>
                     </div>
                 @endif
-                {{-- File list as an island so a reviewed mark/un-mark refreshes the
-                     sidebar checkmarks via renderIsland('file-list') without a full
-                     page render. always:true keeps it current on full renders too
-                     (filtering, discard, hide-reviewed mode). --}}
-                @island(name: 'file-list', always: true)
                 @foreach($this->reviewState->visibleFiles as $file)
                     @php
                         // Badge label and color come from ReviewState so this list and the
@@ -1554,11 +1574,11 @@ new #[Layout('layouts.app')] class extends Component
                         <flux:tooltip>
                             {{-- Reviewed state is server-rendered inside the file-list island.
                                  The click tells DiffFile's checkbox mirror the new state and
-                                 asks the parent to toggle, which refreshes this island. --}}
+                                 asks the parent to toggle, which refreshes affected islands. --}}
                             <button type="button"
                                 @click.stop="
                                     $dispatch('file-reviewed-changed', { id: '{{ $file['id'] }}', reviewed: {{ $isReviewed ? 'false' : 'true' }} });
-                                    $wire.dispatch('toggle-reviewed', { filePath: @js($file['path']) });
+                                    $dispatch('rfa-toggle-reviewed', { filePath: @js($file['path']) });
                                 "
                                 class="shrink-0 size-3.5 flex items-center justify-center transition-[opacity,colors] {{ $isReviewed ? 'text-gh-green hover:text-gh-text' : 'text-gh-muted/40 opacity-0 group-hover:opacity-100 hover:text-gh-text' }}"
                                 aria-label="{{ $isReviewed ? 'Un-mark as reviewed' : 'Mark as reviewed' }}"
@@ -1680,44 +1700,50 @@ new #[Layout('layouts.app')] class extends Component
                 @endif
 
                 {{-- Source Files --}}
-                {{-- Filter-independent: singleFile is read once at a diff-file child's
-                     Alpine init and its :key has no filter component, so a filtered
-                     1-of-N view can't re-init an already-mounted child. Key off the
-                     total source count so the value is stable across filtering. --}}
-                @php $singleFile = $this->reviewState->totalFileCount === 1 && count($reviewPairs) === 0; @endphp
-                @forelse($this->reviewState->visibleFiles as $file)
-                    <div id="{{ $file['id'] }}"
-                         class="border-b border-gh-border transition-opacity duration-150 ease-out">
-                        <livewire:diff-file
-                            lazy
-                            :key="$file['id'].'-'.$file['refreshFingerprint']"
-                            :file="$file"
-                            :load-delay="(int) (floor($loop->index / 15) * 100)"
-                            :file-comments="$this->groupedComments[$file['id']] ?? []"
-                            :is-reviewed="array_key_exists($file['path'], $reviewedFiles)"
-                            :single-file="$singleFile"
-                            :repo-path="$repoPath"
-                            :project-id="$projectId"
-                            :has-remote="$hasRemote"
-                            :diff-from="$diffFrom"
-                            :diff-to="$diffTo"
-                        />
-                    </div>
-                @empty
-                    @if(count($reviewPairs) === 0)
-                        @if($this->reviewState->emptyStateReason === \App\DTOs\ReviewState::EMPTY_FILTER)
-                            <x-empty-state>
-                                <x-slot:heading>No files match</x-slot:heading>
-                                <p class="text-sm text-gh-muted">Clear the filter to show all changed files</p>
-                            </x-empty-state>
-                        @elseif($this->reviewState->emptyStateReason === \App\DTOs\ReviewState::EMPTY_ALL_REVIEWED)
-                            <x-empty-state>
-                                <x-slot:heading>All files reviewed</x-slot:heading>
-                                <p class="text-sm text-gh-muted">Show all files to revisit reviewed changes</p>
-                            </x-empty-state>
+                {{-- Source diffs are isolated from reviewed-summary/sidebar islands
+                     so hide-reviewed mode can remove mounted lazy diff-file children
+                     without morphing the entire review page. --}}
+                @island(name: 'source-diff-list', always: true)
+                    {{-- Filter-independent: singleFile is read once at a diff-file child's
+                         Alpine init and its :key has no filter component, so a filtered
+                         1-of-N view can't re-init an already-mounted child. Key off the
+                         total source count so the value is stable across filtering. --}}
+                    @php $singleFile = $this->reviewState->totalFileCount === 1 && count($reviewPairs) === 0; @endphp
+                    @forelse($this->reviewState->visibleFiles as $file)
+                        <div id="{{ $file['id'] }}"
+                             wire:key="source-file-shell-{{ $file['id'] }}-{{ $file['refreshFingerprint'] }}"
+                             class="border-b border-gh-border transition-opacity duration-150 ease-out">
+                            <livewire:diff-file
+                                lazy
+                                :key="$file['id'].'-'.$file['refreshFingerprint']"
+                                :file="$file"
+                                :load-delay="(int) (floor($loop->index / 15) * 100)"
+                                :file-comments="$this->groupedComments[$file['id']] ?? []"
+                                :is-reviewed="array_key_exists($file['path'], $reviewedFiles)"
+                                :single-file="$singleFile"
+                                :repo-path="$repoPath"
+                                :project-id="$projectId"
+                                :has-remote="$hasRemote"
+                                :diff-from="$diffFrom"
+                                :diff-to="$diffTo"
+                            />
+                        </div>
+                    @empty
+                        @if(count($reviewPairs) === 0)
+                            @if($this->reviewState->emptyStateReason === \App\DTOs\ReviewState::EMPTY_FILTER)
+                                <x-empty-state>
+                                    <x-slot:heading>No files match</x-slot:heading>
+                                    <p class="text-sm text-gh-muted">Clear the filter to show all changed files</p>
+                                </x-empty-state>
+                            @elseif($this->reviewState->emptyStateReason === \App\DTOs\ReviewState::EMPTY_ALL_REVIEWED)
+                                <x-empty-state>
+                                    <x-slot:heading>All files reviewed</x-slot:heading>
+                                    <p class="text-sm text-gh-muted">Show all files to revisit reviewed changes</p>
+                                </x-empty-state>
+                            @endif
                         @endif
-                    @endif
-                @endforelse
+                    @endforelse
+                @endisland
             @endif
     </x-resizable-sidebar-shell>
 
