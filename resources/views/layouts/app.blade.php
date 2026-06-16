@@ -202,11 +202,17 @@
             position: relative;
             z-index: 1;
         }
-        .rfa-search-match--current::after {
+        /* Render the "X of Y" pill only on the piece that carries the number.
+           A match that crosses a token boundary wraps each piece in its own
+           --current span; gating on [data-match-number] stops the other pieces
+           from painting empty phantom pills. `left` is centered across the
+           whole match via the JS-measured --rfa-match-center offset, falling
+           back to the first piece's center for single-piece matches. */
+        .rfa-search-match--current[data-match-number]::after {
             content: attr(data-match-number);
             position: absolute;
             top: 100%;
-            left: 50%;
+            left: var(--rfa-match-center, 50%);
             transform: translate(-50%, 6px);
             background: rgb(var(--gh-accent));
             color: rgb(var(--gh-bg));
@@ -215,10 +221,10 @@
             font-weight: 500;
             line-height: 1;
             padding: 3px 6px;
-            border-radius: 4px;
+            border-radius: 2px;
             white-space: nowrap;
             pointer-events: none;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+            box-shadow: 0 0 0 1px rgb(var(--gh-border));
             z-index: 2;
         }
     </style>
@@ -233,7 +239,11 @@
         }).catch(() => {});
     "
 >
-    {{-- Find-in-page search bar (Cmd/Ctrl+F) --}}
+    {{-- Find-in-page search bar (Cmd/Ctrl+F).
+         @keydown.window (not a plain @keydown) is deliberate: the listener
+         lives on window, so Cmd+F still fires while this bar is x-show-hidden
+         (display:none). Move it onto the element and the shortcut can no longer
+         open the bar. --}}
     <div x-data="pageSearch" x-show="open" x-cloak data-search-ignore
          x-transition:enter="transition ease-out duration-150"
          x-transition:enter-start="opacity-0 -translate-y-1"

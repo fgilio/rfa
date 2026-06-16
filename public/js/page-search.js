@@ -40,16 +40,131 @@
         return cursor;
     }
 
+    // Walk every visible text node under `root` and bucket it by nearest
+    // block-level ancestor. Each block becomes one searchable string, so a
+    // query can cross sibling token spans inside a line but never hop between
+    // lines, cells, or paragraphs. Returns Map<blockElement, Text[]>.
+    function groupTextNodesByBlock(root) {
+        // Sibling text nodes share a parent (very common in diff rows), so
+        // memoize the per-walk visibility answer instead of re-walking the
+        // style chain for each one.
+        const visibility = new WeakMap();
+        const blockCache = new WeakMap();
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode(node) {
+                if (!node.nodeValue || !node.nodeValue.length) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                const parent = node.parentElement;
+                if (!parent || parent.closest(SKIP_SELECTOR)) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                // Skip collapsed/hidden sections (x-show, [hidden],
+                // display:none, visibility:hidden, opacity:0) so the counter
+                // and next/prev navigation only target visible matches.
+                let visible = visibility.get(parent);
+                if (visible === undefined) {
+                    visible = parent.checkVisibility({
+                        checkOpacity: true,
+                        checkVisibilityCSS: true,
+                    });
+                    visibility.set(parent, visible);
+                }
+                return visible ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+            },
+        });
+
+        const blocks = new Map();
+        let node;
+        while ((node = walker.nextNode())) {
+            const block = findBlockAncestor(node.parentElement, blockCache);
+            let bucket = blocks.get(block);
+            if (!bucket) {
+                bucket = [];
+                blocks.set(block, bucket);
+            }
+            bucket.push(node);
+        }
+        return blocks;
+    }
+
+    // Join a block's text nodes into one string, recording where each node's
+    // text lands in the joined string so a match offset can be mapped back to
+    // the right node and its local range.
+    function buildSegments(textNodes) {
+        const segments = [];
+        let joined = '';
+        textNodes.forEach(node => {
+            const value = node.nodeValue;
+            segments.push({ node, start: joined.length, length: value.length });
+            joined += value;
+        });
+        return { segments, joined };
+    }
+
+    // Find every occurrence of `pattern` in `joined` as [start, end) offset
+    // pairs. `needle` is the lowercased query for a cheap pre-check: the regex
+    // is just an escaped literal, so if the needle isn't present the regex
+    // can't match either and we skip the scan entirely.
+    function findRanges(joined, pattern, needle) {
+        if (joined.length === 0) return [];
+        if (!joined.toLowerCase().includes(needle)) return [];
+        pattern.lastIndex = 0;
+        const ranges = [];
+        let m;
+        while ((m = pattern.exec(joined)) !== null) {
+            if (m[0].length === 0) {
+                pattern.lastIndex++;
+                continue;
+            }
+            ranges.push([m.index, m.index + m[0].length]);
+        }
+        return ranges;
+    }
+
+    // Wrap each match's text in its own `.rfa-search-match` span(s), returning
+    // one group of pieces per match. A match that crosses sibling text nodes
+    // wraps each piece separately. Matches and segments are processed
+    // back-to-front so each DOM split only invalidates offsets already handled.
+    function wrapRanges(ranges, segments) {
+        const wrapped = new Array(ranges.length);
+        for (let i = ranges.length - 1; i >= 0; i--) {
+            const [matchStart, matchEnd] = ranges[i];
+            const pieces = [];
+            for (let s = segments.length - 1; s >= 0; s--) {
+                const seg = segments[s];
+                const segEnd = seg.start + seg.length;
+                if (segEnd <= matchStart || seg.start >= matchEnd) continue;
+                const localStart = Math.max(0, matchStart - seg.start);
+                const localEnd = Math.min(seg.length, matchEnd - seg.start);
+                if (localStart >= localEnd) continue;
+                const range = document.createRange();
+                range.setStart(seg.node, localStart);
+                range.setEnd(seg.node, localEnd);
+                const span = document.createElement('span');
+                span.className = MATCH_CLASS;
+                range.surroundContents(span);
+                pieces.unshift(span);
+            }
+            wrapped[i] = pieces;
+        }
+        return wrapped;
+    }
+
     function createPageSearch() {
         return {
             open: false,
             query: '',
             currentMatch: 0,
-            // Each entry is one logical match: an array of one or more spans.
-            // A query that crosses sibling text nodes wraps each piece in its
-            // own `.rfa-search-match` span, all grouped under a single entry.
+            // Each entry is one match's pieces: a single `.rfa-search-match`
+            // span, or several when the match crosses sibling token spans.
             matches: [],
 
+            // Cmd/Ctrl+F is handled here, not through the global keymap store,
+            // because find must fire while focus is inside its own search input
+            // (to re-select and re-run the query) — the very case the store
+            // suppresses via its editable-target guard. It also owns local
+            // open/refresh/$refs state the store can't reach.
             handleKeydown(e) {
                 if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
                     e.preventDefault();
@@ -99,20 +214,44 @@
             updateCurrent(scroll) {
                 const total = this.matches.length;
                 const badge = `${this.currentMatch} of ${total}`;
-                this.matches.forEach((spans, i) => {
+                this.matches.forEach((pieces, i) => {
                     const isCurrent = (i + 1) === this.currentMatch;
-                    spans.forEach((el, j) => {
-                        el.classList.toggle(CURRENT_CLASS, isCurrent);
+                    pieces.forEach((piece, j) => {
+                        piece.classList.toggle(CURRENT_CLASS, isCurrent);
                         if (isCurrent && j === 0) {
-                            el.setAttribute('data-match-number', badge);
+                            piece.setAttribute('data-match-number', badge);
                         } else {
-                            el.removeAttribute('data-match-number');
+                            piece.removeAttribute('data-match-number');
+                            piece.style.removeProperty('--rfa-match-center');
                         }
                     });
-                    if (isCurrent && scroll && spans[0]) {
-                        spans[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    if (isCurrent) {
+                        this.centerBadge(pieces);
+                        if (scroll && pieces[0]) {
+                            pieces[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+                        }
                     }
                 });
+            },
+
+            // Center the "X of Y" pill on the horizontal midpoint of the whole
+            // match. The pill renders via ::after on the first piece only, but a
+            // match can cross several token spans — without this it sits under
+            // the first piece and reads as off-center. We hand CSS the offset
+            // (measured from the first piece's left edge) via --rfa-match-center
+            // and fall back to `left: 50%` for single-piece matches and any case
+            // we can't measure (a wrapped match, or zero-size rects in tests).
+            centerBadge(pieces) {
+                const anchor = pieces[0];
+                if (!anchor) return;
+                anchor.style.removeProperty('--rfa-match-center');
+                if (pieces.length < 2) return;
+                const first = anchor.getBoundingClientRect();
+                const last = pieces[pieces.length - 1].getBoundingClientRect();
+                const sameLine = Math.abs(last.top - first.top) < 1;
+                const width = last.right - first.left;
+                if (!sameLine || width <= 0) return;
+                anchor.style.setProperty('--rfa-match-center', `${width / 2}px`);
             },
 
             close() {
@@ -138,114 +277,14 @@
             markMatches(query) {
                 const pattern = new RegExp(escapeRegex(query), 'gi');
                 const needle = query.toLowerCase();
-                // Sibling text nodes share a parent (very common in diff rows),
-                // so memoize the per-walk visibility answer to avoid re-walking
-                // the style chain for each one.
-                const visibility = new WeakMap();
-                const blockCache = new WeakMap();
-                const walker = document.createTreeWalker(
-                    document.body,
-                    NodeFilter.SHOW_TEXT,
-                    {
-                        acceptNode(node) {
-                            if (!node.nodeValue || !node.nodeValue.length) {
-                                return NodeFilter.FILTER_REJECT;
-                            }
-                            const parent = node.parentElement;
-                            if (!parent || parent.closest(SKIP_SELECTOR)) {
-                                return NodeFilter.FILTER_REJECT;
-                            }
-                            // Skip collapsed/hidden sections (x-show, [hidden],
-                            // display:none, visibility:hidden, opacity:0) so
-                            // the counter and next/prev navigation only target
-                            // visible matches.
-                            let visible = visibility.get(parent);
-                            if (visible === undefined) {
-                                visible = parent.checkVisibility({
-                                    checkOpacity: true,
-                                    checkVisibilityCSS: true,
-                                });
-                                visibility.set(parent, visible);
-                            }
-                            return visible ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-                        },
-                    }
-                );
-
-                // Group accepted text nodes by their nearest block-level
-                // ancestor. Each block becomes one searchable string, so a
-                // query can cross sibling token spans inside a line but not
-                // hop between lines/cells/paragraphs.
-                const groups = new Map();
-                let node;
-                while ((node = walker.nextNode())) {
-                    const block = findBlockAncestor(node.parentElement, blockCache);
-                    let bucket = groups.get(block);
-                    if (!bucket) {
-                        bucket = [];
-                        groups.set(block, bucket);
-                    }
-                    bucket.push(node);
-                }
-
                 const matches = [];
-                groups.forEach(textNodes => {
-                    const segments = [];
-                    let joined = '';
-                    textNodes.forEach(n => {
-                        const value = n.nodeValue;
-                        segments.push({ node: n, start: joined.length, length: value.length });
-                        joined += value;
-                    });
-                    if (joined.length === 0) return;
-                    // Cheap substring pre-check: the regex is just an escaped
-                    // literal, so if the lowercased needle isn't in the joined
-                    // string the regex can't match either.
-                    if (!joined.toLowerCase().includes(needle)) return;
-
-                    pattern.lastIndex = 0;
-                    const ranges = [];
-                    let m;
-                    while ((m = pattern.exec(joined)) !== null) {
-                        if (m[0].length === 0) {
-                            pattern.lastIndex++;
-                            continue;
-                        }
-                        ranges.push([m.index, m.index + m[0].length]);
-                    }
-                    if (ranges.length === 0) return;
-
-                    // Wrap each match's text-node ranges in their own
-                    // `.rfa-search-match` span. Process matches back-to-front
-                    // and segments back-to-front within a match so each DOM
-                    // split only invalidates offsets we've already handled.
-                    const wrapped = new Array(ranges.length);
-                    for (let i = ranges.length - 1; i >= 0; i--) {
-                        const [matchStart, matchEnd] = ranges[i];
-                        const spans = [];
-                        for (let s = segments.length - 1; s >= 0; s--) {
-                            const seg = segments[s];
-                            const segEnd = seg.start + seg.length;
-                            if (segEnd <= matchStart || seg.start >= matchEnd) continue;
-                            const localStart = Math.max(0, matchStart - seg.start);
-                            const localEnd = Math.min(seg.length, matchEnd - seg.start);
-                            if (localStart >= localEnd) continue;
-                            const range = document.createRange();
-                            range.setStart(seg.node, localStart);
-                            range.setEnd(seg.node, localEnd);
-                            const span = document.createElement('span');
-                            span.className = MATCH_CLASS;
-                            range.surroundContents(span);
-                            spans.unshift(span);
-                        }
-                        wrapped[i] = spans;
-                    }
-
-                    wrapped.forEach(spans => {
-                        if (spans && spans.length > 0) matches.push(spans);
+                groupTextNodesByBlock(document.body).forEach(textNodes => {
+                    const { segments, joined } = buildSegments(textNodes);
+                    const ranges = findRanges(joined, pattern, needle);
+                    wrapRanges(ranges, segments).forEach(pieces => {
+                        if (pieces.length > 0) matches.push(pieces);
                     });
                 });
-
                 return matches;
             },
         };
