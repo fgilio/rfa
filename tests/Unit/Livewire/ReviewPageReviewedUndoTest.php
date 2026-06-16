@@ -233,7 +233,11 @@ test('toggleReviewed renders source diff list island when hide-reviewed visibili
         ->and($component->instance()->reviewState()->isFileVisible('id-foo'))->toBeFalse()
         ->and($component->instance()->reviewState()->isFileVisible('id-bar'))->toBeTrue()
         ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-bar-')
-        ->and(renderedIslandFragments($component, 'source-diff-list'))->not->toContain('wire:key="id-foo-');
+        ->and(renderedIslandFragments($component, 'source-diff-list'))->not->toContain('wire:key="id-foo-')
+        // The visible-file counts live outside the sidebar list, so a skipRender
+        // toggle must refresh them through their own islands or they go stale.
+        ->and(renderedIslandFragments($component, 'file-count'))->toContain('5/6 files')
+        ->and(renderedIslandFragments($component, 'file-list-header'))->toContain('Files');
 });
 
 test('hide-reviewed actions render diff-file children from fresh review state', function () {
@@ -247,14 +251,16 @@ test('hide-reviewed actions render diff-file children from fresh review state', 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
         ->and(renderedIslandFragments($component, 'reviewed-summary'))->toContain('aria-label="Show all files"')
         ->and(renderedIslandFragments($component, 'source-diff-list'))->not->toContain('wire:key="id-foo-')
-        ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-bar-');
+        ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-bar-')
+        ->and(renderedIslandFragments($component, 'file-count'))->toContain('5/6 files');
 
     $component->call('showAllFiles');
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
         ->and(renderedIslandFragments($component, 'reviewed-summary'))->toContain('aria-label="Hide reviewed"')
         ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-foo-')
-        ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-bar-');
+        ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-bar-')
+        ->and(renderedIslandFragments($component, 'file-count'))->toContain('6 files');
 });
 
 test('the reviewed counter reflects new marks in hide-reviewed mode', function () {
@@ -267,6 +273,23 @@ test('the reviewed counter reflects new marks in hide-reviewed mode', function (
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
         ->and(renderedIslandFragments($component, 'reviewed-summary'))->toContain('2/6 reviewed');
+});
+
+test('hide-reviewed keeps the visible-file count band in step instead of going stale', function () {
+    // The status-strip count ("N files" / "X/N files") and the sidebar "Files"
+    // header read visibleFileCount but render OUTSIDE the file-list island. On
+    // the skipRender visibility path they must refresh through file-count /
+    // file-list-header islands, otherwise the band keeps showing the pre-hide
+    // total while the sidebar and diff list correctly drop the reviewed file.
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
+        ->call('hideReviewedFiles')
+        ->dispatch('toggle-reviewed', filePath: 'src/Bar.php');
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
+        ->and($component->instance()->reviewState()->visibleFileCount)->toBe(4)
+        ->and(renderedIslandFragments($component, 'file-count'))->toContain('4/6 files')
+        ->and(renderedIslandFragments($component, 'file-list-header'))->toContain('Files');
 });
 
 test('marking a file broadcasts an authoritative file-reviewed-changed so DiffFile converges to the server state', function () {

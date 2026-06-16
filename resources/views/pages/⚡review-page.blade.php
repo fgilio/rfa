@@ -933,21 +933,13 @@ new #[Layout('layouts.app')] class extends Component
             ->all();
     }
 
-    private function reviewedChangeNeedsSourceDiffListRender(): bool
-    {
-        // Only Hide-reviewed mode lets a reviewed toggle change the server-visible
-        // list. A path filter is reviewed-independent (ReviewStateService only
-        // drops files for reviewed-ness when hideReviewed is on), so refreshing
-        // the source diff list on a filter-only toggle is wasted work on a
-        // latency-sensitive path.
-        return $this->hideReviewed;
-    }
-
     /**
      * Settle the response after a reviewed-state change.
      *
-     * The affected regions are intentionally islands: summary controls, sidebar
-     * file list, and (only while hiding reviewed files) the source diff list.
+     * The affected regions are intentionally islands: summary controls and the
+     * sidebar file list always; the visibility islands (source diff list and the
+     * visible-file counts) only while hiding reviewed files, since that is the
+     * only mode where a toggle drops a file from the visible set.
      */
     private function settleReviewedRender(): void
     {
@@ -957,32 +949,53 @@ new #[Layout('layouts.app')] class extends Component
         $this->renderIsland('reviewed-summary');
         $this->renderIsland('file-list');
 
-        if ($this->reviewedChangeNeedsSourceDiffListRender()) {
-            $this->renderIsland('source-diff-list');
+        // Only Hide-reviewed mode lets a reviewed toggle change the server-visible
+        // list. A path filter is reviewed-independent (ReviewStateService only
+        // drops files for reviewed-ness when hideReviewed is on), so refreshing
+        // the visibility islands on a filter-only toggle is wasted work on a
+        // latency-sensitive path.
+        if ($this->hideReviewed) {
+            $this->renderVisibilityIslands();
         }
     }
 
     private function settleReviewedVisibilityRender(): void
     {
         $this->forgetReviewState();
+
         $this->skipRender();
         $this->renderIsland('reviewed-summary');
         $this->renderIsland('file-list');
-        $this->renderIsland('source-diff-list');
+        $this->renderVisibilityIslands();
     }
 
     private function settleRecentlyReviewedRender(): void
     {
         $this->forgetReviewState();
 
-        if (! $this->hideReviewed) {
-            $this->skipRender();
-
-            return;
-        }
-
         $this->skipRender();
-        $this->renderIsland('file-list');
+
+        // The Recently-reviewed group lives inside the file-list island and only
+        // shows in Hide-reviewed mode, so nothing else needs refreshing here.
+        if ($this->hideReviewed) {
+            $this->renderIsland('file-list');
+        }
+    }
+
+    /**
+     * Refresh every island that reflects which files are currently visible.
+     *
+     * Dropping a file in/out of the visible set changes the source diff list and
+     * the visible-file counts that live OUTSIDE the sidebar file list: the
+     * status-strip count band and the sidebar "Files" header (the j/k hint and
+     * copy-paths trigger). Each is its own island so a skipRender() reviewed
+     * toggle keeps them in step instead of leaving a stale "N files" behind.
+     */
+    private function renderVisibilityIslands(): void
+    {
+        $this->renderIsland('source-diff-list');
+        $this->renderIsland('file-count');
+        $this->renderIsland('file-list-header');
     }
 
     private function forgetReviewState(): void
@@ -1377,6 +1390,23 @@ new #[Layout('layouts.app')] class extends Component
 
         <x-slot:below>
             <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" :review-state="$this->reviewState">
+                {{-- File count band. Its own island so Hide-reviewed (a skipRender
+                     path that re-renders islands, not the strip) keeps "N files" /
+                     "X/N files" in step with the visible set instead of leaving a
+                     stale total behind. always:true keeps it current on full
+                     renders too. Reads only $this state (island scope can't see
+                     template locals). --}}
+                <x-slot:fileCount>
+                    @island(name: 'file-count', always: true)
+                        <span>
+                            @if ($this->reviewState->visibleFileCount === $this->reviewState->totalFileCount)
+                                {{ $this->reviewState->totalFileCount }} {{ Str::plural('file', $this->reviewState->totalFileCount) }}
+                            @else
+                                {{ $this->reviewState->visibleFileCount }}/{{ $this->reviewState->totalFileCount }} {{ Str::plural('file', $this->reviewState->totalFileCount) }}
+                            @endif
+                        </span>
+                    @endisland
+                </x-slot:fileCount>
                 {{-- Reviewed-progress summary. Wrapped in a Livewire island so a
                      mark/un-mark re-renders just this counter and meter, not the
                      2200-line review page. Reads only $this state (island scope
@@ -1448,6 +1478,12 @@ new #[Layout('layouts.app')] class extends Component
                     <div class="border-b border-gh-border my-3"></div>
                 @endif
 
+                {{-- Header island: the j/k hint and copy-paths trigger both read
+                     visibleFileCount, which Hide-reviewed changes. Kept separate
+                     from the file-list island below so it can refresh on the
+                     skipRender visibility path without re-rendering (and stealing
+                     focus from) the filter input that sits between them. --}}
+                @island(name: 'file-list-header', always: true)
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-2">
                         <span class="section-label text-gh-muted">Files</span>
@@ -1467,6 +1503,7 @@ new #[Layout('layouts.app')] class extends Component
                         />
                     @endif
                 </div>
+                @endisland
                 <flux:input
                     wire:model.live.debounce.150ms="fileFilter"
                     placeholder="Filter files..."
