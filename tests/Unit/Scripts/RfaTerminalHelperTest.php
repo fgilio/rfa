@@ -23,7 +23,12 @@ SH);
 });
 
 test('terminal helper replaces a stale inbox file with the inbox directory', function () {
-    $appSupportPath = $this->homePath.'/Library/Application Support/com.fgilio.rfa';
+    // Mirror the script's own `uname` branch so the test targets the same inbox
+    // base the helper actually writes to: macOS uses Application Support, every
+    // other platform (e.g. the Linux CI runner) uses the XDG data dir.
+    $appSupportPath = PHP_OS_FAMILY === 'Darwin'
+        ? $this->homePath.'/Library/Application Support/com.fgilio.rfa'
+        : $this->homePath.'/.local/share/com.fgilio.rfa';
 
     File::makeDirectory($appSupportPath, 0755, true);
     File::put($appSupportPath.'/inbox', "/stale/repo\n");
