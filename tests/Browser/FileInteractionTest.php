@@ -369,11 +369,19 @@ test('hide reviewed removes checked diff files from the rendered page', function
     expect(collect($diffFiles)->pluck('path')->all())->not->toContain($markedPath);
     expect($page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->count())->toBe(2);
 
+    // The status-strip count band renders outside the islands the toggle
+    // refreshes, so it must drop to the visible total via its own island rather
+    // than stay stale at "3 files".
+    $page->page()->getByTestId('status-strip')->getByText('2/3 files')->waitFor(['state' => 'visible']);
+
     $page->page()->getByRole('button', ['name' => 'Show all files'])->click();
     $diffFiles = waitForRenderedDiffFileCount($page, 3);
 
     expect($diffFiles)->toHaveCount(3);
     expect(collect($diffFiles)->pluck('path')->all())->toContain($markedPath);
+
+    // Showing all files clears the partial-visibility count.
+    $page->page()->getByTestId('status-strip')->getByText('2/3 files')->waitFor(['state' => 'hidden']);
 });
 
 test('clicking sidebar file scrolls to it', function () {
