@@ -193,12 +193,12 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `toggle-reviewed` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{filePath}` |
 | `comment-updated` | ReviewPage PHP dispatch | DiffFile Alpine `@window` | `{fileId, comments}` |
 | `copy-to-clipboard` | DiffFile Alpine/PHP, ReviewPage PHP, comment-display, comments-drawer, branch-explorer | layout `<body>` Alpine `@window` | `{text, toast?}` (if `toast` string is set, a success toast with that text shows on success) |
-| `file-reviewed-changed` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{id, reviewed}` |
+| `file-reviewed-changed` | DiffFile Alpine `$dispatch`, sidebar reviewed button | DiffFile Alpine `@window` (targeted by `id`) | `{id, reviewed}` |
 | `collapse-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-file` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | `{id}` |
 | `undo-available` | ReviewPage PHP dispatch | undo-toast Alpine `@window` | `{type: 'delete'\|'clear-all'\|'discard'\|'mark-reviewed', payload: comment[]\|int\|{filePaths: string[]}, message: string}` |
-| `reviewed-files-reverted` | ReviewPage PHP dispatch (`unmarkReviewed`) | DiffFile + ReviewPage Alpine `@window` | `{fileIds: string[]}` |
+| `reviewed-files-reverted` | ReviewPage PHP dispatch (`unmarkReviewed`) | DiffFile Alpine `@window` | `{fileIds: string[]}` |
 | `discard-file` | DiffFile Alpine `$dispatch` | ReviewPage `#[On]` | `{fileId}` |
 | `fingerprint-reset` | ReviewPage PHP dispatch | change-polling Alpine `@window` | none |
 | `open-remote-menu` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{target: 'file'\|'line', fileId, filePath, oldPath, status, side?, start?, end?, clientX, clientY}` |

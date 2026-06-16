@@ -1,16 +1,8 @@
 <?php
 
-use App\Actions\AddCommentAction;
 use App\Actions\BackfillGlobalGitignoreAction;
-use App\Actions\CleanExpiredTrashAction;
-use App\Actions\DeleteCommentAction;
 use App\Actions\DeleteReviewFilesAction;
-use App\Actions\DeleteTrashedFileAction;
 use App\Actions\DeriveReviewStateAction;
-use App\Actions\DiscardFileChangesAction;
-use App\Actions\ExportReviewAction;
-use App\Actions\ExportReviewSnapshotAction;
-use App\Actions\GetCurrentHeadAction;
 use App\Actions\GetFileListAction;
 use App\Actions\GroupReviewFilesAction;
 use App\Actions\IsSinceBaseViewAction;
@@ -23,28 +15,27 @@ use App\Actions\ResolveProjectAction;
 use App\Actions\ResolveRangeAction;
 use App\Actions\ResolveRangeToWorkingAction;
 use App\Actions\ResolveStartupRouteAction;
-use App\Actions\RestoreDiscardedFileAction;
+use App\Actions\ReviewCommentWorkflowAction;
 use App\Actions\ScanReviewFilesAction;
 use App\Actions\SessionStateAction;
 use App\Actions\ToggleReviewedAction;
 use App\Actions\UnlinkExternalPathAction;
-use App\Actions\UpdateCommentAction;
 use App\Actions\UpdateProjectSettingAction;
 use App\Concerns\InteractsWithRemoteLinks;
-use App\DTOs\CurrentHeadResult;
+use App\Concerns\ReviewPage\ExportsReview;
+use App\Concerns\ReviewPage\ManagesReviewTrash;
+use App\Concerns\ReviewPage\ReviewsBranchDivergence;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
+use App\DTOs\ReviewCommentMutation;
 use App\DTOs\ReviewState;
-use App\Enums\DiffSide;
 use App\Enums\DivergenceState;
-use App\Enums\GitRef;
 use App\Enums\LastViewKind;
 use App\Enums\LastViewMode;
 use App\Events\HardReloadShortcutPressed;
 use App\Events\RefreshShortcutPressed;
 use App\Exceptions\GitCommandException;
 use App\Listeners\HandleMenuItemClicked;
-use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
@@ -59,11 +50,12 @@ use function Illuminate\Support\defer;
 new #[Layout('layouts.app')] class extends Component
 {
     use InteractsWithRemoteLinks;
+    use ExportsReview;
+    use ManagesReviewTrash;
+    use ReviewsBranchDivergence;
 
     /** Undo-toast `type` for the "marked file as reviewed" action. */
     private const UNDO_TYPE_MARK_REVIEWED = 'mark-reviewed';
-
-    private const UNDO_TYPE_SWITCH_BRANCH = 'switch-branch';
 
     /** @var array<int, array<string, mixed>> */
     public array $files = [];
@@ -162,15 +154,29 @@ new #[Layout('layouts.app')] class extends Component
 
     /*
     |----------------------------------------------------------------------
-    | Responsibility clusters (5):
-    |   1. Initialization & Diff Context  (mount..refreshFileList)
-    |   2. Comment Management             (addComment..restoreComments)
-    |   3. Trash & Discard                (discardFileChanges..undo)
-    |   4. Review State & Export           (toggleReviewed..submitReview)
-    |   5. Computed, Helpers & Persistence (groupedComments..loadTrashedFiles)
+    | This page stays ONE Livewire component: it renders N diff-file children,
+    | and a parent re-render rehydrates them all (the 1+N hazard, see
+    | resources/CLAUDE.md), so its sections cannot be nested sub-components.
+    | The class is the event and render coordinator. Cohesive clusters with
+    | little render coupling live in App\Concerns\ReviewPage traits; pure
+    | decision and write logic lives in Actions.
     |
-    | Shared deps: $files, $comments, $reviewedFiles, saveSession()
-    | Extraction blocker: 1+N hydration (see resources/CLAUDE.md)
+    | Traits:
+    |   ReviewsBranchDivergence  HEAD polling + divergence state machine
+    |   ManagesReviewTrash       discard / restore / trash list
+    |   ExportsReview            submit / snapshot / copy paths
+    |
+    | Component regions:
+    |   1. Initialization & Diff Context   (mount..fileFingerprint)
+    |   2. Comment Management              (addComment..restoreComments)
+    |   3. Undo coordinator               (undo, unmarkReviewed)
+    |   4. Review State                   (toggleReviewed..updatedGlobalComment)
+    |   5. Computed, Helpers & Persistence (reviewState..saveSession)
+    |
+    | Shared deps: $files, $comments, $reviewedFiles, saveSession(),
+    | buildDiffTarget(), refreshFileList(). The coordinator keeps every method
+    | that calls skipRender/renderIsland/dispatch, so the 1+N render contract
+    | reads in one place.
     |----------------------------------------------------------------------
     */
 
@@ -426,7 +432,7 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $this->externalPaths = $updated;
-        $this->reloadAfterExternalPathsChange();
+        $this->reloadSessionAfterFileListChange();
         Flux::toast(variant: 'success', text: 'Linked '.basename($picked));
     }
 
@@ -442,14 +448,20 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $this->externalPaths = $updated;
-        $this->reloadAfterExternalPathsChange();
+        $this->reloadSessionAfterFileListChange();
 
         if ($removed !== null) {
             Flux::toast(text: 'Unlinked '.$removed);
         }
     }
 
-    private function reloadAfterExternalPathsChange(): void
+    /**
+     * Reload the file list and re-derive session state after a change that
+     * only affects which files are listed (external paths, global .gitignore).
+     * Lighter than rehydrateForTarget: it leaves the review-pair scan and trash
+     * untouched because neither is sensitive to file-list filtering.
+     */
+    private function reloadSessionAfterFileListChange(): void
     {
         $this->refreshFileList();
 
@@ -469,16 +481,7 @@ new #[Layout('layouts.app')] class extends Component
             'respect_global_gitignore' => $this->respectGlobalGitignore,
         ]);
 
-        $this->refreshFileList();
-
-        $target = $this->buildDiffTarget();
-        $session = app(SessionStateAction::class)->handle($this->repoPath, $this->files, $this->projectId, $target);
-        $this->comments = $session['comments'];
-        $this->reviewedFiles = $session['reviewedFiles'];
-
-        if (! empty($session['orphanedPaths'])) {
-            $this->injectOrphanedFiles($session['orphanedPaths']);
-        }
+        $this->reloadSessionAfterFileListChange();
     }
 
     /**
@@ -603,256 +606,6 @@ new #[Layout('layouts.app')] class extends Component
 
     // endregion: Initialization & Diff Context
 
-    // region: Branch Divergence
-
-    #[On('head-divergence-transitioned')]
-    public function checkHeadDivergence(): void
-    {
-        if (! $this->refreshDivergenceState()) {
-            $this->skipRender();
-        }
-    }
-
-    /**
-     * HEAD advanced on the same branch the user is reviewing, typically
-     * because they just committed. Reload the file list so the diff reflects
-     * the new commit. Commit/range modes pin both endpoints, so a HEAD move
-     * cannot affect what's shown; skip render in that case.
-     */
-    #[On('head-advanced-on-branch')]
-    public function refreshAfterHeadAdvance(): void
-    {
-        if ($this->isCommitMode()) {
-            $this->skipRender();
-
-            return;
-        }
-
-        $this->softRefresh();
-    }
-
-    /**
-     * Recompute divergence state. Returns true if state changed since the last
-     * check (i.e. the caller should render), false when the caller can skip.
-     * Kept separate from `checkHeadDivergence()` so callers like `softRefresh`
-     * can update divergence without latching `skipRender()` onto a response
-     * that still needs to morph because files did change.
-     */
-    private function refreshDivergenceState(): bool
-    {
-        if ($this->isCommitMode()) {
-            $changed = ! $this->divergenceChecked;
-            $this->divergenceChecked = true;
-
-            return $changed;
-        }
-
-        $before = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->projectBranch];
-
-        $head = app(GetCurrentHeadAction::class)->handle($this->repoPath, $this->projectBranch ?: null);
-        $this->resolveDivergenceState($head);
-
-        $after = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->projectBranch];
-
-        $changed = ! $this->divergenceChecked || $before !== $after;
-        $this->divergenceChecked = true;
-
-        return $changed;
-    }
-
-    private function resolveDivergenceState(CurrentHeadResult $head): void
-    {
-        // Sentinel: GetCurrentHeadAction returns sha='' when git fails transiently
-        // (e.g. mid-rebase). Leave state untouched and retry next tick.
-        if ($head->sha === '') {
-            return;
-        }
-
-        if (! $head->detached && $head->branch === $this->projectBranch) {
-            $this->markAligned();
-
-            return;
-        }
-
-        $target = $this->projectBranch;
-
-        if ($head->detached) {
-            if ($this->dismissedAtHead === $head->sha) {
-                $this->markAligned();
-
-                return;
-            }
-
-            $this->divergenceState = DivergenceState::Detached;
-            $this->divergenceContext = [
-                'target' => $target,
-                'currentBranch' => null,
-                'currentSha' => $head->sha,
-                'shortSha' => substr($head->sha, 0, 7),
-            ];
-
-            return;
-        }
-
-        if ($target !== '' && $head->targetExists === false) {
-            if ($this->dismissedAtBranch === $head->branch) {
-                $this->markAligned();
-
-                return;
-            }
-
-            $this->divergenceState = DivergenceState::MissingTarget;
-            $this->divergenceContext = [
-                'target' => $target,
-                'currentBranch' => $head->branch,
-                'currentSha' => $head->sha,
-                'shortSha' => substr($head->sha, 0, 7),
-            ];
-
-            return;
-        }
-
-        if (! $this->hasPersistedComments()) {
-            $this->autoFollowToHead((string) $head->branch);
-
-            return;
-        }
-
-        // Suppress by branch identity, not sha: once the user opts to keep reviewing
-        // their target, committing on the diverged branch shouldn't re-nag every commit.
-        if ($this->dismissedAtBranch === $head->branch) {
-            $this->markAligned();
-
-            return;
-        }
-
-        $this->divergenceState = DivergenceState::Diverged;
-        $this->divergenceContext = [
-            'target' => $target,
-            'currentBranch' => $head->branch,
-            'currentSha' => $head->sha,
-            'shortSha' => substr($head->sha, 0, 7),
-            'commentCount' => $this->persistedCommentCount(),
-        ];
-    }
-
-    public function switchReviewToHead(): void
-    {
-        $head = app(GetCurrentHeadAction::class)->handle($this->repoPath, $this->projectBranch ?: null);
-
-        if ($head->detached || $head->branch === null || $head->branch === '') {
-            return;
-        }
-
-        // Capture before autoFollow clears state, so the switch stays undoable.
-        $wasDiverged = $this->divergenceState === DivergenceState::Diverged;
-        $fromBranch = $this->projectBranch;
-
-        $this->autoFollowToHead($head->branch);
-
-        // Only offer undo when leaving a real, still-existing target (Diverged).
-        // MissingTarget's old branch is gone, so undoing would re-point at nothing.
-        if ($wasDiverged && $fromBranch !== '' && $fromBranch !== $head->branch) {
-            $this->dispatch(
-                'undo-available',
-                type: self::UNDO_TYPE_SWITCH_BRANCH,
-                payload: ['fromBranch' => $fromBranch],
-                message: 'Switched review to '.$head->branch,
-            );
-        }
-    }
-
-    public function keepReviewing(): void
-    {
-        $branch = $this->divergenceContext['currentBranch'] ?? null;
-
-        if (is_string($branch) && $branch !== '') {
-            // Diverged / missing-target: suppress by branch identity.
-            $this->dismissedAtBranch = $branch;
-        } else {
-            // Detached: no branch to key on, so fall back to the sha.
-            $sha = $this->divergenceContext['currentSha'] ?? null;
-
-            if (is_string($sha) && $sha !== '') {
-                $this->dismissedAtHead = $sha;
-            }
-        }
-
-        $this->markAligned();
-    }
-
-    public function dismissDetachedBanner(): void
-    {
-        $this->keepReviewing();
-    }
-
-    public function dismissMissingTarget(): void
-    {
-        $this->keepReviewing();
-    }
-
-    /** @param array{fromBranch?: string} $payload */
-    public function restoreReviewBranch(array $payload): void
-    {
-        $branch = $payload['fromBranch'] ?? null;
-
-        if (is_string($branch) && $branch !== '') {
-            $this->autoFollowToHead($branch);
-
-            // autoFollowToHead() aligns to the restored target, which is right for
-            // its "follow HEAD" callers. Here HEAD is still on the branch we
-            // switched away from, so the review is diverged again. Recompute now:
-            // the head poller won't re-fire (HEAD's identity hasn't changed) and
-            // would otherwise leave the divergence marker hidden indefinitely.
-            $this->refreshDivergenceState();
-        }
-    }
-
-    private function autoFollowToHead(string $newBranch): void
-    {
-        // Race guard: overlapping polls during a slow rehydrate can re-enter here.
-        if ($this->projectBranch === $newBranch) {
-            $this->markAligned();
-
-            return;
-        }
-
-        app(UpdateProjectSettingAction::class)->handle($this->projectId, ['branch' => $newBranch]);
-
-        $this->projectBranch = $newBranch;
-        $this->dismissedAtHead = null;
-        $this->dismissedAtBranch = null;
-        $this->markAligned();
-
-        $this->rehydrateForTarget();
-    }
-
-    private function markAligned(): void
-    {
-        $this->divergenceState = DivergenceState::Aligned;
-        $this->divergenceContext = [];
-    }
-
-    private function hasPersistedComments(): bool
-    {
-        return $this->persistedCommentQuery()->exists();
-    }
-
-    private function persistedCommentCount(): int
-    {
-        return $this->persistedCommentQuery()->count();
-    }
-
-    /** @return \Illuminate\Database\Eloquent\Builder<\App\Models\Comment> */
-    private function persistedCommentQuery(): \Illuminate\Database\Eloquent\Builder
-    {
-        $projectId = $this->projectId === 0 ? null : $this->projectId;
-
-        return \App\Models\Comment::forProjectOrRepo($projectId, $this->repoPath);
-    }
-
-    // endregion: Branch Divergence
-
     // region: Comment Management
 
     #[On('add-comment')]
@@ -869,228 +622,100 @@ new #[Layout('layouts.app')] class extends Component
 
     private function createComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, ?string $lineSnippet, bool $isDraft): void
     {
-        $comment = app(AddCommentAction::class)->handle(
-            $this->repoPath,
-            $this->projectId ?: null,
-            $this->buildDiffTarget(),
-            $this->files,
-            $fileId,
-            $side,
-            $startLine,
-            $endLine,
-            $body,
-            $isDraft,
-            $lineSnippet,
+        $this->applyCommentMutation(
+            app(ReviewCommentWorkflowAction::class)->handle(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $this->buildDiffTarget(),
+                $this->files,
+                $this->comments,
+                $fileId,
+                $side,
+                $startLine,
+                $endLine,
+                $body,
+                $isDraft,
+                $lineSnippet,
+            )
         );
-
-        if (! $comment) {
-            return;
-        }
-
-        $this->comments[] = $comment;
-        $this->dispatchFileComments($fileId);
-        $this->checkHeadDivergence();
-
-        // The new comment reaches its diff-file child via the comment-updated event
-        // (dispatchFileComments), so the parent never needs to re-render. Skipping it
-        // is the documented contract (CLAUDE.md skipRender table) and avoids a full
-        // parent render re-hydrating every diff-file child, the TooManyComponentsException
-        // hazard. Divergence transitions are surfaced by the head-divergence poller's
-        // own render path, not by piggybacking on comment writes.
-        $this->skipRender();
     }
 
     #[On('update-comment')]
     public function updateComment(string $commentId, string $body, bool $isDraft = false): void
     {
-        $index = collect($this->comments)->search(fn ($c) => $c['id'] === $commentId);
-
-        if ($index === false) {
-            return;
-        }
-
-        if (! app(UpdateCommentAction::class)->handle($commentId, $body, $isDraft)) {
-            return;
-        }
-
-        $this->comments[$index]['body'] = $body;
-        $this->comments[$index]['isDraft'] = $isDraft;
-        $fileId = $this->comments[$index]['fileId'];
-
-        $this->dispatchFileComments($fileId);
-        $this->skipRender();
+        $this->applyCommentMutation(
+            app(ReviewCommentWorkflowAction::class)->update($this->comments, $commentId, $body, $isDraft)
+        );
     }
 
     #[On('delete-comment')]
     public function deleteComment(string $commentId): void
     {
-        $deletedComment = collect($this->comments)->firstWhere('id', $commentId);
-        $fileId = $deletedComment['fileId'] ?? null;
+        $this->applyCommentMutation(
+            app(ReviewCommentWorkflowAction::class)->delete($this->comments, $commentId)
+        );
+    }
 
-        $result = app(DeleteCommentAction::class)->handle($this->comments, $commentId);
-
-        if ($result === null) {
+    /**
+     * Apply a comment-write result: swap in the new comments, push the change
+     * to each affected diff-file child via comment-updated, offer undo, and
+     * settle the render. A null mutation means the write was rejected, so the
+     * page renders its current state unchanged.
+     *
+     * The new comment reaches its child through the event, so the parent skips
+     * its own render where the mutation allows. That avoids re-hydrating every
+     * diff-file child (the TooManyComponentsException hazard) and keeps the 1+N
+     * contract. Divergence transitions surface through the head-divergence
+     * poller, not by piggybacking on comment writes.
+     */
+    private function applyCommentMutation(?ReviewCommentMutation $mutation): void
+    {
+        if ($mutation === null) {
             return;
         }
 
-        $this->comments = $result;
+        $this->comments = $mutation->comments;
 
-        if ($fileId) {
+        foreach ($mutation->affectedFileIds as $fileId) {
             $this->dispatchFileComments($fileId);
         }
 
-        if ($deletedComment) {
-            $this->dispatch('undo-available', type: 'delete', payload: [$deletedComment], message: 'Comment deleted');
+        if ($mutation->undo !== null) {
+            $this->dispatch(
+                'undo-available',
+                type: $mutation->undo['type'],
+                payload: $mutation->undo['payload'],
+                message: $mutation->undo['message'],
+            );
         }
 
-        $this->checkHeadDivergence();
+        if ($mutation->checksDivergence) {
+            $this->checkHeadDivergence();
+        }
+
+        if ($mutation->skipsRender) {
+            $this->skipRender();
+        }
     }
 
     public function clearAllComments(): void
     {
-        if (empty($this->comments)) {
-            return;
-        }
-
-        $deletedComments = $this->comments;
-
-        \App\Models\Comment::whereIn('id', array_column($deletedComments, 'id'))->delete();
-
-        $this->comments = [];
-
-        collect($deletedComments)
-            ->pluck('fileId')
-            ->unique()
-            ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
-
-        $count = count($deletedComments);
-        $this->dispatch('undo-available', type: 'clear-all', payload: $deletedComments,
-            message: "Cleared {$count} comment".($count === 1 ? '' : 's'));
-        $this->checkHeadDivergence();
+        $this->applyCommentMutation(
+            app(ReviewCommentWorkflowAction::class)->clearAll($this->comments)
+        );
     }
 
     /** @param  array<int, array<string, mixed>>  $comments */
     public function restoreComments(array $comments): void
     {
-        $merged = $this->mergeComments($comments);
-
-        if (empty($merged)) {
-            return;
-        }
-
-        foreach ($merged as $c) {
-            \App\Models\Comment::updateOrCreate(
-                ['id' => $c['id']],
-                [
-                    'project_id' => $this->projectId ?: null,
-                    'repo_path' => $this->repoPath,
-                    'origin_ref' => $c['originRef'] ?? GitRef::Working->value,
-                    'file_path' => $c['file'] ?? '',
-                    'side' => $c['side'] ?? DiffSide::Right->value,
-                    'start_line' => $c['startLine'] ?? null,
-                    'end_line' => $c['endLine'] ?? null,
-                    'file_content_hash' => $c['fileContentHash'] ?? null,
-                    'line_snippet' => $c['lineSnippet'] ?? null,
-                    'body' => $c['body'] ?? '',
-                    'is_draft' => (bool) ($c['isDraft'] ?? false),
-                    'submitted_at' => null,
-                ],
-            );
-        }
-
-        collect($merged)
-            ->pluck('fileId')
-            ->unique()
-            ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
-
-        $this->checkHeadDivergence();
+        $this->applyCommentMutation(
+            app(ReviewCommentWorkflowAction::class)->restore($this->repoPath, $this->projectId ?: null, $this->comments, $comments)
+        );
     }
 
     // endregion: Comment Management
 
-    // region: Trash & Discard
-
-    #[On('discard-file')]
-    public function discardFileChanges(string $fileId): void
-    {
-        if ($this->isCommitMode()) {
-            return;
-        }
-
-        $file = collect($this->files)->firstWhere('id', $fileId);
-        if (! $file || $file['status'] === 'commented' || ($file['isExternal'] ?? false)) {
-            return;
-        }
-
-        $fileComments = collect($this->comments)->where('fileId', $fileId)->values()->all();
-
-        try {
-            $trashRecord = app(DiscardFileChangesAction::class)->handle(
-                repoPath: $this->repoPath,
-                path: $file['path'],
-                status: $file['status'],
-                projectId: $this->projectId,
-                oldPath: $file['oldPath'] ?? null,
-                isUntracked: $file['isUntracked'] ?? false,
-                isSymlink: $file['isSymlink'] ?? false,
-                comments: $fileComments,
-            );
-        } catch (\Throwable $e) {
-            $message = $e instanceof GitCommandException ? $e->stderr : $e->getMessage();
-            Flux::toast(variant: 'danger', text: 'Discard failed for '.basename($file['path']).': '.$message);
-            $this->skipRender();
-
-            return;
-        }
-
-        // Remove comments for discarded file
-        $this->comments = array_values(
-            array_filter($this->comments, fn ($c) => $c['fileId'] !== $fileId)
-        );
-
-        // Invalidate every diff-cache variant for this file (base + :full-context).
-        $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
-        DiffCacheKey::forget($projectKey, $fileId, $this->buildDiffTarget()->contextKey());
-
-        unset($this->reviewedFiles[$file['path']]);
-
-        $this->refreshFileList();
-        $this->saveSession();
-        $this->loadTrashedFiles();
-
-        $commentCount = count($fileComments);
-        $message = $commentCount > 0
-            ? 'Discarded '.basename($file['path']).' - '.$commentCount.' comment'.($commentCount === 1 ? '' : 's').' removed'
-            : 'Discarded '.basename($file['path']);
-        $this->dispatch('undo-available', type: 'discard', payload: $trashRecord->id, message: $message);
-        $this->dispatch('fingerprint-reset');
-    }
-
-    public function restoreDiscardedFile(int $trashId): void
-    {
-        try {
-            $comments = app(RestoreDiscardedFileAction::class)->handle($trashId, $this->repoPath, $this->projectId);
-        } catch (\Throwable $e) {
-            $message = $e instanceof GitCommandException ? $e->stderr : $e->getMessage();
-            Flux::toast(variant: 'danger', text: 'Restore failed: '.$message);
-            $this->skipRender();
-
-            return;
-        }
-
-        $this->mergeComments($comments);
-        $this->refreshFileList();
-        $this->saveSession();
-        $this->loadTrashedFiles();
-
-        Flux::toast(text: 'Changes restored');
-    }
-
-    public function permanentlyDeleteTrashed(int $trashId): void
-    {
-        app(DeleteTrashedFileAction::class)->handle($trashId, $this->projectId);
-        $this->loadTrashedFiles();
-    }
+    // region: Undo coordinator
 
     public function undo(string $type, mixed $payload): void
     {
@@ -1137,14 +762,12 @@ new #[Layout('layouts.app')] class extends Component
             $this->dispatch('reviewed-files-reverted', fileIds: $revertedIds);
         }
 
-        if (! $this->reviewedChangeNeedsParentRender()) {
-            $this->skipRender();
-        }
+        $this->settleReviewedRender();
     }
 
-    // endregion: Trash & Discard
+    // endregion: Undo coordinator
 
-    // region: Review State & Export
+    // region: Review State
 
     #[On('toggle-reviewed')]
     public function toggleReviewed(string $filePath): void
@@ -1178,6 +801,13 @@ new #[Layout('layouts.app')] class extends Component
                     array_values(array_unique(array_merge([$fileId], $this->recentlyReviewedIds))),
                     0, 5,
                 );
+
+                // Authoritative mark broadcast, symmetric with the un-mark branch's
+                // reviewed-files-reverted. DiffFile's `reviewed` flag converges to the
+                // server state even when an optimistic dispatch carried a stale value
+                // (e.g. a rapid double-click on the sidebar button before the
+                // file-list island re-rendered with the fresh toggle direction).
+                $this->dispatch('file-reviewed-changed', id: $fileId, reviewed: true);
             }
 
             $this->dispatch(
@@ -1192,15 +822,14 @@ new #[Layout('layouts.app')] class extends Component
                 fn (string $id): bool => $id !== $fileId,
             ));
 
-            // Single un-mark transition uses the same broadcast as bulk undo so the
-            // sidebar's reviewedFiles map and DiffFile's `reviewed` mirror flip in lockstep
-            // Callers (e.g. the "Recently reviewed" group) don't have to dual-dispatch.
+            // Single un-mark transition uses the same broadcast as bulk undo so
+            // DiffFile's `reviewed` flag flips in step with the server state.
+            // The sidebar and counter refresh through their islands (see
+            // settleReviewedRender), so callers don't have to dual-dispatch.
             $this->dispatch('reviewed-files-reverted', fileIds: [$fileId]);
         }
 
-        if (! $this->reviewedChangeNeedsParentRender()) {
-            $this->skipRender();
-        }
+        $this->settleReviewedRender();
     }
 
     public function clearRecentlyReviewed(): void
@@ -1257,114 +886,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->skipRender();
     }
 
-    public function submitReview(): void
-    {
-        $this->saveSession();
-
-        $target = $this->buildDiffTarget();
-        $finalizedComments = array_values(array_filter($this->comments, fn ($c) => ! ($c['isDraft'] ?? false)));
-
-        $result = app(ExportReviewAction::class)->handle($this->repoPath, $finalizedComments, $this->globalComment, $this->files, $target);
-
-        $this->exportResult = $result['clipboard'];
-        $this->submitted = true;
-
-        $this->scanReviewFiles();
-
-        Flux::toast(variant: 'success', heading: 'Review submitted', text: $this->exportResult);
-        $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
-
-        // Never drop a comment silently: if the anchor resolver couldn't place some
-        // comments against this diff, they stay in the pool and the user is told.
-        $excludedCount = count($result['excludedComments'] ?? []);
-        if ($excludedCount > 0) {
-            Flux::toast(
-                variant: 'warning',
-                heading: $excludedCount === 1 ? '1 comment not included' : "{$excludedCount} comments not included",
-                text: "Their anchor could not be placed in this diff. They're kept for a later submit.",
-            );
-        }
-
-        // Only drop comments the export actually submitted; drafts and out-of-scope
-        // comments (e.g. hash-anchored from another selection) stay in the pool.
-        $submittedIds = $result['submittedIds'];
-        $affectedFileIds = collect($this->comments)
-            ->whereIn('id', $submittedIds)
-            ->pluck('fileId')
-            ->unique();
-        $this->comments = array_values(array_filter(
-            $this->comments,
-            fn ($c) => ! in_array($c['id'], $submittedIds, true),
-        ));
-        $this->globalComment = '';
-        $this->saveSession();
-
-        $affectedFileIds->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
-    }
-
-    public function exportSnapshot(): void
-    {
-        $this->saveSession();
-
-        $result = app(ExportReviewSnapshotAction::class)->handle(
-            repoPath: $this->repoPath,
-            files: $this->files,
-            comments: $this->comments,
-            globalComment: $this->globalComment,
-            reviewedFiles: $this->reviewedFiles,
-            target: $this->buildDiffTarget(),
-            sourceLabel: $this->projectName !== '' ? $this->projectName : basename($this->repoPath),
-        );
-
-        Flux::toast(variant: 'success', heading: 'Snapshot exported', text: $result['json']);
-        $this->dispatch('copy-to-clipboard', text: $result['clipboard'], toast: 'Snapshot path copied');
-    }
-
-    /**
-     * Copy the currently visible (filtered) file paths to the clipboard as bare
-     * names, repo-relative paths, or absolute paths. The visible set is derived
-     * server-side, so a filtered copy always matches what the user sees without
-     * the client reconstructing the list from the DOM.
-     */
-    public function copyVisiblePaths(string $kind = 'relative'): void
-    {
-        $this->skipRender();
-
-        $paths = collect($this->reviewState->visibleFileEntries)
-            ->pluck('path')
-            ->filter()
-            ->values();
-
-        if ($paths->isEmpty()) {
-            return;
-        }
-
-        $repoPath = rtrim($this->repoPath, '/');
-
-        $lines = $paths->map(fn (string $path): string => match ($kind) {
-            'name' => basename($path),
-            'full' => $repoPath === '' ? $path : $repoPath.'/'.$path,
-            default => $path,
-        });
-
-        $noun = match ($kind) {
-            'name' => 'file name',
-            'full' => 'full path',
-            default => 'relative path',
-        };
-        $count = $lines->count();
-        $toast = $count === 1 ? "Copied {$noun}" : "Copied {$count} {$noun}s";
-
-        $this->dispatch('copy-to-clipboard', text: $lines->implode("\n"), toast: $toast);
-    }
-
-    public function startNewReview(): void
-    {
-        $this->submitted = false;
-        $this->exportResult = null;
-    }
-
-    // endregion: Review State & Export
+    // endregion: Review State
 
     // region: Computed, Helpers & Persistence
 
@@ -1415,6 +937,32 @@ new #[Layout('layouts.app')] class extends Component
         // the parent — and re-hydrating every mounted diff-file child — on a
         // filter-only toggle is wasted work on a latency-sensitive path.
         return $this->hideReviewed;
+    }
+
+    /**
+     * Settle the response after a reviewed-state change. Hide-reviewed mode needs
+     * a full parent render because the toggle drops the file from the visible
+     * list. Every other mode re-renders only the reviewed-summary island, so the
+     * counter and meter update without re-rendering the page or re-hydrating the
+     * mounted diff-file children.
+     */
+    private function settleReviewedRender(): void
+    {
+        // Hide-reviewed mode does a full render because the toggle drops the
+        // newly-reviewed file from the visible list. The reviewed-summary island
+        // is declared always:true, so it re-renders inline as part of that full
+        // render rather than emitting a skip marker.
+        if ($this->reviewedChangeNeedsParentRender()) {
+            return;
+        }
+
+        // Other modes skip the full render for latency and refresh just the
+        // islands. Bust the computed cache first so they reflect the reviewedFiles
+        // change just made rather than a value memoized earlier.
+        unset($this->reviewState);
+        $this->skipRender();
+        $this->renderIsland('reviewed-summary');
+        $this->renderIsland('file-list');
     }
 
     /** @return array<string, array<int, array<string, mixed>>> */
@@ -1545,23 +1093,13 @@ new #[Layout('layouts.app')] class extends Component
         app(SessionStateAction::class)->saveGlobalNote($this->repoPath, $this->globalComment, $this->projectId ?: null);
     }
 
-    private function loadTrashedFiles(): void
-    {
-        if ($this->isCommitMode()) {
-            $this->trashedFiles = [];
-
-            return;
-        }
-
-        $this->trashedFiles = app(CleanExpiredTrashAction::class)->handle($this->projectId);
-    }
-
     // endregion: Computed, Helpers & Persistence
 };
 ?>
 
 @assets
 <script src="/js/diff-file.js"></script>
+<script src="/js/review-page.js"></script>
 @endassets
 
 <div
@@ -1576,198 +1114,15 @@ new #[Layout('layouts.app')] class extends Component
             variant: n === 0 ? 'info' : 'success',
         });
     "
-    x-data="{
-        pendingSaves: 0,
-        pendingSavesGuard: null,
-        init() {
-            this.pendingSavesGuard = window.rfaPendingSaves?.createPendingSavesGuard({
-                root: window,
-                livewire: Livewire,
-                getWireId: () => this.$root.getAttribute('wire:id'),
-                onPendingSavesChanged: (count) => { this.pendingSaves = count; },
-            });
-
-            this.pendingSavesGuard?.attach();
-        },
+    x-data="reviewPage({
         activeFile: @js($this->reviewState->selectedFileId),
-        reviewedFiles: @js((object) $this->reviewState->reviewedFileMap),
-        remoteMenu: { open: false, x: 0, y: 0, projectSlug: '', type: '', params: {}, label: '', disabled: false, disabledReason: '' },
-        jsonData(name, fallback) {
-            try {
-                return JSON.parse(this.$root?.dataset?.[name] || '');
-            } catch (_) {
-                return fallback;
-            }
-        },
-        get sourceFileEntries() {
-            return this.jsonData('sourceFileEntries', []);
-        },
-        get visibleFileEntries() {
-            return this.jsonData('visibleFileEntries', []);
-        },
-        showRemoteMenu($event) {
-            const d = $event.detail;
-            const margin = 8;
-
-            if (d.target === 'direct') {
-                const menuW = 220;
-                const menuH = 80;
-                this.remoteMenu = {
-                    open: true,
-                    x: Math.min(d.clientX, window.innerWidth - menuW - margin),
-                    y: Math.min(d.clientY, window.innerHeight - menuH - margin),
-                    projectSlug: d.projectSlug || @js($projectSlug),
-                    type: d.type,
-                    params: d.params || {},
-                    label: d.label || 'on remote',
-                    disabled: false,
-                    disabledReason: '',
-                };
-
-                return;
-            }
-
-            const projectBranch = @js($projectBranch);
-            const diffFrom = @js($diffFrom);
-            const diffTo = @js($diffTo);
-            const refNew = diffTo || projectBranch || 'HEAD';
-            const refOld = diffTo !== null ? diffFrom : (projectBranch || 'HEAD');
-            const pathOld = d.oldPath || d.filePath;
-            let type, params, label;
-            if (d.target === 'file') {
-                type = 'file';
-                params = { ref: refNew, path: d.filePath };
-                label = 'file';
-            } else {
-                type = 'line';
-                params = {
-                    ref: d.side === 'old' ? refOld : refNew,
-                    path: d.side === 'old' ? pathOld : d.filePath,
-                    start: d.start,
-                    end: d.end,
-                };
-                label = (d.end === null || d.end === d.start) ? 'line ' + d.start : 'lines ' + d.start + '-' + d.end;
-            }
-            // Old-side line links always resolve (refOld is where the file existed).
-            // For new-side links we only disable when we're sure: pure working-tree
-            // mode for `added`, commit/range mode for `deleted`. /rw/{from} mixes
-            // working tree and committed history, so we can't tell which side a
-            // status belongs to, so leave it enabled rather than mis-disable.
-            const isWorkingTreeOnly = diffTo === null && diffFrom === 'HEAD';
-            const isCommitOrRange = diffTo !== null;
-            const usesNewSideRef = d.target === 'file' || d.side !== 'old';
-            const newSideBroken =
-                (d.status === 'added'   && isWorkingTreeOnly) ||
-                (d.status === 'deleted' && isCommitOrRange);
-            const disabled = usesNewSideRef && newSideBroken;
-            const disabledReason = disabled
-                ? (d.status === 'added' ? 'File not pushed to remote yet' : 'File was removed at this commit')
-                : '';
-            const menuW = 220;
-            const menuH = disabled ? 110 : 80;
-            this.remoteMenu = {
-                open: true,
-                x: Math.min(d.clientX, window.innerWidth - menuW - margin),
-                y: Math.min(d.clientY, window.innerHeight - menuH - margin),
-                projectSlug: @js($projectSlug),
-                type, params, label, disabled, disabledReason,
-            };
-        },
-        closeRemoteMenu() { this.remoteMenu.open = false; },
-        get reviewedCount() {
-            return Object.values(this.reviewedFiles).filter(Boolean).length;
-        },
-        isFileVisible(fileId) {
-            return this.visibleFileEntries.some(entry => entry.id === fileId);
-        },
-        pathDir(path) {
-            if (!path) return '';
-            const i = path.lastIndexOf('/');
-            return i === -1 ? '' : path.slice(0, i + 1);
-        },
-        pathBase(path) {
-            if (!path) return '';
-            const i = path.lastIndexOf('/');
-            return i === -1 ? path : path.slice(i + 1);
-        },
+        projectSlug: @js($projectSlug),
+        projectBranch: @js($projectBranch),
+        diffFrom: @js($diffFrom),
+        diffTo: @js($diffTo),
         repoPath: @js($repoPath),
-        get visibleFileCount() {
-            return this.visibleFileEntries.length;
-        },
-        buildFullPath(path) {
-            const repo = this.repoPath || '';
-            if (!repo) return path;
-            return repo.replace(/\/+$/, '') + '/' + path;
-        },
-        scrollToFile(id, persist = true) {
-            this.activeFile = id;
-            // Persist the selection server-side so a later full parent re-render
-            // re-seeds the highlight. Skippable when the caller already persisted
-            // it (e.g. revealFile) to avoid a redundant round-trip.
-            if (persist) {
-                $wire.selectFile(id);
-            }
-            this.$dispatch('expand-file', { id });
-            document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        },
-        focusAdjacentFile(delta) {
-            // Move the selection between visible files (j/k). Computed client-side
-            // off the visible list so rapid presses stay instant; selection clamps
-            // at the ends rather than wrapping.
-            const entries = this.visibleFileEntries;
-            if (entries.length === 0) {
-                return;
-            }
-            const current = entries.findIndex(file => file.id === this.activeFile);
-            const target = current === -1
-                ? (delta > 0 ? 0 : entries.length - 1)
-                : Math.min(entries.length - 1, Math.max(0, current + delta));
-            this.scrollToFile(entries[target].id);
-        },
-        async scrollToComment(commentId, filePath) {
-            const file = this.sourceFileEntries.find(f => f.path === filePath);
-            if (!file) {
-                Flux.toast({ text: 'Comment is on a file not in this diff', variant: 'warning' });
-                return;
-            }
-            const revealed = !this.isFileVisible(file.id);
-            if (revealed) {
-                await $wire.revealFile(file.id);
-            }
-            this.activeFile = file.id;
-            (window.__rfaPendingExpandFiles ??= new Set()).add(file.id);
-            // revealFile already set activeFileId server-side, so don't re-persist.
-            this.scrollToFile(file.id, !revealed);
-            clearTimeout(this.commentScrollPollId);
-            const target = 'comment-' + commentId;
-            const start = performance.now();
-            const tryScroll = () => {
-                if (!this.$el?.isConnected) return;
-                {{-- Re-dispatch every tick: the diff-file may be lazy and hydrate after the first dispatch, --}}
-                {{-- in which case its listeners weren't yet registered to receive the initial expand-file. --}}
-                this.$dispatch('expand-file', { id: file.id });
-                this.$dispatch('unfold-for-comment', { fileId: file.id });
-                const el = document.getElementById(target);
-                if (el && el.offsetParent !== null) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    return;
-                }
-                if (performance.now() - start < 4000) {
-                    this.commentScrollPollId = setTimeout(tryScroll, 100);
-                }
-            };
-            tryScroll();
-        },
-        destroy() {
-            this.pendingSavesGuard?.detach();
-            this.pendingSavesGuard = null;
-            clearTimeout(this.commentScrollPollId);
-        }
-    }"
+    })"
     @scroll-to-comment.window="scrollToComment($event.detail.commentId, $event.detail.filePath)"
-    @file-reviewed-changed.window="reviewedFiles[$event.detail.id] = $event.detail.reviewed"
-    @reset-reviewed-files.window="reviewedFiles = {}"
-    @reviewed-files-reverted.window="($event.detail.fileIds || []).forEach(id => { reviewedFiles[id] = false })"
     @open-remote-menu.window="showRemoteMenu($event)"
     @keydown.window="
         if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {
@@ -1897,22 +1252,29 @@ new #[Layout('layouts.app')] class extends Component
                 <livewire:comments-drawer :repo-path="$repoPath" :project-id="$projectId ?: null" />
             </div>
             <div class="flex items-center gap-2 text-xs">
-                {{-- Hide reviewed toggle --}}
-                <div x-show="reviewedCount > 0" x-cloak class="grid place-items-center">
-                    @if($hideReviewed)
-                        <flux:button variant="ghost" size="sm" icon="eye" icon:variant="outline"
-                            tooltip="Show all files"
-                            aria-label="Show all files"
-                            class="col-start-1 row-start-1"
-                            wire:click="showAllFiles" />
-                    @else
-                        <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
-                            tooltip="Hide reviewed"
-                            aria-label="Hide reviewed"
-                            class="col-start-1 row-start-1"
-                            wire:click="hideReviewedFiles" />
+                {{-- Hide reviewed toggle. Same-named island as the counter, so
+                     renderIsland('reviewed-summary') flips its visibility in step
+                     with the count on a mark/un-mark. always:true keeps it in sync
+                     on full renders too. --}}
+                @island(name: 'reviewed-summary', always: true)
+                    @if ($this->reviewState->reviewedFileCount > 0)
+                        <div class="grid place-items-center">
+                            @if($hideReviewed)
+                                <flux:button variant="ghost" size="sm" icon="eye" icon:variant="outline"
+                                    tooltip="Show all files"
+                                    aria-label="Show all files"
+                                    class="col-start-1 row-start-1"
+                                    wire:click="showAllFiles" />
+                            @else
+                                <flux:button variant="ghost" size="sm" icon="eye-slash" icon:variant="outline"
+                                    tooltip="Hide reviewed"
+                                    aria-label="Hide reviewed"
+                                    class="col-start-1 row-start-1"
+                                    wire:click="hideReviewedFiles" />
+                            @endif
+                        </div>
                     @endif
-                </div>
+                @endisland
 
                 {{-- Expand/Collapse toggle --}}
                 <div class="grid place-items-center">
@@ -1947,52 +1309,12 @@ new #[Layout('layouts.app')] class extends Component
                 <span class="w-px h-4 bg-gh-border" aria-hidden="true"></span>
 
                 @if(! $this->isCommitMode())
-                    <div data-testid="change-polling" x-data="{
-                        hasChanges: false,
-                        fingerprint: null,
-                        currentCount: 0,
-                        stopPoll: null,
-                        async check() {
-                            try {
-                                const res = await fetch('/api/changes/{{ $projectId }}');
-                                const data = await res.json();
-                                if (this.fingerprint === null) {
-                                    this.fingerprint = data.fingerprint;
-                                } else if (data.fingerprint !== this.fingerprint) {
-                                    const newCount = data.count ?? 0;
-                                    if (! this.hasChanges || this.currentCount !== newCount) {
-                                        this.hasChanges = true;
-                                        this.currentCount = newCount;
-                                    }
-                                }
-                            } catch {}
-                        },
-                        softRefresh() { $wire.softRefresh(); },
-                        hardReload() { window.location.reload(); },
-                        get tooltip() {
-                            if (!this.hasChanges) return 'Refresh · ⌘R · ⌘⇧R to hard reload';
-                            const n = this.currentCount;
-                            const noun = n === 1 ? 'file' : 'files';
-                            return `${n} ${noun} changed externally - click to refresh`;
-                        },
-                        init() {
-                            this.check();
-                            this.stopPoll = window.smartPoll.startSmartPoll({
-                                window,
-                                document,
-                                getInterval: () => window.smartPoll.isFocused(document) ? 60000 : (document.hidden ? null : 300000),
-                                onTick: () => this.check(),
-                            });
-                            @browser
-                            $store.keymap.register('⌘R', () => this.softRefresh(), { allowInEditable: true });
-                            $store.keymap.register('⌘⇧R', () => this.hardReload(), { allowInEditable: true });
-                            @endbrowser
-                        },
-                        destroy() {
-                            if (this.stopPoll) this.stopPoll();
-                        },
-                    }"
-                    @fingerprint-reset.window="fingerprint = null; hasChanges = false; currentCount = 0; check();"
+                    <div data-testid="change-polling"
+                        x-data="reviewChangePoller({
+                            projectId: {{ $projectId }},
+                            keymapEnabled: @js(! config('nativephp-internal.running')),
+                        })"
+                    @fingerprint-reset.window="reset()"
                     class="relative flex items-center">
                         <flux:tooltip>
                             <flux:button variant="ghost" size="sm" icon="arrow-path" icon:variant="outline"
@@ -2015,114 +1337,34 @@ new #[Layout('layouts.app')] class extends Component
 
                 {{-- Settings --}}
                 @if(! $this->isCommitMode())
-                    <flux:dropdown position="bottom" align="end">
-                        <flux:tooltip content="Settings">
-                            <flux:button variant="ghost" size="sm" icon="cog-6-tooth" icon:variant="outline"
-                                aria-label="Settings" />
-                        </flux:tooltip>
-                        <flux:menu>
-                            <flux:menu.item keep-open>
-                                <flux:checkbox wire:model.live="respectGlobalGitignore" label="Global .gitignore" class="text-xs whitespace-nowrap" />
-                            </flux:menu.item>
-                            <p class="px-3 pb-2 text-[10px] font-mono text-gh-muted/80 leading-snug w-56">
-                                Hide files matched by your global .gitignore (e.g. ~/.gitignore_global).
-                            </p>
-                            <flux:menu.separator />
-                            <div class="px-3 py-2 w-56 space-y-1.5" wire:ignore.self>
-                                <label for="default-base-branch-input" class="block text-[10px] font-display font-semibold uppercase tracking-brutal text-gh-muted">
-                                    Base branch
-                                </label>
-                                <flux:input
-                                    id="default-base-branch-input"
-                                    data-testid="default-base-branch-input"
-                                    wire:model.live.debounce.400ms="defaultBaseBranch"
-                                    placeholder="dev, master, main..."
-                                    size="sm"
-                                    variant="filled"
-                                    class="!font-mono text-xs"
-                                />
-                                <p class="text-[10px] font-mono text-gh-muted/80 leading-snug">
-                                    Default branch to compare against. Pre-fills the
-                                    @if($defaultBaseBranch !== '')
-                                        <span class="text-gh-text">Since {{ $defaultBaseBranch }}</span>
-                                        shortcut
-                                    @else
-                                        Since shortcut (e.g. <span class="text-gh-text">Since dev</span>)
-                                    @endif
-                                    in the branch picker.
-                                </p>
-                            </div>
-                            <flux:menu.separator />
-                            <div class="px-3 py-2 w-72 space-y-2" wire:ignore.self>
-                                <label class="block text-[10px] font-display font-semibold uppercase tracking-brutal text-gh-muted">
-                                    Linked external paths
-                                </label>
-                                <p class="text-[10px] font-mono text-gh-muted/80 leading-snug">
-                                    Folders or single files outside the repo that show up as commentable files (e.g. design notes, a Claude Code plan).
-                                </p>
-                                @if(count($externalPaths) > 0)
-                                    <ul class="space-y-1" data-testid="external-paths-list">
-                                        @foreach($externalPaths as $index => $row)
-                                            <li class="flex items-center gap-2 group" wire:key="external-path-{{ $index }}">
-                                                <div class="min-w-0 flex-1">
-                                                    <div class="text-xs font-display text-gh-text truncate" title="{{ $row['path'] }}">{{ $row['label'] }}</div>
-                                                    <x-file-path :path="$row['path']" class="text-[10px] text-gh-muted/70" />
-                                                </div>
-                                                <flux:tooltip content="Unlink">
-                                                    <flux:button
-                                                        size="xs"
-                                                        variant="ghost"
-                                                        icon="x-mark"
-                                                        icon:variant="outline"
-                                                        wire:click="removeExternalPath({{ $index }})"
-                                                        aria-label="Unlink {{ $row['label'] }}"
-                                                        data-testid="external-path-remove-{{ $index }}"
-                                                    />
-                                                </flux:tooltip>
-                                            </li>
-                                        @endforeach
-                                    </ul>
-                                @endif
-                                <div class="flex gap-1">
-                                    <flux:button
-                                        size="xs"
-                                        variant="ghost"
-                                        icon="folder-plus"
-                                        icon:variant="outline"
-                                        wire:click="addExternalPath"
-                                        wire:loading.attr="disabled"
-                                        wire:target="addExternalPath"
-                                        data-testid="external-path-add"
-                                        class="flex-1"
-                                    >
-                                        <span wire:loading.remove wire:target="addExternalPath">Link folder…</span>
-                                        <span wire:loading wire:target="addExternalPath">Opening…</span>
-                                    </flux:button>
-                                    <flux:button
-                                        size="xs"
-                                        variant="ghost"
-                                        icon="document-plus"
-                                        icon:variant="outline"
-                                        wire:click="addExternalFile"
-                                        wire:loading.attr="disabled"
-                                        wire:target="addExternalFile"
-                                        data-testid="external-file-add"
-                                        class="flex-1"
-                                    >
-                                        <span wire:loading.remove wire:target="addExternalFile">Link file…</span>
-                                        <span wire:loading wire:target="addExternalFile">Opening…</span>
-                                    </flux:button>
-                                </div>
-                            </div>
-                        </flux:menu>
-                    </flux:dropdown>
+                    @include('pages.partials.review-settings-dropdown')
                 @endif
 
                 <livewire:theme-switcher />
             </div>
 
         <x-slot:below>
-            <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" :review-state="$this->reviewState" />
+            <x-status-strip :source-files="$sourceFiles" :review-pairs="$reviewPairs" :review-state="$this->reviewState">
+                {{-- Reviewed-progress summary. Wrapped in a Livewire island so a
+                     mark/un-mark re-renders just this counter and meter, not the
+                     2200-line review page. Reads only $this state (island scope
+                     can't see template locals). --}}
+                <x-slot:reviewedSummary>
+                    {{-- always:true so a full render (e.g. hide-reviewed mode,
+                         filtering) re-renders the counter inline instead of
+                         skipping it; renderIsland still scopes the latency path. --}}
+                    @island(name: 'reviewed-summary', always: true)
+                        @if ($this->reviewState->reviewedFileCount > 0)
+                            <div class="flex items-center gap-2">
+                                <span data-testid="reviewed-counter">{{ $this->reviewState->reviewedFileCount }}/{{ $this->reviewState->totalFileCount }} reviewed</span>
+                                <div class="w-24 h-0.5 bg-gh-border/50 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gh-green/70 rounded-full transition-all duration-200" style="width: {{ round($this->reviewState->reviewedFileCount / max(1, $this->reviewState->totalFileCount) * 100) }}%"></div>
+                                </div>
+                            </div>
+                        @endif
+                    @endisland
+                </x-slot:reviewedSummary>
+            </x-status-strip>
         </x-slot:below>
     </x-page-header>
 
@@ -2240,6 +1482,11 @@ new #[Layout('layouts.app')] class extends Component
                         <div class="border-b border-gh-border my-3"></div>
                     </div>
                 @endif
+                {{-- File list as an island so a reviewed mark/un-mark refreshes the
+                     sidebar checkmarks via renderIsland('file-list') without a full
+                     page render. always:true keeps it current on full renders too
+                     (filtering, discard, hide-reviewed mode). --}}
+                @island(name: 'file-list', always: true)
                 @foreach($this->reviewState->visibleFiles as $file)
                     @php
                         // Badge label and color come from ReviewState so this list and the
@@ -2248,6 +1495,7 @@ new #[Layout('layouts.app')] class extends Component
                         $badgeLabel = $badge['badgeLabel'] ?? 'M';
                         $badgeClass = $badge['badgeClass'] ?? 'text-gh-attention';
                         $remoteStatus = ($file['isUntracked'] ?? false) ? 'added' : ($file['status'] ?? 'modified');
+                        $isReviewed = array_key_exists($file['path'], $reviewedFiles);
                     @endphp
                     <div
                         @if($hasRemote)
@@ -2292,23 +1540,20 @@ new #[Layout('layouts.app')] class extends Component
                             />
                         </button>
                         <flux:tooltip>
+                            {{-- Reviewed state is server-rendered inside the file-list island.
+                                 The click tells DiffFile's checkbox mirror the new state and
+                                 asks the parent to toggle, which refreshes this island. --}}
                             <button type="button"
                                 @click.stop="
-                                    const next = !reviewedFiles['{{ $file['id'] }}'];
-                                    $dispatch('file-reviewed-changed', { id: '{{ $file['id'] }}', reviewed: next });
+                                    $dispatch('file-reviewed-changed', { id: '{{ $file['id'] }}', reviewed: {{ $isReviewed ? 'false' : 'true' }} });
                                     $wire.dispatch('toggle-reviewed', { filePath: @js($file['path']) });
                                 "
-                                class="shrink-0 size-3.5 flex items-center justify-center transition-[opacity,colors]"
-                                :class="reviewedFiles['{{ $file['id'] }}']
-                                    ? 'text-gh-green hover:text-gh-text'
-                                    : 'text-gh-muted/40 opacity-0 group-hover:opacity-100 hover:text-gh-text'"
-                                x-bind:aria-label="reviewedFiles['{{ $file['id'] }}'] ? 'Un-mark as reviewed' : 'Mark as reviewed'"
+                                class="shrink-0 size-3.5 flex items-center justify-center transition-[opacity,colors] {{ $isReviewed ? 'text-gh-green hover:text-gh-text' : 'text-gh-muted/40 opacity-0 group-hover:opacity-100 hover:text-gh-text' }}"
+                                aria-label="{{ $isReviewed ? 'Un-mark as reviewed' : 'Mark as reviewed' }}"
                             >
                                 <flux:icon icon="check" variant="outline" class="!size-3.5" />
                             </button>
-                            <flux:tooltip.content>
-                                <span x-text="reviewedFiles['{{ $file['id'] }}'] ? 'Un-mark as reviewed' : 'Mark as reviewed'"></span>
-                            </flux:tooltip.content>
+                            <flux:tooltip.content>{{ $isReviewed ? 'Un-mark as reviewed' : 'Mark as reviewed' }}</flux:tooltip.content>
                         </flux:tooltip>
                         <span class="shrink-0 size-3.5 flex items-center justify-center">
                             @if(! $this->isCommitMode() && $file['status'] !== 'commented' && ! ($file['isExternal'] ?? false))
@@ -2343,47 +1588,8 @@ new #[Layout('layouts.app')] class extends Component
                         All files reviewed
                     </div>
                 @endif
-                @if(! empty($trashedFiles))
-                    <div class="border-t border-gh-border mt-3 pt-3">
-                        <span class="section-label text-gh-muted mb-3 block">Trash</span>
-                        @foreach($trashedFiles as $trashed)
-                            <div class="w-full px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2 group transition-colors"
-                                x-data="{
-                                    expiresAt: {{ $trashed['expires_at'] ? \Carbon\Carbon::parse($trashed['expires_at'])->getTimestampMs() : 0 }},
-                                    remaining: '',
-                                    intervalId: null,
-                                    init() {
-                                        const update = () => {
-                                            const ms = this.expiresAt - Date.now();
-                                            if (ms <= 0) { this.remaining = 'expired'; clearInterval(this.intervalId); return; }
-                                            const m = Math.ceil(ms / 60000);
-                                            this.remaining = m < 1 ? '< 1m' : m + 'm';
-                                        };
-                                        update();
-                                        this.intervalId = setInterval(update, 15000);
-                                    },
-                                    destroy() {
-                                        clearInterval(this.intervalId);
-                                    },
-                                }"
-                            >
-                                <span class="font-mono text-xs text-gh-muted truncate flex-1" title="{{ $trashed['file_path'] }}">{{ basename($trashed['file_path']) }}</span>
-                                <span class="text-[10px] text-gh-muted tabular-nums" x-text="remaining"></span>
-                                <button @click="$wire.restoreDiscardedFile({{ $trashed['id'] }})" title="Restore"
-                                    aria-label="Restore discarded file"
-                                    class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-green hover:text-gh-text shrink-0">
-                                    <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
-                                </button>
-                                <x-arm-commit-button
-                                    icon="trash"
-                                    tooltip="Permanently delete"
-                                    @confirmed="$wire.permanentlyDeleteTrashed({{ $trashed['id'] }})"
-                                    class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                                />
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
+                @endisland
+                @include('pages.partials.review-trash-list', ['trashedFiles' => $trashedFiles])
             </div>
         </x-slot:sidebar>
 

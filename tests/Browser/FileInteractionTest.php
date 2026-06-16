@@ -215,6 +215,44 @@ test('checking reviewed updates sidebar indicator', function () {
     $page->assertSee('1/3 reviewed');
 });
 
+test('a second mark in normal mode advances the status-strip counter via the slot island', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    // First mark: 1/3. Second mark: 2/3. The counter lives in the
+    // reviewed-summary island nested inside the x-status-strip slot, refreshed
+    // by renderIsland on the skipRender path. This guards that the slot-scoped
+    // island actually re-renders (not just the first mark or the hide-mode
+    // full render).
+    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
+    $page->assertSee('1/3 reviewed');
+
+    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->nth(1)->click();
+    $page->assertSee('2/3 reviewed');
+});
+
+test('marking a file flips its sidebar button to the reviewed state via the island', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    // Mark via the diff-file checkbox; the sidebar button is server-rendered in
+    // the file-list island and must re-render into its un-mark state.
+    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
+
+    $page->page()->getByRole('button', ['name' => 'Un-mark as reviewed'])->first()->waitFor(['state' => 'visible']);
+});
+
+test('marking a file reveals the Hide reviewed toggle', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    // The toggle lives in the reviewed-summary island and is absent until at
+    // least one file is reviewed.
+    $page->page()->getByRole('button', ['name' => 'Hide reviewed'])->waitFor(['state' => 'hidden']);
+
+    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
+
+    // The mark refreshes the island, which renders the toggle into view.
+    $page->page()->getByRole('button', ['name' => 'Hide reviewed'])->waitFor(['state' => 'visible']);
+});
+
 test('clicking sidebar file scrolls to it', function () {
     $page = $this->visit($this->projectUrl());
 

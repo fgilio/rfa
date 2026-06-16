@@ -36,7 +36,6 @@ class ReviewStateService
             visibleFiles: $visibleFiles,
             selectedFileId: $selectedFileId,
             reviewedFileIds: $reviewedFileIds,
-            reviewedFileMap: $reviewedIdSet,
             sourceFileEntries: $this->sourceFileEntries($sourceFiles),
             visibleFileEntries: $this->sourceFileEntries($visibleFiles),
             filesById: $this->filesById($sourceFiles),
