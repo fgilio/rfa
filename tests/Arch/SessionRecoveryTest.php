@@ -23,7 +23,7 @@ test('.env.example sets a session lifetime of at least 1 week', function () {
 test('app layout loads session-recovery.js', function () {
     $layout = file_get_contents(dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php');
 
-    expect($layout)->toContain('/js/session-recovery.js');
+    expect($layout)->toContain("@localScript('js/session-recovery.js')");
 });
 
 test('session-recovery.js intercepts 419 responses and reloads', function () {
