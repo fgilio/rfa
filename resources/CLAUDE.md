@@ -178,7 +178,9 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `clearAllComments` | Yes | Dispatches comment-updated + undo-available events |
 | `restoreComments` | Yes | Dispatches comment-updated events to affected files |
 | `updatedGlobalComment` | Yes | No UI change needed server-side |
-| `toggleReviewed` | Conditional | Renders only in Hide-reviewed mode (only then does a toggle change the server-visible list). A path filter is reviewed-independent, so filter-only stays a skipRender. |
+| `toggleReviewed` | Yes | Always skips the parent render; refreshes the `reviewed-summary` + `file-list` islands, plus the visibility islands (`source-diff-list`, `file-count`, `file-list-header`) in Hide-reviewed mode where the toggle drops the file from the visible set. |
+| `hideReviewedFiles` / `showAllFiles` | Yes | Skip the parent render; refresh `reviewed-summary` + `file-list` + the visibility islands as files drop in/out of the visible set. |
+| `clearRecentlyReviewed` | Yes | Skip the parent render; refresh `file-list` only in Hide-reviewed mode (where the Recently-reviewed group shows). |
 | `submitReview` | No | Replaces entire submit bar UI (submitted state) |
 | `discardFileChanges` | No | Structural change: file removed from list, trash updated |
 | `restoreDiscardedFile` | No | Structural change: file reappears in list |
@@ -190,7 +192,11 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 |---|---|---|---|
 | `add-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{fileId, side, startLine, endLine, body}` |
 | `delete-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{commentId}` |
-| `toggle-reviewed` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{filePath}` |
+| `toggle-reviewed` | Livewire event — unit tests only; runtime goes via the `rfa-toggle-reviewed` bridge below | ReviewPage `#[On]` -> `toggleReviewed` | `{filePath}` |
+| `rfa-toggle-reviewed` | DiffFile Alpine + sidebar / Recently-reviewed buttons `$dispatch` (bubbles to window) | ReviewPage root Alpine `@window` -> `$wire.toggleReviewed` | `{filePath}` |
+| `rfa-hide-reviewed` | `reviewed-summary` island button `$dispatch` (window) | ReviewPage root Alpine `@window` -> `$wire.hideReviewedFiles` | none |
+| `rfa-show-all-files` | `reviewed-summary` island button `$dispatch` (window) | ReviewPage root Alpine `@window` -> `$wire.showAllFiles` | none |
+| `rfa-clear-recently-reviewed` | Recently-reviewed "Clear" button `$dispatch` (window) | ReviewPage root Alpine `@window` -> `$wire.clearRecentlyReviewed` | none |
 | `comment-updated` | ReviewPage PHP dispatch | DiffFile Alpine `@window` | `{fileId, comments}` |
 | `copy-to-clipboard` | DiffFile Alpine/PHP, ReviewPage PHP, comment-display, comments-drawer, branch-explorer | layout `<body>` Alpine `@window` | `{text, toast?}` (if `toast` string is set, a success toast with that text shows on success) |
 | `file-reviewed-changed` | DiffFile Alpine `$dispatch`, sidebar reviewed button | DiffFile Alpine `@window` (targeted by `id`) | `{id, reviewed}` |
@@ -204,6 +210,13 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `open-remote-menu` | DiffFile Alpine `$dispatch` | ReviewPage Alpine `@window` | `{target: 'file'\|'line', fileId, filePath, oldPath, status, side?, start?, end?, clientX, clientY}` |
 | `scroll-to-comment` | comments-drawer Alpine `$dispatch` | ReviewPage Alpine `@window` | `{commentId, filePath}` |
 | `unfold-for-comment` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | `{fileId}` |
+
+The `rfa-*` events are a deliberate bridge: a `wire:click` or `$wire.dispatch()`
+fired from inside a Livewire island scopes the action to that island, so a
+reviewed control nested in an island could only refresh its own island. The
+controls instead `$dispatch` a bubbling window event that the page-root Alpine
+catches and forwards to `$wire`, letting the action run outside island scope and
+settle every affected island (see the skipRender table).
 
 ### Known Debt
 
