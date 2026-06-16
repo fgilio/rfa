@@ -332,3 +332,58 @@ test('current match badge text tracks navigation', function () {
     expect($result['afterNext'])->toBe('2 of 3');
     expect($result['afterPrev'])->toBe('1 of 3');
 });
+
+test('a match crossing a token boundary paints the pill once, centered, with no phantom box', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $result = $page->script(<<<'JS'
+        (() => {
+            const host = document.createElement('div');
+            host.id = '__search_sandbox_phantom';
+            // Two inline spans on one line, so "aaaaaabbbbbb" matches across the
+            // boundary — the same shape as a query straddling syntax-highlight
+            // tokens in a diff (e.g. "workflow (`Aoi").
+            host.innerHTML = '<span>aaaaaa</span><span>bbbbbb</span>';
+            document.body.appendChild(host);
+
+            const root = document.querySelector('[x-data="pageSearch"]');
+            const data = Alpine.$data(root);
+
+            data.query = 'aaaaaabbbbbb';
+            data.refresh();
+
+            const spans = host.querySelectorAll('.rfa-search-match');
+            const first = spans[0].getBoundingClientRect();
+            const last = spans[spans.length - 1].getBoundingClientRect();
+
+            const afterFirst = getComputedStyle(spans[0], '::after').content;
+            const afterSecond = getComputedStyle(spans[spans.length - 1], '::after').content;
+            const center = parseFloat(spans[0].style.getPropertyValue('--rfa-match-center'));
+
+            data.close();
+            host.remove();
+
+            return {
+                pieces: spans.length,
+                afterFirst,
+                afterSecond,
+                center,
+                expectedCenter: (last.right - first.left) / 2,
+                firstHalf: first.width / 2,
+            };
+        })()
+    JS);
+
+    // The match really does cross the boundary into a second piece.
+    expect($result['pieces'])->toBe(2);
+
+    // The numbered piece paints the pill; the crossed piece renders no ::after
+    // box at all (pre-fix it painted an empty `""` phantom pill).
+    expect($result['afterFirst'])->not->toBe('none')
+        ->and($result['afterFirst'])->not->toBe('""')
+        ->and($result['afterSecond'])->toBe('none');
+
+    // The pill anchors to the midpoint of the whole match, not the first piece.
+    expect($result['center'])->toEqualWithDelta($result['expectedCenter'], 1.0)
+        ->and($result['center'])->toBeGreaterThan($result['firstHalf']);
+});

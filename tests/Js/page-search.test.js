@@ -369,6 +369,42 @@ describe('updateCurrent', () => {
         expect(spans[1].hasAttribute('data-match-number')).toBe(false);
         expect(spans[2].hasAttribute('data-match-number')).toBe(false);
     });
+
+    it('centers the badge across a multi-piece match via --rfa-match-center', () => {
+        document.body.innerHTML = "<p><span>'</span><span>local</span><span>'</span></p>";
+        data.query = "'local'";
+        data.refresh();
+
+        const [spans] = data.matches;
+        expect(spans).toHaveLength(3);
+
+        // happy-dom reports zero-size rects, so stub the pieces onto one line
+        // laid left-to-right: 0–10, 10–60, 60–70 (px). The whole match spans
+        // 0..70, so the center offset from the first piece's left edge is 35px.
+        const lefts = [0, 10, 60];
+        const rights = [10, 60, 70];
+        spans.forEach((span, i) => {
+            span.getBoundingClientRect = () => ({
+                top: 0, bottom: 10, left: lefts[i], right: rights[i],
+                width: rights[i] - lefts[i], height: 10,
+            });
+        });
+        data.updateCurrent(false);
+
+        // 35px is past the first piece's own center (5px) — proving the badge
+        // anchors to the whole match, not just the first token span.
+        expect(spans[0].style.getPropertyValue('--rfa-match-center')).toBe('35px');
+    });
+
+    it('leaves --rfa-match-center unset for a single-piece match so CSS falls back to 50%', () => {
+        data.query = 'cat';
+        data.refresh();
+
+        // Each "cat" is a single text node, so centerBadge sees one span and
+        // sets no offset; CSS centers on the piece itself via `left: 50%`.
+        expect(data.matches[0]).toHaveLength(1);
+        expect(data.matches[0][0].style.getPropertyValue('--rfa-match-center')).toBe('');
+    });
 });
 
 describe('install', () => {
