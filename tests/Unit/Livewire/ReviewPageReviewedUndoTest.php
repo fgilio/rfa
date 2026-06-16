@@ -224,6 +224,23 @@ test('toggleReviewed renders when hide-reviewed visibility changes', function ()
         ->and($component->instance()->reviewState()->isFileVisible('id-bar'))->toBeTrue();
 });
 
+test('hide-reviewed actions render diff-file children from fresh review state', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
+        ->assertSeeHtml('wire:key="id-foo-')
+        ->assertSeeHtml('wire:key="id-bar-');
+
+    $component->call('hideReviewedFiles')
+        ->assertSeeHtml('aria-label="Show all files"')
+        ->assertDontSeeHtml('wire:key="id-foo-')
+        ->assertSeeHtml('wire:key="id-bar-');
+
+    $component->call('showAllFiles')
+        ->assertSeeHtml('aria-label="Hide reviewed"')
+        ->assertSeeHtml('wire:key="id-foo-')
+        ->assertSeeHtml('wire:key="id-bar-');
+});
+
 test('the reviewed counter reflects new marks in hide-reviewed mode', function () {
     // Hide-reviewed mode does a full render, which emits only skip markers for
     // islands. The reviewed-summary island is declared always:true so it

@@ -835,6 +835,7 @@ new #[Layout('layouts.app')] class extends Component
     public function clearRecentlyReviewed(): void
     {
         $this->recentlyReviewedIds = [];
+        $this->forgetReviewState();
 
         if (! $this->hideReviewed) {
             $this->skipRender();
@@ -844,17 +845,20 @@ new #[Layout('layouts.app')] class extends Component
     public function hideReviewedFiles(): void
     {
         $this->hideReviewed = true;
+        $this->forgetReviewState();
     }
 
     public function showAllFiles(): void
     {
         $this->hideReviewed = false;
         $this->recentlyReviewedIds = [];
+        $this->forgetReviewState();
     }
 
     public function clearFileFilter(): void
     {
         $this->fileFilter = '';
+        $this->forgetReviewState();
     }
 
     public function selectFile(string $fileId): void
@@ -878,6 +882,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->fileFilter = '';
         $this->hideReviewed = false;
         $this->recentlyReviewedIds = [];
+        $this->forgetReviewState();
     }
 
     public function updatedGlobalComment(): void
@@ -948,6 +953,8 @@ new #[Layout('layouts.app')] class extends Component
      */
     private function settleReviewedRender(): void
     {
+        $this->forgetReviewState();
+
         // Hide-reviewed mode does a full render because the toggle drops the
         // newly-reviewed file from the visible list. The reviewed-summary island
         // is declared always:true, so it re-renders inline as part of that full
@@ -957,12 +964,17 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         // Other modes skip the full render for latency and refresh just the
-        // islands. Bust the computed cache first so they reflect the reviewedFiles
-        // change just made rather than a value memoized earlier.
-        unset($this->reviewState);
+        // islands. The computed cache has already been busted so they reflect the
+        // reviewedFiles change just made rather than a value memoized earlier.
         $this->skipRender();
         $this->renderIsland('reviewed-summary');
         $this->renderIsland('file-list');
+    }
+
+    private function forgetReviewState(): void
+    {
+        unset($this->reviewState);
+        unset($this->recentlyReviewedFiles);
     }
 
     /** @return array<string, array<int, array<string, mixed>>> */
