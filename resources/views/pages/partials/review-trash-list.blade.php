@@ -28,14 +28,14 @@
                 <span class="text-[10px] text-gh-muted tabular-nums" x-text="remaining"></span>
                 <button @click="$wire.restoreDiscardedFile({{ $trashed['id'] }})" title="Restore"
                     aria-label="Restore discarded file"
-                    class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-green hover:text-gh-text shrink-0">
+                    class="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity text-gh-green hover:text-gh-text shrink-0">
                     <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
                 </button>
                 <x-arm-commit-button
                     icon="trash"
                     tooltip="Permanently delete"
                     @confirmed="$wire.permanentlyDeleteTrashed({{ $trashed['id'] }})"
-                    class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    class="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shrink-0"
                 />
             </div>
         @endforeach
