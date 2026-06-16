@@ -199,6 +199,40 @@ describe('createChangePoller', () => {
         poller.currentCount = 4;
         expect(poller.tooltip).toBe('4 files changed externally - click to refresh');
     });
+
+    it('registers refresh shortcuts on init and unregisters them on destroy (browser build)', () => {
+        const stopPoll = vi.fn();
+        const keymap = { register: vi.fn(), unregister: vi.fn() };
+        window.smartPoll = { startSmartPoll: () => stopPoll, isFocused: () => true };
+        respondWith({ fingerprint: 'fp-1', count: 0 });
+
+        const poller = createChangePoller({ projectId: 5, keymapEnabled: true });
+        poller.$store = { keymap };
+
+        poller.init();
+        expect(keymap.register).toHaveBeenCalledWith('⌘R', expect.any(Function), { allowInEditable: true });
+        expect(keymap.register).toHaveBeenCalledWith('⌘⇧R', expect.any(Function), { allowInEditable: true });
+
+        poller.destroy();
+        expect(keymap.unregister).toHaveBeenCalledWith('⌘R');
+        expect(keymap.unregister).toHaveBeenCalledWith('⌘⇧R');
+        expect(stopPoll).toHaveBeenCalled();
+    });
+
+    it('leaves shortcuts alone in the native build where keymap is disabled', () => {
+        const keymap = { register: vi.fn(), unregister: vi.fn() };
+        window.smartPoll = { startSmartPoll: () => vi.fn(), isFocused: () => true };
+        respondWith({ fingerprint: 'fp-1', count: 0 });
+
+        const poller = createChangePoller({ projectId: 5, keymapEnabled: false });
+        poller.$store = { keymap };
+
+        poller.init();
+        poller.destroy();
+
+        expect(keymap.register).not.toHaveBeenCalled();
+        expect(keymap.unregister).not.toHaveBeenCalled();
+    });
 });
 
 describe('createReviewPage path helpers', () => {

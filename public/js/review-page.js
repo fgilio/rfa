@@ -263,6 +263,14 @@
             },
             destroy() {
                 if (this.stopPoll) this.stopPoll();
+                // Drop the shortcut bindings on teardown so a poller that's gone
+                // (e.g. after navigating away) doesn't leave ⌘R pointing at a
+                // dead component. The keymap store is keyed by combo, so this
+                // also keeps a remount from re-binding a stale handler.
+                if (config.keymapEnabled) {
+                    this.$store.keymap.unregister('⌘R');
+                    this.$store.keymap.unregister('⌘⇧R');
+                }
             },
         };
     }
