@@ -1,14 +1,8 @@
 <?php
 
 use App\Actions\BackfillGlobalGitignoreAction;
-use App\Actions\CleanExpiredTrashAction;
 use App\Actions\DeleteReviewFilesAction;
-use App\Actions\DeleteTrashedFileAction;
 use App\Actions\DeriveReviewStateAction;
-use App\Actions\DiscardFileChangesAction;
-use App\Actions\ExportReviewAction;
-use App\Actions\ExportReviewSnapshotAction;
-use App\Actions\GetCurrentHeadAction;
 use App\Actions\GetFileListAction;
 use App\Actions\GroupReviewFilesAction;
 use App\Actions\IsSinceBaseViewAction;
@@ -17,12 +11,10 @@ use App\Actions\LoadCommitMetadataAction;
 use App\Actions\PersistProjectViewAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveCommitAction;
-use App\Actions\ResolveDivergenceStateAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\ResolveRangeAction;
 use App\Actions\ResolveRangeToWorkingAction;
 use App\Actions\ResolveStartupRouteAction;
-use App\Actions\RestoreDiscardedFileAction;
 use App\Actions\ReviewCommentWorkflowAction;
 use App\Actions\ScanReviewFilesAction;
 use App\Actions\SessionStateAction;
@@ -30,23 +22,20 @@ use App\Actions\ToggleReviewedAction;
 use App\Actions\UnlinkExternalPathAction;
 use App\Actions\UpdateProjectSettingAction;
 use App\Concerns\InteractsWithRemoteLinks;
-use App\DTOs\CurrentHeadResult;
+use App\Concerns\ReviewPage\ExportsReview;
+use App\Concerns\ReviewPage\ManagesReviewTrash;
+use App\Concerns\ReviewPage\ReviewsBranchDivergence;
 use App\DTOs\DiffTarget;
-use App\DTOs\DivergenceDecision;
 use App\DTOs\FileListEntry;
 use App\DTOs\ReviewCommentMutation;
 use App\DTOs\ReviewState;
-use App\Enums\DiffSide;
-use App\Enums\DivergenceDecisionKind;
 use App\Enums\DivergenceState;
-use App\Enums\GitRef;
 use App\Enums\LastViewKind;
 use App\Enums\LastViewMode;
 use App\Events\HardReloadShortcutPressed;
 use App\Events\RefreshShortcutPressed;
 use App\Exceptions\GitCommandException;
 use App\Listeners\HandleMenuItemClicked;
-use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
@@ -61,11 +50,12 @@ use function Illuminate\Support\defer;
 new #[Layout('layouts.app')] class extends Component
 {
     use InteractsWithRemoteLinks;
+    use ExportsReview;
+    use ManagesReviewTrash;
+    use ReviewsBranchDivergence;
 
     /** Undo-toast `type` for the "marked file as reviewed" action. */
     private const UNDO_TYPE_MARK_REVIEWED = 'mark-reviewed';
-
-    private const UNDO_TYPE_SWITCH_BRANCH = 'switch-branch';
 
     /** @var array<int, array<string, mixed>> */
     public array $files = [];
@@ -164,19 +154,29 @@ new #[Layout('layouts.app')] class extends Component
 
     /*
     |----------------------------------------------------------------------
-    | Responsibility clusters (6):
-    |   1. Initialization & Diff Context   (mount..fileFingerprint)
-    |   2. Branch Divergence               (checkHeadDivergence..persistedCommentQuery)
-    |   3. Comment Management              (addComment..restoreComments)
-    |   4. Trash & Discard                 (discardFileChanges..unmarkReviewed)
-    |   5. Review State & Export           (toggleReviewed..startNewReview)
-    |   6. Computed, Helpers & Persistence (reviewState..loadTrashedFiles)
+    | This page stays ONE Livewire component: it renders N diff-file children,
+    | and a parent re-render rehydrates them all (the 1+N hazard, see
+    | resources/CLAUDE.md), so its sections cannot be nested sub-components.
+    | The class is the event and render coordinator. Cohesive clusters with
+    | little render coupling live in App\Concerns\ReviewPage traits; pure
+    | decision and write logic lives in Actions.
     |
-    | Shared deps: $files, $comments, $reviewedFiles, saveSession()
-    | Extraction blocker: 1+N hydration (see resources/CLAUDE.md). The page
-    | stays one Livewire component; pure decision and write logic lives in
-    | Actions (ResolveDivergenceStateAction, ReviewCommentWorkflowAction),
-    | leaving this class as the event and render coordinator.
+    | Traits:
+    |   ReviewsBranchDivergence  HEAD polling + divergence state machine
+    |   ManagesReviewTrash       discard / restore / trash list
+    |   ExportsReview            submit / snapshot / copy paths
+    |
+    | Component regions:
+    |   1. Initialization & Diff Context   (mount..fileFingerprint)
+    |   2. Comment Management              (addComment..restoreComments)
+    |   3. Undo coordinator               (undo, unmarkReviewed)
+    |   4. Review State                   (toggleReviewed..updatedGlobalComment)
+    |   5. Computed, Helpers & Persistence (reviewState..saveSession)
+    |
+    | Shared deps: $files, $comments, $reviewedFiles, saveSession(),
+    | buildDiffTarget(), refreshFileList(). The coordinator keeps every method
+    | that calls skipRender/renderIsland/dispatch, so the 1+N render contract
+    | reads in one place.
     |----------------------------------------------------------------------
     */
 
@@ -606,205 +606,6 @@ new #[Layout('layouts.app')] class extends Component
 
     // endregion: Initialization & Diff Context
 
-    // region: Branch Divergence
-
-    #[On('head-divergence-transitioned')]
-    public function checkHeadDivergence(): void
-    {
-        if (! $this->refreshDivergenceState()) {
-            $this->skipRender();
-        }
-    }
-
-    /**
-     * HEAD advanced on the same branch the user is reviewing, typically
-     * because they just committed. Reload the file list so the diff reflects
-     * the new commit. Commit/range modes pin both endpoints, so a HEAD move
-     * cannot affect what's shown; skip render in that case.
-     */
-    #[On('head-advanced-on-branch')]
-    public function refreshAfterHeadAdvance(): void
-    {
-        if ($this->isCommitMode()) {
-            $this->skipRender();
-
-            return;
-        }
-
-        $this->softRefresh();
-    }
-
-    /**
-     * Recompute divergence state. Returns true if state changed since the last
-     * check (i.e. the caller should render), false when the caller can skip.
-     * Kept separate from `checkHeadDivergence()` so callers like `softRefresh`
-     * can update divergence without latching `skipRender()` onto a response
-     * that still needs to morph because files did change.
-     */
-    private function refreshDivergenceState(): bool
-    {
-        if ($this->isCommitMode()) {
-            $changed = ! $this->divergenceChecked;
-            $this->divergenceChecked = true;
-
-            return $changed;
-        }
-
-        $before = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->projectBranch];
-
-        $head = app(GetCurrentHeadAction::class)->handle($this->repoPath, $this->projectBranch ?: null);
-        $this->resolveDivergenceState($head);
-
-        $after = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->projectBranch];
-
-        $changed = ! $this->divergenceChecked || $before !== $after;
-        $this->divergenceChecked = true;
-
-        return $changed;
-    }
-
-    private function resolveDivergenceState(CurrentHeadResult $head): void
-    {
-        $decision = app(ResolveDivergenceStateAction::class)->handle(
-            $head,
-            $this->projectBranch,
-            $this->dismissedAtHead,
-            $this->dismissedAtBranch,
-            fn (): bool => $this->hasPersistedComments(),
-            fn (): int => $this->persistedCommentCount(),
-        );
-
-        match ($decision->kind) {
-            DivergenceDecisionKind::Noop => null,
-            DivergenceDecisionKind::Aligned => $this->markAligned(),
-            DivergenceDecisionKind::AutoFollow => $this->autoFollowToHead((string) $decision->autoFollowBranch),
-            DivergenceDecisionKind::Show => $this->showDivergence($decision),
-        };
-    }
-
-    private function showDivergence(DivergenceDecision $decision): void
-    {
-        $this->divergenceState = $decision->state ?? DivergenceState::Aligned;
-        $this->divergenceContext = $decision->context;
-    }
-
-    public function switchReviewToHead(): void
-    {
-        $head = app(GetCurrentHeadAction::class)->handle($this->repoPath, $this->projectBranch ?: null);
-
-        if ($head->detached || $head->branch === null || $head->branch === '') {
-            return;
-        }
-
-        // Capture before autoFollow clears state, so the switch stays undoable.
-        $wasDiverged = $this->divergenceState === DivergenceState::Diverged;
-        $fromBranch = $this->projectBranch;
-
-        $this->autoFollowToHead($head->branch);
-
-        // Only offer undo when leaving a real, still-existing target (Diverged).
-        // MissingTarget's old branch is gone, so undoing would re-point at nothing.
-        if ($wasDiverged && $fromBranch !== '' && $fromBranch !== $head->branch) {
-            $this->dispatch(
-                'undo-available',
-                type: self::UNDO_TYPE_SWITCH_BRANCH,
-                payload: ['fromBranch' => $fromBranch],
-                message: 'Switched review to '.$head->branch,
-            );
-        }
-    }
-
-    public function keepReviewing(): void
-    {
-        $branch = $this->divergenceContext['currentBranch'] ?? null;
-
-        if (is_string($branch) && $branch !== '') {
-            // Diverged / missing-target: suppress by branch identity.
-            $this->dismissedAtBranch = $branch;
-        } else {
-            // Detached: no branch to key on, so fall back to the sha.
-            $sha = $this->divergenceContext['currentSha'] ?? null;
-
-            if (is_string($sha) && $sha !== '') {
-                $this->dismissedAtHead = $sha;
-            }
-        }
-
-        $this->markAligned();
-    }
-
-    public function dismissDetachedBanner(): void
-    {
-        $this->keepReviewing();
-    }
-
-    public function dismissMissingTarget(): void
-    {
-        $this->keepReviewing();
-    }
-
-    /** @param array{fromBranch?: string} $payload */
-    public function restoreReviewBranch(array $payload): void
-    {
-        $branch = $payload['fromBranch'] ?? null;
-
-        if (is_string($branch) && $branch !== '') {
-            $this->autoFollowToHead($branch);
-
-            // autoFollowToHead() aligns to the restored target, which is right for
-            // its "follow HEAD" callers. Here HEAD is still on the branch we
-            // switched away from, so the review is diverged again. Recompute now:
-            // the head poller won't re-fire (HEAD's identity hasn't changed) and
-            // would otherwise leave the divergence marker hidden indefinitely.
-            $this->refreshDivergenceState();
-        }
-    }
-
-    private function autoFollowToHead(string $newBranch): void
-    {
-        // Race guard: overlapping polls during a slow rehydrate can re-enter here.
-        if ($this->projectBranch === $newBranch) {
-            $this->markAligned();
-
-            return;
-        }
-
-        app(UpdateProjectSettingAction::class)->handle($this->projectId, ['branch' => $newBranch]);
-
-        $this->projectBranch = $newBranch;
-        $this->dismissedAtHead = null;
-        $this->dismissedAtBranch = null;
-        $this->markAligned();
-
-        $this->rehydrateForTarget();
-    }
-
-    private function markAligned(): void
-    {
-        $this->divergenceState = DivergenceState::Aligned;
-        $this->divergenceContext = [];
-    }
-
-    private function hasPersistedComments(): bool
-    {
-        return $this->persistedCommentQuery()->exists();
-    }
-
-    private function persistedCommentCount(): int
-    {
-        return $this->persistedCommentQuery()->count();
-    }
-
-    /** @return \Illuminate\Database\Eloquent\Builder<\App\Models\Comment> */
-    private function persistedCommentQuery(): \Illuminate\Database\Eloquent\Builder
-    {
-        $projectId = $this->projectId === 0 ? null : $this->projectId;
-
-        return \App\Models\Comment::forProjectOrRepo($projectId, $this->repoPath);
-    }
-
-    // endregion: Branch Divergence
-
     // region: Comment Management
 
     #[On('add-comment')]
@@ -899,149 +700,22 @@ new #[Layout('layouts.app')] class extends Component
 
     public function clearAllComments(): void
     {
-        if (empty($this->comments)) {
-            return;
-        }
-
-        $deletedComments = $this->comments;
-
-        \App\Models\Comment::whereIn('id', array_column($deletedComments, 'id'))->delete();
-
-        $this->comments = [];
-
-        collect($deletedComments)
-            ->pluck('fileId')
-            ->unique()
-            ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
-
-        $count = count($deletedComments);
-        $this->dispatch('undo-available', type: 'clear-all', payload: $deletedComments,
-            message: "Cleared {$count} comment".($count === 1 ? '' : 's'));
-        $this->checkHeadDivergence();
+        $this->applyCommentMutation(
+            app(ReviewCommentWorkflowAction::class)->clearAll($this->comments)
+        );
     }
 
     /** @param  array<int, array<string, mixed>>  $comments */
     public function restoreComments(array $comments): void
     {
-        $merged = $this->mergeComments($comments);
-
-        if (empty($merged)) {
-            return;
-        }
-
-        foreach ($merged as $c) {
-            \App\Models\Comment::updateOrCreate(
-                ['id' => $c['id']],
-                [
-                    'project_id' => $this->projectId ?: null,
-                    'repo_path' => $this->repoPath,
-                    'origin_ref' => $c['originRef'] ?? GitRef::Working->value,
-                    'file_path' => $c['file'] ?? '',
-                    'side' => $c['side'] ?? DiffSide::Right->value,
-                    'start_line' => $c['startLine'] ?? null,
-                    'end_line' => $c['endLine'] ?? null,
-                    'file_content_hash' => $c['fileContentHash'] ?? null,
-                    'line_snippet' => $c['lineSnippet'] ?? null,
-                    'body' => $c['body'] ?? '',
-                    'is_draft' => (bool) ($c['isDraft'] ?? false),
-                    'submitted_at' => null,
-                ],
-            );
-        }
-
-        collect($merged)
-            ->pluck('fileId')
-            ->unique()
-            ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
-
-        $this->checkHeadDivergence();
+        $this->applyCommentMutation(
+            app(ReviewCommentWorkflowAction::class)->restore($this->repoPath, $this->projectId ?: null, $this->comments, $comments)
+        );
     }
 
     // endregion: Comment Management
 
-    // region: Trash & Discard
-
-    #[On('discard-file')]
-    public function discardFileChanges(string $fileId): void
-    {
-        if ($this->isCommitMode()) {
-            return;
-        }
-
-        $file = collect($this->files)->firstWhere('id', $fileId);
-        if (! $file || $file['status'] === 'commented' || ($file['isExternal'] ?? false)) {
-            return;
-        }
-
-        $fileComments = collect($this->comments)->where('fileId', $fileId)->values()->all();
-
-        try {
-            $trashRecord = app(DiscardFileChangesAction::class)->handle(
-                repoPath: $this->repoPath,
-                path: $file['path'],
-                status: $file['status'],
-                projectId: $this->projectId,
-                oldPath: $file['oldPath'] ?? null,
-                isUntracked: $file['isUntracked'] ?? false,
-                isSymlink: $file['isSymlink'] ?? false,
-                comments: $fileComments,
-            );
-        } catch (\Throwable $e) {
-            $message = $e instanceof GitCommandException ? $e->stderr : $e->getMessage();
-            Flux::toast(variant: 'danger', text: 'Discard failed for '.basename($file['path']).': '.$message);
-            $this->skipRender();
-
-            return;
-        }
-
-        // Remove comments for discarded file
-        $this->comments = array_values(
-            array_filter($this->comments, fn ($c) => $c['fileId'] !== $fileId)
-        );
-
-        // Invalidate every diff-cache variant for this file (base + :full-context).
-        $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
-        DiffCacheKey::forget($projectKey, $fileId, $this->buildDiffTarget()->contextKey());
-
-        unset($this->reviewedFiles[$file['path']]);
-
-        $this->refreshFileList();
-        $this->saveSession();
-        $this->loadTrashedFiles();
-
-        $commentCount = count($fileComments);
-        $message = $commentCount > 0
-            ? 'Discarded '.basename($file['path']).' - '.$commentCount.' comment'.($commentCount === 1 ? '' : 's').' removed'
-            : 'Discarded '.basename($file['path']);
-        $this->dispatch('undo-available', type: 'discard', payload: $trashRecord->id, message: $message);
-        $this->dispatch('fingerprint-reset');
-    }
-
-    public function restoreDiscardedFile(int $trashId): void
-    {
-        try {
-            $comments = app(RestoreDiscardedFileAction::class)->handle($trashId, $this->repoPath, $this->projectId);
-        } catch (\Throwable $e) {
-            $message = $e instanceof GitCommandException ? $e->stderr : $e->getMessage();
-            Flux::toast(variant: 'danger', text: 'Restore failed: '.$message);
-            $this->skipRender();
-
-            return;
-        }
-
-        $this->mergeComments($comments);
-        $this->refreshFileList();
-        $this->saveSession();
-        $this->loadTrashedFiles();
-
-        Flux::toast(text: 'Changes restored');
-    }
-
-    public function permanentlyDeleteTrashed(int $trashId): void
-    {
-        app(DeleteTrashedFileAction::class)->handle($trashId, $this->projectId);
-        $this->loadTrashedFiles();
-    }
+    // region: Undo coordinator
 
     public function undo(string $type, mixed $payload): void
     {
@@ -1091,9 +765,9 @@ new #[Layout('layouts.app')] class extends Component
         $this->settleReviewedRender();
     }
 
-    // endregion: Trash & Discard
+    // endregion: Undo coordinator
 
-    // region: Review State & Export
+    // region: Review State
 
     #[On('toggle-reviewed')]
     public function toggleReviewed(string $filePath): void
@@ -1212,114 +886,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->skipRender();
     }
 
-    public function submitReview(): void
-    {
-        $this->saveSession();
-
-        $target = $this->buildDiffTarget();
-        $finalizedComments = array_values(array_filter($this->comments, fn ($c) => ! ($c['isDraft'] ?? false)));
-
-        $result = app(ExportReviewAction::class)->handle($this->repoPath, $finalizedComments, $this->globalComment, $this->files, $target);
-
-        $this->exportResult = $result['clipboard'];
-        $this->submitted = true;
-
-        $this->scanReviewFiles();
-
-        Flux::toast(variant: 'success', heading: 'Review submitted', text: $this->exportResult);
-        $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
-
-        // Never drop a comment silently: if the anchor resolver couldn't place some
-        // comments against this diff, they stay in the pool and the user is told.
-        $excludedCount = count($result['excludedComments'] ?? []);
-        if ($excludedCount > 0) {
-            Flux::toast(
-                variant: 'warning',
-                heading: $excludedCount === 1 ? '1 comment not included' : "{$excludedCount} comments not included",
-                text: "Their anchor could not be placed in this diff. They're kept for a later submit.",
-            );
-        }
-
-        // Only drop comments the export actually submitted; drafts and out-of-scope
-        // comments (e.g. hash-anchored from another selection) stay in the pool.
-        $submittedIds = $result['submittedIds'];
-        $affectedFileIds = collect($this->comments)
-            ->whereIn('id', $submittedIds)
-            ->pluck('fileId')
-            ->unique();
-        $this->comments = array_values(array_filter(
-            $this->comments,
-            fn ($c) => ! in_array($c['id'], $submittedIds, true),
-        ));
-        $this->globalComment = '';
-        $this->saveSession();
-
-        $affectedFileIds->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
-    }
-
-    public function exportSnapshot(): void
-    {
-        $this->saveSession();
-
-        $result = app(ExportReviewSnapshotAction::class)->handle(
-            repoPath: $this->repoPath,
-            files: $this->files,
-            comments: $this->comments,
-            globalComment: $this->globalComment,
-            reviewedFiles: $this->reviewedFiles,
-            target: $this->buildDiffTarget(),
-            sourceLabel: $this->projectName !== '' ? $this->projectName : basename($this->repoPath),
-        );
-
-        Flux::toast(variant: 'success', heading: 'Snapshot exported', text: $result['json']);
-        $this->dispatch('copy-to-clipboard', text: $result['clipboard'], toast: 'Snapshot path copied');
-    }
-
-    /**
-     * Copy the currently visible (filtered) file paths to the clipboard as bare
-     * names, repo-relative paths, or absolute paths. The visible set is derived
-     * server-side, so a filtered copy always matches what the user sees without
-     * the client reconstructing the list from the DOM.
-     */
-    public function copyVisiblePaths(string $kind = 'relative'): void
-    {
-        $this->skipRender();
-
-        $paths = collect($this->reviewState->visibleFileEntries)
-            ->pluck('path')
-            ->filter()
-            ->values();
-
-        if ($paths->isEmpty()) {
-            return;
-        }
-
-        $repoPath = rtrim($this->repoPath, '/');
-
-        $lines = $paths->map(fn (string $path): string => match ($kind) {
-            'name' => basename($path),
-            'full' => $repoPath === '' ? $path : $repoPath.'/'.$path,
-            default => $path,
-        });
-
-        $noun = match ($kind) {
-            'name' => 'file name',
-            'full' => 'full path',
-            default => 'relative path',
-        };
-        $count = $lines->count();
-        $toast = $count === 1 ? "Copied {$noun}" : "Copied {$count} {$noun}s";
-
-        $this->dispatch('copy-to-clipboard', text: $lines->implode("\n"), toast: $toast);
-    }
-
-    public function startNewReview(): void
-    {
-        $this->submitted = false;
-        $this->exportResult = null;
-    }
-
-    // endregion: Review State & Export
+    // endregion: Review State
 
     // region: Computed, Helpers & Persistence
 
@@ -1524,17 +1091,6 @@ new #[Layout('layouts.app')] class extends Component
     private function saveSession(): void
     {
         app(SessionStateAction::class)->saveGlobalNote($this->repoPath, $this->globalComment, $this->projectId ?: null);
-    }
-
-    private function loadTrashedFiles(): void
-    {
-        if ($this->isCommitMode()) {
-            $this->trashedFiles = [];
-
-            return;
-        }
-
-        $this->trashedFiles = app(CleanExpiredTrashAction::class)->handle($this->projectId);
     }
 
     // endregion: Computed, Helpers & Persistence

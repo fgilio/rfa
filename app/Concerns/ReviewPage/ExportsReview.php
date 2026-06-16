@@ -1,0 +1,135 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Concerns\ReviewPage;
+
+use App\Actions\ExportReviewAction;
+use App\Actions\ExportReviewSnapshotAction;
+use Flux\Flux;
+
+/**
+ * Review finalization and export for the review page.
+ *
+ * Submitting formats the non-draft comments into a review, copies it to the
+ * clipboard, and drops the submitted comments from the pool (drafts and
+ * unplaceable comments stay). Snapshot export and copy-visible-paths are
+ * read-only side exports. startNewReview clears the submitted state so the
+ * editor returns.
+ *
+ * Component state read/written: $comments, $globalComment, $files,
+ * $reviewedFiles, $repoPath, $projectName, $exportResult, $submitted. Calls
+ * into the coordinator (saveSession, buildDiffTarget, scanReviewFiles,
+ * dispatchFileComments, the reviewState computed) and the render pipeline
+ * (skipRender, dispatch). submitReview renders (it swaps the submit bar);
+ * copyVisiblePaths skips render since the clipboard write is client-side.
+ */
+trait ExportsReview
+{
+    public function submitReview(): void
+    {
+        $this->saveSession();
+
+        $target = $this->buildDiffTarget();
+        $finalizedComments = array_values(array_filter($this->comments, fn ($c) => ! ($c['isDraft'] ?? false)));
+
+        $result = app(ExportReviewAction::class)->handle($this->repoPath, $finalizedComments, $this->globalComment, $this->files, $target);
+
+        $this->exportResult = $result['clipboard'];
+        $this->submitted = true;
+
+        $this->scanReviewFiles();
+
+        Flux::toast(variant: 'success', heading: 'Review submitted', text: $this->exportResult);
+        $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
+
+        // Never drop a comment silently: if the anchor resolver couldn't place some
+        // comments against this diff, they stay in the pool and the user is told.
+        $excludedCount = count($result['excludedComments'] ?? []);
+        if ($excludedCount > 0) {
+            Flux::toast(
+                variant: 'warning',
+                heading: $excludedCount === 1 ? '1 comment not included' : "{$excludedCount} comments not included",
+                text: "Their anchor could not be placed in this diff. They're kept for a later submit.",
+            );
+        }
+
+        // Only drop comments the export actually submitted; drafts and out-of-scope
+        // comments (e.g. hash-anchored from another selection) stay in the pool.
+        $submittedIds = $result['submittedIds'];
+        $affectedFileIds = collect($this->comments)
+            ->whereIn('id', $submittedIds)
+            ->pluck('fileId')
+            ->unique();
+        $this->comments = array_values(array_filter(
+            $this->comments,
+            fn ($c) => ! in_array($c['id'], $submittedIds, true),
+        ));
+        $this->globalComment = '';
+        $this->saveSession();
+
+        $affectedFileIds->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
+    }
+
+    public function exportSnapshot(): void
+    {
+        $this->saveSession();
+
+        $result = app(ExportReviewSnapshotAction::class)->handle(
+            repoPath: $this->repoPath,
+            files: $this->files,
+            comments: $this->comments,
+            globalComment: $this->globalComment,
+            reviewedFiles: $this->reviewedFiles,
+            target: $this->buildDiffTarget(),
+            sourceLabel: $this->projectName !== '' ? $this->projectName : basename($this->repoPath),
+        );
+
+        Flux::toast(variant: 'success', heading: 'Snapshot exported', text: $result['json']);
+        $this->dispatch('copy-to-clipboard', text: $result['clipboard'], toast: 'Snapshot path copied');
+    }
+
+    /**
+     * Copy the currently visible (filtered) file paths to the clipboard as bare
+     * names, repo-relative paths, or absolute paths. The visible set is derived
+     * server-side, so a filtered copy always matches what the user sees without
+     * the client reconstructing the list from the DOM.
+     */
+    public function copyVisiblePaths(string $kind = 'relative'): void
+    {
+        $this->skipRender();
+
+        $paths = collect($this->reviewState->visibleFileEntries)
+            ->pluck('path')
+            ->filter()
+            ->values();
+
+        if ($paths->isEmpty()) {
+            return;
+        }
+
+        $repoPath = rtrim($this->repoPath, '/');
+
+        $lines = $paths->map(fn (string $path): string => match ($kind) {
+            'name' => basename($path),
+            'full' => $repoPath === '' ? $path : $repoPath.'/'.$path,
+            default => $path,
+        });
+
+        $noun = match ($kind) {
+            'name' => 'file name',
+            'full' => 'full path',
+            default => 'relative path',
+        };
+        $count = $lines->count();
+        $toast = $count === 1 ? "Copied {$noun}" : "Copied {$count} {$noun}s";
+
+        $this->dispatch('copy-to-clipboard', text: $lines->implode("\n"), toast: $toast);
+    }
+
+    public function startNewReview(): void
+    {
+        $this->submitted = false;
+        $this->exportResult = null;
+    }
+}

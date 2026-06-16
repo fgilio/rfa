@@ -136,3 +136,72 @@ test('delete of a valid id absent from the pool offers no undo and refreshes no 
         ->and($mutation->checksDivergence)->toBeTrue()
         ->and($mutation->skipsRender)->toBeFalse();
 });
+
+// -- clearAll --
+
+test('clearAll deletes every comment and offers undo while rendering the parent', function () {
+    $first = ($this->add)([], 'file-abc', 'one')->comments;
+    $both = ($this->add)($first, 'file-def', 'two')->comments;
+
+    $mutation = $this->action->clearAll($both);
+
+    expect($mutation)->not->toBeNull()
+        ->and($mutation->comments)->toBeEmpty()
+        ->and($mutation->affectedFileIds)->toBe(['file-abc', 'file-def'])
+        ->and($mutation->undo['type'])->toBe('clear-all')
+        ->and($mutation->undo['payload'])->toHaveCount(2)
+        ->and($mutation->undo['message'])->toBe('Cleared 2 comments')
+        ->and($mutation->checksDivergence)->toBeTrue()
+        ->and($mutation->skipsRender)->toBeFalse();
+
+    expect(Comment::count())->toBe(0);
+});
+
+test('clearAll uses a singular message for a single comment', function () {
+    $comments = ($this->add)([])->comments;
+
+    expect($this->action->clearAll($comments)->undo['message'])->toBe('Cleared 1 comment');
+});
+
+test('clearAll returns null when there are no comments', function () {
+    expect($this->action->clearAll([]))->toBeNull();
+});
+
+// -- restore --
+
+test('restore re-persists a removed comment and re-checks divergence without offering undo', function () {
+    $added = ($this->add)([])->comments;
+    $commentId = $added[0]['id'];
+    Comment::where('id', $commentId)->delete();
+
+    $mutation = $this->action->restore($this->repoPath, null, [], $added);
+
+    expect($mutation)->not->toBeNull()
+        ->and($mutation->comments)->toHaveCount(1)
+        ->and($mutation->comments[0]['id'])->toBe($commentId)
+        ->and($mutation->affectedFileIds)->toBe(['file-abc'])
+        ->and($mutation->undo)->toBeNull()
+        ->and($mutation->checksDivergence)->toBeTrue()
+        ->and($mutation->skipsRender)->toBeFalse();
+
+    expect(Comment::where('id', $commentId)->exists())->toBeTrue();
+});
+
+test('restore merges only the comments not already loaded', function () {
+    $current = ($this->add)([])->comments;
+    $incoming = ($this->add)($current, 'file-def', 'two')->comments;
+    Comment::where('id', $incoming[1]['id'])->delete();
+
+    $mutation = $this->action->restore($this->repoPath, null, $current, $incoming);
+
+    expect($mutation)->not->toBeNull()
+        ->and($mutation->comments)->toHaveCount(2)
+        ->and($mutation->affectedFileIds)->toBe(['file-def'])
+        ->and(Comment::where('id', $incoming[1]['id'])->exists())->toBeTrue();
+});
+
+test('restore returns null when every incoming comment is already loaded', function () {
+    $added = ($this->add)([])->comments;
+
+    expect($this->action->restore($this->repoPath, null, $added, $added))->toBeNull();
+});

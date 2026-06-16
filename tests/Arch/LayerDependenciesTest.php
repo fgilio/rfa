@@ -65,13 +65,19 @@ arch('services are only used in actions, services, and providers (for container 
         'App\Providers',
     ]);
 
-arch('dtos are only used in services, actions, livewire, and console benchmark tooling')
+arch('dtos are only used in services, actions, livewire, review-page concerns, and console benchmark tooling')
     ->expect('App\DTOs')
     ->toOnlyBeUsedIn([
         'App\Services',
         'App\Actions',
         'App\DTOs',
         'App\Livewire',
+        // App\Concerns\ReviewPage holds traits extracted from the review-page
+        // Livewire component. They orchestrate Actions and consume the DTOs
+        // those Actions return, so they share the Livewire layer's DTO access.
+        // Model access is deliberately not extended here: the traits delegate
+        // every model query to an Action, as the layering requires.
+        'App\Concerns\ReviewPage',
         'App\Console\Benchmark',
     ]);
 
