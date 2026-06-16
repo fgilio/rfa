@@ -24,6 +24,72 @@ function waitForCopiedText($page, float $timeoutSec = 5.0): ?string
     return null;
 }
 
+function cssRgbChannelValues(string $rgb): array
+{
+    preg_match_all('/[\d.]+/', $rgb, $matches);
+
+    return array_map('floatval', array_slice($matches[0], 0, 3));
+}
+
+function cssContrastRatio(string $firstColor, string $secondColor): float
+{
+    $relativeLuminance = function (string $color): float {
+        $channels = array_map(
+            fn (float $channel): float => $channel / 255,
+            cssRgbChannelValues($color),
+        );
+
+        $linear = array_map(
+            fn (float $channel): float => $channel <= 0.03928
+                ? $channel / 12.92
+                : (($channel + 0.055) / 1.055) ** 2.4,
+            $channels,
+        );
+
+        return 0.2126 * $linear[0] + 0.7152 * $linear[1] + 0.0722 * $linear[2];
+    };
+
+    $first = $relativeLuminance($firstColor);
+    $second = $relativeLuminance($secondColor);
+
+    return (max($first, $second) + 0.05) / (min($first, $second) + 0.05);
+}
+
+function renderedDiffFiles($page): array
+{
+    return $page->script("
+        [...document.querySelectorAll('[data-rfa-diff-file]')].map((element) => {
+            const data = window.Alpine?.\$data(element) ?? {};
+            const checkbox = element.querySelector('ui-checkbox');
+
+            return {
+                id: element.getAttribute('data-file-id'),
+                path: data.filePath ?? null,
+                checked: checkbox?.checked ?? null,
+                dataChecked: checkbox?.hasAttribute('data-checked') ?? null,
+            };
+        })
+    ");
+}
+
+function waitForRenderedDiffFileCount($page, int $expectedCount, float $timeoutSec = 5.0): array
+{
+    $deadline = microtime(true) + $timeoutSec;
+    $diffFiles = [];
+
+    while (microtime(true) < $deadline) {
+        $diffFiles = renderedDiffFiles($page);
+
+        if (count($diffFiles) === $expectedCount) {
+            return $diffFiles;
+        }
+
+        usleep(100_000);
+    }
+
+    return $diffFiles;
+}
+
 test('clicking file name collapses and expands file diff', function () {
     $page = $this->visit($this->projectUrl());
 
@@ -251,6 +317,63 @@ test('marking a file reveals the Hide reviewed toggle', function () {
 
     // The mark refreshes the island, which renders the toggle into view.
     $page->page()->getByRole('button', ['name' => 'Hide reviewed'])->waitFor(['state' => 'visible']);
+});
+
+test('checked reviewed checkbox keeps its check glyph visible in dark mode', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    $page->script("
+        document.documentElement.classList.add('dark');
+        if (window.Flux) window.Flux.dark = true;
+    ");
+
+    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
+    $page->assertSee('1/3 reviewed');
+
+    $styles = $page->script("
+        (() => {
+            const checkboxes = [...document.querySelectorAll('ui-checkbox')];
+            const checkbox = checkboxes.find((candidate) => candidate.checked);
+            const indicator = checkbox?.querySelector('[data-flux-checkbox-indicator]');
+            const icon = indicator?.querySelector('svg');
+
+            return {
+                checked: Boolean(checkbox),
+                hasCheckedAttribute: checkbox?.hasAttribute('data-checked') ?? false,
+                display: icon ? getComputedStyle(icon).display : null,
+                iconColor: icon ? getComputedStyle(icon).color : null,
+                backgroundColor: indicator ? getComputedStyle(indicator).backgroundColor : null,
+            };
+        })()
+    ");
+
+    expect($styles['checked'])->toBeTrue()
+        ->and($styles['hasCheckedAttribute'])->toBeTrue()
+        ->and($styles['display'])->toBe('block')
+        ->and(cssContrastRatio($styles['iconColor'], $styles['backgroundColor']))->toBeGreaterThan(3.0);
+});
+
+test('hide reviewed removes checked diff files from the rendered page', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    $markedPath = waitForRenderedDiffFileCount($page, 3)[0]['path'];
+
+    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
+    $page->page()->getByRole('button', ['name' => 'Hide reviewed'])->waitFor(['state' => 'visible']);
+    $page->page()->getByRole('button', ['name' => 'Hide reviewed'])->click();
+
+    $page->page()->getByRole('button', ['name' => 'Show all files'])->waitFor(['state' => 'visible']);
+    $diffFiles = waitForRenderedDiffFileCount($page, 2);
+
+    expect($diffFiles)->toHaveCount(2);
+    expect(collect($diffFiles)->pluck('path')->all())->not->toContain($markedPath);
+    expect($page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->count())->toBe(2);
+
+    $page->page()->getByRole('button', ['name' => 'Show all files'])->click();
+    $diffFiles = waitForRenderedDiffFileCount($page, 3);
+
+    expect($diffFiles)->toHaveCount(3);
+    expect(collect($diffFiles)->pluck('path')->all())->toContain($markedPath);
 });
 
 test('clicking sidebar file scrolls to it', function () {

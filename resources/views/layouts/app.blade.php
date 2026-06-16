@@ -181,7 +181,7 @@
             border-color: rgb(var(--gh-border));
         }
         .dark [data-flux-checkbox-indicator] svg {
-            color: white;
+            color: var(--color-accent-foreground);
         }
 
         /* Override Flux heading to use display font */

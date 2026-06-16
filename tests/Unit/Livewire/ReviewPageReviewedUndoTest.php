@@ -17,6 +17,13 @@ use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
+function renderedIslandFragments(mixed $component, string $name): string
+{
+    return collect($component->effects['islandFragments'] ?? [])
+        ->filter(fn (string $fragment): bool => str_contains($fragment, "name={$name}|"))
+        ->implode("\n");
+}
+
 beforeEach(function () {
     $this->files = [
         ['id' => 'id-foo', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 5, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false],
@@ -211,17 +218,22 @@ test('toggleReviewed still skips parent re-render after these changes', function
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->dispatch('toggle-reviewed', filePath: 'src/Foo.php');
 
-    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
+        ->and(renderedIslandFragments($component, 'reviewed-summary'))->toContain('1/6 reviewed')
+        ->and(renderedIslandFragments($component, 'file-list'))->toContain('Un-mark as reviewed')
+        ->and(renderedIslandFragments($component, 'source-diff-list'))->toBe('');
 });
 
-test('toggleReviewed renders when hide-reviewed visibility changes', function () {
+test('toggleReviewed renders source diff list island when hide-reviewed visibility changes', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->call('hideReviewedFiles')
         ->dispatch('toggle-reviewed', filePath: 'src/Foo.php');
 
-    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeFalsy()
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
         ->and($component->instance()->reviewState()->isFileVisible('id-foo'))->toBeFalse()
-        ->and($component->instance()->reviewState()->isFileVisible('id-bar'))->toBeTrue();
+        ->and($component->instance()->reviewState()->isFileVisible('id-bar'))->toBeTrue()
+        ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-bar-')
+        ->and(renderedIslandFragments($component, 'source-diff-list'))->not->toContain('wire:key="id-foo-');
 });
 
 test('hide-reviewed actions render diff-file children from fresh review state', function () {
@@ -230,28 +242,31 @@ test('hide-reviewed actions render diff-file children from fresh review state', 
         ->assertSeeHtml('wire:key="id-foo-')
         ->assertSeeHtml('wire:key="id-bar-');
 
-    $component->call('hideReviewedFiles')
-        ->assertSeeHtml('aria-label="Show all files"')
-        ->assertDontSeeHtml('wire:key="id-foo-')
-        ->assertSeeHtml('wire:key="id-bar-');
+    $component->call('hideReviewedFiles');
 
-    $component->call('showAllFiles')
-        ->assertSeeHtml('aria-label="Hide reviewed"')
-        ->assertSeeHtml('wire:key="id-foo-')
-        ->assertSeeHtml('wire:key="id-bar-');
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
+        ->and(renderedIslandFragments($component, 'reviewed-summary'))->toContain('aria-label="Show all files"')
+        ->and(renderedIslandFragments($component, 'source-diff-list'))->not->toContain('wire:key="id-foo-')
+        ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-bar-');
+
+    $component->call('showAllFiles');
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
+        ->and(renderedIslandFragments($component, 'reviewed-summary'))->toContain('aria-label="Hide reviewed"')
+        ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-foo-')
+        ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-bar-');
 });
 
 test('the reviewed counter reflects new marks in hide-reviewed mode', function () {
-    // Hide-reviewed mode does a full render, which emits only skip markers for
-    // islands. The reviewed-summary island is declared always:true so it
-    // re-renders inline rather than going stale: marking a second file while
-    // hidden must advance the counter to 2/6, not stick at 1/6.
+    // Hide-reviewed mode renders reviewed-state surfaces as explicit islands.
+    // The reviewed-summary island must advance to 2/6, not stick at 1/6.
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
         ->call('hideReviewedFiles')
         ->dispatch('toggle-reviewed', filePath: 'src/Bar.php');
 
-    $component->assertSee('2/6 reviewed');
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
+        ->and(renderedIslandFragments($component, 'reviewed-summary'))->toContain('2/6 reviewed');
 });
 
 test('marking a file broadcasts an authoritative file-reviewed-changed so DiffFile converges to the server state', function () {
@@ -285,14 +300,15 @@ test('clearRecentlyReviewed skips parent re-render', function () {
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
 });
 
-test('clearRecentlyReviewed renders while hide-reviewed group is visible', function () {
+test('clearRecentlyReviewed renders sidebar file-list island while hide-reviewed group is visible', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
         ->call('hideReviewedFiles')
         ->call('clearRecentlyReviewed');
 
-    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeFalsy()
-        ->and($component->get('recentlyReviewedIds'))->toBe([]);
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
+        ->and($component->get('recentlyReviewedIds'))->toBe([])
+        ->and(renderedIslandFragments($component, 'file-list'))->not->toContain('data-testid="recently-reviewed-group"');
 });
 
 test('unmarkReviewed skips parent re-render to avoid 1+N child hydration', function () {
