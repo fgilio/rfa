@@ -32,11 +32,45 @@ else
     INBOX_DIR="$HOME/.local/share/com.fgilio.rfa/inbox"
 fi
 INBOX_PARENT="${INBOX_DIR%/*}"
-mkdir -p "$INBOX_PARENT"
-if [ -e "$INBOX_DIR" ] && [ ! -d "$INBOX_DIR" ]; then
-    mv "$INBOX_DIR" "$INBOX_DIR.$(date +%s)-$$.bak"
-fi
-mkdir -p "$INBOX_DIR"
+
+ensure_dir_path() {
+    local path="$1"
+    local current=""
+    local segment=""
+
+    if [ "${path#/}" != "$path" ]; then
+        current="/"
+        path="${path#/}"
+    fi
+
+    while [ -n "$path" ]; do
+        segment="${path%%/*}"
+        if [ "$path" = "$segment" ]; then
+            path=""
+        else
+            path="${path#*/}"
+        fi
+
+        [ -z "$segment" ] && continue
+
+        if [ "$current" = "/" ]; then
+            current="/$segment"
+        elif [ -z "$current" ]; then
+            current="$segment"
+        else
+            current="$current/$segment"
+        fi
+
+        if [ -e "$current" ] && [ ! -d "$current" ]; then
+            mv "$current" "$current.$(date +%s)-$$.bak"
+        fi
+
+        mkdir -p "$current"
+    done
+}
+
+ensure_dir_path "$INBOX_PARENT"
+ensure_dir_path "$INBOX_DIR"
 INBOX_FILE="$INBOX_DIR/$(date +%s%N)-$$.path"
 INBOX_TMP="$INBOX_FILE.tmp"
 if [ -n "$MODE" ]; then
