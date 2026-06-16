@@ -201,6 +201,22 @@ test('blade templates do not attach pending-save Livewire hooks inline', functio
     expect($violations)->toBeEmpty();
 });
 
+test('blade templates version first-party javascript assets', function () {
+    $violations = [];
+
+    foreach (bladeFiles() as $file) {
+        $content = file_get_contents($file);
+
+        if (preg_match_all('/<script\s+[^>]*src=["\']\/js\/[^"\']+["\'][^>]*>/i', $content, $matches)) {
+            foreach ($matches[0] as $tag) {
+                $violations[] = bladeRelativePath($file).': '.$tag;
+            }
+        }
+    }
+
+    expect($violations)->toBeEmpty();
+});
+
 test('inline alpine timers clear themselves on destroy', function () {
     $violations = [];
 

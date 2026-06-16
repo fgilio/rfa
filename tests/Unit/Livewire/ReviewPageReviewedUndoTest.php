@@ -219,7 +219,8 @@ test('toggleReviewed still skips parent re-render after these changes', function
         ->dispatch('toggle-reviewed', filePath: 'src/Foo.php');
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
-        ->and(renderedIslandFragments($component, 'reviewed-summary'))->toContain('1/6 reviewed')
+        ->and(renderedIslandFragments($component, 'reviewed-counter'))->toContain('1/6 reviewed')
+        ->and(renderedIslandFragments($component, 'reviewed-toggle'))->toContain('aria-label="Hide reviewed"')
         ->and(renderedIslandFragments($component, 'file-list'))->toContain('Un-mark as reviewed')
         ->and(renderedIslandFragments($component, 'source-diff-list'))->toBe('');
 });
@@ -249,7 +250,7 @@ test('hide-reviewed actions render diff-file children from fresh review state', 
     $component->call('hideReviewedFiles');
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
-        ->and(renderedIslandFragments($component, 'reviewed-summary'))->toContain('aria-label="Show all files"')
+        ->and(renderedIslandFragments($component, 'reviewed-toggle'))->toContain('aria-label="Show all files"')
         ->and(renderedIslandFragments($component, 'source-diff-list'))->not->toContain('wire:key="id-foo-')
         ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-bar-')
         ->and(renderedIslandFragments($component, 'file-count'))->toContain('5/6 files');
@@ -257,7 +258,7 @@ test('hide-reviewed actions render diff-file children from fresh review state', 
     $component->call('showAllFiles');
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
-        ->and(renderedIslandFragments($component, 'reviewed-summary'))->toContain('aria-label="Hide reviewed"')
+        ->and(renderedIslandFragments($component, 'reviewed-toggle'))->toContain('aria-label="Hide reviewed"')
         ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-foo-')
         ->and(renderedIslandFragments($component, 'source-diff-list'))->toContain('wire:key="id-bar-')
         ->and(renderedIslandFragments($component, 'file-count'))->toContain('6 files');
@@ -265,14 +266,14 @@ test('hide-reviewed actions render diff-file children from fresh review state', 
 
 test('the reviewed counter reflects new marks in hide-reviewed mode', function () {
     // Hide-reviewed mode renders reviewed-state surfaces as explicit islands.
-    // The reviewed-summary island must advance to 2/6, not stick at 1/6.
+    // The reviewed-counter island must advance to 2/6, not stick at 1/6.
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->dispatch('toggle-reviewed', filePath: 'src/Foo.php')
         ->call('hideReviewedFiles')
         ->dispatch('toggle-reviewed', filePath: 'src/Bar.php');
 
     expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
-        ->and(renderedIslandFragments($component, 'reviewed-summary'))->toContain('2/6 reviewed');
+        ->and(renderedIslandFragments($component, 'reviewed-counter'))->toContain('2/6 reviewed');
 });
 
 test('hide-reviewed keeps the visible-file count band in step instead of going stale', function () {
@@ -290,6 +291,20 @@ test('hide-reviewed keeps the visible-file count band in step instead of going s
         ->and($component->instance()->reviewState()->visibleFileCount)->toBe(4)
         ->and(renderedIslandFragments($component, 'file-count'))->toContain('4/6 files')
         ->and(renderedIslandFragments($component, 'file-list-header'))->toContain('Files');
+});
+
+test('hide-reviewed refreshes the status-strip copy-paths trigger visibility', function () {
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project']);
+
+    collect($this->files)
+        ->pluck('path')
+        ->each(fn (string $path) => $component->dispatch('toggle-reviewed', filePath: $path));
+
+    $component->call('hideReviewedFiles');
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue()
+        ->and($component->instance()->reviewState()->visibleFileCount)->toBe(0)
+        ->and(renderedIslandFragments($component, 'status-strip-copy-paths'))->not->toContain('status-strip-copy-paths-trigger');
 });
 
 test('marking a file broadcasts an authoritative file-reviewed-changed so DiffFile converges to the server state', function () {

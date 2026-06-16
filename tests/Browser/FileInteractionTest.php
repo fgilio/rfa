@@ -24,6 +24,23 @@ function waitForCopiedText($page, float $timeoutSec = 5.0): ?string
     return null;
 }
 
+function waitForReviewedCounter($page, string $text): void
+{
+    $counter = $page->page()->getByTestId('reviewed-counter');
+
+    $counter->getByText($text)->waitFor(['state' => 'visible']);
+
+    expect($counter->innerText())->toContain($text);
+}
+
+function clickFirstUncheckedReviewedCheckbox($page): void
+{
+    $page->page()
+        ->locator('[data-rfa-diff-file] ui-checkbox:not([data-checked])')
+        ->first()
+        ->click();
+}
+
 function cssRgbChannelValues(string $rgb): array
 {
     preg_match_all('/[\d.]+/', $rgb, $matches);
@@ -278,22 +295,22 @@ test('checking reviewed updates sidebar indicator', function () {
 
     $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
 
-    $page->assertSee('1/3 reviewed');
+    waitForReviewedCounter($page, '1/3 reviewed');
 });
 
 test('a second mark in normal mode advances the status-strip counter via the slot island', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
     // First mark: 1/3. Second mark: 2/3. The counter lives in the
-    // reviewed-summary island nested inside the x-status-strip slot, refreshed
+    // reviewed-counter island nested inside the x-status-strip slot, refreshed
     // by renderIsland on the skipRender path. This guards that the slot-scoped
     // island actually re-renders (not just the first mark or the hide-mode
     // full render).
-    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
-    $page->assertSee('1/3 reviewed');
+    clickFirstUncheckedReviewedCheckbox($page);
+    waitForReviewedCounter($page, '1/3 reviewed');
 
-    $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->nth(1)->click();
-    $page->assertSee('2/3 reviewed');
+    clickFirstUncheckedReviewedCheckbox($page);
+    waitForReviewedCounter($page, '2/3 reviewed');
 });
 
 test('marking a file flips its sidebar button to the reviewed state via the island', function () {
@@ -309,7 +326,7 @@ test('marking a file flips its sidebar button to the reviewed state via the isla
 test('marking a file reveals the Hide reviewed toggle', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
-    // The toggle lives in the reviewed-summary island and is absent until at
+    // The toggle lives in the reviewed-toggle island and is absent until at
     // least one file is reviewed.
     $page->page()->getByRole('button', ['name' => 'Hide reviewed'])->waitFor(['state' => 'hidden']);
 
@@ -328,7 +345,7 @@ test('checked reviewed checkbox keeps its check glyph visible in dark mode', fun
     ");
 
     $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
-    $page->assertSee('1/3 reviewed');
+    waitForReviewedCounter($page, '1/3 reviewed');
 
     $styles = $page->script("
         (() => {
@@ -382,6 +399,21 @@ test('hide reviewed removes checked diff files from the rendered page', function
 
     // Showing all files clears the partial-visibility count.
     $page->page()->getByTestId('status-strip')->getByText('2/3 files')->waitFor(['state' => 'hidden']);
+});
+
+test('status strip copy menu hides when hide-reviewed removes every file', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    foreach (range(0, 2) as $index) {
+        clickFirstUncheckedReviewedCheckbox($page);
+        waitForReviewedCounter($page, ($index + 1).'/3 reviewed');
+    }
+
+    $page->page()->getByRole('button', ['name' => 'Hide reviewed'])->click();
+
+    $page->page()->getByTestId('status-strip-copy-paths')->waitFor(['state' => 'hidden']);
+
+    expect($page->page()->getByTestId('status-strip-copy-paths')->isHidden())->toBeTrue();
 });
 
 test('clicking sidebar file scrolls to it', function () {

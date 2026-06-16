@@ -87,7 +87,7 @@ test('reviewed files persist after page reload', function () {
     JS);
 
     $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
-    // The reviewed-summary island re-renders the counter on the toggle round-trip;
+    // The reviewed-counter island re-renders on the toggle round-trip;
     // poll until it renders.
     $page->page()->waitForFunction("document.querySelector('[data-testid=\"reviewed-counter\"]')?.textContent?.includes('1/3 reviewed')");
     $page->page()->waitForFunction('window.__reviewedPersisted === true && window.__reviewedPendingCommits === 0');

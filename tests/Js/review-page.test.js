@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import reviewPage from '../../public/js/review-page.js';
 
-const { computeRemoteMenu, createReviewPage, createChangePoller } = reviewPage;
+const { computeRemoteMenu, createReviewPage, createChangePoller, install } = reviewPage;
 
 // A roomy viewport so the clamp never trims the requested click position;
 // clamping itself is covered by its own test.
@@ -235,7 +235,31 @@ describe('createChangePoller', () => {
     });
 });
 
+describe('install', () => {
+    afterEach(() => {
+        delete window.Alpine;
+    });
+
+    it('registers the latest review-page Alpine factories every time it loads', () => {
+        const data = vi.fn();
+        window.Alpine = { data };
+
+        expect(install(window)).toBe(true);
+        expect(install(window)).toBe(true);
+
+        expect(data).toHaveBeenCalledTimes(4);
+        expect(data).toHaveBeenNthCalledWith(1, 'reviewPage', expect.any(Function));
+        expect(data).toHaveBeenNthCalledWith(2, 'reviewChangePoller', expect.any(Function));
+        expect(data).toHaveBeenNthCalledWith(3, 'reviewPage', expect.any(Function));
+        expect(data).toHaveBeenNthCalledWith(4, 'reviewChangePoller', expect.any(Function));
+    });
+});
+
 describe('createReviewPage path helpers', () => {
+    afterEach(() => {
+        delete window.__rfaReviewedActionQueue;
+    });
+
     it('splits a path into directory and basename', () => {
         const page = createReviewPage(config);
         expect(page.pathDir('src/app/Foo.php')).toBe('src/app/');
@@ -254,5 +278,82 @@ describe('createReviewPage path helpers', () => {
     it('seeds activeFile from config', () => {
         expect(createReviewPage({ activeFile: 'file-7' }).activeFile).toBe('file-7');
         expect(createReviewPage({}).activeFile).toBeNull();
+    });
+
+    it('serializes reviewed actions so rapid toggles use settled Livewire state', async () => {
+        let releaseFirst;
+        const first = new Promise(resolve => {
+            releaseFirst = resolve;
+        });
+        const calls = [];
+        const page = createReviewPage({});
+        page.$wire = {
+            toggleReviewed: vi.fn((path) => {
+                calls.push(path);
+
+                return path === 'src/Foo.php' ? first : Promise.resolve();
+            }),
+        };
+
+        const firstToggle = page.toggleReviewed('src/Foo.php');
+        const secondToggle = page.toggleReviewed('src/Bar.php');
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(calls).toEqual(['src/Foo.php']);
+
+        releaseFirst();
+        await firstToggle;
+        await secondToggle;
+
+        expect(calls).toEqual(['src/Foo.php', 'src/Bar.php']);
+    });
+
+    it('keeps reviewed actions serialized across remounted page instances', async () => {
+        let releaseFirst;
+        const first = new Promise(resolve => {
+            releaseFirst = resolve;
+        });
+        const calls = [];
+        const firstPage = createReviewPage({});
+        const remountedPage = createReviewPage({});
+        firstPage.$wire = {
+            toggleReviewed: vi.fn((path) => {
+                calls.push(path);
+
+                return first;
+            }),
+        };
+        remountedPage.$wire = {
+            toggleReviewed: vi.fn((path) => {
+                calls.push(path);
+
+                return Promise.resolve();
+            }),
+        };
+
+        const firstToggle = firstPage.toggleReviewed('src/Foo.php');
+        const secondToggle = remountedPage.toggleReviewed('src/Bar.php');
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(calls).toEqual(['src/Foo.php']);
+
+        releaseFirst();
+        await firstToggle;
+        await secondToggle;
+
+        expect(calls).toEqual(['src/Foo.php', 'src/Bar.php']);
+    });
+
+    it('ignores reviewed toggle events without a file path', async () => {
+        const page = createReviewPage({});
+        page.$wire = { toggleReviewed: vi.fn() };
+
+        await page.toggleReviewed(undefined);
+
+        expect(page.$wire.toggleReviewed).not.toHaveBeenCalled();
     });
 });

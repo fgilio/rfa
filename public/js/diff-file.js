@@ -567,8 +567,7 @@
     }
 
     function install(root) {
-        if (typeof root.Alpine === 'undefined' || root.__diffFileAttached) return false;
-        root.__diffFileAttached = true;
+        if (typeof root.Alpine === 'undefined') return false;
         root.Alpine.data('diffFile', createDiffFile);
         return true;
     }

@@ -44,9 +44,8 @@ final readonly class ToggleReviewedAction
                 ->forProjectOrRepo($projectId, $repoPath)
                 ->where('file_path', $filePath)
                 ->delete();
-            unset($reviewedFiles[$filePath]);
 
-            return $reviewedFiles;
+            return $this->reviewedFilesFromStorage($knownFiles, $repoPath, $projectId);
         }
 
         ReviewedFile::updateOrCreate(
@@ -58,9 +57,33 @@ final readonly class ToggleReviewedAction
             ['content_hash' => $contentHash],
         );
 
-        $reviewedFiles[$filePath] = $contentHash;
+        return $this->reviewedFilesFromStorage($knownFiles, $repoPath, $projectId);
+    }
 
-        return $reviewedFiles;
+    /**
+     * Reload reviewed state from persisted rows so overlapping Livewire
+     * requests cannot replace the page with a partial snapshot.
+     *
+     * @param  array<int, array{path: string}>  $knownFiles
+     * @return array<string, string>
+     */
+    private function reviewedFilesFromStorage(array $knownFiles, string $repoPath, ?int $projectId): array
+    {
+        $paths = collect($knownFiles)
+            ->pluck('path')
+            ->map(fn (mixed $path): string => (string) $path)
+            ->filter()
+            ->values();
+
+        $hashesByPath = ReviewedFile::query()
+            ->forProjectOrRepo($projectId, $repoPath)
+            ->whereIn('file_path', $paths)
+            ->pluck('content_hash', 'file_path');
+
+        return $paths
+            ->filter(fn (string $path): bool => $hashesByPath->has($path))
+            ->mapWithKeys(fn (string $path): array => [$path => (string) $hashesByPath->get($path)])
+            ->all();
     }
 
     /**

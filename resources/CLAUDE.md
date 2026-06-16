@@ -178,8 +178,8 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `clearAllComments` | Yes | Dispatches comment-updated + undo-available events |
 | `restoreComments` | Yes | Dispatches comment-updated events to affected files |
 | `updatedGlobalComment` | Yes | No UI change needed server-side |
-| `toggleReviewed` | Yes | Always skips the parent render; refreshes the `reviewed-summary` + `file-list` islands, plus the visibility islands (`source-diff-list`, `file-count`, `file-list-header`) in Hide-reviewed mode where the toggle drops the file from the visible set. |
-| `hideReviewedFiles` / `showAllFiles` | Yes | Skip the parent render; refresh `reviewed-summary` + `file-list` + the visibility islands as files drop in/out of the visible set. |
+| `toggleReviewed` | Yes | Always skips the parent render; refreshes the `reviewed-toggle`, `reviewed-counter`, and `file-list` islands, plus the visibility islands (`source-diff-list`, `file-count`, `file-list-header`, `status-strip-copy-paths`) in Hide-reviewed mode where the toggle drops the file from the visible set. |
+| `hideReviewedFiles` / `showAllFiles` | Yes | Skip the parent render; refresh `reviewed-toggle`, `reviewed-counter`, `file-list`, and the visibility islands as files drop in/out of the visible set. |
 | `clearRecentlyReviewed` | Yes | Skip the parent render; refresh `file-list` only in Hide-reviewed mode (where the Recently-reviewed group shows). |
 | `submitReview` | No | Replaces entire submit bar UI (submitted state) |
 | `discardFileChanges` | No | Structural change: file removed from list, trash updated |
@@ -194,9 +194,9 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `delete-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{commentId}` |
 | `toggle-reviewed` | Livewire event — unit tests only; runtime goes via the `rfa-toggle-reviewed` bridge below | ReviewPage `#[On]` -> `toggleReviewed` | `{filePath}` |
 | `rfa-toggle-reviewed` | DiffFile Alpine + sidebar / Recently-reviewed buttons `$dispatch` (bubbles to window) | ReviewPage root Alpine `@window` -> `$wire.toggleReviewed` | `{filePath}` |
-| `rfa-hide-reviewed` | `reviewed-summary` island button `$dispatch` (window) | ReviewPage root Alpine `@window` -> `$wire.hideReviewedFiles` | none |
-| `rfa-show-all-files` | `reviewed-summary` island button `$dispatch` (window) | ReviewPage root Alpine `@window` -> `$wire.showAllFiles` | none |
-| `rfa-clear-recently-reviewed` | Recently-reviewed "Clear" button `$dispatch` (window) | ReviewPage root Alpine `@window` -> `$wire.clearRecentlyReviewed` | none |
+| `rfa-hide-reviewed` | `reviewed-toggle` island button `$dispatch` (window) | ReviewPage root Alpine `@window` -> queued `$wire.hideReviewedFiles` | none |
+| `rfa-show-all-files` | `reviewed-toggle` island button `$dispatch` (window) | ReviewPage root Alpine `@window` -> queued `$wire.showAllFiles` | none |
+| `rfa-clear-recently-reviewed` | Recently-reviewed "Clear" button `$dispatch` (window) | ReviewPage root Alpine `@window` -> queued `$wire.clearRecentlyReviewed` | none |
 | `comment-updated` | ReviewPage PHP dispatch | DiffFile Alpine `@window` | `{fileId, comments}` |
 | `copy-to-clipboard` | DiffFile Alpine/PHP, ReviewPage PHP, comment-display, comments-drawer, branch-explorer | layout `<body>` Alpine `@window` | `{text, toast?}` (if `toast` string is set, a success toast with that text shows on success) |
 | `file-reviewed-changed` | DiffFile Alpine `$dispatch`, sidebar reviewed button | DiffFile Alpine `@window` (targeted by `id`) | `{id, reviewed}` |

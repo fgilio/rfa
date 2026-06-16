@@ -150,7 +150,7 @@ new class extends Component {
 ?>
 
 @assets
-<script src="/js/branch-explorer.js"></script>
+@localScript('js/branch-explorer.js')
 @endassets
 
 <div

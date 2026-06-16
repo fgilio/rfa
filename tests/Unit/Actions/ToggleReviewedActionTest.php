@@ -36,6 +36,7 @@ test('adds file to reviewed list with content hash', function () {
 
 test('removes file from reviewed list', function () {
     ReviewedFile::create(['repo_path' => '/tmp/repo', 'file_path' => 'a.php', 'content_hash' => 'hash1']);
+    ReviewedFile::create(['repo_path' => '/tmp/repo', 'file_path' => 'b.php', 'content_hash' => 'hash2']);
 
     $result = $this->action->handle(['a.php' => 'hash1', 'b.php' => 'hash2'], 'a.php', $this->knownFiles, '/tmp/repo');
 
@@ -105,11 +106,24 @@ test('updates content_hash in place instead of inserting a new row when the file
 });
 
 test('preserves other entries on toggle off', function () {
+    ReviewedFile::create(['repo_path' => '/tmp/repo', 'file_path' => 'a.php', 'content_hash' => 'h1']);
     ReviewedFile::create(['repo_path' => '/tmp/repo', 'file_path' => 'b.php', 'content_hash' => 'h2']);
+    ReviewedFile::create(['repo_path' => '/tmp/repo', 'file_path' => 'c.php', 'content_hash' => 'h3']);
 
     $result = $this->action->handle(['a.php' => 'h1', 'b.php' => 'h2', 'c.php' => 'h3'], 'b.php', $this->knownFiles, '/tmp/repo');
 
     expect($result)->toBe(['a.php' => 'h1', 'c.php' => 'h3']);
+});
+
+test('rebuilds returned state from persisted rows when the component snapshot is stale', function () {
+    ReviewedFile::create(['repo_path' => '/tmp/repo', 'file_path' => 'a.php', 'content_hash' => 'hash-a']);
+
+    $result = $this->action->handle([], 'b.php', $this->knownFiles, '/tmp/repo');
+
+    expect($result)->toBe([
+        'a.php' => 'hash-a',
+        'b.php' => 'mock-hash',
+    ]);
 });
 
 test('hashes external files off disk so a content edit un-reviews them', function () {

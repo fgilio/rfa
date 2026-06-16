@@ -946,8 +946,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->forgetReviewState();
 
         $this->skipRender();
-        $this->renderIsland('reviewed-summary');
-        $this->renderIsland('file-list');
+        $this->renderReviewedStateIslands();
 
         // Only Hide-reviewed mode lets a reviewed toggle change the server-visible
         // list. A path filter is reviewed-independent (ReviewStateService only
@@ -964,8 +963,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->forgetReviewState();
 
         $this->skipRender();
-        $this->renderIsland('reviewed-summary');
-        $this->renderIsland('file-list');
+        $this->renderReviewedStateIslands();
         $this->renderVisibilityIslands();
     }
 
@@ -982,6 +980,13 @@ new #[Layout('layouts.app')] class extends Component
         }
     }
 
+    private function renderReviewedStateIslands(): void
+    {
+        $this->renderIsland('reviewed-toggle');
+        $this->renderIsland('reviewed-counter');
+        $this->renderIsland('file-list');
+    }
+
     /**
      * Refresh every island that reflects which files are currently visible.
      *
@@ -996,6 +1001,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->renderIsland('source-diff-list');
         $this->renderIsland('file-count');
         $this->renderIsland('file-list-header');
+        $this->renderIsland('status-strip-copy-paths');
     }
 
     private function forgetReviewState(): void
@@ -1137,8 +1143,8 @@ new #[Layout('layouts.app')] class extends Component
 ?>
 
 @assets
-<script src="/js/diff-file.js"></script>
-<script src="/js/review-page.js"></script>
+@localScript('js/diff-file.js')
+@localScript('js/review-page.js')
 @endassets
 
 <div
@@ -1163,10 +1169,10 @@ new #[Layout('layouts.app')] class extends Component
     })"
     @scroll-to-comment.window="scrollToComment($event.detail.commentId, $event.detail.filePath)"
     @open-remote-menu.window="showRemoteMenu($event)"
-    x-on:rfa-toggle-reviewed.window="$wire.toggleReviewed($event.detail.filePath)"
-    x-on:rfa-hide-reviewed.window="$wire.hideReviewedFiles()"
-    x-on:rfa-show-all-files.window="$wire.showAllFiles()"
-    x-on:rfa-clear-recently-reviewed.window="$wire.clearRecentlyReviewed()"
+    x-on:rfa-toggle-reviewed.window="toggleReviewed($event.detail?.filePath)"
+    x-on:rfa-hide-reviewed.window="hideReviewedFiles()"
+    x-on:rfa-show-all-files.window="showAllFiles()"
+    x-on:rfa-clear-recently-reviewed.window="clearRecentlyReviewed()"
     @keydown.window="
         if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {
             if ($event.key === 'Escape' && !$event.target.closest('[data-comment-form]')) { $wire.clearFileFilter(); $event.target.blur(); $event.preventDefault(); }
@@ -1295,11 +1301,9 @@ new #[Layout('layouts.app')] class extends Component
                 <livewire:comments-drawer :repo-path="$repoPath" :project-id="$projectId ?: null" />
             </div>
             <div class="flex items-center gap-2 text-xs">
-                {{-- Hide reviewed toggle. Same-named island as the counter, so
-                     renderIsland('reviewed-summary') flips its visibility in step
-                     with the count on a mark/un-mark. always:true keeps it in sync
-                     on full renders too. --}}
-                @island(name: 'reviewed-summary', always: true)
+                {{-- Hide reviewed toggle. Separate from the counter island so
+                     each reviewed-state fragment has one DOM target. --}}
+                @island(name: 'reviewed-toggle', always: true)
                     @if ($this->reviewState->reviewedFileCount > 0)
                         <div class="grid place-items-center">
                             {{-- Bridge through the page root so island children don't
@@ -1407,7 +1411,7 @@ new #[Layout('layouts.app')] class extends Component
                         </span>
                     @endisland
                 </x-slot:fileCount>
-                {{-- Reviewed-progress summary. Wrapped in a Livewire island so a
+                {{-- Reviewed-progress counter. Wrapped in a Livewire island so a
                      mark/un-mark re-renders just this counter and meter, not the
                      2200-line review page. Reads only $this state (island scope
                      can't see template locals). --}}
@@ -1415,7 +1419,7 @@ new #[Layout('layouts.app')] class extends Component
                     {{-- always:true so a full render (e.g. hide-reviewed mode,
                          filtering) re-renders the counter inline instead of
                          skipping it; renderIsland still scopes the latency path. --}}
-                    @island(name: 'reviewed-summary', always: true)
+                    @island(name: 'reviewed-counter', always: true)
                         @if ($this->reviewState->reviewedFileCount > 0)
                             <div class="flex items-center gap-2">
                                 <span data-testid="reviewed-counter">{{ $this->reviewState->reviewedFileCount }}/{{ $this->reviewState->totalFileCount }} reviewed</span>
@@ -1426,6 +1430,16 @@ new #[Layout('layouts.app')] class extends Component
                         @endif
                     @endisland
                 </x-slot:reviewedSummary>
+                <x-slot:copyPaths>
+                    @island(name: 'status-strip-copy-paths', always: true)
+                        @if($this->reviewState->visibleFileCount > 0)
+                            <x-copy-paths-button
+                                testid-prefix="status-strip-copy-paths"
+                                :visible-count="$this->reviewState->visibleFileCount"
+                            />
+                        @endif
+                    @endisland
+                </x-slot:copyPaths>
             </x-status-strip>
         </x-slot:below>
     </x-page-header>
@@ -1737,7 +1751,7 @@ new #[Layout('layouts.app')] class extends Component
                 @endif
 
                 {{-- Source Files --}}
-                {{-- Source diffs are isolated from reviewed-summary/sidebar islands
+                {{-- Source diffs are isolated from reviewed-state/sidebar islands
                      so hide-reviewed mode can remove mounted lazy diff-file children
                      without morphing the entire review page. --}}
                 @island(name: 'source-diff-list', always: true)
