@@ -1,5 +1,5 @@
 {{-- Parent Alpine scope contract: fileId, filePath, oldPath, status, reviewed, collapsed,
-     toggleCollapse(), openFileComment(), onReviewedChange(), $wire.fileComments,
+     toggleCollapse(), openFileComment(), $wire.fileComments,
      $wire.copyContent(), $dispatch('open-remote-menu' | 'discard-file' | 'copy-to-clipboard') --}}
 @props([
     'file',
