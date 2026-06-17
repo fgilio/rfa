@@ -557,12 +557,6 @@
 
                 return rowContainsLinePoint(rowSide, oldLineNum, newLineNum, this.formEndPoint);
             },
-
-            onReviewedChange() {
-                this.collapsed = this.reviewed;
-                this.$dispatch('file-reviewed-changed', { id: this.fileId, reviewed: this.reviewed });
-                this.$dispatch('rfa-toggle-reviewed', { filePath: this.filePath });
-            },
         };
     }
 
