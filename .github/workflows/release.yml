@@ -81,6 +81,30 @@ jobs:
       - name: "Patch NativePHP: npm ci -> npm install (dev-l13-compatibility workaround)"
         run: sed -i '' "s/->run('npm ci'/->run('npm install'/" vendor/nativephp/desktop/src/Drivers/Electron/Commands/BuildCommand.php
 
+      # electron-builder's GitHub publisher creates a draft release per artifact when none
+      # exists yet: getOrCreateRelease() lists releases, and only when no draft matches the
+      # tag does it call createRelease(). With several artifacts (zip, dmg, their blockmaps,
+      # latest-mac.yml) finishing near-simultaneously, multiple publishers clear that check
+      # before any draft exists and each creates its own draft. The assets then split across
+      # two drafts, leaving both incomplete — e.g. the .zip the macOS updater needs lands on
+      # a different draft than latest-mac.yml, so a published release 404s every auto-update.
+      # Pre-creating the draft closes the window: every publisher finds this draft (it returns
+      # early on a matching draft) and attaches to it instead of racing to create one.
+      - name: Pre-create draft release (prevents electron-builder duplicate-draft race)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release for $tag already exists; reusing it."
+          else
+            gh release create "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft \
+              --title "${{ steps.version.outputs.value }}" \
+              --notes "Release notes are added before publishing."
+          fi
+
       - name: Build and publish to GitHub Releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -95,6 +119,47 @@ jobs:
           ELECTRON_CACHE: ~/Library/Caches/electron
           ELECTRON_BUILDER_CACHE: ~/Library/Caches/electron-builder
         run: php artisan native:build mac arm64 --publish --no-interaction
+
+      # Defense in depth: even with the pre-created draft, fail loudly if the publish didn't
+      # land exactly one release carrying every expected artifact. A split or a dropped upload
+      # must never reach a human as a publishable draft — the macOS updater 404s when
+      # latest-mac.yml points at a .zip that isn't attached. Asset names track the mac
+      # artifactName template in electron-builder.mjs (`rfa-${version}-arm64.${ext}`).
+      - name: Verify release artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${{ steps.version.outputs.value }}"
+
+          count=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate \
+            --jq "[.[] | select(.tag_name == \"$tag\")] | length")
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Expected exactly 1 release for $tag, found $count (duplicate-draft race?)."
+            gh api "repos/${GITHUB_REPOSITORY}/releases" \
+              --jq ".[] | select(.tag_name == \"$tag\") | {id, draft, assets: [.assets[].name]}"
+            exit 1
+          fi
+
+          assets=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          missing=0
+          for expected in \
+            "latest-mac.yml" \
+            "rfa-${version}-arm64.zip" \
+            "rfa-${version}-arm64.zip.blockmap" \
+            "rfa-${version}-arm64.dmg" \
+            "rfa-${version}-arm64.dmg.blockmap"; do
+            if ! printf '%s\n' "$assets" | grep -qxF "$expected"; then
+              echo "::error::Missing release asset: $expected"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Assets present:"; printf '%s\n' "$assets"
+            exit 1
+          fi
+          echo "✓ $tag: one draft with all expected artifacts."
 
       - name: Upload build logs on failure
         if: failure()
