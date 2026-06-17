@@ -11,6 +11,7 @@ git push --tags
 - Build runs on `macos-15` (arm64), publishes to GitHub Releases as **draft**
 - Publish the draft via `gh release edit vX.Y.Z --draft=false`
 - Tag must be `vX.Y.Z` (semver with `v` prefix). Version injected from tag automatically.
+- The workflow **pre-creates the draft** before the build so electron-builder attaches to it instead of racing to create one. Without this, multiple publishers (zip/dmg/blockmaps/`latest-mac.yml`) each create a draft and the assets split across two incomplete drafts — a published release then 404s the macOS updater. A post-build **Verify release artifacts** step fails the job if there isn't exactly one release with all five expected assets.
 
 ## Updater
 
