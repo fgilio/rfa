@@ -66,6 +66,11 @@ trait ReviewsBranchDivergence
      * Kept separate from `checkHeadDivergence()` so callers like `softRefresh`
      * can update divergence without latching `skipRender()` onto a response
      * that still needs to morph because files did change.
+     *
+     * Proposal: if divergence chrome gains more independent surfaces, split them
+     * into explicit islands and refresh them from this trait after recomputing
+     * state. Today a changed state renders the page. More surfaces would risk
+     * stale banners when callers skip the parent render.
      */
     private function refreshDivergenceState(): bool
     {

@@ -27,6 +27,11 @@
      intercepts the click via `@click.capture.stop` before Flux sees it, and
      wraps only the trigger — menu items are siblings, so their clicks aren't
      captured and reach Flux normally.
+
+     Proposal: if more bulk actions depend on "currently visible files", keep
+     their triggers island-owned by the page and let the server compute the
+     file list. Client-side filters can drift from ReviewState during
+     hide-reviewed and search changes.
 --}}
 <div data-testid="{{ $testidPrefix }}"
     @if ($mode === 'bulk' && ($visibleCount ?? 0) <= 0) hidden @endif

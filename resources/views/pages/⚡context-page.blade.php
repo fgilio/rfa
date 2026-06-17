@@ -451,6 +451,10 @@ new #[Layout('layouts.app')] class extends Component
      * Push the per-file count/draft summary into the sidebar without re-rendering
      * the page. Pairs with skipRender() on every comment mutation — keeps the
      * sidebar's commentSummary in sync without rehydrating N diff-file children.
+     *
+     * Proposal: if context comment controls move into islands, add a root bridge
+     * plus a comment-mutation queue before calling this dispatcher. The sidebar
+     * summary and file children need to observe one server-owned comment snapshot.
      */
     private function dispatchSidebarSummary(): void
     {

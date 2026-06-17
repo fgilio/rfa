@@ -152,6 +152,13 @@ HTML;
         };
     }
 
+    /**
+     * Proposal: if expand-context and expand-gap controls gain batching or
+     * keyboard repeat, give each file a request queue keyed by file id and
+     * settle from the loaded diff cache. The expander chrome already depends on
+     * completion events, so ordered server results would prevent older diff loads
+     * from replacing newer expanded hunks.
+     */
     public function expandContext(): void
     {
         $cacheKey = $this->diffCacheKey();

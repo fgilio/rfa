@@ -99,7 +99,14 @@ new class extends Component {
         }
     }
 
-    /** @param  list<string>  $selectedHashes */
+    /**
+     * Proposal: keep applySelection as the server authority when the picker
+     * grows. If selection starts from an island or global shortcut, bridge it
+     * through the branch-explorer root and queue it with snapshot reloads so
+     * stale hashes cannot navigate after a newer selection.
+     *
+     * @param  list<string>  $selectedHashes
+     */
     #[Renderless]
     public function applySelection(string $branch, array $selectedHashes, bool $workingTreeSelected, string $snapshotKey): void
     {

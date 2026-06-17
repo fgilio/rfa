@@ -460,6 +460,11 @@ new #[Layout('layouts.app')] class extends Component
      * only affects which files are listed (external paths, global .gitignore).
      * Lighter than rehydrateForTarget: it leaves the review-pair scan and trash
      * untouched because neither is sensitive to file-list filtering.
+     *
+     * Proposal: if this path is later optimized to skip the parent render, treat
+     * it like reviewed visibility changes. Recompute session state server-side
+     * and render every island that reads the visible file set, because external
+     * paths can add or remove rows from both the sidebar and status chrome.
      */
     private function reloadSessionAfterFileListChange(): void
     {
@@ -667,6 +672,12 @@ new #[Layout('layouts.app')] class extends Component
      * diff-file child (the TooManyComponentsException hazard) and keeps the 1+N
      * contract. Divergence transitions surface through the head-divergence
      * poller, not by piggybacking on comment writes.
+     *
+     * Proposal: if comment writes move behind toolbar or sidebar controls that
+     * can fire in bursts, route them through a root `rfa-comment-*` bridge,
+     * serialize those `$wire` calls on `window`, and reload comments from storage
+     * before settling child or sidebar fragments. That gives overlapping comment
+     * requests the same server-owned convergence as reviewed-state.
      */
     private function applyCommentMutation(?ReviewCommentMutation $mutation): void
     {

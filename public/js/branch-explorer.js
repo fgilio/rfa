@@ -229,6 +229,10 @@
             async refreshSnapshot(branchName, { clear = false, force = false, minimumCommitCount = 0 } = {}) {
                 if (!force && branchName === this.selectedBranch && this.$wire.commits.length > 0) return true;
 
+                // Proposal: if more branch-picker actions become renderless,
+                // extract the reviewed-action pattern into a named request
+                // coordinator here. Queue mutations that must preserve order,
+                // and keep `_loadId` for latest-response snapshot refreshes.
                 const id = ++this._loadId;
                 await this.$wire.loadSnapshot(branchName, minimumCommitCount);
                 if (this._loadId !== id) return false;
