@@ -61,14 +61,19 @@
         stopTicker() {
             if (this.intervalId) { clearInterval(this.intervalId); this.intervalId = null; }
         },
-        destroy() { this.stopTicker(); }
+        init() {
+            // allowInEditable is false in the catalog, so the keymap store already
+            // suppresses ⌘Z while focus is in a textarea/input.
+            this.$store.shortcuts.register('review.undo', () => {
+                if (this.visible && this.current) this.undo();
+            });
+        },
+        destroy() {
+            this.stopTicker();
+            this.$store.shortcuts.unregister('review.undo');
+        }
     }"
     @undo-available.window="push($event.detail)"
-    @keydown.window="
-        if (!visible || !current) return;
-        if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') return;
-        if (($event.metaKey || $event.ctrlKey) && $event.key === 'z') { undo(); $event.preventDefault(); }
-    "
     x-show="visible"
     x-cloak
     x-transition:enter="transition ease-out duration-200"

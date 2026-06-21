@@ -16,10 +16,16 @@
             processSampleIntervalMs: @js((int) config('rfa.diagnostics.process_sample_interval_ms')),
         };
     </script>
+    <script>
+        // Single source of truth for keyboard shortcuts (config/shortcuts.php).
+        // shortcuts-store.js reads this to wire handlers and the cheat sheet.
+        window.RFA_SHORTCUTS = @js(\App\Support\Shortcuts::all());
+    </script>
     @localScript('js/runtime-diagnostics.js')
     @localScript('js/settings-store.js')
     @localScript('js/overlays-store.js')
     @localScript('js/keymap-store.js')
+    @localScript('js/shortcuts-store.js')
     @localScript('js/page-search.js')
     @localScript('js/session-recovery.js')
     @localScript('js/smart-poll.js')
@@ -323,6 +329,8 @@
             </svg>
         </button>
     </div>
+
+    <x-shortcuts-help />
 
     <livewire:keepalive />
     {{-- Single defined home for Flux toasts (bottom-right), clear of the undo-toast

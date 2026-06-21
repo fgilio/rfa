@@ -84,7 +84,7 @@ class extends Component
 {{-- Keep the trigger button visible at first paint so the header layout doesn't
      shift; the real component hydrates and supplies the count + drawer body. --}}
 <div class="relative">
-    <flux:tooltip content="All comments · ⌘J">
+    <flux:tooltip content="All comments · {{ \App\Support\Shortcuts::display('comments-drawer.toggle') }}">
         <flux:button variant="ghost" size="sm" icon="chat-bubble-left-right" icon:variant="outline" aria-label="All comments in this repo" />
     </flux:tooltip>
 </div>
@@ -108,7 +108,7 @@ class extends Component
             this.close();
         },
     }"
-    x-init="$store.keymap.register('⌘J', () => toggle())"
+    x-init="$store.shortcuts.register('comments-drawer.toggle', () => toggle())"
     @keydown.window="if (open && $event.key === 'Escape') { $event.preventDefault(); close(); return; }"
     x-effect="if (open && !$store.overlays.is('comments-drawer')) close()"
     class="relative"
@@ -118,7 +118,7 @@ class extends Component
          server-side. The trigger doesn't strictly need a reactive
          aria-expanded — a static aria-haspopup is sufficient for screen
          readers to announce that this button opens a dialog. --}}
-    <flux:tooltip content="All comments · ⌘J">
+    <flux:tooltip content="All comments · {{ \App\Support\Shortcuts::display('comments-drawer.toggle') }}">
         <flux:button
             variant="ghost"
             size="sm"

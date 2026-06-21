@@ -15,6 +15,7 @@ use App\Listeners\HandleMenuItemClicked;
 use App\Listeners\HandleZoomShortcutPressed;
 use App\Listeners\RegisterNativeGlobalShortcuts;
 use App\Listeners\UnregisterNativeGlobalShortcuts;
+use App\Support\Shortcuts;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
@@ -201,7 +202,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             Menu::make(
                 Menu::label('Add Single Repository...')
                     ->id('open-repo')
-                    ->hotkey('CmdOrCtrl+O')
+                    ->hotkey(Shortcuts::accelerator('app.add-repo'))
                     ->icon(resource_path('icons/add-repoTemplate.png')),
                 Menu::label('Scan Folder for Repos...')
                     ->id('scan-directory')
@@ -221,7 +222,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             Menu::make(
                 Menu::label('Show Context Files...')
                     ->id('show-context')
-                    ->hotkey('CmdOrCtrl+Shift+K'),
+                    ->hotkey(Shortcuts::accelerator('app.context-files')),
                 Menu::separator(),
                 Menu::label('Actual Size')->id('reset-zoom'),
                 Menu::label('Zoom In')->id('zoom-in'),

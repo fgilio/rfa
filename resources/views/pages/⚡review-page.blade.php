@@ -1166,6 +1166,8 @@ new #[Layout('layouts.app')] class extends Component
         diffFrom: @js($diffFrom),
         diffTo: @js($diffTo),
         repoPath: @js($repoPath),
+        prevCommitHash: @js($commitInfo['prevHash'] ?? null),
+        nextCommitHash: @js($commitInfo['nextHash'] ?? null),
     })"
     @scroll-to-comment.window="scrollToComment($event.detail.commentId, $event.detail.filePath)"
     @open-remote-menu.window="showRemoteMenu($event)"
@@ -1173,19 +1175,15 @@ new #[Layout('layouts.app')] class extends Component
     x-on:rfa-hide-reviewed.window="hideReviewedFiles()"
     x-on:rfa-show-all-files.window="showAllFiles()"
     x-on:rfa-clear-recently-reviewed.window="clearRecentlyReviewed()"
-    @keydown.window="
-        if ($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT') {
-            if ($event.key === 'Escape' && !$event.target.closest('[data-comment-form]')) { $wire.clearFileFilter(); $event.target.blur(); $event.preventDefault(); }
-            return;
+    {{-- Filter/file/commit shortcuts are registered through the keymap store
+         (see registerShortcuts() in review-page.js). Only the in-input Escape
+         that clears the file filter stays here, since the store suppresses
+         shortcuts while focus is in an input. --}}
+    @keydown.escape.window="
+        if (($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT')
+            && !$event.target.closest('[data-comment-form]')) {
+            $wire.clearFileFilter(); $event.target.blur(); $event.preventDefault();
         }
-        if ($event.key === '/') { $refs.fileFilterInput?.focus(); $event.preventDefault(); }
-        if (($event.key === 'j' || $event.key === 'k') && !$event.metaKey && !$event.ctrlKey && !$event.altKey) { focusAdjacentFile($event.key === 'j' ? 1 : -1); $event.preventDefault(); }
-        if ($event.shiftKey && $event.key === 'C') { $store.settings.collapseAll = true; $dispatch('collapse-all-files'); $event.preventDefault(); }
-        if ($event.shiftKey && $event.key === 'E') { $store.settings.collapseAll = false; $dispatch('expand-all-files'); $event.preventDefault(); }
-        @if($commitInfo)
-            if ($event.key === '[' && @js($commitInfo['prevHash'])) { Livewire.navigate('/p/{{ $projectSlug }}/c/' + @js($commitInfo['prevHash'])); $event.preventDefault(); }
-            if ($event.key === ']' && @js($commitInfo['nextHash'])) { Livewire.navigate('/p/{{ $projectSlug }}/c/' + @js($commitInfo['nextHash'])); $event.preventDefault(); }
-        @endif
     "
 >
     @if($hasRemote)
@@ -1362,6 +1360,8 @@ new #[Layout('layouts.app')] class extends Component
                         x-data="reviewChangePoller({
                             projectId: {{ $projectId }},
                             keymapEnabled: @js(! config('nativephp-internal.running')),
+                            refreshCombo: @js(\App\Support\Shortcuts::display('app.refresh')),
+                            hardReloadCombo: @js(\App\Support\Shortcuts::display('app.hard-reload')),
                         })"
                     @fingerprint-reset.window="reset()"
                     class="relative flex items-center">

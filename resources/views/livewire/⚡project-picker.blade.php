@@ -144,7 +144,7 @@ class extends Component
             if (slug) this.selectSlug(slug);
         },
     }"
-    x-init="$store.keymap.register('⌘K', () => toggle(), { allowInEditable: true })"
+    x-init="$store.shortcuts.register('project-picker.toggle', () => toggle())"
     @project-picker:toggle.window="toggle()"
     @project-picker:close.window="close()"
     x-effect="if (open && !$store.overlays.is('project-picker')) close()"
@@ -158,8 +158,8 @@ class extends Component
     "
 >
     <x-header-picker-trigger
-        tooltip="Switch repo · ⌘K"
-        aria-label="Switch repo (⌘K)"
+        tooltip="Switch repo · {{ \App\Support\Shortcuts::display('project-picker.toggle') }}"
+        aria-label="Switch repo ({{ \App\Support\Shortcuts::display('project-picker.toggle') }})"
         variant="display"
         x-on:click="toggle()"
         x-bind:aria-expanded="open"

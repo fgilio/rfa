@@ -472,8 +472,8 @@ new #[Layout('layouts.app')] class extends Component
         },
         init() {
             @browser
-            $store.keymap.register('⌘R', () => $wire.refresh(), { allowInEditable: true });
-            $store.keymap.register('⌘⇧R', () => window.location.reload(), { allowInEditable: true });
+            $store.shortcuts.register('app.refresh', () => $wire.refresh());
+            $store.shortcuts.register('app.hard-reload', () => window.location.reload());
             @endbrowser
         },
     }"
