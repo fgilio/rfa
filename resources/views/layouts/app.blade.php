@@ -342,6 +342,12 @@
             window.Livewire.on('native:App\\Events\\HardReloadShortcutPressed', () => {
                 window.location.reload();
             });
+
+            {{-- The native "Keyboard Shortcuts" menu item opens the same cheat-sheet
+                 modal as the `?` shortcut, crossing the main→renderer bridge. --}}
+            window.Livewire.on('native:App\\Events\\ShowShortcutsRequested', () => {
+                window.Flux?.modal('keyboard-shortcuts').show();
+            });
         });
     </script>
     @fluxScripts

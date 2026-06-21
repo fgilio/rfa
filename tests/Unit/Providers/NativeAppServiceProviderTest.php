@@ -93,6 +93,16 @@ test('the View submenu declares the review menu items with their accelerators', 
     expect(Shortcuts::accelerator('app.context-files'))->toBe('CmdOrCtrl+Shift+K');
 });
 
+test('the View submenu declares the keyboard-shortcuts menu item', function () {
+    // No hotkey: the `?` keymap shortcut already opens the cheat sheet, so the
+    // menu item is a click-only affordance that broadcasts ShowShortcutsRequested.
+    $source = file_get_contents((new ReflectionClass(NativeAppServiceProvider::class))->getFileName());
+
+    expect($source)
+        ->toContain("Menu::label('Keyboard Shortcuts')")
+        ->toContain("->id('show-shortcuts')");
+});
+
 // -- Inbox parser --
 
 test('two-line inbox with context mode routes to context-page', function () {

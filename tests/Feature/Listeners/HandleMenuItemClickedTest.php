@@ -3,10 +3,12 @@
 use App\Actions\OpenRepositoryDialogAction;
 use App\Actions\ResolveProjectByIdAction;
 use App\Actions\ScanDirectoryDialogAction;
+use App\Events\ShowShortcutsRequested;
 use App\Listeners\HandleMenuItemClicked;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Event;
 use Native\Desktop\Events\Menu\MenuItemClicked;
 use Native\Desktop\Facades\Window;
 use Tests\TestCase;
@@ -130,6 +132,18 @@ test('review-code with no cached id and no project picked navigates nowhere', fu
 
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'review-code']));
 
+    expect($this->capturedUrl)->toBeNull();
+});
+
+test('show-shortcuts broadcasts the cheat-sheet open request without navigating', function () {
+    Event::fake([ShowShortcutsRequested::class]);
+
+    bindResolveProjectByIdAction(null);
+    bindOpenRepositoryDialogAction(null);
+
+    app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'show-shortcuts']));
+
+    Event::assertDispatched(ShowShortcutsRequested::class);
     expect($this->capturedUrl)->toBeNull();
 });
 

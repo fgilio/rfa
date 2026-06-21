@@ -8,6 +8,7 @@ use App\Actions\OpenRepositoryDialogAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveProjectByIdAction;
 use App\Actions\ScanDirectoryDialogAction;
+use App\Events\ShowShortcutsRequested;
 use Illuminate\Support\Facades\Cache;
 use Native\Desktop\Events\Menu\MenuItemClicked;
 use Native\Desktop\Facades\AutoUpdater;
@@ -34,8 +35,9 @@ final readonly class HandleMenuItemClicked
             'open-repo' => $this->handleOpenRepo(),
             'scan-directory' => app(ScanDirectoryDialogAction::class)->handle(),
             'check-updates' => $this->handleCheckUpdates(),
-            'show-context' => $this->handleShowContext(),
-            'review-code' => $this->handleReviewCode(),
+            'show-context' => $this->navigateToActiveProject('context-page', 'menu.show_context.completed'),
+            'review-code' => $this->navigateToActiveProject('review-page', 'menu.review_code.completed'),
+            'show-shortcuts' => ShowShortcutsRequested::dispatch(),
             default => null,
         };
     }
@@ -63,16 +65,6 @@ final readonly class HandleMenuItemClicked
 
             Window::get('main')->url(route('review-page', ['slug' => $project->slug]));
         }
-    }
-
-    private function handleShowContext(): void
-    {
-        $this->navigateToActiveProject('context-page', 'menu.show_context.completed');
-    }
-
-    private function handleReviewCode(): void
-    {
-        $this->navigateToActiveProject('review-page', 'menu.review_code.completed');
     }
 
     /**
