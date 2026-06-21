@@ -108,15 +108,15 @@
                 this.pendingSavesGuard?.attach();
                 this.registerShortcuts();
             },
-            // Page-scoped review shortcuts. Registered by catalog id (combos live
-            // in config/shortcuts.php); cleared on navigate by the keymap store and
-            // re-registered when the next review page mounts.
+            // Page-scoped review shortcuts, registered by catalog id (combos live
+            // in config/shortcuts.php). The keymap store clears them on navigate
+            // and they re-register when the next review page mounts.
             registerShortcuts() {
                 const reg = (id, handler) => {
                     this.$store.shortcuts.register(id, handler);
                     this.registeredShortcutIds.push(id);
                 };
-                const commitUrl = (hash) => '/p/' + this.config.projectSlug + '/c/' + hash;
+                const commitUrl = (hash) => `/p/${this.config.projectSlug}/c/${hash}`;
 
                 reg('review.filter', () => this.$refs.fileFilterInput?.focus());
                 reg('review.next-file', () => this.focusAdjacentFile(1));

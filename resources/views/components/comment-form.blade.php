@@ -3,7 +3,7 @@
 
 <flux:card size="sm" class="!rounded-none {{ $borderClass }} border-gh-border" data-comment-form>
     {{-- ⌘↵ to save is registered globally (config: comment.save) and routed to
-         the focused form's save button; Esc-to-draft stays element-local. --}}
+         the focused form's save button. Esc-to-draft stays element-local. --}}
     <flux:textarea
         x-ref="commentInput"
         x-model="formBody"

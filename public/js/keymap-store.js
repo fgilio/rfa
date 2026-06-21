@@ -47,9 +47,9 @@
             return e.key.toLowerCase() === key;
         }
 
-        // Bare-character combo: no command modifier. The character itself —
-        // including its shifted form ('C' from Shift+C, '?' from Shift+/) — is
-        // matched case-sensitively, so the shift state is encoded by the glyph.
+        // Bare-character combo: no command modifier. The character itself
+        // (including its shifted form, 'C' from Shift+C or '?' from Shift+/)
+        // is matched case-sensitively, so the glyph encodes the shift state.
         if (hasCmd) return false;
         return e.key === comboKey(combo);
     }

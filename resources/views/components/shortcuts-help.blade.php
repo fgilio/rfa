@@ -1,9 +1,9 @@
 @php
     /**
-     * Cheat sheet for every documented keyboard shortcut. Rendered once from the
-     * layout. Content is driven entirely by config/shortcuts.php — the same
-     * catalog the handlers register against — so it can never list a combo that
-     * doesn't fire, or miss one that does.
+     * Cheat sheet for every documented keyboard shortcut, rendered once from
+     * the layout. The content comes entirely from config/shortcuts.php (the
+     * same catalog the handlers register against), so it can never list a
+     * combo that doesn't fire or miss one that does.
      */
     $catalog = collect(\App\Support\Shortcuts::all());
     $groupIndex = array_flip(\App\Support\Shortcuts::groups());
@@ -13,19 +13,17 @@
 @endphp
 
 {{-- This component lives in the persistent layout chrome, so its x-init runs
-     once and is NOT re-run when Livewire morphs the body on navigation. The
-     keymap store clears every binding on `livewire:navigating`, so these global
-     shortcuts must be re-registered on `livewire:navigated` or they go dead
-     after the first SPA navigation. Page/Livewire-scoped registrants re-init
-     naturally; these layout-level ones don't. --}}
+     once and does not re-run when Livewire morphs the body on navigation.
+     The keymap store clears every binding on `livewire:navigating`, so the
+     global shortcuts re-register on `livewire:navigated`. Page and Livewire
+     scoped registrants re-init on navigation on their own. --}}
 <div
     x-data="{
         registerGlobalShortcuts() {
             $store.shortcuts.register('help.shortcuts', () => $flux.modal('keyboard-shortcuts').show());
-            {{-- ⌘↵ save is registered globally here, not on <x-comment-form>: that
-                 component renders once per diff line, so registering there is
-                 O(lines) of render + binding churn (measurably regresses diff-large).
-                 One global handler routes to whichever comment form holds focus. --}}
+            {{-- One global ⌘↵ handler routes to the comment form that holds focus.
+                 The form renders once per diff line, so binding the handler on
+                 each form would cost O(lines) of registration churn on large diffs. --}}
             $store.shortcuts.register('comment.save', (e) => {
                 const form = e.target.closest('[data-comment-form]');
                 if (form) form.querySelector('[data-comment-save]')?.click();
@@ -33,7 +31,8 @@
         },
     }"
     x-init="registerGlobalShortcuts()"
-    {{-- x-on: form, not @livewire — the @ collides with Blade's @livewire directive. --}}
+    {{-- The @ in `@livewire:navigated.window` collides with Blade's @livewire
+         directive, so this uses the x-on: form. --}}
     x-on:livewire:navigated.window="registerGlobalShortcuts()"
 >
     <flux:modal name="keyboard-shortcuts" class="md:w-[32rem]">

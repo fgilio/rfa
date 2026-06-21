@@ -8,13 +8,13 @@ use App\Events\ZoomShortcutPressed;
 
 /*
 |--------------------------------------------------------------------------
-| Keyboard shortcuts — single source of truth
+| Keyboard shortcuts: single source of truth
 |--------------------------------------------------------------------------
 |
 | Every documented shortcut lives here. Three consumers read this catalog so
 | the combo and label are defined exactly once:
 |
-|   1. The Alpine `$store.shortcuts` (public/js/shortcuts-store.js) — call
+|   1. The Alpine `$store.shortcuts` (public/js/shortcuts-store.js). Call
 |      sites register handlers by `id`, never by a literal combo, e.g.
 |      `$store.shortcuts.register('project-picker.toggle', () => toggle())`.
 |      The combo string and `allowInEditable` flag come from here.
@@ -22,7 +22,7 @@ use App\Events\ZoomShortcutPressed;
 |      this catalog grouped by `group`.
 |   3. The native menu (NativeAppServiceProvider) reads `accelerator` for the
 |      menu items it owns. App-level global shortcuts (refresh, zoom) keep
-|      their Electron accelerators on the Event classes; we reference those
+|      their Electron accelerators on the Event classes. We reference those
 |      constants here so the catalog never drifts from the registry.
 |
 | Combo notation (mac-only):
@@ -34,8 +34,8 @@ use App\Events\ZoomShortcutPressed;
 |     '?' for Shift+/. `display` overrides the label shown in the cheat sheet.
 |
 | `wired` documents how the shortcut reaches its handler. `keymap` shortcuts
-| flow through `$store.shortcuts.register`; `native` ones are owned by Electron
-| (menu / globalShortcut) and are documentation-only on the JS side; `custom`
+| flow through `$store.shortcuts.register`. `native` ones are owned by Electron
+| (menu or globalShortcut) and are documentation-only on the JS side. `custom`
 | ones have a bespoke renderer handler (find-in-page).
 |
 */
