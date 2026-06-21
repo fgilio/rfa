@@ -102,22 +102,17 @@ class MarkdownTableAlignerService
         $parsed = array_map(fn (DiffLine $line) => $this->parseCells($line->content), $group);
 
         $firstSeparator = null;
+        $maxCols = 0;
         foreach ($parsed as $index => $row) {
-            if ($row['isSeparator']) {
+            if ($row['isSeparator'] && $firstSeparator === null) {
                 $firstSeparator = $index;
-                break;
             }
+            $maxCols = max($maxCols, count($row['cells']));
         }
 
         // A pipe-prefixed block without a separator row (`| --- |`) is not a GFM
         // table — leave it as plain source rather than forcing a grid onto it.
-        if ($firstSeparator === null || count($group) < 2) {
-            return $group;
-        }
-
-        $maxCols = max(array_map(fn (array $row) => count($row['cells']), $parsed));
-
-        if ($maxCols === 0) {
+        if ($firstSeparator === null || count($group) < 2 || $maxCols === 0) {
             return $group;
         }
 
