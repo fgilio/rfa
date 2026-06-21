@@ -129,9 +129,11 @@ test('keyboard registration goes through the shortcuts store, never keymap direc
 
         $contents = file_get_contents($file);
 
+        // Match both `keymap.register(` and the `keymap().register(` accessor form
+        // so neither can bypass the guard from a non-store file.
         expect($contents)
-            ->not->toContain('keymap.register(', "$file should register via \$store.shortcuts, not keymap directly")
-            ->not->toContain('keymap.unregister(', "$file should unregister via \$store.shortcuts, not keymap directly");
+            ->not->toMatch('/\bkeymap(?:\(\))?\s*\.\s*register\s*\(/')
+            ->not->toMatch('/\bkeymap(?:\(\))?\s*\.\s*unregister\s*\(/');
     }
 });
 

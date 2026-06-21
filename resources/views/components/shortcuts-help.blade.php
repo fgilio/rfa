@@ -12,19 +12,29 @@
         ->sortBy(fn ($_, $group) => $groupIndex[$group] ?? PHP_INT_MAX);
 @endphp
 
+{{-- This component lives in the persistent layout chrome, so its x-init runs
+     once and is NOT re-run when Livewire morphs the body on navigation. The
+     keymap store clears every binding on `livewire:navigating`, so these global
+     shortcuts must be re-registered on `livewire:navigated` or they go dead
+     after the first SPA navigation. Page/Livewire-scoped registrants re-init
+     naturally; these layout-level ones don't. --}}
 <div
-    x-data
-    x-init="
-        $store.shortcuts.register('help.shortcuts', () => $flux.modal('keyboard-shortcuts').show());
-        {{-- ⌘↵ save is registered globally here, not on <x-comment-form>: that
-             component renders once per diff line, so registering there is
-             O(lines) of render + binding churn (measurably regresses diff-large).
-             One global handler routes to whichever comment form holds focus. --}}
-        $store.shortcuts.register('comment.save', (e) => {
-            const form = e.target.closest('[data-comment-form]');
-            if (form) form.querySelector('[data-comment-save]')?.click();
-        });
-    "
+    x-data="{
+        registerGlobalShortcuts() {
+            $store.shortcuts.register('help.shortcuts', () => $flux.modal('keyboard-shortcuts').show());
+            {{-- ⌘↵ save is registered globally here, not on <x-comment-form>: that
+                 component renders once per diff line, so registering there is
+                 O(lines) of render + binding churn (measurably regresses diff-large).
+                 One global handler routes to whichever comment form holds focus. --}}
+            $store.shortcuts.register('comment.save', (e) => {
+                const form = e.target.closest('[data-comment-form]');
+                if (form) form.querySelector('[data-comment-save]')?.click();
+            });
+        },
+    }"
+    x-init="registerGlobalShortcuts()"
+    {{-- x-on: form, not @livewire — the @ collides with Blade's @livewire directive. --}}
+    x-on:livewire:navigated.window="registerGlobalShortcuts()"
 >
     <flux:modal name="keyboard-shortcuts" class="md:w-[32rem]">
         <div class="space-y-6">
