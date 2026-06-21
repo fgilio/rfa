@@ -78,14 +78,12 @@ test('every shortcuts-store id used in views and scripts exists in the catalog',
 test('every Shortcuts accessor id referenced in PHP exists in the catalog', function () {
     $ids = array_keys(shortcutsConfig()['shortcuts']);
 
-    $root = dirname(__DIR__, 2);
-    $phpFiles = [
-        ...glob($root.'/resources/views/**/*.blade.php') ?: [],
-        ...glob($root.'/resources/views/**/**/*.blade.php') ?: [],
-        $root.'/app/Providers/NativeAppServiceProvider.php',
+    $files = [
+        ...shortcutFiles(),
+        dirname(__DIR__, 2).'/app/Providers/NativeAppServiceProvider.php',
     ];
 
-    foreach ($phpFiles as $file) {
+    foreach ($files as $file) {
         $contents = file_get_contents($file);
 
         preg_match_all(

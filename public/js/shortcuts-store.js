@@ -43,14 +43,6 @@
                     keymap().unregister(entry.combo);
                 }
             },
-            /** The match/combo string for keymap-store (e.g. '⌘K', 'j'). */
-            combo(id) {
-                return this.map[id]?.combo ?? '';
-            },
-            /** The human-facing combo (e.g. '⇧C'), falling back to the combo. */
-            display(id) {
-                return this.map[id]?.display ?? this.map[id]?.combo ?? '';
-            },
         };
     }
 

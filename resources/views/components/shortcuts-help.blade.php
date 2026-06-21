@@ -6,24 +6,15 @@
      * doesn't fire, or miss one that does.
      */
     $catalog = collect(\App\Support\Shortcuts::all());
-    $groupOrder = \App\Support\Shortcuts::groups();
+    $groupIndex = array_flip(\App\Support\Shortcuts::groups());
     $grouped = $catalog
         ->groupBy('group')
-        ->sortBy(fn ($_, $group) => array_search($group, $groupOrder, true) === false
-            ? PHP_INT_MAX
-            : array_search($group, $groupOrder, true));
+        ->sortBy(fn ($_, $group) => $groupIndex[$group] ?? PHP_INT_MAX);
 @endphp
 
 <div
     x-data
-    x-init="
-        $store.shortcuts.register('help.shortcuts', () => $flux.modal('keyboard-shortcuts').show());
-        {{-- Global save: route ⌘↵ to the comment form holding focus. --}}
-        $store.shortcuts.register('comment.save', (e) => {
-            const form = e.target.closest('[data-comment-form]');
-            if (form) form.querySelector('[data-comment-save]')?.click();
-        });
-    "
+    x-init="$store.shortcuts.register('help.shortcuts', () => $flux.modal('keyboard-shortcuts').show())"
 >
     <flux:modal name="keyboard-shortcuts" class="md:w-[32rem]">
         <div class="space-y-6">

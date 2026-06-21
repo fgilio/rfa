@@ -63,23 +63,3 @@ describe('unregister', () => {
         expect(keymap.unregister).not.toHaveBeenCalled();
     });
 });
-
-describe('combo / display', () => {
-    it('returns the combo used for matching', () => {
-        const { store } = setup();
-        expect(store.combo('review.collapse-all')).toBe('C');
-        expect(store.combo('review.next-file')).toBe('j');
-    });
-
-    it('prefers the display override, falling back to the combo', () => {
-        const { store } = setup();
-        expect(store.display('review.collapse-all')).toBe('⇧C');
-        expect(store.display('project-picker.toggle')).toBe('⌘K');
-    });
-
-    it('returns empty strings for an unknown id', () => {
-        const { store } = setup();
-        expect(store.combo('nope')).toBe('');
-        expect(store.display('nope')).toBe('');
-    });
-});
