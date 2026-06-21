@@ -42,9 +42,11 @@ return [
     // Full color values - no opacity modifier needed
     'raw' => [
         'light' => [
-            // Row fills stay light so syntax highlighting reads through; the
-            // change-marker stripe (add-line/del-line) carries the signal at a
-            // confident alpha so adds/dels segment pre-attentively.
+            // Row fills (add-bg/del-bg) stay light so syntax highlighting reads
+            // through. The change-marker (add-line/del-line) is the 2px bar on the
+            // line-number gutter's inner edge (.diff-num-marker) — a confident
+            // saturated color that segments adds/dels pre-attentively without
+            // washing out the digits the way a full-cell fill did.
             'add-bg' => 'rgba(22,163,74,0.10)',
             'add-line' => 'rgba(22,163,74,0.60)',
             'del-bg' => 'rgba(220,38,38,0.10)',
