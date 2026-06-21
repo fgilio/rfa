@@ -226,6 +226,8 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                 Menu::label('Review Agents instructions')
                     ->id('show-context')
                     ->hotkey(Shortcuts::accelerator('app.context-files')),
+                Menu::label('Keyboard Shortcuts')
+                    ->id('show-shortcuts'),
                 Menu::separator(),
                 Menu::label('Actual Size')->id('reset-zoom'),
                 Menu::label('Zoom In')->id('zoom-in'),
