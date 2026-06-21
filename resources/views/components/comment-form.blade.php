@@ -1,18 +1,7 @@
 {{-- Parent Alpine scope contract: formBody, escHint, handleEscape(), cancelForm(), commentInput (x-ref) --}}
 @props(['save', 'placeholder' => 'Write a comment...', 'borderClass' => 'border-y'])
 
-{{-- ⌘↵ saves the comment form holding focus. Registered here (not globally) so
-     the shortcut's owner is the thing it acts on; the generic focus-routing
-     handler tolerates multiple open forms (Map-keyed by combo). --}}
-<flux:card
-    size="sm"
-    class="!rounded-none {{ $borderClass }} border-gh-border"
-    data-comment-form
-    x-init="$store.shortcuts.register('comment.save', (e) => {
-        const form = e.target.closest('[data-comment-form]');
-        if (form) form.querySelector('[data-comment-save]')?.click();
-    })"
->
+<flux:card size="sm" class="!rounded-none {{ $borderClass }} border-gh-border" data-comment-form>
     {{-- ⌘↵ to save is registered globally (config: comment.save) and routed to
          the focused form's save button; Esc-to-draft stays element-local. --}}
     <flux:textarea
