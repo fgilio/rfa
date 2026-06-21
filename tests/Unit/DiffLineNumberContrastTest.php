@@ -5,6 +5,12 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+/** WCAG AA contrast for large/bold text — the floor for numbers on the plain row bg. */
+const CONTRAST_AA_LARGE = 4.5;
+
+/** WCAG floor for UI components / non-text — the floor for numbers on the add/del gutter tint. */
+const CONTRAST_UI_FLOOR = 3.0;
+
 /**
  * Guards diff line-number legibility (see resources/CLAUDE.md "Use real muted
  * color, not opacity"). The original bug rendered line numbers at
@@ -125,18 +131,18 @@ test('line numbers clear the legibility floor on every background', function (st
     $muted = rgbTriple($colors['muted']);
     $bg = rgbTriple($colors['bg']);
 
-    // Context line numbers sit on the plain row background — require AA (4.5:1).
+    // Context line numbers sit on the plain row background — require AA.
     expect(contrastRatio($muted, $bg))
-        ->toBeGreaterThanOrEqual(4.5, "muted on bg ($theme)");
+        ->toBeGreaterThanOrEqual(CONTRAST_AA_LARGE, "muted on bg ($theme)");
 
     // Add/del line numbers sit on the faint add-bg/del-bg tint (the saturated
     // stripe is now a marker bar, not a fill). Colored gutter affordance —
-    // require at least the WCAG UI/large-text floor (3:1), comfortably above
-    // the ~2.4:1 the buried-under-stripe bug produced.
+    // require the WCAG UI floor, comfortably above the ~2.4:1 the
+    // buried-under-stripe bug produced.
     foreach (['add-bg', 'del-bg'] as $token) {
         $tinted = composite(rgbaParts($raw[$token]), $bg);
 
         expect(contrastRatio($muted, $tinted))
-            ->toBeGreaterThanOrEqual(3.0, "muted on $token ($theme)");
+            ->toBeGreaterThanOrEqual(CONTRAST_UI_FLOOR, "muted on $token ($theme)");
     }
 })->with('themes');
