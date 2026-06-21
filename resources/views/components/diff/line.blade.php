@@ -25,6 +25,7 @@
         default => 'context',
     };
     $headingId = $line['headingId'] ?? null;
+    $table = $line['table'] ?? null;
     $headingAncestors = $line['headingAncestors'] ?? [];
     $ancestorJs = $headingAncestors === [] ? null : json_encode($headingAncestors);
 
@@ -58,7 +59,7 @@
 
     <div class="diff-cell diff-cell-prefix {{ $bgClass }} {{ $prefixColor }}">{{ $prefix }}</div>
 
-    <div class="diff-cell diff-cell-content {{ $bgClass }}">@if($headingId !== null)<button
+    <div @class(['diff-cell', 'diff-cell-content', 'diff-cell-table' => $table !== null, $bgClass])>@if($table !== null)<x-diff.md-table :table="$table" />@elseif($headingId !== null)<button
             type="button"
             data-testid="heading-fold-toggle"
             data-heading-id="{{ $headingId }}"
@@ -66,11 +67,11 @@
             :aria-label="foldedHeadings[{{ $headingId }}] ? 'Expand section' : 'Collapse section'"
             :aria-expanded="!foldedHeadings[{{ $headingId }}]"
             class="inline-flex align-middle -my-0.5 mr-1 size-4 items-center justify-center text-gh-muted/60 hover:text-gh-text"
-        ><flux:icon icon="chevron-down" variant="outline" class="!size-3" x-show="!foldedHeadings[{{ $headingId }}]" /><flux:icon icon="chevron-right" variant="outline" class="!size-3" x-show="foldedHeadings[{{ $headingId }}]" x-cloak /></button>@endif{!! $line['highlightedContent'] ?? e($line['content']) !!}</div>
+        ><flux:icon icon="chevron-down" variant="outline" class="!size-3" x-show="!foldedHeadings[{{ $headingId }}]" /><flux:icon icon="chevron-right" variant="outline" class="!size-3" x-show="foldedHeadings[{{ $headingId }}]" x-cloak /></button>{!! $line['highlightedContent'] ?? e($line['content']) !!}@else{!! $line['highlightedContent'] ?? e($line['content']) !!}@endif</div>
 
     @if($type === LineType::Context)
         {{-- Mirror cell: shown only in split mode (CSS hides in unified). --}}
-        <div class="diff-cell diff-cell-content diff-cell-content-mirror {{ $bgClass }}" aria-hidden="true">{!! $line['highlightedContent'] ?? e($line['content']) !!}</div>
+        <div @class(['diff-cell', 'diff-cell-content', 'diff-cell-content-mirror', 'diff-cell-table' => $table !== null, $bgClass]) aria-hidden="true">@if($table !== null)<x-diff.md-table :table="$table" />@else{!! $line['highlightedContent'] ?? e($line['content']) !!}@endif</div>
     @endif
 </div>
 

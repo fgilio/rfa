@@ -33,7 +33,55 @@ test('returns hunks unchanged when no tables present', function () {
     expect($result)->toBe($hunks);
 });
 
-test('keeps an escaped pipe inside a cell instead of splitting the column', function () {
+test('attaches grid cell metadata to each table row', function () {
+    $hunks = [
+        new Hunk('', 1, 3, 1, 3, [
+            new DiffLine(LineType::Context, '| Name | Description |', 1, 1),
+            new DiffLine(LineType::Context, '| --- | --- |', 2, 2),
+            new DiffLine(LineType::Context, '| a | a longer description |', 3, 3),
+        ]),
+    ];
+
+    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
+
+    expect($lines[0]->table)->toMatchArray([
+        'separator' => false,
+        'header' => true,
+        'cells' => ['Name', 'Description'],
+    ]);
+    // Every row in the group shares the same column template, so they align.
+    expect($lines[0]->table['template'])->toBe($lines[2]->table['template'])
+        ->and($lines[0]->table['template'])->toContain('minmax(0,')
+        ->and($lines[0]->table['maxWidth'])->toBeInt();
+
+    // The separator row collapses to a header rule, not cells.
+    expect($lines[1]->table)->toBe(['separator' => true]);
+
+    // The body row is not a header and carries its own cells.
+    expect($lines[2]->table)->toMatchArray([
+        'separator' => false,
+        'header' => false,
+        'cells' => ['a', 'a longer description'],
+    ]);
+});
+
+test('leaves source content untouched', function () {
+    $hunks = [
+        new Hunk('', 1, 3, 1, 3, [
+            new DiffLine(LineType::Context, '| Name | Description |', 1, 1),
+            new DiffLine(LineType::Context, '| --- | --- |', 2, 2),
+            new DiffLine(LineType::Context, '| a | longer |', 3, 3),
+        ]),
+    ];
+
+    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
+
+    // No padding is written into the content — the grid handles alignment.
+    expect($lines[0]->content)->toBe('| Name | Description |')
+        ->and($lines[2]->content)->toBe('| a | longer |');
+});
+
+test('keeps an escaped pipe inside a single cell', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
             new DiffLine(LineType::Context, '| a \| b | second column |', 1, 1),
@@ -42,158 +90,96 @@ test('keeps an escaped pipe inside a cell instead of splitting the column', func
         ]),
     ];
 
-    $result = $this->aligner->alignTables($hunks, 'doc.md');
-    $lines = $result[0]->lines;
+    $lines = $this->aligner->alignTables($hunks, 'doc.md')[0]->lines;
 
-    // The literal pipe (\|) stays inside cell 1 rather than shattering it.
-    expect($lines[0]->content)->toContain('a \| b');
-    // The separator keeps exactly two columns (3 delimiter pipes), not three.
-    expect(substr_count($lines[1]->content, '|'))->toBe(3);
+    // The literal pipe (\|) stays inside cell 1 rather than shattering it into two.
+    expect($lines[0]->table['cells'])->toBe(['a \| b', 'second column']);
 });
 
-test('aligns simple table columns', function () {
+test('does not annotate a pipe block without a separator row', function () {
     $hunks = [
-        new Hunk('', 1, 4, 1, 4, [
-            new DiffLine(LineType::Context, '| Name | Description | Notes |', 1, 1),
-            new DiffLine(LineType::Context, '|---|---|---|', 2, 2),
-            new DiffLine(LineType::Context, '| a | A longer description | n |', 3, 3),
-            new DiffLine(LineType::Context, '| longer name | b | some notes here |', 4, 4),
+        new Hunk('', 1, 2, 1, 2, [
+            new DiffLine(LineType::Context, '| just | some |', 1, 1),
+            new DiffLine(LineType::Context, '| pipe | lines |', 2, 2),
         ]),
     ];
 
     $result = $this->aligner->alignTables($hunks, 'readme.md');
 
-    // All columns padded to widest cell in each column
-    expect($result[0]->lines[0]->content)->toBe('| Name        | Description          | Notes           |');
-    expect($result[0]->lines[1]->content)->toMatch('/^\| -+ \| -+ \| -+ \|$/');
-    expect($result[0]->lines[2]->content)->toBe('| a           | A longer description | n               |');
-    expect($result[0]->lines[3]->content)->toBe('| longer name | b                    | some notes here |');
+    // No GFM separator -> not a table -> left as plain source.
+    expect($result)->toBe($hunks);
 });
 
-test('handles mixed diff types in table group', function () {
+test('annotates mixed diff types in a table group and preserves types', function () {
     $hunks = [
-        new Hunk('', 1, 3, 1, 3, [
+        new Hunk('', 1, 4, 1, 4, [
             new DiffLine(LineType::Context, '| Col | Value |', 1, 1),
-            new DiffLine(LineType::Context, '|---|---|', 2, 2),
+            new DiffLine(LineType::Context, '| --- | --- |', 2, 2),
             new DiffLine(LineType::Remove, '| short | x |', 3, null),
             new DiffLine(LineType::Add, '| a much longer cell | updated |', null, 3),
         ]),
     ];
 
-    $result = $this->aligner->alignTables($hunks, 'docs.md');
+    $lines = $this->aligner->alignTables($hunks, 'docs.md')[0]->lines;
 
-    $lines = $result[0]->lines;
-    // All lines aligned to the widest content across all types
-    expect($lines[0]->content)->toBe('| Col                | Value   |');
-    expect($lines[2]->content)->toBe('| short              | x       |');
-    expect($lines[2]->type)->toBe(LineType::Remove);
-    expect($lines[3]->content)->toBe('| a much longer cell | updated |');
-    expect($lines[3]->type)->toBe(LineType::Add);
+    expect($lines[2]->type)->toBe(LineType::Remove)
+        ->and($lines[2]->table['cells'])->toBe(['short', 'x'])
+        ->and($lines[3]->type)->toBe(LineType::Add)
+        ->and($lines[3]->table['cells'])->toBe(['a much longer cell', 'updated'])
+        // Shared template keeps both sides aligned to the widest column.
+        ->and($lines[2]->table['template'])->toBe($lines[3]->table['template']);
 });
 
-test('extends separator row dashes to match column width', function () {
+test('caps a prose column so it does not starve its neighbours', function () {
+    $prose = str_repeat('word ', 60);
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine(LineType::Context, '| Header One | H2 |', 1, 1),
-            new DiffLine(LineType::Context, '|---|---|', 2, 2),
-            new DiffLine(LineType::Context, '| data | d |', 3, 3),
+            new DiffLine(LineType::Context, '| Item | Why it bites |', 1, 1),
+            new DiffLine(LineType::Context, '| --- | --- |', 2, 2),
+            new DiffLine(LineType::Context, "| composer.lock | {$prose} |", 3, 3),
         ]),
     ];
 
-    $result = $this->aligner->alignTables($hunks, 'readme.md');
+    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
 
-    expect($result[0]->lines[1]->content)->toBe('| ---------- | --- |');
+    // 'composer.lock' (13) keeps its width; the long prose column is capped at 60.
+    expect($lines[0]->table['template'])->toBe('minmax(0,13fr) minmax(0,60fr)');
 });
 
-test('preserves separator alignment markers', function () {
+test('marks every header row before the separator', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
-            new DiffLine(LineType::Context, '| Left Longer | Center Longer | Right Longer |', 1, 1),
-            new DiffLine(LineType::Context, '|:---|:---:|---:|', 2, 2),
-            new DiffLine(LineType::Context, '| data | data | data |', 3, 3),
+            new DiffLine(LineType::Context, '| H1 | H2 |', 1, 1),
+            new DiffLine(LineType::Context, '| --- | --- |', 2, 2),
+            new DiffLine(LineType::Context, '| body | row |', 3, 3),
         ]),
     ];
 
-    $result = $this->aligner->alignTables($hunks, 'readme.md');
+    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
 
-    $sep = $result[0]->lines[1]->content;
-    // Left-aligned: starts with :
-    expect($sep)->toContain(':----');
-    // Center-aligned: starts and ends with :
-    expect($sep)->toMatch('/:---+:/');
-    // Right-aligned: ends with :
-    expect($sep)->toMatch('/---+: \|$/');
-});
-
-test('handles tables with different column counts', function () {
-    $hunks = [
-        new Hunk('', 1, 2, 1, 2, [
-            new DiffLine(LineType::Context, '| a | b | c |', 1, 1),
-            new DiffLine(LineType::Add, '| x | y |', null, 2),
-        ]),
-    ];
-
-    $result = $this->aligner->alignTables($hunks, 'readme.md');
-
-    // All columns padded to minimum width of 3 (separator minimum)
-    $lines = $result[0]->lines;
-    expect($lines[0]->content)->toBe('| a   | b   | c   |');
-    expect($lines[1]->content)->toBe('| x   | y   |     |');
-});
-
-test('preserves indented tables', function () {
-    $hunks = [
-        new Hunk('', 1, 3, 1, 3, [
-            new DiffLine(LineType::Context, '    | Col | Value |', 1, 1),
-            new DiffLine(LineType::Context, '    |---|---|', 2, 2),
-            new DiffLine(LineType::Context, '    | longer | x |', 3, 3),
-        ]),
-    ];
-
-    $result = $this->aligner->alignTables($hunks, 'readme.md');
-
-    expect($result[0]->lines[0]->content)->toStartWith('    |');
-    expect($result[0]->lines[2]->content)->toStartWith('    |');
-    // Column alignment should work within the indented table
-    expect($result[0]->lines[0]->content)->toBe('    | Col    | Value |');
-    expect($result[0]->lines[2]->content)->toBe('    | longer | x     |');
-});
-
-test('does not align non-table pipe lines', function () {
-    $hunks = [
-        new Hunk('', 1, 2, 1, 2, [
-            new DiffLine(LineType::Context, 'echo foo | grep bar', 1, 1),
-            new DiffLine(LineType::Context, 'cat file | wc -l', 2, 2),
-        ]),
-    ];
-
-    $result = $this->aligner->alignTables($hunks, 'readme.md');
-
-    expect($result)->toBe($hunks);
+    expect($lines[0]->table['header'])->toBeTrue()
+        ->and($lines[2]->table['header'])->toBeFalse();
 });
 
 test('handles multiple table groups in one hunk', function () {
     $hunks = [
         new Hunk('', 1, 7, 1, 7, [
             new DiffLine(LineType::Context, '| a | b |', 1, 1),
-            new DiffLine(LineType::Context, '|---|---|', 2, 2),
+            new DiffLine(LineType::Context, '| --- | --- |', 2, 2),
             new DiffLine(LineType::Context, '| longer | x |', 3, 3),
             new DiffLine(LineType::Context, '', 4, 4),
             new DiffLine(LineType::Context, '| c | d |', 5, 5),
-            new DiffLine(LineType::Context, '|---|---|', 6, 6),
+            new DiffLine(LineType::Context, '| --- | --- |', 6, 6),
             new DiffLine(LineType::Context, '| y | much longer |', 7, 7),
         ]),
     ];
 
-    $result = $this->aligner->alignTables($hunks, 'readme.md');
+    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
 
-    // First table: "longer" is widest in col 0, min width 3 for col 1
-    expect($result[0]->lines[0]->content)->toBe('| a      | b   |');
-    expect($result[0]->lines[2]->content)->toBe('| longer | x   |');
-
-    // Second table: "y" and "c" in col 0, "much longer" and "d" in col 1
-    expect($result[0]->lines[4]->content)->toBe('| c   | d           |');
-    expect($result[0]->lines[6]->content)->toBe('| y   | much longer |');
+    expect($lines[0]->table['cells'])->toBe(['a', 'b'])
+        ->and($lines[3]->table)->toBeNull()
+        ->and($lines[4]->table['cells'])->toBe(['c', 'd'])
+        ->and($lines[6]->table['cells'])->toBe(['y', 'much longer']);
 });
 
 test('handles empty hunks', function () {
@@ -206,31 +192,52 @@ test('processes mdx files', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [
             new DiffLine(LineType::Context, '| Short | Value |', 1, 1),
-            new DiffLine(LineType::Context, '|---|---|', 2, 2),
+            new DiffLine(LineType::Context, '| --- | --- |', 2, 2),
             new DiffLine(LineType::Context, '| a longer name | x |', 3, 3),
         ]),
     ];
 
-    $result = $this->aligner->alignTables($hunks, 'docs/page.mdx');
+    $lines = $this->aligner->alignTables($hunks, 'docs/page.mdx')[0]->lines;
 
-    expect($result[0]->lines[0]->content)->toBe('| Short         | Value |');
-    expect($result[0]->lines[2]->content)->toBe('| a longer name | x     |');
+    expect($lines[2]->table['cells'])->toBe(['a longer name', 'x']);
 });
 
 test('preserves line numbers and types', function () {
     $hunks = [
         new Hunk('', 10, 3, 10, 3, [
             new DiffLine(LineType::Context, '| a | b |', 10, 10),
-            new DiffLine(LineType::Context, '|---|---|', 11, 11),
+            new DiffLine(LineType::Context, '| --- | --- |', 11, 11),
             new DiffLine(LineType::Add, '| longer | x |', null, 12),
         ]),
     ];
 
-    $result = $this->aligner->alignTables($hunks, 'readme.md');
+    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
 
-    expect($result[0]->lines[0]->oldLineNum)->toBe(10)
-        ->and($result[0]->lines[0]->newLineNum)->toBe(10)
-        ->and($result[0]->lines[2]->type)->toBe(LineType::Add)
-        ->and($result[0]->lines[2]->oldLineNum)->toBeNull()
-        ->and($result[0]->lines[2]->newLineNum)->toBe(12);
+    expect($lines[0]->oldLineNum)->toBe(10)
+        ->and($lines[0]->newLineNum)->toBe(10)
+        ->and($lines[2]->type)->toBe(LineType::Add)
+        ->and($lines[2]->oldLineNum)->toBeNull()
+        ->and($lines[2]->newLineNum)->toBe(12);
+});
+
+test('preserves highlighting and heading metadata already on the line', function () {
+    $hunks = [
+        new Hunk('', 1, 2, 1, 2, [
+            new DiffLine(
+                type: LineType::Add,
+                content: '| a | b |',
+                oldLineNum: null,
+                newLineNum: 1,
+                highlightedContent: '<span>| a | b |</span>',
+                headingAncestors: [5],
+            ),
+            new DiffLine(LineType::Add, '| --- | --- |', null, 2),
+        ]),
+    ];
+
+    $line = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines[0];
+
+    expect($line->highlightedContent)->toBe('<span>| a | b |</span>')
+        ->and($line->headingAncestors)->toBe([5])
+        ->and($line->table['cells'])->toBe(['a', 'b']);
 });
