@@ -181,10 +181,17 @@ class IgnoreService
 
             if ($char === '*') {
                 if (($glob[$i + 1] ?? '') === '*') {
-                    $regex .= '.*';
-                    $i++;
+                    $i++; // consume the second '*'
                     if (($glob[$i + 1] ?? '') === '/') {
-                        $i++;
+                        // `**/` matches zero or more whole path segments, so the
+                        // separator stays part of the match: `(?:.*/)?`. Emitting
+                        // a bare `.*` and swallowing the slash drops the segment
+                        // boundary, letting `**/build` match `prebuild` or
+                        // `a/**/b` match `a/xb`.
+                        $i++; // consume the '/'
+                        $regex .= '(?:.*/)?';
+                    } else {
+                        $regex .= '.*';
                     }
                 } else {
                     $regex .= '[^/]*';

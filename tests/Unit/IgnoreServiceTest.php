@@ -146,3 +146,33 @@ test('isPathExcluded anchors a leading-slash pattern to the repo root', function
     expect($this->service->isPathExcluded('dist/a.js', $rules))->toBeTrue();
     expect($this->service->isPathExcluded('packages/x/dist/a.js', $rules))->toBeFalse();
 });
+
+test('isPathExcluded matches a mid-path ** across zero or more whole segments', function () {
+    $rules = $this->service->compile(['a/**/b']);
+
+    expect($this->service->isPathExcluded('a/b', $rules))->toBeTrue();
+    expect($this->service->isPathExcluded('a/x/b', $rules))->toBeTrue();
+    expect($this->service->isPathExcluded('a/x/y/b', $rules))->toBeTrue();
+    // `**/` must not bridge into a partial segment name: `a/xb` is not `a/.../b`.
+    expect($this->service->isPathExcluded('a/xb', $rules))->toBeFalse();
+});
+
+test('isPathExcluded leading **/ matches a name at any depth without over-matching a partial segment', function () {
+    $rules = $this->service->compile(['**/build']);
+
+    expect($this->service->isPathExcluded('build', $rules))->toBeTrue();
+    expect($this->service->isPathExcluded('build/out.js', $rules))->toBeTrue();
+    expect($this->service->isPathExcluded('pkg/a/build', $rules))->toBeTrue();
+    expect($this->service->isPathExcluded('pkg/a/build/out.js', $rules))->toBeTrue();
+    // A bare `.*` body would wrongly swallow these — the segment boundary forbids it.
+    expect($this->service->isPathExcluded('prebuild', $rules))->toBeFalse();
+    expect($this->service->isPathExcluded('pkg/prebuild/out.js', $rules))->toBeFalse();
+});
+
+test('isPathExcluded trailing ** matches everything under a directory', function () {
+    $rules = $this->service->compile(['logs/**']);
+
+    expect($this->service->isPathExcluded('logs/a.txt', $rules))->toBeTrue();
+    expect($this->service->isPathExcluded('logs/sub/b.txt', $rules))->toBeTrue();
+    expect($this->service->isPathExcluded('src/a.txt', $rules))->toBeFalse();
+});

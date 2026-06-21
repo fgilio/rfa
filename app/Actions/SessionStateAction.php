@@ -100,10 +100,10 @@ final readonly class SessionStateAction
      */
     private function collectOrphanedPaths(array $resolved, array $currentFiles): array
     {
-        $presentPaths = collect($currentFiles)->pluck('path')->all();
+        $presentPaths = collect($currentFiles)->pluck('path')->flip();
 
         return collect($resolved)
-            ->filter(fn (array $c) => ! in_array($c['file'], $presentPaths, true))
+            ->reject(fn (array $c) => $presentPaths->has($c['file']))
             ->pluck('file')
             ->unique()
             ->values()
