@@ -14,9 +14,9 @@
     $oldNum = $line['oldLineNum'] ?? null;
     $newNum = $line['newLineNum'] ?? null;
     $lineNum = $newNum ?? $oldNum;
-    [$bgClass, $oldNumBgClass, $newNumBgClass, $prefix, $prefixColor] = match($type) {
-        LineType::Add => ['bg-gh-add-bg', '', 'bg-gh-add-line', '+', 'text-gh-green'],
-        LineType::Remove => ['bg-gh-del-bg', 'bg-gh-del-line', '', '-', 'text-gh-red'],
+    [$bgClass, $oldNumMarker, $newNumMarker, $prefix, $prefixColor] = match($type) {
+        LineType::Add => ['bg-gh-add-bg', '', 'diff-num-marker diff-num-marker-add', '+', 'text-gh-green'],
+        LineType::Remove => ['bg-gh-del-bg', 'diff-num-marker diff-num-marker-del', '', '-', 'text-gh-red'],
         default => ['', '', '', ' ', 'text-gh-muted/30'],
     };
     $lineSide = match($type) {
@@ -48,11 +48,11 @@
     @if($oldNum) data-line-old="{{ $oldNum }}" @endif
     @if($ancestorJs) x-show="!isLineFolded({{ $ancestorJs }})" @endif
 >
-    <div @if($oldNum && ! $newNum) data-testid="diff-line-number" @endif class="diff-cell diff-cell-num diff-cell-num-old {{ $bgClass }} {{ $oldNumBgClass }}"
+    <div @if($oldNum && ! $newNum) data-testid="diff-line-number" @endif class="diff-cell diff-cell-num diff-cell-num-old {{ $bgClass }} {{ $oldNumMarker }}"
         @if($oldNum) @mousedown.prevent="handleLineMousedown({{ $oldNum }}, 'left', $event)" @endif
     >{{ $oldNum ?? '' }}</div>
 
-    <div @if($newNum) data-testid="diff-line-number" @endif class="diff-cell diff-cell-num diff-cell-num-new {{ $bgClass }} {{ $newNumBgClass }}"
+    <div @if($newNum) data-testid="diff-line-number" @endif class="diff-cell diff-cell-num diff-cell-num-new {{ $bgClass }} {{ $newNumMarker }}"
         @if($newNum) @mousedown.prevent="handleLineMousedown({{ $newNum }}, 'right', $event)" @endif
     >{{ $newNum ?? '' }}</div>
 
