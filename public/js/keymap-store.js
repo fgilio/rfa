@@ -19,20 +19,39 @@
         api.autoInstall(root);
     }
 })(typeof window !== 'undefined' ? window : null, function () {
+    // Glyphs in a combo that don't equal their KeyboardEvent.key spelling.
+    const GLYPH_KEYS = { '↵': 'enter' };
+
     /**
-     * @param {string} combo       e.g. '⌘K' (also matches Ctrl on non-mac)
+     * @param {string} stripped  combo with modifier glyphs removed
+     * @returns {string}
+     */
+    function comboKey(stripped) {
+        return GLYPH_KEYS[stripped] ?? stripped;
+    }
+
+    /**
+     * @param {string} combo       e.g. '⌘K', '⌘↵', or a bare key like 'j' / '⇧C' / '?'
      * @param {KeyboardEvent|{key: string, metaKey?: boolean, ctrlKey?: boolean, shiftKey?: boolean, altKey?: boolean}} e
      * @returns {boolean}
      */
     function matches(combo, e) {
-        const wantCmd = combo.includes('⌘');
-        const wantShift = combo.includes('⇧');
-        const hasCmd = e.metaKey || e.ctrlKey;
-        if (wantCmd !== hasCmd) return false;
-        if (wantShift !== e.shiftKey) return false;
         if (e.altKey) return false;
-        const key = combo.replace(/[⌘⇧]/g, '').toLowerCase();
-        return e.key.toLowerCase() === key;
+        const hasCmd = e.metaKey || e.ctrlKey;
+
+        if (combo.includes('⌘')) {
+            // Cmd combo: explicit ⌘/⇧ requirements, base key matched case-insensitively.
+            if (!hasCmd) return false;
+            if (combo.includes('⇧') !== e.shiftKey) return false;
+            const key = comboKey(combo.replace(/[⌘⇧]/g, '')).toLowerCase();
+            return e.key.toLowerCase() === key;
+        }
+
+        // Bare-character combo: no command modifier. The character itself —
+        // including its shifted form ('C' from Shift+C, '?' from Shift+/) — is
+        // matched case-sensitively, so the shift state is encoded by the glyph.
+        if (hasCmd) return false;
+        return e.key === comboKey(combo);
     }
 
     /**

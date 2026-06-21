@@ -105,6 +105,33 @@
                 });
 
                 this.pendingSavesGuard?.attach();
+                this.registerShortcuts();
+            },
+            // Page-scoped review shortcuts. Registered by catalog id (combos live
+            // in config/shortcuts.php); cleared on navigate by the keymap store and
+            // re-registered when the next review page mounts.
+            registerShortcuts() {
+                const s = this.$store.shortcuts;
+                s.register('review.filter', () => this.$refs.fileFilterInput?.focus());
+                s.register('review.next-file', () => this.focusAdjacentFile(1));
+                s.register('review.prev-file', () => this.focusAdjacentFile(-1));
+                s.register('review.collapse-all', () => {
+                    this.$store.settings.collapseAll = true;
+                    this.$dispatch('collapse-all-files');
+                });
+                s.register('review.expand-all', () => {
+                    this.$store.settings.collapseAll = false;
+                    this.$dispatch('expand-all-files');
+                });
+                if (this.config.prevCommitHash) {
+                    s.register('review.prev-commit', () => Livewire.navigate(this.commitUrl(this.config.prevCommitHash)));
+                }
+                if (this.config.nextCommitHash) {
+                    s.register('review.next-commit', () => Livewire.navigate(this.commitUrl(this.config.nextCommitHash)));
+                }
+            },
+            commitUrl(hash) {
+                return '/p/' + this.config.projectSlug + '/c/' + hash;
             },
             jsonData(name, fallback) {
                 try {
@@ -235,6 +262,9 @@
                 this.pendingSavesGuard?.detach();
                 this.pendingSavesGuard = null;
                 clearTimeout(this.commentScrollPollId);
+                ['review.filter', 'review.next-file', 'review.prev-file', 'review.collapse-all',
+                    'review.expand-all', 'review.prev-commit', 'review.next-commit']
+                    .forEach((id) => this.$store.shortcuts.unregister(id));
             },
         };
     }
@@ -271,7 +301,9 @@
             softRefresh() { this.$wire.softRefresh(); },
             hardReload() { window.location.reload(); },
             get tooltip() {
-                if (!this.hasChanges) return 'Refresh · ⌘R · ⌘⇧R to hard reload';
+                if (!this.hasChanges) {
+                    return `Refresh · ${config.refreshCombo} · ${config.hardReloadCombo} to hard reload`;
+                }
                 const n = this.currentCount;
                 const noun = n === 1 ? 'file' : 'files';
                 return `${n} ${noun} changed externally - click to refresh`;
@@ -286,8 +318,8 @@
                 });
                 // Browser build only: the native build routes ⌘R through its menu.
                 if (config.keymapEnabled) {
-                    this.$store.keymap.register('⌘R', () => this.softRefresh(), { allowInEditable: true });
-                    this.$store.keymap.register('⌘⇧R', () => this.hardReload(), { allowInEditable: true });
+                    this.$store.shortcuts.register('app.refresh', () => this.softRefresh());
+                    this.$store.shortcuts.register('app.hard-reload', () => this.hardReload());
                 }
             },
             destroy() {
@@ -297,8 +329,8 @@
                 // dead component. The keymap store is keyed by combo, so this
                 // also keeps a remount from re-binding a stale handler.
                 if (config.keymapEnabled) {
-                    this.$store.keymap.unregister('⌘R');
-                    this.$store.keymap.unregister('⌘⇧R');
+                    this.$store.shortcuts.unregister('app.refresh');
+                    this.$store.shortcuts.unregister('app.hard-reload');
                 }
             },
         };

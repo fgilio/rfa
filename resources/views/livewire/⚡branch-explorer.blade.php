@@ -161,7 +161,7 @@ new class extends Component {
         projectSlug: @js($projectSlug),
         branches: @js($branches),
     })"
-    x-init="$store.keymap.register('⌘B', () => open ? closePanel() : openPanel())"
+    x-init="$store.shortcuts.register('branch-explorer.toggle', () => open ? closePanel() : openPanel())"
     @keydown.window="handleKeydown($event)"
     @open-selection-drawer.window="openPanel()"
     @branch-explorer-selection-error.window="showSelectionError($event.detail.message)"
@@ -171,11 +171,11 @@ new class extends Component {
 >
     <div class="inline-flex items-stretch rounded-md border border-gh-border/70 bg-gh-surface/30 hover:border-gh-text/30 transition-colors">
         <div @if($hasRemote) @contextmenu.prevent="openRemoteContext($event, 'branch', { name: currentBranch }, 'branch ' + currentBranch)" @endif class="inline-flex">
-            <flux:tooltip content="Switch branch · ⌘B">
+            <flux:tooltip content="Switch branch · {{ \App\Support\Shortcuts::display('branch-explorer.toggle') }}">
                 <button
                     type="button"
                     class="group inline-flex items-center gap-1.5 px-2 py-1 text-xs font-mono text-gh-muted hover:text-gh-text hover:bg-gh-border/25 rounded-l-md transition-colors cursor-pointer"
-                    aria-label="Switch branch (⌘B)"
+                    aria-label="Switch branch ({{ \App\Support\Shortcuts::display('branch-explorer.toggle') }})"
                     aria-haspopup="dialog"
                     x-on:click="openPanel()"
                     x-bind:aria-expanded="open"
@@ -189,11 +189,11 @@ new class extends Component {
         <span class="w-px self-stretch bg-gh-border/70" aria-hidden="true"></span>
 
         <div @if($hasRemote) @contextmenu.prevent="openSelectionRemoteContext($event)" @endif class="inline-flex">
-            <flux:tooltip content="{{ $selectionTitle }} · ⌘B">
+            <flux:tooltip content="{{ $selectionTitle }} · {{ \App\Support\Shortcuts::display('branch-explorer.toggle') }}">
                 <button
                     type="button"
                     class="group inline-flex items-center gap-1.5 px-2 py-1 text-xs font-mono text-gh-text hover:bg-gh-border/25 rounded-r-md transition-colors cursor-pointer"
-                    aria-label="Open selection drawer (⌘B)"
+                    aria-label="Open selection drawer ({{ \App\Support\Shortcuts::display('branch-explorer.toggle') }})"
                     aria-haspopup="dialog"
                     x-on:click="openPanel()"
                     x-bind:aria-expanded="open"

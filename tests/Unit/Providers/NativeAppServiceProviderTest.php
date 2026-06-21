@@ -2,6 +2,7 @@
 
 use App\Console\Benchmark\BenchmarkIsolation;
 use App\Providers\NativeAppServiceProvider;
+use App\Support\Shortcuts;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -76,13 +77,16 @@ test('dev compiled view cleanup skips deletion in testing environment', function
 test('the View submenu declares the show-context menu item with the cmd-shift-k accelerator', function () {
     // The hotkey lives in the menu builder DSL, which is wired through the
     // native bridge. Read the source directly so the assertion stays fast
-    // and decoupled from the bridge.
+    // and decoupled from the bridge. The accelerator itself is sourced from the
+    // shortcuts catalog so the menu and the cheat sheet can't drift.
     $source = file_get_contents((new ReflectionClass(NativeAppServiceProvider::class))->getFileName());
 
     expect($source)
         ->toContain("Menu::label('Show Context Files...')")
         ->toContain("->id('show-context')")
-        ->toContain("->hotkey('CmdOrCtrl+Shift+K')");
+        ->toContain("->hotkey(Shortcuts::accelerator('app.context-files'))");
+
+    expect(Shortcuts::accelerator('app.context-files'))->toBe('CmdOrCtrl+Shift+K');
 });
 
 // -- Inbox parser --

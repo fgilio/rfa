@@ -26,6 +26,19 @@ describe('matches', () => {
         ['⌘K rejects wrong key', '⌘K', { key: 'j', metaKey: true }, false],
         ['⌘K rejects when no modifier is held', '⌘K', { key: 'k' }, false],
         ['⇧⌘K rejects without cmd', '⇧⌘K', { key: 'k', shiftKey: true }, false],
+        // ⌘↵ maps the Enter glyph to the KeyboardEvent.key spelling.
+        ['⌘↵ matches meta+Enter', '⌘↵', { key: 'Enter', metaKey: true }, true],
+        ['⌘↵ matches ctrl+Enter', '⌘↵', { key: 'Enter', ctrlKey: true }, true],
+        ['⌘↵ rejects bare Enter', '⌘↵', { key: 'Enter' }, false],
+        // Bare-character combos: exact key, no command modifier.
+        ['j matches a bare j', 'j', { key: 'j' }, true],
+        ['j rejects ⌘+j', 'j', { key: 'j', metaKey: true }, false],
+        ['j rejects shift+J (case-sensitive)', 'j', { key: 'J', shiftKey: true }, false],
+        ['⇧-letter combo C matches the shifted character', 'C', { key: 'C', shiftKey: true }, true],
+        ['C rejects a lowercase c', 'C', { key: 'c' }, false],
+        ['? matches its shifted character', '?', { key: '?', shiftKey: true }, true],
+        ['/ matches a bare slash', '/', { key: '/' }, true],
+        ['[ rejects when alt is held', '[', { key: '[', altKey: true }, false],
     ])('%s', (_label, combo, props, expected) => {
         expect(matches(combo, event(props))).toBe(expected);
     });

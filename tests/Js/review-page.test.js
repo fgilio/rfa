@@ -189,7 +189,7 @@ describe('createChangePoller', () => {
     });
 
     it('renders the changed-file count in the tooltip', () => {
-        const poller = createChangePoller({ projectId: 5 });
+        const poller = createChangePoller({ projectId: 5, refreshCombo: '⌘R', hardReloadCombo: '⌘⇧R' });
         expect(poller.tooltip).toBe('Refresh · ⌘R · ⌘⇧R to hard reload');
 
         poller.hasChanges = true;
@@ -202,36 +202,36 @@ describe('createChangePoller', () => {
 
     it('registers refresh shortcuts on init and unregisters them on destroy (browser build)', () => {
         const stopPoll = vi.fn();
-        const keymap = { register: vi.fn(), unregister: vi.fn() };
+        const shortcuts = { register: vi.fn(), unregister: vi.fn() };
         window.smartPoll = { startSmartPoll: () => stopPoll, isFocused: () => true };
         respondWith({ fingerprint: 'fp-1', count: 0 });
 
         const poller = createChangePoller({ projectId: 5, keymapEnabled: true });
-        poller.$store = { keymap };
+        poller.$store = { shortcuts };
 
         poller.init();
-        expect(keymap.register).toHaveBeenCalledWith('⌘R', expect.any(Function), { allowInEditable: true });
-        expect(keymap.register).toHaveBeenCalledWith('⌘⇧R', expect.any(Function), { allowInEditable: true });
+        expect(shortcuts.register).toHaveBeenCalledWith('app.refresh', expect.any(Function));
+        expect(shortcuts.register).toHaveBeenCalledWith('app.hard-reload', expect.any(Function));
 
         poller.destroy();
-        expect(keymap.unregister).toHaveBeenCalledWith('⌘R');
-        expect(keymap.unregister).toHaveBeenCalledWith('⌘⇧R');
+        expect(shortcuts.unregister).toHaveBeenCalledWith('app.refresh');
+        expect(shortcuts.unregister).toHaveBeenCalledWith('app.hard-reload');
         expect(stopPoll).toHaveBeenCalled();
     });
 
     it('leaves shortcuts alone in the native build where keymap is disabled', () => {
-        const keymap = { register: vi.fn(), unregister: vi.fn() };
+        const shortcuts = { register: vi.fn(), unregister: vi.fn() };
         window.smartPoll = { startSmartPoll: () => vi.fn(), isFocused: () => true };
         respondWith({ fingerprint: 'fp-1', count: 0 });
 
         const poller = createChangePoller({ projectId: 5, keymapEnabled: false });
-        poller.$store = { keymap };
+        poller.$store = { shortcuts };
 
         poller.init();
         poller.destroy();
 
-        expect(keymap.register).not.toHaveBeenCalled();
-        expect(keymap.unregister).not.toHaveBeenCalled();
+        expect(shortcuts.register).not.toHaveBeenCalled();
+        expect(shortcuts.unregister).not.toHaveBeenCalled();
     });
 });
 
