@@ -79,15 +79,15 @@ final readonly class LoadFileDiffAction
             }
 
             $fileDiff = $fileDiff->withHunks(
-                $this->markdownTableAligner->alignTables($fileDiff->hunks, $fileDiff->path)
-            );
-
-            $fileDiff = $fileDiff->withHunks(
                 $this->csvAligner->alignRows($fileDiff->hunks, $fileDiff->path)
             );
 
             $highlightedHunks = $this->syntaxHighlightService->highlightHunks($fileDiff->hunks, $fileDiff->path);
             $annotatedHunks = $this->markdownRegionService->annotate($highlightedHunks, $fileDiff->path);
+
+            // Table grid metadata is attached last so it survives the line
+            // reconstruction that highlighting and heading annotation perform.
+            $annotatedHunks = $this->markdownTableAligner->alignTables($annotatedHunks, $fileDiff->path);
 
             $css = '';
             foreach ($this->syntaxHighlightService->getStyleMap() as $cls => $styles) {

@@ -11,6 +11,24 @@ use App\Support\MarkdownPath;
 class MarkdownTableAlignerService
 {
     /**
+     * Per-column weight ceiling, in characters. A prose column (paragraph-length
+     * cells) is capped here so it shares the available width with its siblings
+     * instead of dominating; short label columns keep their natural width.
+     */
+    private const COLUMN_WEIGHT_CAP = 60;
+
+    /**
+     * Floor so a separator column still resolves to a usable track.
+     */
+    private const COLUMN_WEIGHT_MIN = 3;
+
+    /**
+     * Annotate contiguous markdown table rows with the structured cell data and
+     * shared column template the diff view needs to lay each row out as a real
+     * CSS grid. The source content is left untouched; only `table` metadata is
+     * attached. Runs last in the diff pipeline so highlighting and heading
+     * annotation are preserved on the rebuilt lines.
+     *
      * @param  Hunk[]  $hunks
      * @return Hunk[]
      */
@@ -20,10 +38,10 @@ class MarkdownTableAlignerService
             return $hunks;
         }
 
-        return array_map(fn (Hunk $hunk) => $this->alignHunk($hunk), $hunks);
+        return array_map(fn (Hunk $hunk) => $this->annotateHunk($hunk), $hunks);
     }
 
-    private function alignHunk(Hunk $hunk): Hunk
+    private function annotateHunk(Hunk $hunk): Hunk
     {
         $lines = $hunk->lines;
         $count = count($lines);
@@ -43,9 +61,9 @@ class MarkdownTableAlignerService
                     $i++;
                 }
 
-                $aligned = $this->alignTableGroup(array_slice($lines, $groupStart, $i - $groupStart));
+                $annotated = $this->annotateTableGroup(array_slice($lines, $groupStart, $i - $groupStart));
 
-                foreach ($aligned as $offset => $line) {
+                foreach ($annotated as $offset => $line) {
                     if ($line !== $lines[$groupStart + $offset]) {
                         $modified = true;
                     }
@@ -79,69 +97,99 @@ class MarkdownTableAlignerService
      * @param  DiffLine[]  $group
      * @return DiffLine[]
      */
-    private function alignTableGroup(array $group): array
+    private function annotateTableGroup(array $group): array
     {
-        $parsed = [];
-        $maxCols = 0;
+        $parsed = array_map(fn (DiffLine $line) => $this->parseCells($line->content), $group);
 
-        foreach ($group as $line) {
-            $row = $this->parseCells($line->content);
-            $parsed[] = $row;
-            $maxCols = max($maxCols, count($row['cells']));
+        $firstSeparator = null;
+        foreach ($parsed as $index => $row) {
+            if ($row['isSeparator']) {
+                $firstSeparator = $index;
+                break;
+            }
         }
+
+        // A pipe-prefixed block without a separator row (`| --- |`) is not a GFM
+        // table — leave it as plain source rather than forcing a grid onto it.
+        if ($firstSeparator === null || count($group) < 2) {
+            return $group;
+        }
+
+        $maxCols = max(array_map(fn (array $row) => count($row['cells']), $parsed));
 
         if ($maxCols === 0) {
             return $group;
         }
 
-        // Compute max width per column (excluding separator rows)
-        $colWidths = array_fill(0, $maxCols, 0);
+        $weights = $this->columnWeights($parsed, $maxCols);
+        $template = collect($weights)
+            ->map(fn (int $weight) => "minmax(0,{$weight}fr)")
+            ->implode(' ');
+        $maxWidth = array_sum($weights);
+
+        $result = [];
+        foreach ($group as $offset => $line) {
+            $row = $parsed[$offset];
+
+            $table = $row['isSeparator']
+                ? ['separator' => true]
+                : [
+                    'separator' => false,
+                    'header' => $offset < $firstSeparator,
+                    'cells' => $row['cells'],
+                    'template' => $template,
+                    'maxWidth' => $maxWidth,
+                ];
+
+            $result[] = $this->withTable($line, $table);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Column weight is the widest cell in that column, capped so a prose column
+     * can't starve its neighbours. Used as the `fr` ratio for the grid track.
+     *
+     * @param  array<int, array{indent: string, cells: string[], isSeparator: bool}>  $parsed
+     * @return int[]
+     */
+    private function columnWeights(array $parsed, int $maxCols): array
+    {
+        $widths = array_fill(0, $maxCols, 0);
+
         foreach ($parsed as $row) {
             if ($row['isSeparator']) {
                 continue;
             }
             foreach ($row['cells'] as $colIndex => $cell) {
-                $colWidths[$colIndex] = max($colWidths[$colIndex], $this->displayWidth($cell));
+                $widths[$colIndex] = max($widths[$colIndex], $this->displayWidth($cell));
             }
         }
 
-        // Ensure separator rows also contribute a minimum width of 3 (for ---)
-        foreach ($colWidths as $colIndex => $width) {
-            $colWidths[$colIndex] = max($width, 3);
-        }
+        return array_map(
+            fn (int $width) => max(self::COLUMN_WEIGHT_MIN, min($width, self::COLUMN_WEIGHT_CAP)),
+            $widths,
+        );
+    }
 
-        // Rebuild each line with padded cells
-        $result = [];
-        foreach ($group as $i => $line) {
-            $row = $parsed[$i];
-            $paddedCells = [];
-
-            for ($col = 0; $col < $maxCols; $col++) {
-                $cell = $row['cells'][$col] ?? '';
-
-                if ($row['isSeparator']) {
-                    $paddedCells[] = $this->padSeparatorCell($cell, $colWidths[$col]);
-                } else {
-                    $paddedCells[] = $this->padContentCell($cell, $colWidths[$col]);
-                }
-            }
-
-            $newContent = $row['indent'].'| '.implode(' | ', $paddedCells).' |';
-
-            if ($newContent === $line->content) {
-                $result[] = $line;
-            } else {
-                $result[] = new DiffLine(
-                    type: $line->type,
-                    content: $newContent,
-                    oldLineNum: $line->oldLineNum,
-                    newLineNum: $line->newLineNum,
-                    moved: $line->moved,
-                );
-            }
-        }
-
-        return $result;
+    /**
+     * @param  array{separator: true}|array{separator: false, header: bool, cells: string[], template: string, maxWidth: int}  $table
+     */
+    private function withTable(DiffLine $line, array $table): DiffLine
+    {
+        return new DiffLine(
+            type: $line->type,
+            content: $line->content,
+            oldLineNum: $line->oldLineNum,
+            newLineNum: $line->newLineNum,
+            highlightedContent: $line->highlightedContent,
+            headingLevel: $line->headingLevel,
+            headingId: $line->headingId,
+            headingAncestors: $line->headingAncestors,
+            moved: $line->moved,
+            table: $table,
+        );
     }
 
     /**
@@ -175,13 +223,6 @@ class MarkdownTableAlignerService
         ];
     }
 
-    private function padContentCell(string $cell, int $width): string
-    {
-        $padding = max(0, $width - $this->displayWidth($cell));
-
-        return $cell.str_repeat(' ', $padding);
-    }
-
     /**
      * Display width of a cell: an escaped pipe (`\|`) is two source characters but
      * renders as one, so it must count as a single column for alignment.
@@ -189,21 +230,5 @@ class MarkdownTableAlignerService
     private function displayWidth(string $cell): int
     {
         return mb_strwidth(str_replace('\\|', '|', $cell));
-    }
-
-    private function padSeparatorCell(string $cell, int $width): string
-    {
-        if ($cell === '') {
-            return str_repeat('-', $width);
-        }
-
-        // Detect alignment markers
-        $leftColon = str_starts_with($cell, ':');
-        $rightColon = str_ends_with($cell, ':');
-
-        $dashCount = $width - ($leftColon ? 1 : 0) - ($rightColon ? 1 : 0);
-        $dashCount = max(1, $dashCount);
-
-        return ($leftColon ? ':' : '').str_repeat('-', $dashCount).($rightColon ? ':' : '');
     }
 }

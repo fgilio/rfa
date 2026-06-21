@@ -125,6 +125,25 @@
         .diff-cell-prefix { padding: 0 0.25rem; text-align: center; user-select: none; }
         .diff-cell-content { padding: 0 0.5rem; white-space: pre-wrap; word-break: break-all; }
 
+        /* Markdown table rows render their cells as a real grid so each cell wraps
+           within its own column instead of the whole row wrapping mid-character.
+           Every row in a group shares the same grid-template-columns, so columns
+           line up across rows. The cell drops pre-wrap/break-all (set for raw
+           source) so blade whitespace collapses and prose wraps on word bounds. */
+        .diff-cell-table { white-space: normal; }
+        .diff-md-table { display: grid; align-items: start; width: 100%; }
+        .diff-md-td {
+            min-width: 0;
+            padding: 0 0.6rem;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: normal;
+            border-left: 1px solid rgb(var(--gh-border) / 0.6);
+        }
+        .diff-md-td:first-child { padding-left: 0; border-left: 0; }
+        .diff-md-th { font-weight: 600; color: rgb(var(--gh-text)); }
+        .diff-md-sep { height: 0; border-bottom: 1px solid rgb(var(--gh-border)); margin: 0.15rem 0; }
+
         /* Unified: cells fill cols 1-4 in source order. */
         .diff-grid[data-view-mode="unified"] .diff-cell-num-old { grid-column: 1; }
         .diff-grid[data-view-mode="unified"] .diff-cell-num-new { grid-column: 2; }

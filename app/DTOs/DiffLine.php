@@ -11,6 +11,7 @@ class DiffLine
     /**
      * @param  int[]  $headingAncestors
      * @param  'old'|'new'|null  $moved
+     * @param  array{separator: true}|array{separator: false, header: bool, cells: string[], template: string, maxWidth: int}|null  $table
      */
     public function __construct(
         public readonly LineType $type,
@@ -22,6 +23,7 @@ class DiffLine
         public readonly ?int $headingId = null,
         public readonly array $headingAncestors = [],
         public readonly ?string $moved = null,
+        public readonly ?array $table = null,
     ) {}
 
     /** @return array<string, mixed> */
@@ -49,6 +51,10 @@ class DiffLine
 
         if ($this->moved !== null) {
             $array['moved'] = $this->moved;
+        }
+
+        if ($this->table !== null) {
+            $array['table'] = $this->table;
         }
 
         return $array;
