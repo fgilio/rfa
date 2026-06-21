@@ -143,6 +143,9 @@
         .diff-md-td:first-child { padding-left: 0; border-left: 0; }
         .diff-md-th { font-weight: 600; color: rgb(var(--gh-text)); }
         .diff-md-sep { height: 0; border-bottom: 1px solid rgb(var(--gh-border)); margin: 0.15rem 0; }
+        /* A changed separator shows its raw `:---`/`---:` markers, muted so they
+           read as structure rather than content. */
+        .diff-md-sep-cell { color: rgb(var(--gh-muted)); }
 
         /* Unified: cells fill cols 1-4 in source order. */
         .diff-grid[data-view-mode="unified"] .diff-cell-num-old { grid-column: 1; }

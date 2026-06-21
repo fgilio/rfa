@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
+use App\Enums\LineType;
 use App\Support\MarkdownPath;
 
 class MarkdownTableAlignerService
@@ -127,7 +128,7 @@ class MarkdownTableAlignerService
             $row = $parsed[$offset];
 
             $table = $row['isSeparator']
-                ? ['separator' => true]
+                ? $this->separatorTable($line, $row['cells'], $template, $maxWidth)
                 : [
                     'separator' => false,
                     'header' => $offset < $firstSeparator,
@@ -140,6 +141,32 @@ class MarkdownTableAlignerService
         }
 
         return $result;
+    }
+
+    /**
+     * Build the table metadata for a separator row.
+     *
+     * An unchanged separator carries no information for the reader, so it
+     * collapses to a thin header rule. A separator that is itself part of the
+     * diff (added or removed) instead renders its own `:---`/`---:` cells on the
+     * shared column template, so the change in alignment markers is visible
+     * rather than flattened to two indistinguishable rules.
+     *
+     * @param  string[]  $cells
+     * @return array{separator: true}|array{separator: true, cells: string[], template: string, maxWidth: int}
+     */
+    private function separatorTable(DiffLine $line, array $cells, string $template, int $maxWidth): array
+    {
+        if ($line->type === LineType::Context) {
+            return ['separator' => true];
+        }
+
+        return [
+            'separator' => true,
+            'cells' => $cells,
+            'template' => $template,
+            'maxWidth' => $maxWidth,
+        ];
     }
 
     /**
@@ -169,7 +196,7 @@ class MarkdownTableAlignerService
     }
 
     /**
-     * @param  array{separator: true}|array{separator: false, header: bool, cells: string[], template: string, maxWidth: int}  $table
+     * @param  array{separator: true}|array{separator: true, cells: string[], template: string, maxWidth: int}|array{separator: false, header: bool, cells: string[], template: string, maxWidth: int}  $table
      */
     private function withTable(DiffLine $line, array $table): DiffLine
     {
