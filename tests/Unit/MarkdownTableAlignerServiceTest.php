@@ -65,6 +65,67 @@ test('attaches grid cell metadata to each table row', function () {
     ]);
 });
 
+test('renders a changed separator as aligned cells instead of a rule', function () {
+    $hunks = [
+        new Hunk('', 1, 4, 1, 4, [
+            new DiffLine(LineType::Context, '| Name | Default |', 1, 1),
+            new DiffLine(LineType::Remove, '| --- | --- |', 2, null),
+            new DiffLine(LineType::Add, '| :--- | ---: |', null, 2),
+            new DiffLine(LineType::Context, '| a | b |', 3, 3),
+        ]),
+    ];
+
+    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
+
+    // The removed separator keeps its `---` markers on the shared column grid.
+    expect($lines[1]->table)->toMatchArray([
+        'separator' => true,
+        'cells' => ['---', '---'],
+    ])
+        ->and($lines[1]->table['template'])->toBe($lines[0]->table['template'])
+        ->and($lines[1]->table['maxWidth'])->toBe($lines[0]->table['maxWidth']);
+
+    // The added separator shows the new alignment markers, aligned the same way.
+    expect($lines[2]->table)->toMatchArray([
+        'separator' => true,
+        'cells' => [':---', '---:'],
+    ])
+        ->and($lines[2]->table['template'])->toBe($lines[0]->table['template']);
+});
+
+test('keeps an unchanged separator as a thin rule', function () {
+    $hunks = [
+        new Hunk('', 1, 4, 1, 4, [
+            new DiffLine(LineType::Context, '| Name | Default |', 1, 1),
+            new DiffLine(LineType::Context, '| --- | --- |', 2, 2),
+            new DiffLine(LineType::Remove, '| a | old |', 3, null),
+            new DiffLine(LineType::Add, '| a | new |', null, 3),
+        ]),
+    ];
+
+    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
+
+    // An unchanged (context) separator carries no diff signal, so it collapses
+    // to a rule with no cells regardless of body-cell changes around it.
+    expect($lines[1]->table)->toBe(['separator' => true]);
+});
+
+test('a changed separator does not inflate its column widths', function () {
+    $hunks = [
+        new Hunk('', 1, 3, 1, 3, [
+            new DiffLine(LineType::Context, '| A | B |', 1, 1),
+            new DiffLine(LineType::Add, '| :--------------- | ---------------: |', null, 2),
+            new DiffLine(LineType::Context, '| x | y |', 3, 3),
+        ]),
+    ];
+
+    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
+
+    // The long dash runs in the separator must not set the column weights —
+    // those still come from the (short) body/header cells.
+    expect($lines[0]->table['template'])->toBe('minmax(0,3fr) minmax(0,3fr)');
+});
+
 test('leaves source content untouched', function () {
     $hunks = [
         new Hunk('', 1, 3, 1, 3, [

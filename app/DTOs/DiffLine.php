@@ -11,7 +11,7 @@ class DiffLine
     /**
      * @param  int[]  $headingAncestors
      * @param  'old'|'new'|null  $moved
-     * @param  array{separator: true}|array{separator: false, header: bool, cells: string[], template: string, maxWidth: int}|null  $table
+     * @param  array{separator: true}|array{separator: true, cells: string[], template: string, maxWidth: int}|array{separator: false, header: bool, cells: string[], template: string, maxWidth: int}|null  $table
      */
     public function __construct(
         public readonly LineType $type,
