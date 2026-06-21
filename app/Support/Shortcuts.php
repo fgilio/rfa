@@ -8,9 +8,9 @@ namespace App\Support;
  * Read accessor for the keyboard-shortcut catalog (config/shortcuts.php).
  *
  * Shortcut ids contain dots (e.g. `project-picker.toggle`), so `config()`
- * dot-notation can't reach a single entry — it would read the dot as nesting.
- * This helper looks entries up by their literal id instead, giving Blade, the
- * native menu, and the JS bridge one consistent way to read combos and labels.
+ * dot-notation reads the dot as nesting and can't reach a single entry.
+ * This helper indexes entries by their literal id instead, giving Blade,
+ * the native menu, and the JS bridge one way to read combos and labels.
  */
 final class Shortcuts
 {
@@ -52,8 +52,7 @@ final class Shortcuts
 
     private static function field(string $id, string $key): mixed
     {
-        // Ids contain dots, so index by the literal id, then the field — never a
-        // single dotted path, which Arr::get / config would read as nesting.
-        return (self::all()[$id] ?? [])[$key] ?? null;
+        // Index by literal [id, key] segments so data_get never splits the dotted id.
+        return data_get(self::all(), [$id, $key]);
     }
 }

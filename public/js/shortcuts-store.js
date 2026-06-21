@@ -1,7 +1,7 @@
 // Keyboard-shortcut catalog bridge. The combo strings and labels are defined
 // once in PHP (config/shortcuts.php) and injected onto `window.RFA_SHORTCUTS`
 // by the layout. This store exposes them to Alpine so call sites register
-// handlers by stable `id` — never by a hard-coded combo:
+// handlers by a stable `id`, never a hard-coded combo:
 //
 //   $store.shortcuts.register('project-picker.toggle', () => toggle())
 //
@@ -32,7 +32,7 @@
             register(id, handler) {
                 const entry = this.map[id];
                 if (!entry) {
-                    console.warn(`[shortcuts] unknown id "${id}" — not registered`);
+                    console.warn(`[shortcuts] unknown id "${id}", not registered`);
                     return;
                 }
                 keymap().register(entry.combo, handler, { allowInEditable: !!entry.allowInEditable });
