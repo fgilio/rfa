@@ -52,6 +52,16 @@ final class RuntimeDiagnosticsService
             'hidden' => (bool) ($payload['hidden'] ?? false),
             'focused' => (bool) ($payload['focused'] ?? false),
             'viewport' => $this->arrayOnly($payload['viewport'] ?? null, ['width', 'height', 'devicePixelRatio']),
+            'screen' => $this->arrayOnly($payload['screen'] ?? null, ['width', 'height', 'availWidth', 'availHeight']),
+            'visibility' => $this->arrayOnly($payload['visibility'] ?? null, [
+                'state',
+                'hidden',
+                'focused',
+                'focusAgeMs',
+                'visibilityAgeMs',
+            ]),
+            'activity' => $this->arrayOnly($payload['activity'] ?? null, ['idleMs', 'lastEvent']),
+            'scroll' => $this->arrayOnly($payload['scroll'] ?? null, ['x', 'y', 'maxY']),
             'heap' => $this->arrayOnly($payload['heap'] ?? null, [
                 'usedJSHeapSize',
                 'totalJSHeapSize',
@@ -66,11 +76,26 @@ final class RuntimeDiagnosticsService
                 'expandedDiffFiles',
                 'diffLines',
                 'comments',
+                'animatedElements',
+                'animateSpin',
+                'animatePing',
+                'animatePulse',
+                'backdropBlur',
+                'sticky',
             ]),
+            'animations' => $this->normalizeAnimations($payload['animations'] ?? null),
             'navigation' => $this->arrayOnly($payload['navigation'] ?? null, [
                 'type',
                 'domCompleteMs',
                 'resources',
+            ]),
+            'poll' => $this->arrayOnly($payload['poll'] ?? null, [
+                'source',
+                'method',
+                'intervalMs',
+                'ageMs',
+                'hidden',
+                'focused',
             ]),
             'timings' => $this->normalizeTimings($payload['timings'] ?? null),
         ]);
@@ -97,7 +122,7 @@ final class RuntimeDiagnosticsService
     }
 
     /**
-     * @return list<array{pid: int, ppid: int, role: string, name: string, rss_mb: float}>
+     * @return list<array<string, mixed>>
      */
     private function rfaProcesses(): array
     {
@@ -105,7 +130,7 @@ final class RuntimeDiagnosticsService
             return [];
         }
 
-        $processList = new Process(['ps', '-axo', 'pid=,ppid=,rss=,comm=,command=']);
+        $processList = new Process(['ps', '-axo', 'pid=,ppid=,%cpu=,%mem=,rss=,stat=,etime=,comm=,command=']);
         $processList->setTimeout((float) config('rfa.diagnostics.process_snapshot_timeout_seconds', 2));
 
         try {
@@ -134,7 +159,13 @@ final class RuntimeDiagnosticsService
                 'ppid' => $process['ppid'],
                 'role' => $this->processRole($process['command']),
                 'name' => basename($process['comm']),
+                'cpu_percent' => $process['cpu_percent'],
+                'memory_percent' => $process['memory_percent'],
                 'rss_mb' => $this->bytesToMegabytes($process['rss_kb'] * 1024),
+                'state' => $this->shortString($process['state'], 16),
+                'elapsed' => $this->shortString($process['elapsed'], 32),
+                'command_hash' => hash('xxh128', $process['command']),
+                'command_features' => $this->processCommandFeatures($process['command']),
             ];
         }
 
@@ -145,20 +176,24 @@ final class RuntimeDiagnosticsService
     }
 
     /**
-     * @return array{pid: int, ppid: int, rss_kb: int, comm: string, command: string}|null
+     * @return array{pid: int, ppid: int, cpu_percent: float, memory_percent: float, rss_kb: int, state: string, elapsed: string, comm: string, command: string}|null
      */
     private function parseProcessLine(string $line): ?array
     {
-        if (! preg_match('/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/', $line, $matches)) {
+        if (! preg_match('/^\s*(\d+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*)$/', $line, $matches)) {
             return null;
         }
 
         return [
             'pid' => (int) $matches[1],
             'ppid' => (int) $matches[2],
-            'rss_kb' => (int) $matches[3],
-            'comm' => $matches[4],
-            'command' => $matches[5],
+            'cpu_percent' => (float) $matches[3],
+            'memory_percent' => (float) $matches[4],
+            'rss_kb' => (int) $matches[5],
+            'state' => $matches[6],
+            'elapsed' => $matches[7],
+            'comm' => $matches[8],
+            'command' => $matches[9],
         ];
     }
 
@@ -180,10 +215,56 @@ final class RuntimeDiagnosticsService
         // Electron 38 exposes these helper roles in the process command line.
         return match (true) {
             str_contains($lower, 'helper (renderer)') => 'renderer',
+            str_contains($lower, '--type=renderer') => 'renderer',
             str_contains($lower, 'helper (gpu)') => 'gpu',
+            str_contains($lower, '--type=gpu-process') => 'gpu',
             str_contains($lower, 'helper') => 'helper',
+            str_contains($lower, '--type=utility') => 'helper',
             default => 'main',
         };
+    }
+
+    /** @return array<string, mixed>|null */
+    private function processCommandFeatures(string $command): ?array
+    {
+        if (! (bool) config('rfa.diagnostics.process_snapshot_command_features', true)) {
+            return null;
+        }
+
+        $features = array_filter([
+            'type' => $this->processSwitch($command, 'type'),
+            'utility' => $this->processSwitch($command, 'utility-sub-type'),
+            'enabled' => $this->processFeatureList($command, 'enable-features'),
+            'disabled' => $this->processFeatureList($command, 'disable-features'),
+        ], fn (mixed $value): bool => $value !== null && $value !== []);
+
+        return $features === [] ? null : $features;
+    }
+
+    private function processSwitch(string $command, string $name): ?string
+    {
+        if (! preg_match('/--'.preg_quote($name, '/').'=([^\s]+)/', $command, $matches)) {
+            return null;
+        }
+
+        return $this->shortString($matches[1], 128);
+    }
+
+    /** @return list<string> */
+    private function processFeatureList(string $command, string $name): array
+    {
+        $switch = $this->processSwitch($command, $name);
+
+        if ($switch === null) {
+            return [];
+        }
+
+        return collect(explode(',', $switch))
+            ->map(fn (string $feature): string => trim($feature))
+            ->filter()
+            ->take(40)
+            ->values()
+            ->all();
     }
 
     /** @param array<string, mixed> $entry */
@@ -305,8 +386,136 @@ final class RuntimeDiagnosticsService
                 'binary',
                 'cached',
             ]),
-            'livewireCommit' => $this->arrayOnly($value['livewireCommit'] ?? null, ['status', 'elapsedMs']),
+            'livewireCommit' => $this->arrayOnly($value['livewireCommit'] ?? null, [
+                'status',
+                'elapsedMs',
+                'componentId',
+                'componentName',
+                'callCount',
+                'calls',
+                'updateCount',
+                'updateKeys',
+                'pollSource',
+                'pollMethod',
+                'pollAgeMs',
+            ]),
         ], fn (mixed $item): bool => $item !== null);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function normalizeAnimations(mixed $value): ?array
+    {
+        if (! is_array($value)) {
+            return null;
+        }
+
+        $summary = $this->arrayOnly($value, [
+            'activeCount',
+            'runningCount',
+            'cssAnimationCount',
+            'cssTransitionCount',
+        ]) ?? [];
+        $detailLimit = $this->animationDetailLimit();
+        $classSummaryLimit = $this->animationClassSummaryLimit();
+
+        $animations = array_filter([
+            ...$summary,
+            'classSummary' => $this->normalizeAnimationRows($value['classSummary'] ?? null, [
+                'name',
+                'count',
+            ], $classSummaryLimit),
+            'elementGroups' => $this->normalizeAnimationRows($value['elementGroups'] ?? null, [
+                'signature',
+                'count',
+                'runningCount',
+                'animationNames',
+                'classes',
+                'nearestLivewireName',
+                'nearestTestId',
+                'nearestInteractiveSignature',
+                'nearestButtonLabel',
+                'nearestButtonText',
+                'nearestButtonTitle',
+                'nearestButtonRole',
+                'nearestButtonDisabled',
+                'nearestLoading',
+                'nearestWireClick',
+                'nearestWireTarget',
+            ], $detailLimit),
+            'elements' => $this->normalizeAnimationRows($value['elements'] ?? null, [
+                'signature',
+                'tag',
+                'id',
+                'testId',
+                'role',
+                'classes',
+                'animationNames',
+                'playStates',
+                'animationCount',
+                'runningCount',
+                'maxDurationMs',
+                'connected',
+                'visible',
+                'nearestLivewireId',
+                'nearestLivewireName',
+                'nearestTestId',
+                'nearestDiffFileState',
+                'nearestInteractiveSignature',
+                'nearestButtonLabel',
+                'nearestButtonText',
+                'nearestButtonTitle',
+                'nearestButtonRole',
+                'nearestButtonDisabled',
+                'nearestLoading',
+                'nearestWireClick',
+                'nearestWireTarget',
+                'rectX',
+                'rectY',
+                'rectWidth',
+                'rectHeight',
+                'computedDisplay',
+                'computedVisibility',
+                'computedOpacity',
+                'computedPointerEvents',
+                'cssAnimationName',
+                'cssAnimationDuration',
+                'cssAnimationPlayState',
+            ], $detailLimit),
+        ], fn (mixed $item): bool => $item !== null && $item !== []);
+
+        return $animations === [] ? null : $animations;
+    }
+
+    private function animationDetailLimit(): int
+    {
+        return max(0, min(50, (int) config('rfa.diagnostics.animation_detail_limit', 20)));
+    }
+
+    private function animationClassSummaryLimit(): int
+    {
+        return max(0, min(50, (int) config('rfa.diagnostics.animation_class_summary_limit', 20)));
+    }
+
+    /**
+     * @param  list<string>  $keys
+     * @return list<array<string, mixed>>|null
+     */
+    private function normalizeAnimationRows(mixed $rows, array $keys, int $limit): ?array
+    {
+        if (! is_array($rows)) {
+            return null;
+        }
+
+        return collect($rows)
+            ->filter(fn (mixed $row): bool => is_array($row))
+            ->map(fn (array $row): array => array_filter(
+                Arr::only($row, $keys),
+                fn (mixed $item): bool => $item !== null && $item !== [],
+            ))
+            ->filter()
+            ->take($limit)
+            ->values()
+            ->all();
     }
 
     private function redactedUrlPath(mixed $url): ?string
@@ -378,7 +587,7 @@ final class RuntimeDiagnosticsService
 
     private function normalize(mixed $value, int $depth = 0): mixed
     {
-        if ($depth > 4) {
+        if ($depth > 6) {
             return '[depth-limit]';
         }
 

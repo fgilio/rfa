@@ -75,6 +75,7 @@ describe('createDirectiveHandler', () => {
 
     afterEach(() => {
         cleanupCallbacks.forEach((cb) => cb());
+        delete window.__rfaLastSmartPollTick;
         vi.useRealTimers();
         document.body.innerHTML = '';
     });
@@ -82,6 +83,7 @@ describe('createDirectiveHandler', () => {
     it('calls the component method on the focused interval', async () => {
         el.dataset.focus = '10s';
         el.dataset.blur = '5m';
+        component.name = 'head-divergence-poller';
 
         attach();
 
@@ -93,6 +95,13 @@ describe('createDirectiveHandler', () => {
         await vi.advanceTimersByTimeAsync(1);
         expect(component.$wire.call).toHaveBeenCalledTimes(1);
         expect(component.$wire.call).toHaveBeenCalledWith('poll');
+        expect(window.__rfaLastSmartPollTick).toMatchObject({
+            source: 'wire:smart-poll:head-divergence-poller',
+            method: 'poll',
+            intervalMs: 10000,
+            hidden: false,
+            focused: true,
+        });
     });
 
     it('uses the blur interval when window is unfocused', async () => {
@@ -261,6 +270,32 @@ describe('createDirectiveHandler', () => {
         // Visible-again is treated as a refocus → immediate tick.
         await vi.advanceTimersByTimeAsync(0);
         expect(component.$wire.call).toHaveBeenCalledTimes(1);
+    });
+
+    it('accepts explicit source labels for non-Livewire poll loops', async () => {
+        let ticks = 0;
+
+        const stop = smartPoll.startSmartPoll({
+            window,
+            document,
+            source: 'review-change-poller',
+            method: 'check',
+            getInterval: () => 10000,
+            onTick: () => {
+                ticks++;
+            },
+        });
+
+        await vi.advanceTimersByTimeAsync(10_000);
+
+        expect(ticks).toBe(1);
+        expect(window.__rfaLastSmartPollTick).toMatchObject({
+            source: 'review-change-poller',
+            method: 'check',
+            intervalMs: 10000,
+        });
+
+        stop();
     });
 
     it('does not re-arm after stop() runs while a tick is in flight', async () => {

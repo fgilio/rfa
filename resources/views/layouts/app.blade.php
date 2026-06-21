@@ -13,7 +13,10 @@
             enabled: @js((bool) config('rfa.diagnostics.enabled')),
             endpoint: '/api/diagnostics/browser',
             sampleIntervalMs: @js((int) config('rfa.diagnostics.browser_sample_interval_ms')),
+            commitSampleThrottleMs: @js((int) config('rfa.diagnostics.commit_sample_throttle_ms')),
             processSampleIntervalMs: @js((int) config('rfa.diagnostics.process_sample_interval_ms')),
+            animationDetailLimit: @js((int) config('rfa.diagnostics.animation_detail_limit')),
+            animationClassSummaryLimit: @js((int) config('rfa.diagnostics.animation_class_summary_limit')),
         };
     </script>
     <script>

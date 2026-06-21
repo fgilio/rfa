@@ -78,9 +78,92 @@ test('browser sample records useful counters without query strings', function ()
         'hidden' => false,
         'focused' => true,
         'viewport' => ['width' => 1280, 'height' => 860, 'devicePixelRatio' => 2],
+        'screen' => ['width' => 2560, 'height' => 1600, 'availWidth' => 2560, 'availHeight' => 1512],
+        'visibility' => ['state' => 'visible', 'hidden' => false, 'focused' => true, 'focusAgeMs' => 1200],
+        'activity' => ['idleMs' => 45000, 'lastEvent' => 'keydown'],
+        'scroll' => ['x' => 0, 'y' => 240, 'maxY' => 2000],
         'heap' => ['usedJSHeapSizeMb' => 123.456, 'totalJSHeapSizeMb' => 150.0],
-        'dom' => ['nodes' => 5000, 'livewireComponents' => 120, 'diffFiles' => 30, 'expandedDiffFiles' => 12],
+        'dom' => [
+            'nodes' => 5000,
+            'livewireComponents' => 120,
+            'diffFiles' => 30,
+            'expandedDiffFiles' => 12,
+            'animatedElements' => 2,
+            'animateSpin' => 1,
+        ],
+        'animations' => [
+            'activeCount' => 4,
+            'runningCount' => 3,
+            'cssAnimationCount' => 3,
+            'cssTransitionCount' => 1,
+            'classSummary' => [
+                ['name' => 'animate-spin', 'count' => 3],
+                ['name' => 'animate-pulse', 'count' => 1],
+            ],
+            'elementGroups' => [
+                [
+                    'signature' => 'svg.animate-spin',
+                    'count' => 3,
+                    'runningCount' => 3,
+                    'animationNames' => ['spin'],
+                    'classes' => ['animate-spin'],
+                    'nearestLivewireName' => 'update-banner',
+                    'nearestTestId' => 'update-banner',
+                    'nearestInteractiveSignature' => 'button[data-testid="refresh-button"]',
+                    'nearestButtonLabel' => 'Refresh changes',
+                    'nearestButtonText' => 'Refresh',
+                    'nearestButtonTitle' => 'Check changes',
+                    'nearestButtonRole' => 'button',
+                    'nearestButtonDisabled' => false,
+                    'nearestLoading' => true,
+                    'nearestWireClick' => 'softRefresh',
+                    'nearestWireTarget' => 'softRefresh',
+                ],
+            ],
+            'elements' => [
+                [
+                    'signature' => 'svg.animate-spin',
+                    'tag' => 'svg',
+                    'id' => 'refresh-icon',
+                    'testId' => 'refresh-icon',
+                    'classes' => ['animate-spin'],
+                    'animationNames' => ['spin'],
+                    'playStates' => ['running'],
+                    'animationCount' => 1,
+                    'runningCount' => 1,
+                    'maxDurationMs' => 1000,
+                    'connected' => true,
+                    'visible' => true,
+                    'nearestLivewireId' => 'abc123',
+                    'nearestLivewireName' => 'update-banner',
+                    'nearestTestId' => 'update-banner',
+                    'nearestDiffFileState' => 'false',
+                    'nearestInteractiveSignature' => 'button[data-testid="refresh-button"]',
+                    'nearestButtonLabel' => 'Refresh changes',
+                    'nearestButtonText' => 'Refresh',
+                    'nearestButtonTitle' => 'Check changes',
+                    'nearestButtonRole' => 'button',
+                    'nearestButtonDisabled' => false,
+                    'nearestLoading' => true,
+                    'nearestWireClick' => 'softRefresh',
+                    'nearestWireTarget' => 'softRefresh',
+                    'rectX' => 10,
+                    'rectY' => 20,
+                    'rectWidth' => 16,
+                    'rectHeight' => 16,
+                    'computedDisplay' => 'block',
+                    'computedVisibility' => 'visible',
+                    'computedOpacity' => '1',
+                    'computedPointerEvents' => 'auto',
+                    'cssAnimationName' => 'spin',
+                    'cssAnimationDuration' => '1s',
+                    'cssAnimationPlayState' => 'running',
+                    'unexpected' => 'dropped',
+                ],
+            ],
+        ],
         'navigation' => ['type' => 'navigate', 'resources' => 45],
+        'poll' => ['source' => 'wire:smart-poll:review-page', 'method' => 'poll', 'intervalMs' => 10000, 'ageMs' => 65],
         'timings' => [
             'diffAction' => ['action' => 'expandContext', 'elapsedMs' => 2400, 'phpMs' => 2200, 'diffLines' => 2247],
             'longTasksDuringAction' => ['count' => 3, 'totalMs' => 180, 'maxMs' => 90],
@@ -94,6 +177,19 @@ test('browser sample records useful counters without query strings', function ()
         ->and($entry['context']['path_hash'])->toBe(hash('xxh128', '/p/rfa/c/abcdef'))
         ->and($entry['context']['heap']['usedJSHeapSizeMb'])->toBe(123.456)
         ->and($entry['context']['dom']['diffFiles'])->toBe(30)
+        ->and($entry['context']['dom']['animateSpin'])->toBe(1)
+        ->and($entry['context']['animations']['activeCount'])->toBe(4)
+        ->and($entry['context']['animations']['classSummary'][0])->toBe(['name' => 'animate-spin', 'count' => 3])
+        ->and($entry['context']['animations']['elementGroups'][0]['nearestLivewireName'])->toBe('update-banner')
+        ->and($entry['context']['animations']['elementGroups'][0]['nearestButtonLabel'])->toBe('Refresh changes')
+        ->and($entry['context']['animations']['elements'][0]['signature'])->toBe('svg.animate-spin')
+        ->and($entry['context']['animations']['elements'][0]['nearestWireClick'])->toBe('softRefresh')
+        ->and($entry['context']['animations']['elements'][0]['rectWidth'])->toBe(16)
+        ->and($entry['context']['animations']['elements'][0])->not->toHaveKey('unexpected')
+        ->and($entry['context']['visibility']['focusAgeMs'])->toBe(1200)
+        ->and($entry['context']['activity']['idleMs'])->toBe(45000)
+        ->and($entry['context']['scroll']['y'])->toBe(240)
+        ->and($entry['context']['poll']['source'])->toBe('wire:smart-poll:review-page')
         ->and($entry['context']['timings']['diffAction']['phpMs'])->toBe(2200)
         ->and($entry['context']['timings']['longTasksDuringAction']['count'])->toBe(3)
         ->and($entry['context']['viewport']['width'])->toBe(1280);
@@ -163,6 +259,53 @@ test('browser sample does not leak process snapshot timeouts', function () {
         ->and($entries[0]['event'])->toBe('browser.sample')
         ->and($entries[1]['event'])->toBe('system.processes')
         ->and($entries[1]['context']['processes'])->toBe([]);
+});
+
+test('process snapshots include cpu counters and sanitized command features', function () {
+    $originalPath = getenv('PATH') ?: '';
+    $fakeBin = $this->diagnosticsDir.'/bin';
+    $fakePs = $fakeBin.'/ps';
+
+    mkdir($fakeBin, 0755, true);
+    file_put_contents($fakePs, <<<'SH'
+#!/bin/sh
+printf ' 123 1 12.5 3.4 204800 S 01:02:03 /Applications/rfa.app/Contents/MacOS/rfa /Applications/rfa.app/Contents/MacOS/rfa --type=renderer --enable-features=Foo,Bar --disable-features=MacWebContentsOcclusion,Other\n'
+SH);
+    chmod($fakePs, 0755);
+
+    config([
+        'rfa.diagnostics.process_snapshots' => true,
+        'rfa.diagnostics.process_snapshot_timeout_seconds' => 1,
+    ]);
+
+    putenv('PATH='.$fakeBin.':'.$originalPath);
+
+    try {
+        app(RuntimeDiagnosticsService::class)->recordBrowserSample([
+            'reason' => 'heartbeat',
+            'includeProcessSnapshot' => true,
+        ]);
+    } finally {
+        putenv('PATH='.$originalPath);
+    }
+
+    $entries = collect(file($this->diagnosticsPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES))
+        ->map(fn (string $line): array => json_decode($line, true))
+        ->all();
+
+    $process = $entries[1]['context']['processes'][0];
+
+    expect($process['pid'])->toBe(123)
+        ->and($process['role'])->toBe('renderer')
+        ->and($process['cpu_percent'])->toBe(12.5)
+        ->and($process['memory_percent'])->toBe(3.4)
+        ->and($process['rss_mb'])->toBe(200)
+        ->and($process['state'])->toBe('S')
+        ->and($process['elapsed'])->toBe('01:02:03')
+        ->and($process['command_hash'])->toHaveLength(32)
+        ->and($process['command_features']['type'])->toBe('renderer')
+        ->and($process['command_features']['enabled'])->toBe(['Foo', 'Bar'])
+        ->and($process['command_features']['disabled'])->toContain('MacWebContentsOcclusion');
 });
 
 test('browser sample drops urls without a path', function () {

@@ -314,6 +314,8 @@
                 this.stopPoll = window.smartPoll.startSmartPoll({
                     window,
                     document,
+                    source: 'review-change-poller',
+                    method: 'check',
                     getInterval: () => window.smartPoll.isFocused(document) ? 60000 : (document.hidden ? null : 300000),
                     onTick: () => this.check(),
                 });

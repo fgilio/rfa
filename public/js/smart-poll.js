@@ -27,6 +27,17 @@
         return !doc.hidden && doc.hasFocus();
     }
 
+    function markSmartPollTick(win, doc, detail) {
+        win.__rfaLastSmartPollTick = {
+            at: Date.now(),
+            source: detail.source || null,
+            method: detail.method || null,
+            intervalMs: detail.intervalMs ?? null,
+            hidden: !!doc.hidden,
+            focused: doc.hasFocus(),
+        };
+    }
+
     /**
      * Drives a focus-aware polling loop. Pauses while the document is hidden,
      * fires one immediate tick on regaining focus, and serializes overlapping
@@ -37,19 +48,23 @@
      * @param {Document} opts.document
      * @param {() => number|null} opts.getInterval  ms until next tick, or null to pause.
      * @param {() => Promise<void>|void} opts.onTick
+     * @param {string|null} [opts.source] diagnostic label for the poll loop.
+     * @param {string|null} [opts.method] method or action the poll loop invokes.
      * @returns {() => void} stop() — clears the timer and detaches listeners.
      */
-    function startSmartPoll({ window: win, document: doc, getInterval, onTick }) {
+    function startSmartPoll({ window: win, document: doc, getInterval, onTick, source = null, method = null }) {
         let timeoutId = null;
         let inflight = false;
         let stopped = false;
         let lastFocused = isFocused(doc);
+        let currentIntervalMs = null;
 
         function schedule() {
             clearTimeout(timeoutId);
             timeoutId = null;
             if (stopped) return;
             const ms = getInterval();
+            currentIntervalMs = ms;
             if (ms === null) return;
             timeoutId = setTimeout(tick, ms);
         }
@@ -60,6 +75,11 @@
                 schedule();
                 return;
             }
+            markSmartPollTick(win, doc, {
+                source,
+                method,
+                intervalMs: currentIntervalMs,
+            });
             inflight = true;
             try {
                 await onTick();
@@ -77,6 +97,7 @@
                 lastFocused = true;
                 clearTimeout(timeoutId);
                 timeoutId = null;
+                currentIntervalMs = getInterval();
                 tick();
                 return;
             }
@@ -106,10 +127,13 @@
 
         return function attach({ el, directive, component, cleanup }) {
             const method = ((directive && directive.expression) || '').trim() || 'poll';
+            const componentName = component?.name || component?.snapshot?.memo?.name || 'unknown';
 
             const stop = startSmartPoll({
                 window: win,
                 document: doc,
+                source: `wire:smart-poll:${componentName}`,
+                method,
                 getInterval() {
                     if (doc.hidden) return null;
                     const attr = doc.hasFocus() ? 'focus' : 'blur';
@@ -138,5 +162,5 @@
         }
     }
 
-    return { parseDuration, isFocused, startSmartPoll, createDirectiveHandler, install, autoInstall };
+    return { parseDuration, isFocused, markSmartPollTick, startSmartPoll, createDirectiveHandler, install, autoInstall };
 });

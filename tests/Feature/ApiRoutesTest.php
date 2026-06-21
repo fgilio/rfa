@@ -71,10 +71,94 @@ test('diagnostics route accepts validated browser samples', function () {
         'focused' => true,
         'includeProcessSnapshot' => false,
         'viewport' => ['width' => 1280, 'height' => 720, 'devicePixelRatio' => 2],
-        'dom' => ['nodes' => 100, 'livewireComponents' => 4],
+        'screen' => ['width' => 2560, 'height' => 1600, 'availWidth' => 2560, 'availHeight' => 1512],
+        'visibility' => ['state' => 'visible', 'hidden' => false, 'focused' => true, 'focusAgeMs' => 100],
+        'activity' => ['idleMs' => 12000, 'lastEvent' => 'wheel'],
+        'scroll' => ['x' => 0, 'y' => 50, 'maxY' => 300],
+        'dom' => ['nodes' => 100, 'livewireComponents' => 4, 'animatedElements' => 1],
+        'animations' => [
+            'activeCount' => 3,
+            'runningCount' => 2,
+            'cssAnimationCount' => 2,
+            'cssTransitionCount' => 1,
+            'classSummary' => [
+                ['name' => 'animate-spin', 'count' => 2],
+            ],
+            'elementGroups' => [
+                [
+                    'signature' => 'svg.animate-spin',
+                    'count' => 2,
+                    'runningCount' => 2,
+                    'animationNames' => ['spin'],
+                    'classes' => ['animate-spin'],
+                    'nearestLivewireName' => 'update-banner',
+                    'nearestTestId' => 'update-banner',
+                    'nearestInteractiveSignature' => 'button[data-testid="refresh-button"]',
+                    'nearestButtonLabel' => 'Refresh changes',
+                    'nearestButtonText' => 'Refresh',
+                    'nearestButtonTitle' => 'Check changes',
+                    'nearestButtonRole' => 'button',
+                    'nearestButtonDisabled' => false,
+                    'nearestLoading' => true,
+                    'nearestWireClick' => 'softRefresh',
+                    'nearestWireTarget' => 'softRefresh',
+                ],
+            ],
+            'elements' => [
+                [
+                    'signature' => 'svg.animate-spin',
+                    'tag' => 'svg',
+                    'classes' => ['animate-spin'],
+                    'animationNames' => ['spin'],
+                    'playStates' => ['running'],
+                    'animationCount' => 1,
+                    'runningCount' => 1,
+                    'maxDurationMs' => 1000,
+                    'connected' => true,
+                    'visible' => true,
+                    'nearestLivewireId' => 'abc123',
+                    'nearestLivewireName' => 'update-banner',
+                    'nearestTestId' => 'update-banner',
+                    'nearestInteractiveSignature' => 'button[data-testid="refresh-button"]',
+                    'nearestButtonLabel' => 'Refresh changes',
+                    'nearestButtonText' => 'Refresh',
+                    'nearestButtonTitle' => 'Check changes',
+                    'nearestButtonRole' => 'button',
+                    'nearestButtonDisabled' => false,
+                    'nearestLoading' => true,
+                    'nearestWireClick' => 'softRefresh',
+                    'nearestWireTarget' => 'softRefresh',
+                    'rectX' => 10,
+                    'rectY' => 20,
+                    'rectWidth' => 16,
+                    'rectHeight' => 16,
+                    'computedDisplay' => 'block',
+                    'computedVisibility' => 'visible',
+                    'computedOpacity' => '1',
+                    'computedPointerEvents' => 'auto',
+                    'cssAnimationName' => 'spin',
+                    'cssAnimationDuration' => '1s',
+                    'cssAnimationPlayState' => 'running',
+                ],
+            ],
+        ],
+        'poll' => ['source' => 'wire:smart-poll:review-page', 'method' => 'poll', 'intervalMs' => 10000, 'ageMs' => 50],
         'timings' => [
             'diffAction' => ['action' => 'expandContext', 'elapsedMs' => 2500, 'phpMs' => 2200, 'diffLines' => 2247],
             'longTasks' => ['count' => 2, 'totalMs' => 120, 'maxMs' => 80],
+            'livewireCommit' => [
+                'status' => 'succeeded',
+                'elapsedMs' => 70,
+                'componentId' => 'abc123',
+                'componentName' => 'pages::review-page',
+                'callCount' => 1,
+                'calls' => ['poll'],
+                'updateCount' => 0,
+                'updateKeys' => [],
+                'pollSource' => 'wire:smart-poll:review-page',
+                'pollMethod' => 'poll',
+                'pollAgeMs' => 20,
+            ],
         ],
     ])->assertNoContent();
 
@@ -83,6 +167,11 @@ test('diagnostics route accepts validated browser samples', function () {
     expect($entry['event'])->toBe('browser.sample')
         ->and($entry['context']['path'])->toBe('/p/{project}/context')
         ->and($entry['context']['dom']['nodes'])->toBe(100)
+        ->and($entry['context']['visibility']['state'])->toBe('visible')
+        ->and($entry['context']['animations']['classSummary'][0]['name'])->toBe('animate-spin')
+        ->and($entry['context']['animations']['elementGroups'][0]['nearestLivewireName'])->toBe('update-banner')
+        ->and($entry['context']['animations']['elementGroups'][0]['nearestButtonLabel'])->toBe('Refresh changes')
+        ->and($entry['context']['poll']['method'])->toBe('poll')
         ->and($entry['context']['timings']['diffAction']['elapsedMs'])->toBe(2500);
 
     foreach (glob($diagnosticsPath.'*') ?: [] as $path) {
@@ -111,6 +200,19 @@ test('diagnostics route rejects unknown timing fields', function () {
                 'action' => 'expandContext',
                 'elapsedMs' => 120,
                 'unexpected' => 'rejected',
+            ],
+        ],
+    ])->assertUnprocessable();
+});
+
+test('diagnostics route rejects unknown animation fields', function () {
+    config(['rfa.diagnostics.enabled' => true]);
+
+    $this->postJson('/api/diagnostics/browser', [
+        'reason' => 'heartbeat',
+        'animations' => [
+            'elements' => [
+                ['signature' => 'svg.animate-spin', 'text' => 'rejected'],
             ],
         ],
     ])->assertUnprocessable();
