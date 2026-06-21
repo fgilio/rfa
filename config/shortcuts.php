@@ -180,9 +180,16 @@ return [
             'accelerator' => 'CmdOrCtrl+O',
             'wired' => 'native',
         ],
+        'app.review-code' => [
+            'combo' => '⌘⇧C',
+            'label' => 'Review code',
+            'group' => 'View',
+            'accelerator' => 'CmdOrCtrl+Shift+C',
+            'wired' => 'native',
+        ],
         'app.context-files' => [
             'combo' => '⌘⇧K',
-            'label' => 'Show context files',
+            'label' => 'Review agents instructions',
             'group' => 'View',
             'accelerator' => 'CmdOrCtrl+Shift+K',
             'wired' => 'native',

@@ -74,18 +74,22 @@ test('dev compiled view cleanup skips deletion in testing environment', function
 
 // -- Menu structure --
 
-test('the View submenu declares the show-context menu item with the cmd-shift-k accelerator', function () {
-    // The hotkey lives in the menu builder DSL, which is wired through the
+test('the View submenu declares the review menu items with their accelerators', function () {
+    // The hotkeys live in the menu builder DSL, which is wired through the
     // native bridge. Read the source directly so the assertion stays fast
-    // and decoupled from the bridge. The accelerator itself is sourced from the
+    // and decoupled from the bridge. The accelerators are sourced from the
     // shortcuts catalog so the menu and the cheat sheet can't drift.
     $source = file_get_contents((new ReflectionClass(NativeAppServiceProvider::class))->getFileName());
 
     expect($source)
-        ->toContain("Menu::label('Show Context Files...')")
+        ->toContain("Menu::label('Review Code')")
+        ->toContain("->id('review-code')")
+        ->toContain("->hotkey(Shortcuts::accelerator('app.review-code'))")
+        ->toContain("Menu::label('Review Agents instructions')")
         ->toContain("->id('show-context')")
         ->toContain("->hotkey(Shortcuts::accelerator('app.context-files'))");
 
+    expect(Shortcuts::accelerator('app.review-code'))->toBe('CmdOrCtrl+Shift+C');
     expect(Shortcuts::accelerator('app.context-files'))->toBe('CmdOrCtrl+Shift+K');
 });
 
