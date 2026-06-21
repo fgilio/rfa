@@ -28,16 +28,10 @@ final class Shortcuts
         return config('shortcuts.groups', []);
     }
 
-    /** The match/combo string used by the keymap store (e.g. `⌘K`, `j`). */
-    public static function combo(string $id): string
-    {
-        return (string) self::field($id, 'combo');
-    }
-
     /** The human-facing combo for the cheat sheet (`display` override, else combo). */
     public static function display(string $id): string
     {
-        $entry = self::all()[$id] ?? [];
+        $entry = self::entry($id);
 
         return (string) ($entry['display'] ?? $entry['combo'] ?? '');
     }
@@ -45,14 +39,14 @@ final class Shortcuts
     /** The Electron accelerator for natively-owned shortcuts (menu / globalShortcut). */
     public static function accelerator(string $id): ?string
     {
-        $value = self::field($id, 'accelerator');
+        $accelerator = self::entry($id)['accelerator'] ?? null;
 
-        return $value === null ? null : (string) $value;
+        return $accelerator === null ? null : (string) $accelerator;
     }
 
-    private static function field(string $id, string $key): mixed
+    /** @return array<string, mixed> */
+    private static function entry(string $id): array
     {
-        // Index by literal [id, key] segments so data_get never splits the dotted id.
-        return data_get(self::all(), [$id, $key]);
+        return self::all()[$id] ?? [];
     }
 }
