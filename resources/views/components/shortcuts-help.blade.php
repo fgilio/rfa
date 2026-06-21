@@ -14,7 +14,17 @@
 
 <div
     x-data
-    x-init="$store.shortcuts.register('help.shortcuts', () => $flux.modal('keyboard-shortcuts').show())"
+    x-init="
+        $store.shortcuts.register('help.shortcuts', () => $flux.modal('keyboard-shortcuts').show());
+        {{-- ⌘↵ save is registered globally here, not on <x-comment-form>: that
+             component renders once per diff line, so registering there is
+             O(lines) of render + binding churn (measurably regresses diff-large).
+             One global handler routes to whichever comment form holds focus. --}}
+        $store.shortcuts.register('comment.save', (e) => {
+            const form = e.target.closest('[data-comment-form]');
+            if (form) form.querySelector('[data-comment-save]')?.click();
+        });
+    "
 >
     <flux:modal name="keyboard-shortcuts" class="md:w-[32rem]">
         <div class="space-y-6">
