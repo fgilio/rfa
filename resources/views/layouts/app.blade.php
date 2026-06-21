@@ -113,10 +113,29 @@
         .diff-cell-num {
             padding: 0 0.5rem;
             text-align: right;
-            color: rgb(var(--gh-muted) / 0.5);
+            /* Full muted — never an opacity-on-muted, which on the add/del gutter
+               tint compounds to illegibility (see resources/CLAUDE.md). The add/del
+               signal is carried by the .diff-num-marker bar, not a fill behind the
+               digits, so numbers always sit on the faint tint and stay readable. */
+            color: rgb(var(--gh-muted));
             cursor: pointer;
             user-select: none;
         }
+        /* Change-marker: a confident saturated bar on the inner (content-facing)
+           edge of the gutter, replacing the old full-cell stripe that buried the
+           line number under a 0.6-alpha green/red fill. */
+        .diff-num-marker { position: relative; }
+        .diff-num-marker::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            right: 0;
+            width: 2px;
+            pointer-events: none;
+        }
+        .diff-num-marker-add::after { background: var(--gh-add-line); }
+        .diff-num-marker-del::after { background: var(--gh-del-line); }
         /* Empty num cells (added rows have no old number, deleted rows have no
            new number) have no @mousedown handler — show the default cursor so
            the affordance matches the actual click behavior. */
