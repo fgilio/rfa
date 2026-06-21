@@ -98,6 +98,41 @@ test('show-context with no cached id and no project picked navigates nowhere', f
     expect($this->capturedUrl)->toBeNull();
 });
 
+test('review-code with cached active-project navigates to review-page for that project', function () {
+    $project = Project::factory()->create(['slug' => 'rfa']);
+    Cache::put('rfa.active-project-id', $project->id);
+
+    bindResolveProjectByIdAction($project);
+    bindOpenRepositoryDialogAction(null);
+
+    app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'review-code']));
+
+    expect($this->capturedUrl)->toBe(route('review-page', ['slug' => 'rfa']));
+});
+
+test('review-code with cache miss falls back to the file-picker flow', function () {
+    Cache::forget('rfa.active-project-id');
+    $picked = Project::factory()->create(['slug' => 'picked']);
+
+    bindResolveProjectByIdAction(null);
+    bindOpenRepositoryDialogAction($picked);
+
+    app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'review-code']));
+
+    expect($this->capturedUrl)->toBe(route('review-page', ['slug' => 'picked']));
+});
+
+test('review-code with no cached id and no project picked navigates nowhere', function () {
+    Cache::forget('rfa.active-project-id');
+
+    bindResolveProjectByIdAction(null);
+    bindOpenRepositoryDialogAction(null);
+
+    app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'review-code']));
+
+    expect($this->capturedUrl)->toBeNull();
+});
+
 test('open-repo still routes to review-page', function () {
     $project = Project::factory()->create(['slug' => 'opened']);
 

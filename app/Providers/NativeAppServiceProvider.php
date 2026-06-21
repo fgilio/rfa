@@ -220,7 +220,10 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             //     fire it. Only mouse clicks do (electron/electron#19559,
             //     #15496). Explicit menu accelerators do not help.
             Menu::make(
-                Menu::label('Show Context Files...')
+                Menu::label('Review Code')
+                    ->id('review-code')
+                    ->hotkey(Shortcuts::accelerator('app.review-code')),
+                Menu::label('Review Agents instructions')
                     ->id('show-context')
                     ->hotkey(Shortcuts::accelerator('app.context-files')),
                 Menu::separator(),

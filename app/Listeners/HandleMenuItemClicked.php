@@ -35,6 +35,7 @@ final readonly class HandleMenuItemClicked
             'scan-directory' => app(ScanDirectoryDialogAction::class)->handle(),
             'check-updates' => $this->handleCheckUpdates(),
             'show-context' => $this->handleShowContext(),
+            'review-code' => $this->handleReviewCode(),
             default => null,
         };
     }
@@ -64,12 +65,23 @@ final readonly class HandleMenuItemClicked
         }
     }
 
-    /**
-     * Resolve the active project from the renderer's mount-time cache write.
-     * Falls back to the file picker when the cache is empty or stale (project
-     * deleted, or user is on select-repo-page which forgets the key).
-     */
     private function handleShowContext(): void
+    {
+        $this->navigateToActiveProject('context-page', 'menu.show_context.completed');
+    }
+
+    private function handleReviewCode(): void
+    {
+        $this->navigateToActiveProject('review-page', 'menu.review_code.completed');
+    }
+
+    /**
+     * Resolve the active project from the renderer's mount-time cache write and
+     * point the main window at the given route for it. Falls back to the file
+     * picker when the cache is empty or stale (project deleted, or user is on
+     * select-repo-page which forgets the key).
+     */
+    private function navigateToActiveProject(string $routeName, string $diagnostic): void
     {
         $cachedId = Cache::get(self::ACTIVE_PROJECT_CACHE_KEY);
         $project = is_int($cachedId) ? app(ResolveProjectByIdAction::class)->handle($cachedId) : null;
@@ -79,13 +91,13 @@ final readonly class HandleMenuItemClicked
         }
 
         if ($project) {
-            app(RecordRuntimeDiagnosticAction::class)->handle('menu.show_context.completed', [
+            app(RecordRuntimeDiagnosticAction::class)->handle($diagnostic, [
                 'project_id' => $project->id,
                 'project_slug' => $project->slug,
                 'used_cached_project' => is_int($cachedId),
             ]);
 
-            Window::get('main')->url(route('context-page', ['slug' => $project->slug]));
+            Window::get('main')->url(route($routeName, ['slug' => $project->slug]));
         }
     }
 }
