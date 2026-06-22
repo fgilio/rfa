@@ -194,6 +194,30 @@ test('mounting with /rw/{from} sets diffFrom to the commit and diffTo to null', 
     expect($component->get('diffTo'))->toBeNull();
 });
 
+// -- Since the beginning (entire repo) --
+
+test('mounting /rw/{empty-tree} flags the entire-repo view and labels it', function () {
+    $component = Livewire::test('pages::review-page', [
+        'slug' => 'test-project',
+        'rangeFromWorking' => DiffTarget::EMPTY_TREE_HASH,
+    ]);
+
+    expect($component->get('diffFrom'))->toBe(DiffTarget::EMPTY_TREE_HASH)
+        ->and($component->get('diffTo'))->toBeNull()
+        ->and($component->get('isSinceBeginningView'))->toBeTrue();
+
+    $component->assertSee('Since the beginning');
+});
+
+test('a plain range-to-working mount is not the entire-repo view', function () {
+    $component = Livewire::test('pages::review-page', [
+        'slug' => 'test-project',
+        'rangeFromWorking' => 'abc1234',
+    ]);
+
+    expect($component->get('isSinceBeginningView'))->toBeFalse();
+});
+
 test('buildDiffTarget preserves the base commit for range-to-working mounts', function () {
     // Regression: fromRefs($from, null) silently collapses to workingDirectory(),
     // which would reset diffFrom to HEAD and make every downstream consumer

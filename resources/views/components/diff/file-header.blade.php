@@ -7,6 +7,7 @@
     'hasRemote' => false,
     'diffTo' => null,
     'repoPath' => '',
+    'allowDiscard' => true,
 ])
 
 @php
@@ -70,7 +71,7 @@
                 </flux:dropdown>
             @endif
 
-            @if($diffTo === null && ($file['status'] ?? '') !== 'commented' && ! ($file['isExternal'] ?? false))
+            @if($allowDiscard && $diffTo === null && ($file['status'] ?? '') !== 'commented' && ! ($file['isExternal'] ?? false))
                 <flux:button
                     tooltip="Discard changes"
                     aria-label="Discard changes"

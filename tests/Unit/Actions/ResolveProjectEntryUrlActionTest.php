@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\ResolveProjectEntryUrlAction;
+use App\DTOs\DiffTarget;
 use App\Enums\LastViewKind;
 use App\Enums\LastViewMode;
 use App\Models\Project;
@@ -174,6 +175,25 @@ test('falls back to working tree when range-to-working from no longer resolves',
 
     expect($this->action->handle($this->project->slug))
         ->toBe(route('review-page', ['slug' => 'entry-test']));
+});
+
+test('rebuilds the entire-repo URL from the empty tree without a ref check', function () {
+    // The empty tree always exists but is a tree, not a commit, so resolveRef
+    // (which forces ^{commit}) returns null for it. Restore must special-case it
+    // rather than fall through to the working tree.
+    ReviewSession::create([
+        'project_id' => $this->project->id,
+        'repo_path' => $this->repoPath,
+        'last_view_mode' => LastViewMode::Review,
+        'last_view_kind' => LastViewKind::RangeToWorking,
+        'last_view_from' => DiffTarget::EMPTY_TREE_HASH,
+    ]);
+
+    expect($this->action->handle($this->project->slug))
+        ->toBe(route('review-page.range-to-working', [
+            'slug' => 'entry-test',
+            'rangeFromWorking' => DiffTarget::EMPTY_TREE_HASH,
+        ]));
 });
 
 // -- since_base re-resolution --

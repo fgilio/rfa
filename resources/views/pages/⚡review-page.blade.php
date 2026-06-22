@@ -132,6 +132,10 @@ new #[Layout('layouts.app')] class extends Component
     #[Locked]
     public bool $isSinceBaseView = false;
 
+    /** True when the active diff is the whole repo: git's empty tree through the working tree. */
+    #[Locked]
+    public bool $isSinceBeginningView = false;
+
     /** @var array{shortHash: string, message: string, author: string, prevHash: ?string, nextHash: ?string}|null */
     #[Locked]
     public ?array $commitInfo = null;
@@ -243,6 +247,7 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $this->isSinceBaseView = $this->detectSinceBaseView();
+        $this->isSinceBeginningView = $this->diffTo === null && $this->diffFrom === DiffTarget::EMPTY_TREE_HASH;
 
         $this->rehydrateForTarget();
         $this->checkHeadDivergence();
@@ -255,6 +260,7 @@ new #[Layout('layouts.app')] class extends Component
             'repo_hash' => hash('xxh128', $this->repoPath),
             'target' => $this->buildDiffTarget()->contextKey(),
             'is_since_base_view' => $this->isSinceBaseView,
+            'is_since_beginning_view' => $this->isSinceBeginningView,
             'file_count' => count($this->files),
             'source_file_count' => count($this->sourceFiles),
             'comment_count' => count($this->comments),
@@ -529,6 +535,7 @@ new #[Layout('layouts.app')] class extends Component
             Context::add('rfa.project_slug', $this->projectSlug);
             Context::add('rfa.target', $this->buildDiffTarget()->contextKey());
             Context::add('rfa.is_since_base_view', $this->isSinceBaseView);
+            Context::add('rfa.is_since_beginning_view', $this->isSinceBeginningView);
             Context::add('rfa.file_count_before', count($before));
             Context::add('rfa.diff_refresh_token', $this->diffRefreshToken);
             Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
@@ -1270,6 +1277,8 @@ new #[Layout('layouts.app')] class extends Component
                             => ['Working tree', 'Working tree changes'],
                         $isSinceBaseView
                             => ['Since '.$defaultBaseBranch, 'All changes since '.$defaultBaseBranch.' (commits + uncommitted)'],
+                        $isSinceBeginningView
+                            => ['Since the beginning', 'Entire repository (every commit + uncommitted)'],
                         $diffTo === null
                             => ['WT · '.$shortFrom, 'Working tree + commits through '.$diffFrom],
                         $diffFrom === $diffTo.'^'
@@ -1744,6 +1753,7 @@ new #[Layout('layouts.app')] class extends Component
                                     :has-remote="$hasRemote"
                                     :diff-from="$diffFrom"
                                     :diff-to="$diffTo"
+                                    :allow-discard="! $isSinceBeginningView"
                                 />
                             </div>
                         </div>
@@ -1777,6 +1787,7 @@ new #[Layout('layouts.app')] class extends Component
                                 :has-remote="$hasRemote"
                                 :diff-from="$diffFrom"
                                 :diff-to="$diffTo"
+                                :allow-discard="! $isSinceBeginningView"
                             />
                         </div>
                     @empty
