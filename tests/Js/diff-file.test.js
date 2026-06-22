@@ -608,8 +608,13 @@ describe('formatCitation', () => {
             .toBe('> first line\n> second line\n> third line\n\n');
     });
 
-    it('trims leading and trailing whitespace before quoting', () => {
-        expect(formatCitation('\n  spaced selection  \n')).toBe('> spaced selection\n\n');
+    it('drops blank lines at the edges but keeps each line\'s own indentation', () => {
+        expect(formatCitation('\n  spaced selection  \n')).toBe('>   spaced selection  \n\n');
+    });
+
+    it('preserves the indentation of quoted code (does not dedent the first line)', () => {
+        expect(formatCitation('    if (foo) {\n        bar();\n    }'))
+            .toBe('>     if (foo) {\n>         bar();\n>     }\n\n');
     });
 
     it('still quotes interior blank lines', () => {
@@ -718,6 +723,52 @@ describe('selectionLineRange', () => {
 
     it('returns null for a missing range', () => {
         expect(selectionLineRange(null, root)).toBeNull();
+    });
+});
+
+describe('selectionLineRange in split view', () => {
+    let root;
+
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <div id="file-root" data-file-id="f1">
+                <div class="diff-grid" data-view-mode="split">
+                    <div class="diff-line" data-type="context" data-line-old="10" data-line-new="20">
+                        <div class="diff-cell diff-cell-content">context text</div>
+                        <div class="diff-cell diff-cell-content diff-cell-content-mirror">context text</div>
+                    </div>
+                </div>
+            </div>`;
+        root = document.getElementById('file-root');
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    function rangeIn(selector) {
+        const range = document.createRange();
+        const node = document.querySelector(selector).firstChild;
+        range.setStart(node, 0);
+        range.setEnd(node, node.length);
+        return range;
+    }
+
+    it('anchors a selection in the left content cell to the old side', () => {
+        // The primary `.diff-cell-content` is the original (left) side in split view.
+        expect(selectionLineRange(rangeIn('.diff-cell-content'), root))
+            .toEqual({ side: 'left', startLine: 10, endLine: 10 });
+    });
+
+    it('anchors a selection in the right mirror cell to the new side', () => {
+        expect(selectionLineRange(rangeIn('.diff-cell-content-mirror'), root))
+            .toEqual({ side: 'right', startLine: 20, endLine: 20 });
+    });
+
+    it('keeps the new-side default for a context row in unified view', () => {
+        root.querySelector('.diff-grid').dataset.viewMode = 'unified';
+        expect(selectionLineRange(rangeIn('.diff-cell-content'), root))
+            .toEqual({ side: 'right', startLine: 20, endLine: 20 });
     });
 });
 

@@ -80,15 +80,19 @@
 
     // Formats selected diff text as a GitHub-style blockquote citation that
     // seeds a fresh comment. Every line is prefixed with `> ` and a blank line
-    // follows so the cursor lands below the quote. Leading/trailing blank lines
-    // are trimmed; interior blank lines are preserved (and still quoted).
-    // Returns '' for empty/whitespace-only input so callers can skip pre-filling.
+    // follows so the cursor lands below the quote. Blank (whitespace-only) lines
+    // at the top and bottom of the selection are dropped (e.g. a trailing
+    // newline), but each remaining line keeps its own indentation so quoted code
+    // isn't dedented; interior blank lines are preserved (and still quoted).
+    // Returns '' when the selection is empty/whitespace-only.
     function formatCitation(text) {
         if (typeof text !== 'string') return '';
-        const trimmed = text.replace(/^\s+|\s+$/g, '');
-        if (trimmed === '') return '';
+        const lines = text.split('\n');
+        while (lines.length && lines[0].trim() === '') { lines.shift(); }
+        while (lines.length && lines[lines.length - 1].trim() === '') { lines.pop(); }
+        if (lines.length === 0) return '';
 
-        return trimmed.split('\n').map((line) => `> ${line}`).join('\n') + '\n\n';
+        return lines.map((line) => `> ${line}`).join('\n') + '\n\n';
     }
 
     // Walks up from a Selection/Range node to the `.diff-line` row it sits in.
@@ -108,17 +112,35 @@
         return Number.isFinite(value) ? value : null;
     }
 
+    // Picks the diff side a selection belongs to. Single-sided rows (add /
+    // remove) are unambiguous. A context row carries both line numbers and, in
+    // split view, renders the original text in the primary content cell (left /
+    // old) and a mirror cell for the new (right) side — so honor whichever cell
+    // the selection started in. Unified view only shows the primary cell, so it
+    // keeps the new-side default.
+    function sideForSelection(node, row) {
+        if (!row.dataset.lineOld) { return 'right'; }
+        if (!row.dataset.lineNew) { return 'left'; }
+
+        const el = node && node.nodeType === 3 ? node.parentElement : node;
+        if (el && typeof el.closest === 'function' && el.closest('.diff-cell-content-mirror')) {
+            return 'right';
+        }
+
+        return row.closest?.('.diff-grid')?.dataset.viewMode === 'split' ? 'left' : 'right';
+    }
+
     // Maps a text-selection Range onto the diff line(s) it covers, scoped to
     // `root` (a single diff-file element). The side is anchored off the start
-    // row — new (right) when it carries a `data-line-new`, else old (left) — and
-    // both endpoints are read on that side. Returns null when the selection
-    // doesn't start on a diff row inside `root`, so non-matching files ignore it.
+    // row (see sideForSelection) and both endpoints are read on that side.
+    // Returns null when the selection doesn't start on a diff row inside `root`,
+    // so non-matching files ignore it.
     function selectionLineRange(range, root) {
         if (!range) return null;
         const startRow = closestDiffLine(range.startContainer);
         if (!startRow || (root && !root.contains(startRow))) return null;
 
-        const side = startRow.dataset.lineNew ? 'right' : 'left';
+        const side = sideForSelection(range.startContainer, startRow);
         const startLine = rowLineForSide(startRow, side);
         if (startLine === null) return null;
 
