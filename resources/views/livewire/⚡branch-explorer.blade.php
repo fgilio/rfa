@@ -355,94 +355,66 @@ new class extends Component {
 
                     {{-- Commits list --}}
                     <div class="overflow-y-auto flex-1" x-ref="commitList">
-                        {{-- "Since {base}" shortcut: a single click fills the
-                             multi-select with every commit in base..HEAD plus
-                             working tree, so the user can trim before applying. --}}
-                        <template x-if="sinceBaseRowVisible">
-                            <div data-testid="since-base-row">
-                                {{-- Ready: clickable shortcut --}}
-                                <template x-if="$wire.branchBase.state === 'ready'">
-                                    <div
-                                        class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
-                                        @click="selectSinceBase()"
-                                        :class="{ 'bg-gh-link/5 border-l-2 border-l-gh-link': sinceBaseSelected }"
-                                        :aria-pressed="sinceBaseSelected"
-                                    >
-                                        <div class="flex items-start gap-2">
-                                            <span
-                                                class="mt-0.5 size-4 shrink-0 grid place-items-center rounded border transition-colors"
-                                                :class="sinceBaseSelected
-                                                    ? 'border-gh-link bg-gh-link/20 text-gh-link'
-                                                    : 'border-gh-border opacity-0 group-hover:opacity-100'"
-                                                aria-hidden="true"
-                                            >
-                                                <template x-if="sinceBaseSelected">
-                                                    <flux:icon icon="check" variant="outline" class="!size-3" />
-                                                </template>
-                                            </span>
-                                            <div class="min-w-0 flex-1">
-                                                <div class="text-xs text-gh-text truncate font-medium tracking-tight">
-                                                    Since <span class="font-mono" x-text="$wire.branchBase.baseBranch"></span>
-                                                </div>
-                                                <span
-                                                    class="block mt-0.5 text-[10px] font-mono text-gh-muted"
-                                                    x-text="$wire.branchBase.commitCount + ' commit' + ($wire.branchBase.commitCount === 1 ? '' : 's') + ' + uncommitted changes'"
-                                                ></span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
+                        {{-- The three scope rows are cumulative ranges ending at the
+                             working tree, ordered widest first so reach-back shrinks
+                             going down: entire repo, then base..HEAD, then just the
+                             working tree as the hinge before the per-commit list. --}}
 
-                                {{-- Up to date with base: dimmed, not actionable --}}
-                                <template x-if="$wire.branchBase.state === 'up_to_date'">
-                                    <div class="px-4 py-2.5 border-b border-gh-border/50">
-                                        <div class="flex items-start gap-2 opacity-60">
-                                            <span class="mt-0.5 size-4 shrink-0" aria-hidden="true"></span>
-                                            <div class="min-w-0 flex-1">
-                                                <div class="text-xs text-gh-text truncate tracking-tight">
-                                                    Up to date with <span class="font-mono" x-text="$wire.branchBase.baseBranch"></span>
-                                                </div>
-                                                <span class="block mt-0.5 text-[10px] font-mono text-gh-muted">no commits ahead</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                {{-- Missing ref: actionable hint --}}
-                                <template x-if="$wire.branchBase.state === 'missing_ref'">
-                                    <div class="px-4 py-2.5 border-b border-gh-border/50">
-                                        <div class="flex items-start gap-2">
-                                            <span class="mt-0.5 size-4 shrink-0 text-gh-muted" aria-hidden="true">
-                                                <flux:icon icon="exclamation-triangle" variant="outline" class="!size-3.5" />
-                                            </span>
-                                            <div class="min-w-0 flex-1">
-                                                <div class="text-xs text-gh-text truncate tracking-tight">
-                                                    Run <span class="font-mono">git fetch</span> to compare with <span class="font-mono" x-text="$wire.branchBase.baseBranch"></span>
-                                                </div>
-                                                <span class="block mt-0.5 text-[10px] font-mono text-gh-muted">base ref not found locally</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                {{-- Not configured: nudge to settings --}}
-                                <template x-if="$wire.branchBase.state === 'not_configured'">
-                                    <div class="px-4 py-2.5 border-b border-gh-border/50">
-                                        <div class="flex items-start gap-2 opacity-80">
-                                            <span class="mt-0.5 size-4 shrink-0 text-gh-muted" aria-hidden="true">
-                                                <flux:icon icon="cog-6-tooth" variant="outline" class="!size-3.5" />
-                                            </span>
-                                            <div class="min-w-0 flex-1">
-                                                <div class="text-xs text-gh-text truncate tracking-tight">Pick a base branch to compare against</div>
-                                                <span class="block mt-0.5 text-[10px] font-mono text-gh-muted">set it from the project settings menu</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
-
-                                {{-- on_base_branch: hidden entirely (comparing X..X is nonsense) --}}
+                        {{-- "Since the beginning": the whole repo (git's empty tree
+                             through the working tree) as one diff. Always available.
+                             Needs no base branch and works on any branch. --}}
+                        <div
+                            data-testid="since-beginning-row"
+                            class="px-4 py-2.5 border-b border-gh-border/50 hover:bg-gh-border/20 transition-colors group cursor-pointer"
+                            @click="viewSinceBeginning()"
+                            :class="{ 'bg-gh-text/5 border-l-2 border-l-gh-text': sinceBeginningActive }"
+                            :aria-current="sinceBeginningActive ? 'true' : null"
+                        >
+                            <div class="flex items-start gap-2">
+                                <span class="mt-0.5 size-4 shrink-0" aria-hidden="true"></span>
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-xs text-gh-text truncate font-medium tracking-tight">Since the beginning</div>
+                                    <span class="block mt-0.5 text-[10px] font-mono text-gh-muted">entire repository</span>
+                                </div>
                             </div>
-                        </template>
+                        </div>
+
+                        {{-- "Since {base}" row: always present so its position never
+                             shifts. Clickable when the base is configured, resolved,
+                             and HEAD is ahead; otherwise disabled with a reason that
+                             names why it can't be used right now. --}}
+                        <div
+                            data-testid="since-base-row"
+                            class="px-4 py-2.5 border-b border-gh-border/50 group"
+                            :class="sinceBaseActionable
+                                ? ('cursor-pointer hover:bg-gh-border/20 transition-colors' + (sinceBaseSelected ? ' bg-gh-link/5 border-l-2 border-l-gh-link' : ''))
+                                : 'opacity-60 cursor-not-allowed'"
+                            :aria-disabled="sinceBaseActionable ? null : 'true'"
+                            :aria-pressed="sinceBaseActionable ? (sinceBaseSelected ? 'true' : 'false') : null"
+                            @click="sinceBaseActionable && selectSinceBase()"
+                        >
+                            <div class="flex items-start gap-2">
+                                <span
+                                    class="mt-0.5 size-4 shrink-0 grid place-items-center rounded border transition-colors"
+                                    :class="!sinceBaseActionable
+                                        ? 'border-gh-border opacity-30'
+                                        : (sinceBaseSelected
+                                            ? 'border-gh-link bg-gh-link/20 text-gh-link'
+                                            : 'border-gh-border opacity-0 group-hover:opacity-100')"
+                                    aria-hidden="true"
+                                >
+                                    <template x-if="sinceBaseActionable && sinceBaseSelected">
+                                        <flux:icon icon="check" variant="outline" class="!size-3" />
+                                    </template>
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-xs text-gh-text truncate font-medium tracking-tight">
+                                        Since <span class="font-mono" x-text="($wire.branchBase && $wire.branchBase.baseBranch) || 'base branch'"></span>
+                                    </div>
+                                    <span class="block mt-0.5 text-[10px] font-mono text-gh-muted" x-text="sinceBaseReason"></span>
+                                </div>
+                            </div>
+                        </div>
 
                         <div
                             data-testid="working-tree-row"
