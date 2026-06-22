@@ -1648,7 +1648,7 @@ new #[Layout('layouts.app')] class extends Component
                             <flux:tooltip.content>{{ $isReviewed ? 'Un-mark as reviewed' : 'Mark as reviewed' }}</flux:tooltip.content>
                         </flux:tooltip>
                         <span class="shrink-0 size-3.5 flex items-center justify-center">
-                            @if(! $this->isCommitMode() && $file['status'] !== 'commented' && ! ($file['isExternal'] ?? false))
+                            @if(! $this->isCommitMode() && ! $isSinceBeginningView && $file['status'] !== 'commented' && ! ($file['isExternal'] ?? false))
                                 <flux:tooltip content="Discard changes">
                                     <button
                                         class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text data-loading:pointer-events-none data-loading:opacity-50"

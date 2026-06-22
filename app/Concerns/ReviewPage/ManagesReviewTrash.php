@@ -36,6 +36,13 @@ trait ManagesReviewTrash
             return;
         }
 
+        // In the entire-repo view every tracked file diffs as "added" from the
+        // empty tree, so discarding one would run `git rm -f` on an otherwise
+        // clean committed file. Refuse here regardless of which control fired.
+        if ($this->isSinceBeginningView) {
+            return;
+        }
+
         $file = collect($this->files)->firstWhere('id', $fileId);
         if (! $file || $file['status'] === 'commented' || ($file['isExternal'] ?? false)) {
             return;
