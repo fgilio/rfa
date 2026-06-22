@@ -197,6 +197,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `rfa-hide-reviewed` | `reviewed-toggle` island button `$dispatch` (window) | ReviewPage root Alpine `@window` -> queued `$wire.hideReviewedFiles` | none |
 | `rfa-show-all-files` | `reviewed-toggle` island button `$dispatch` (window) | ReviewPage root Alpine `@window` -> queued `$wire.showAllFiles` | none |
 | `rfa-clear-recently-reviewed` | Recently-reviewed "Clear" button `$dispatch` (window) | ReviewPage root Alpine `@window` -> queued `$wire.clearRecentlyReviewed` | none |
+| `rfa-comment-selection` | ReviewPage Alpine `$dispatch` (window), fired by the `review.comment-selection` shortcut (`c`) | DiffFile Alpine `@window` -> `commentOnSelection()` (only the file whose `$el` contains the text selection acts) | none |
 | `comment-updated` | ReviewPage PHP dispatch | DiffFile Alpine `@window` | `{fileId, comments}` |
 | `copy-to-clipboard` | DiffFile Alpine/PHP, ReviewPage PHP, comment-display, comments-drawer, branch-explorer | layout `<body>` Alpine `@window` | `{text, toast?}` (if `toast` string is set, a success toast with that text shows on success) |
 | `file-reviewed-changed` | DiffFile Alpine `$dispatch`, sidebar reviewed button | DiffFile Alpine `@window` (targeted by `id`) | `{id, reviewed}` |

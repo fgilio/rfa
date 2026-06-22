@@ -78,6 +78,57 @@
         return false;
     }
 
+    // Formats selected diff text as a GitHub-style blockquote citation that
+    // seeds a fresh comment. Every line is prefixed with `> ` and a blank line
+    // follows so the cursor lands below the quote. Leading/trailing blank lines
+    // are trimmed; interior blank lines are preserved (and still quoted).
+    // Returns '' for empty/whitespace-only input so callers can skip pre-filling.
+    function formatCitation(text) {
+        if (typeof text !== 'string') return '';
+        const trimmed = text.replace(/^\s+|\s+$/g, '');
+        if (trimmed === '') return '';
+
+        return trimmed.split('\n').map((line) => `> ${line}`).join('\n') + '\n\n';
+    }
+
+    // Walks up from a Selection/Range node to the `.diff-line` row it sits in.
+    // Text nodes resolve through their parent element. Returns null when the
+    // node isn't inside a diff row (e.g. a selection in a comment box).
+    function closestDiffLine(node) {
+        const el = node && node.nodeType === 3 ? node.parentElement : node;
+        return el && typeof el.closest === 'function' ? el.closest('.diff-line') : null;
+    }
+
+    function rowLineForSide(row, side) {
+        if (!row) return null;
+        const raw = side === 'left' ? row.dataset.lineOld : row.dataset.lineNew;
+        if (raw === undefined || raw === '') return null;
+        const value = parseInt(raw, 10);
+
+        return Number.isFinite(value) ? value : null;
+    }
+
+    // Maps a text-selection Range onto the diff line(s) it covers, scoped to
+    // `root` (a single diff-file element). The side is anchored off the start
+    // row — new (right) when it carries a `data-line-new`, else old (left) — and
+    // both endpoints are read on that side. Returns null when the selection
+    // doesn't start on a diff row inside `root`, so non-matching files ignore it.
+    function selectionLineRange(range, root) {
+        if (!range) return null;
+        const startRow = closestDiffLine(range.startContainer);
+        if (!startRow || (root && !root.contains(startRow))) return null;
+
+        const side = startRow.dataset.lineNew ? 'right' : 'left';
+        const startLine = rowLineForSide(startRow, side);
+        if (startLine === null) return null;
+
+        let endRow = closestDiffLine(range.endContainer);
+        if (!endRow || (root && !root.contains(endRow))) endRow = startRow;
+        const endLine = rowLineForSide(endRow, side) ?? startLine;
+
+        return { side, startLine, endLine };
+    }
+
     // In-progress comment form state, keyed by file id. Filtering or hiding
     // reviewed files unmounts diff-file components that leave the server-visible
     // list; snapshotting the open form on destroy lets a later remount restore
@@ -103,6 +154,9 @@
             formStartPoint: null,
             formEndPoint: null,
             formBody: '',
+            // Citation captured at line-number mousedown, applied when the form
+            // opens (drag end / shift-click). Holds a formatted `> …` block or ''.
+            _pendingCitation: '',
             lastClickedPoint: null,
             showForm: false,
             editingCommentId: null,
@@ -208,7 +262,15 @@
 
             focusCommentInput() {
                 this.$dispatch('comment-form-opened', { fileId: this.fileId });
-                this.$nextTick(() => { this.$refs.commentInput?.focus(); });
+                this.$nextTick(() => {
+                    const input = this.$refs.commentInput;
+                    if (!input) return;
+                    input.focus();
+                    // Drop the caret after any pre-filled text (citation / edited
+                    // body) so the user types below the quote instead of inside it.
+                    const end = input.value?.length ?? 0;
+                    input.setSelectionRange?.(end, end);
+                });
             },
 
             closeEmptyFormFromAnotherFile(openedFileId) {
@@ -226,8 +288,16 @@
                 const clickedPoint = createLinePoint(lineNum, side);
                 if (clickedPoint == null) return;
 
+                // Snapshot any active text selection as a citation now: the
+                // gutter's `mousedown.prevent` stops the click from collapsing it,
+                // but it must be read before the form (drag end / shift-click) opens.
+                const citation = formatCitation(this._selectionTextWithinFile());
+
                 if (event.shiftKey && this.lastClickedPoint?.side === clickedPoint.side) {
                     this.setLineSelection(this.lastClickedPoint, clickedPoint);
+                    if (citation && this.formBody.trim() === '') {
+                        this.formBody = citation;
+                    }
                     this.showForm = true;
                     this.focusCommentInput();
                     return;
@@ -253,6 +323,7 @@
                 this.isDragging = true;
                 this.dragStartPoint = clickedPoint;
                 this.dragSide = side;
+                this._pendingCitation = citation;
                 this.setLineSelection(clickedPoint, clickedPoint);
                 this.showForm = false;
 
@@ -293,6 +364,10 @@
                 this.stopDragTracking();
                 this._cachedFileHeader = null;
                 this.showForm = true;
+                if (this._pendingCitation && this.formBody.trim() === '') {
+                    this.formBody = this._pendingCitation;
+                }
+                this._pendingCitation = '';
                 this.lastClickedPoint = this.formEndPoint ? { ...this.formEndPoint } : null;
                 this.focusCommentInput();
             },
@@ -301,6 +376,7 @@
                 this.stopDragTracking();
                 this.showForm = false;
                 this.formBody = '';
+                this._pendingCitation = '';
                 this.clearLineSelection();
                 this.escHint = false;
                 if (this.escTimer) { clearTimeout(this.escTimer); this.escTimer = null; }
@@ -428,6 +504,55 @@
                         this.$refs.fileCommentForm?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                     });
                 });
+            },
+
+            // Keyboard entry point (catalog id `review.comment-selection`, 'c'):
+            // open the line-comment composer on the row(s) under the current text
+            // selection, seeded with that text as a citation. Every diff-file
+            // receives the window event; only the one containing the selection
+            // acts (selectionLineRange returns null for the rest).
+            commentOnSelection() {
+                const win = this.$el?.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : null);
+                const selection = win?.getSelection?.();
+                if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+                    return;
+                }
+
+                const range = selection.getRangeAt(0);
+                const lineRange = selectionLineRange(range, this.$el);
+                if (!lineRange) return;
+
+                const citation = formatCitation(selection.toString());
+
+                this.autoExpandedForComment = false;
+                this.editingCommentId = null;
+                this.setLineSelection(
+                    createLinePoint(lineRange.startLine, lineRange.side),
+                    createLinePoint(lineRange.endLine, lineRange.side),
+                );
+                this.lastClickedPoint = this.formEndPoint ? { ...this.formEndPoint } : null;
+                if (citation && this.formBody.trim() === '') {
+                    this.formBody = citation;
+                }
+                this.showForm = true;
+                this.focusCommentInput();
+            },
+
+            // Current text selection as a string, but only when it begins inside
+            // this file's diff rows — so a stray selection elsewhere (a comment,
+            // another file) never leaks into this file's citation. '' otherwise.
+            _selectionTextWithinFile() {
+                const win = this.$el?.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : null);
+                const selection = win?.getSelection?.();
+                if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+                    return '';
+                }
+                const row = closestDiffLine(selection.anchorNode);
+                if (!row || !this.$el?.contains(row)) {
+                    return '';
+                }
+
+                return selection.toString();
             },
 
             submitComment(isDraft = false) {
@@ -591,6 +716,9 @@
         createLinePoint,
         areLinePointsEqual,
         rowContainsLinePoint,
+        formatCitation,
+        closestDiffLine,
+        selectionLineRange,
         createDiffFile,
         install,
         autoInstall,

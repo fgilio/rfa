@@ -121,6 +121,10 @@
                 reg('review.filter', () => this.$refs.fileFilterInput?.focus());
                 reg('review.next-file', () => this.focusAdjacentFile(1));
                 reg('review.prev-file', () => this.focusAdjacentFile(-1));
+                // Open the comment composer on the line(s) under the current text
+                // selection. Page-level so it's registered once; the matching
+                // diff-file (the one whose $el contains the selection) acts on it.
+                reg('review.comment-selection', () => this.$dispatch('rfa-comment-selection'));
                 reg('review.collapse-all', () => {
                     this.$store.settings.collapseAll = true;
                     this.$dispatch('collapse-all-files');
