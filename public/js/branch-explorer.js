@@ -132,17 +132,55 @@
             },
 
             /**
-             * Showing the "Since {base}" row only makes sense for the project's
-             * current branch - the configured base is HEAD-relative, not relative
-             * to whichever branch the picker happens to be displaying. The
-             * `on_base_branch` state is also hidden because comparing a branch
-             * to itself is nonsense.
+             * The "Since {base}" row is always rendered for a predictable layout,
+             * but it's only clickable on the project's current branch with a base
+             * that's configured, resolved, and ahead of HEAD. The configured base
+             * is HEAD-relative, so it's meaningless while browsing another branch.
              */
-            get sinceBaseRowVisible() {
-                if (this.selectedBranch !== currentBranch) return false;
+            get sinceBaseActionable() {
                 const base = this.$wire.branchBase;
                 if (!base) return false;
-                return base.state !== BranchBaseState.OnBaseBranch;
+                if (this.selectedBranch !== this.currentBranch) return false;
+                return base.state === BranchBaseState.Ready;
+            },
+
+            /**
+             * One-line explanation under the "Since {base}" row. For the ready
+             * state it's the scope summary; otherwise it names why the row can't
+             * be used right now. Null-safe: the row renders before branchBase
+             * loads, so a missing snapshot must not throw.
+             */
+            get sinceBaseReason() {
+                const base = this.$wire.branchBase;
+                if (!base) return '';
+                if (this.selectedBranch !== this.currentBranch) {
+                    return `compares against your current branch (${this.currentBranch})`;
+                }
+
+                switch (base.state) {
+                    case BranchBaseState.Ready:
+                        return `${base.commitCount} commit${base.commitCount === 1 ? '' : 's'} + uncommitted changes`;
+                    case BranchBaseState.UpToDate:
+                        return 'no commits ahead';
+                    case BranchBaseState.MissingRef:
+                        return 'base ref not found locally (run git fetch)';
+                    case BranchBaseState.OnBaseBranch:
+                        return "you're on the base branch";
+                    case BranchBaseState.NotConfigured:
+                        return 'set a base branch in project settings';
+                    default:
+                        return '';
+                }
+            },
+
+            /**
+             * True when the active view is the whole repo ("Since the beginning").
+             * The empty-tree check alone is ambiguous: a root commit's diff also
+             * starts from the empty tree, so require `activeCommitHash === null`
+             * (working-tree target) to tell the two apart.
+             */
+            get sinceBeginningActive() {
+                return this.activeCommitHash === null && this.activeDiffFrom === EMPTY_TREE_HASH;
             },
 
             get sinceBaseSelected() {
@@ -362,6 +400,10 @@
                 Livewire.navigate(`/p/${this.projectSlug}`);
             },
 
+            viewSinceBeginning() {
+                Livewire.navigate(`/p/${this.projectSlug}/rw/${EMPTY_TREE_HASH}`);
+            },
+
             isSelected(hash) {
                 return this.selectedHashes.includes(hash);
             },
@@ -471,6 +513,18 @@
                 const from = this.activeDiffFrom;
                 const tip = this.activeCommitHash;
 
+                // "Since the beginning" is a fixed whole-repo view, not a commit
+                // range. Leave the multi-select empty so Apply stays a no-op until
+                // the user makes a deliberate selection - otherwise rehydrating it
+                // as "all loaded commits + WT" would let Apply rewrite the mode.
+                if (this.sinceBeginningActive) {
+                    this.workingTreeSelected = false;
+                    this.selectedHashes = [];
+                    this.lastSelectionAnchorIsWT = false;
+                    this.lastSelectionIndex = -1;
+                    return;
+                }
+
                 if (tip === null && from === 'HEAD') {
                     this.workingTreeSelected = true;
                     this.selectedHashes = [];
@@ -565,8 +619,8 @@
              * selected.
              */
             selectSinceBase() {
+                if (!this.sinceBaseActionable) return;
                 const base = this.$wire.branchBase;
-                if (!base || base.state !== BranchBaseState.Ready) return;
                 this._clearSelectionError();
 
                 if (this.sinceBaseSelected) {
@@ -680,5 +734,5 @@
         }
     }
 
-    return { BranchBaseState, isSinceBaseExactly, violatesTipAnchor, stripRemotePrefix, createBranchExplorer, install, autoInstall };
+    return { BranchBaseState, EMPTY_TREE_HASH, isSinceBaseExactly, violatesTipAnchor, stripRemotePrefix, createBranchExplorer, install, autoInstall };
 });

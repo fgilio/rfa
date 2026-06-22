@@ -6,6 +6,7 @@ use App\Actions\DiscardFileChangesAction;
 use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
 use App\Actions\ResolveProjectAction;
+use App\Actions\ResolveRangeToWorkingAction;
 use App\Actions\ScanReviewFilesAction;
 use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
@@ -582,6 +583,34 @@ test('discardFileChanges is a no-op for external files', function () {
 
     Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->dispatch('discard-file', fileId: 'ext789')
+        ->assertNotDispatched('undo-available');
+});
+
+test('discardFileChanges is a no-op in the entire-repo (since the beginning) view', function () {
+    app()->bind(ResolveRangeToWorkingAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, string $from): DiffTarget
+        {
+            return DiffTarget::rangeToWorking($from);
+        }
+    });
+
+    app()->bind(DiscardFileChangesAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, string $path, string $status, int $projectId, ?string $oldPath = null, bool $isUntracked = false, bool $isSymlink = false, array $comments = []): TrashedFile
+        {
+            throw new RuntimeException('DiscardFileChangesAction must not run in the entire-repo view');
+        }
+    });
+
+    $component = Livewire::test('pages::review-page', [
+        'slug' => 'test-project',
+        'rangeFromWorking' => DiffTarget::EMPTY_TREE_HASH,
+    ]);
+
+    expect($component->get('isSinceBeginningView'))->toBeTrue();
+
+    $component->dispatch('discard-file', fileId: 'abc123')
         ->assertNotDispatched('undo-available');
 });
 

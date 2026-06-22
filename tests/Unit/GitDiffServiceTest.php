@@ -298,6 +298,36 @@ test('getFileList populates mtime/byteSize in rangeToWorking (1commit+WC / Since
     expect($entries[0]->byteSize)->toBe(File::size($this->tmpDir.'/file.txt'));
 });
 
+test('getFileList returns the whole repo as added files from the empty tree', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/a.txt', "a\n");
+    File::put($this->tmpDir.'/b.txt', "b\n");
+    $this->commitTestRepo($this->tmpDir, 'c1');
+
+    $entries = $this->service->getFileList(
+        $this->tmpDir,
+        target: DiffTarget::rangeToWorking(DiffTarget::EMPTY_TREE_HASH),
+    );
+
+    expect($entries)->toHaveCount(2)
+        ->and(collect($entries)->pluck('status')->unique()->all())->toBe(['added'])
+        ->and(collect($entries)->pluck('path')->sort()->values()->all())->toBe(['a.txt', 'b.txt']);
+});
+
+test('getFileList returns working files from the empty tree on an unborn repo', function () {
+    // No commit: HEAD is unborn, so `git diff HEAD` would fail. Diffing from the
+    // empty tree still surfaces the working files for the entire-repo view.
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/wip.txt', "wip\n");
+
+    $entries = $this->service->getFileList(
+        $this->tmpDir,
+        target: DiffTarget::rangeToWorking(DiffTarget::EMPTY_TREE_HASH),
+    );
+
+    expect(collect($entries)->pluck('path')->all())->toContain('wip.txt');
+});
+
 test('getFileList leaves mtime/byteSize null for immutable (commit-to-commit) targets', function () {
     $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/file.txt', "v1\n");

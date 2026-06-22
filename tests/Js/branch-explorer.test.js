@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import branchExplorer from '../../public/js/branch-explorer.js';
 
-const { BranchBaseState, isSinceBaseExactly, stripRemotePrefix, createBranchExplorer, install } = branchExplorer;
+const { BranchBaseState, EMPTY_TREE_HASH, isSinceBaseExactly, stripRemotePrefix, createBranchExplorer, install } = branchExplorer;
 
 /** Minimal factory wrapper for tests that exercise the Alpine state machine
  *  directly. Provides a stub `$wire` that the production code reads from. */
@@ -588,6 +588,87 @@ describe('_rehydrateSelectionFromActiveView', () => {
         a._rehydrateSelectionFromActiveView();
 
         expect(a.selectedHashes).toEqual(['unknown-tip']);
+    });
+});
+
+describe('since the beginning (entire repo)', () => {
+    afterEach(() => {
+        delete global.Livewire;
+        delete window.Livewire;
+    });
+
+    it('viewSinceBeginning navigates to the empty-tree range-to-working URL', () => {
+        const navigate = vi.fn();
+        global.Livewire = window.Livewire = { navigate };
+
+        makeForView().viewSinceBeginning();
+
+        expect(navigate).toHaveBeenCalledWith(`/p/p/rw/${EMPTY_TREE_HASH}`);
+    });
+
+    it('sinceBeginningActive is true only for the whole-repo working-tree view', () => {
+        expect(makeForView({ activeCommitHash: null, activeDiffFrom: EMPTY_TREE_HASH }).sinceBeginningActive).toBe(true);
+    });
+
+    it('sinceBeginningActive is false for a root commit view (empty-tree from, pinned commit)', () => {
+        expect(makeForView({ activeCommitHash: 'aaa1', activeDiffFrom: EMPTY_TREE_HASH }).sinceBeginningActive).toBe(false);
+    });
+
+    it('sinceBeginningActive is false for an ordinary working-tree view', () => {
+        expect(makeForView({ activeCommitHash: null, activeDiffFrom: 'HEAD' }).sinceBeginningActive).toBe(false);
+    });
+
+    it('rehydrate leaves the selection empty so Apply stays a no-op', () => {
+        const a = makeForView({ activeCommitHash: null, activeDiffFrom: EMPTY_TREE_HASH, commits: longCommits });
+        a._rehydrateSelectionFromActiveView();
+
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.selectedHashes).toEqual([]);
+        expect(a.lastSelectionAnchorIsWT).toBe(false);
+        expect(a.lastSelectionIndex).toBe(-1);
+    });
+});
+
+describe('since-base row predictability', () => {
+    function withBase(state, { branch = 'main', baseBranch = 'main', commitCount = 3 } = {}) {
+        return makeForView({
+            branch,
+            branchBase: state === null
+                ? null
+                : { state, baseBranch, commitCount, baseSha: 'base', hashesInRange: [] },
+        });
+    }
+
+    it('is actionable only in the ready state on the current branch', () => {
+        expect(withBase(BranchBaseState.Ready).sinceBaseActionable).toBe(true);
+        expect(withBase(BranchBaseState.UpToDate).sinceBaseActionable).toBe(false);
+        expect(withBase(BranchBaseState.MissingRef).sinceBaseActionable).toBe(false);
+        expect(withBase(BranchBaseState.NotConfigured).sinceBaseActionable).toBe(false);
+        expect(withBase(BranchBaseState.OnBaseBranch).sinceBaseActionable).toBe(false);
+    });
+
+    it('is not actionable while browsing a different branch even when ready', () => {
+        expect(withBase(BranchBaseState.Ready, { branch: 'feature/x' }).sinceBaseActionable).toBe(false);
+    });
+
+    it('gives a reason for every state', () => {
+        expect(withBase(BranchBaseState.Ready, { commitCount: 1 }).sinceBaseReason).toBe('1 commit + uncommitted changes');
+        expect(withBase(BranchBaseState.Ready, { commitCount: 3 }).sinceBaseReason).toBe('3 commits + uncommitted changes');
+        expect(withBase(BranchBaseState.UpToDate).sinceBaseReason).toBe('no commits ahead');
+        expect(withBase(BranchBaseState.MissingRef).sinceBaseReason).toBe('base ref not found locally (run git fetch)');
+        expect(withBase(BranchBaseState.OnBaseBranch).sinceBaseReason).toBe("you're on the base branch");
+        expect(withBase(BranchBaseState.NotConfigured).sinceBaseReason).toBe('set a base branch in project settings');
+    });
+
+    it('explains the off-branch case with the current branch name', () => {
+        expect(withBase(BranchBaseState.Ready, { branch: 'feature/x' }).sinceBaseReason)
+            .toBe('compares against your current branch (main)');
+    });
+
+    it('is null-safe before the branch-base snapshot loads', () => {
+        const a = withBase(null);
+        expect(a.sinceBaseActionable).toBe(false);
+        expect(a.sinceBaseReason).toBe('');
     });
 });
 

@@ -59,3 +59,22 @@ test('resolves a plain short from ref to a full hash', function () {
     expect($target->from())->toBe($this->rootSha)
         ->and($target->to())->toBeNull();
 });
+
+test('passes the empty-tree hash through unchanged for the entire-repo view', function () {
+    $target = $this->action->handle($this->tmpDir, DiffTarget::EMPTY_TREE_HASH);
+
+    expect($target->from())->toBe(DiffTarget::EMPTY_TREE_HASH)
+        ->and($target->to())->toBeNull()
+        ->and($target->isWorkingDirectory())->toBeTrue();
+});
+
+test('resolves the empty tree on an unborn repo without error', function () {
+    $unborn = $this->createTempDirectory('rfa_unborn_repo_test_');
+    $this->initTestRepo($unborn);
+    File::put($unborn.'/staged.txt', "wip\n");
+
+    $target = $this->action->handle($unborn, DiffTarget::EMPTY_TREE_HASH);
+
+    expect($target->from())->toBe(DiffTarget::EMPTY_TREE_HASH)
+        ->and($target->to())->toBeNull();
+});

@@ -36,6 +36,10 @@ new class extends Component {
     #[Locked]
     public ?string $diffTo = null;
 
+    /** False suppresses the discard affordance where it would be destructive, e.g. the empty-tree "Since the beginning" view. */
+    #[Locked]
+    public bool $allowDiscard = true;
+
     public bool $isReviewed = false;
 
     public bool $singleFile = false;
@@ -421,6 +425,7 @@ HTML;
         :has-remote="$hasRemote"
         :diff-to="$diffTo"
         :repo-path="$repoPath"
+        :allow-discard="$allowDiscard"
     />
 
     {{-- File body --}}

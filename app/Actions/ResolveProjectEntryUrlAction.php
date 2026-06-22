@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\DiffTarget;
 use App\Enums\LastViewKind;
 use App\Enums\LastViewMode;
 use App\Models\Project;
@@ -155,6 +156,17 @@ final readonly class ResolveProjectEntryUrlAction
         }
 
         $fromBase = str_ends_with($from, '^') ? substr($from, 0, -1) : $from;
+
+        // "Since the beginning" diffs from git's empty tree, which always exists
+        // but is a tree, not a commit, so resolveRef (which forces ^{commit})
+        // can't verify it. Rebuild the URL directly rather than failing the gate.
+        if ($fromBase === DiffTarget::EMPTY_TREE_HASH) {
+            return route('review-page.range-to-working', [
+                'slug' => $slug,
+                'rangeFromWorking' => DiffTarget::EMPTY_TREE_HASH,
+            ]);
+        }
+
         if ($fromBase !== '' && ! $this->refExists($project->path, $fromBase)) {
             return null;
         }

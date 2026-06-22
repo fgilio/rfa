@@ -36,6 +36,14 @@ test('rangeToWorking preserves the from commit with a null to', function () {
         ->and($target->isImmutable())->toBeFalse();
 });
 
+test('rangeToWorking from the empty tree diffs the whole repo as a working-tree target', function () {
+    $target = DiffTarget::rangeToWorking(DiffTarget::EMPTY_TREE_HASH);
+
+    expect($target->toDiffArgs())->toBe(['diff', DiffTarget::EMPTY_TREE_HASH])
+        ->and($target->isWorkingDirectory())->toBeTrue()
+        ->and($target->isImmutable())->toBeFalse();
+});
+
 test('fromRefs preserves the from commit when to is null', function () {
     // Regression: fromRefs($from, null) used to collapse to workingDirectory(),
     // forcing per-file diffs in range-to-working views to run against HEAD
