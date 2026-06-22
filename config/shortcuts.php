@@ -87,6 +87,12 @@ return [
             'group' => 'Review',
             'wired' => 'keymap',
         ],
+        'review.comment-selection' => [
+            'combo' => 'c',
+            'label' => 'Comment on selection',
+            'group' => 'Review',
+            'wired' => 'keymap',
+        ],
         'review.collapse-all' => [
             'combo' => 'C',
             'display' => '⇧C',

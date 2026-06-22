@@ -121,6 +121,22 @@
                 reg('review.filter', () => this.$refs.fileFilterInput?.focus());
                 reg('review.next-file', () => this.focusAdjacentFile(1));
                 reg('review.prev-file', () => this.focusAdjacentFile(-1));
+                // Open the comment composer on the line(s) under the current text
+                // selection. Resolve which file owns the selection once here and
+                // target that diff-file by id (matching the comment-updated /
+                // expand-file convention) rather than waking every component.
+                reg('review.comment-selection', () => {
+                    const selection = window.getSelection?.();
+                    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+                        return;
+                    }
+                    const node = selection.getRangeAt(0).startContainer;
+                    const el = node?.nodeType === 3 ? node.parentElement : node;
+                    const fileRoot = el?.closest?.('[data-file-id]');
+                    if (fileRoot) {
+                        this.$dispatch('rfa-comment-selection', { fileId: fileRoot.dataset.fileId });
+                    }
+                });
                 reg('review.collapse-all', () => {
                     this.$store.settings.collapseAll = true;
                     this.$dispatch('collapse-all-files');

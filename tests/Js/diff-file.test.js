@@ -8,6 +8,9 @@ const {
     createLinePoint,
     areLinePointsEqual,
     rowContainsLinePoint,
+    formatCitation,
+    closestDiffLine,
+    selectionLineRange,
     createDiffFile,
     install,
     autoInstall,
@@ -591,5 +594,335 @@ describe('pending comment form cleared on SPA navigation', () => {
 
         expect(second.showForm).toBe(false);
         expect(second.formBody).toBe('');
+    });
+});
+
+describe('formatCitation', () => {
+    it('quotes a single line and appends a blank line for the cursor', () => {
+        expect(formatCitation('Identify the single most undeniable paper cut'))
+            .toBe('> Identify the single most undeniable paper cut\n\n');
+    });
+
+    it('prefixes every line of a multi-line selection', () => {
+        expect(formatCitation('first line\nsecond line\nthird line'))
+            .toBe('> first line\n> second line\n> third line\n\n');
+    });
+
+    it('drops blank lines at the edges but keeps each line\'s own indentation', () => {
+        expect(formatCitation('\n  spaced selection  \n')).toBe('>   spaced selection  \n\n');
+    });
+
+    it('preserves the indentation of quoted code (does not dedent the first line)', () => {
+        expect(formatCitation('    if (foo) {\n        bar();\n    }'))
+            .toBe('>     if (foo) {\n>         bar();\n>     }\n\n');
+    });
+
+    it('still quotes interior blank lines', () => {
+        expect(formatCitation('para one\n\npara two')).toBe('> para one\n> \n> para two\n\n');
+    });
+
+    it.each([
+        ['', ''],
+        ['   ', ''],
+        ['\n\n', ''],
+    ])('returns empty string for empty/whitespace input (%j)', (input, expected) => {
+        expect(formatCitation(input)).toBe(expected);
+    });
+
+    it.each([[null], [undefined], [42]])('returns empty string for non-string input (%j)', (input) => {
+        expect(formatCitation(input)).toBe('');
+    });
+});
+
+describe('closestDiffLine', () => {
+    afterEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    it('resolves a text node up to its .diff-line row', () => {
+        document.body.innerHTML = '<div class="diff-line" data-line-new="5"><div class="diff-cell-content">hello</div></div>';
+        const textNode = document.querySelector('.diff-cell-content').firstChild;
+        expect(closestDiffLine(textNode)).toBe(document.querySelector('.diff-line'));
+    });
+
+    it('resolves an element node to its .diff-line row', () => {
+        document.body.innerHTML = '<div class="diff-line" data-line-new="5"><div class="diff-cell-content">hello</div></div>';
+        const cell = document.querySelector('.diff-cell-content');
+        expect(closestDiffLine(cell)).toBe(document.querySelector('.diff-line'));
+    });
+
+    it('returns null when the node is not inside a diff row', () => {
+        document.body.innerHTML = '<div class="comment-box">a comment</div>';
+        expect(closestDiffLine(document.querySelector('.comment-box'))).toBeNull();
+    });
+
+    it('returns null for nullish input', () => {
+        expect(closestDiffLine(null)).toBeNull();
+    });
+});
+
+describe('selectionLineRange', () => {
+    let root;
+
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <div id="file-root">
+                <div class="diff-line" data-line-old="10" data-line-new="10"><div class="diff-cell-content">ctx line</div></div>
+                <div class="diff-line" data-line-new="11"><div class="diff-cell-content">added line</div></div>
+                <div class="diff-line" data-line-old="12"><div class="diff-cell-content">removed line</div></div>
+            </div>
+            <div id="other-root">
+                <div class="diff-line" data-line-new="99"><div class="diff-cell-content">elsewhere</div></div>
+            </div>
+        `;
+        root = document.getElementById('file-root');
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    function rangeOver(startSelector, endSelector = startSelector) {
+        const range = document.createRange();
+        range.setStart(document.querySelector(startSelector).firstChild, 0);
+        const endNode = document.querySelector(endSelector).firstChild;
+        range.setEnd(endNode, endNode.length);
+        return range;
+    }
+
+    it('anchors a single added line to the right side', () => {
+        const range = rangeOver('[data-line-new="11"] .diff-cell-content');
+        expect(selectionLineRange(range, root)).toEqual({ side: 'right', startLine: 11, endLine: 11 });
+    });
+
+    it('prefers the new (right) side on a context row that carries both', () => {
+        const range = rangeOver('[data-line-new="10"] .diff-cell-content');
+        expect(selectionLineRange(range, root)).toEqual({ side: 'right', startLine: 10, endLine: 10 });
+    });
+
+    it('uses the old (left) side for a removed-only row', () => {
+        const range = rangeOver('[data-line-old="12"] .diff-cell-content');
+        expect(selectionLineRange(range, root)).toEqual({ side: 'left', startLine: 12, endLine: 12 });
+    });
+
+    it('spans the start row to the end row on the anchored side', () => {
+        const range = rangeOver('[data-line-new="10"] .diff-cell-content', '[data-line-new="11"] .diff-cell-content');
+        expect(selectionLineRange(range, root)).toEqual({ side: 'right', startLine: 10, endLine: 11 });
+    });
+
+    it('falls back to the start line when the end row lacks the anchored side', () => {
+        // Start on the right side (line 11) but end on a left-only row: endLine stays 11.
+        const range = rangeOver('[data-line-new="11"] .diff-cell-content', '[data-line-old="12"] .diff-cell-content');
+        expect(selectionLineRange(range, root)).toEqual({ side: 'right', startLine: 11, endLine: 11 });
+    });
+
+    it('returns null when the selection starts outside the given root', () => {
+        const range = rangeOver('#other-root [data-line-new="99"] .diff-cell-content');
+        expect(selectionLineRange(range, root)).toBeNull();
+    });
+
+    it('returns null for a missing range', () => {
+        expect(selectionLineRange(null, root)).toBeNull();
+    });
+});
+
+describe('selectionLineRange in split view', () => {
+    let root;
+
+    beforeEach(() => {
+        document.body.innerHTML = `
+            <div id="file-root" data-file-id="f1">
+                <div class="diff-grid" data-view-mode="split">
+                    <div class="diff-line" data-type="context" data-line-old="10" data-line-new="20">
+                        <div class="diff-cell diff-cell-content">context text</div>
+                        <div class="diff-cell diff-cell-content diff-cell-content-mirror">context text</div>
+                    </div>
+                </div>
+            </div>`;
+        root = document.getElementById('file-root');
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    function rangeIn(selector) {
+        const range = document.createRange();
+        const node = document.querySelector(selector).firstChild;
+        range.setStart(node, 0);
+        range.setEnd(node, node.length);
+        return range;
+    }
+
+    it('anchors a selection in the left content cell to the old side', () => {
+        // The primary `.diff-cell-content` is the original (left) side in split view.
+        expect(selectionLineRange(rangeIn('.diff-cell-content'), root))
+            .toEqual({ side: 'left', startLine: 10, endLine: 10 });
+    });
+
+    it('anchors a selection in the right mirror cell to the new side', () => {
+        expect(selectionLineRange(rangeIn('.diff-cell-content-mirror'), root))
+            .toEqual({ side: 'right', startLine: 20, endLine: 20 });
+    });
+
+    it('keeps the new-side default for a context row in unified view', () => {
+        root.querySelector('.diff-grid').dataset.viewMode = 'unified';
+        expect(selectionLineRange(rangeIn('.diff-cell-content'), root))
+            .toEqual({ side: 'right', startLine: 20, endLine: 20 });
+    });
+});
+
+describe('comment on text selection', () => {
+    let root;
+
+    beforeEach(() => {
+        globalThis.Alpine = { store: () => ({ collapseAll: false }) };
+        document.body.innerHTML = `
+            <div id="file-root">
+                <div class="diff-line" data-line-new="13"><div class="diff-cell-content">> Identify the single most undeniable paper cut</div></div>
+                <div class="diff-line" data-line-new="14"><div class="diff-cell-content">more context</div></div>
+            </div>
+        `;
+        root = document.getElementById('file-root');
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = '';
+        delete globalThis.Alpine;
+        vi.restoreAllMocks();
+    });
+
+    function makeComponent() {
+        const component = createDiffFile({ fileId: 'file-1', filePath: 'README.md', isReviewed: false });
+        component.$el = root;
+        component.$dispatch = vi.fn();
+        component.$nextTick = (fn) => fn();
+        component.$refs = { commentInput: { focus: vi.fn(), value: '', setSelectionRange: vi.fn() } };
+        return component;
+    }
+
+    function stubSelection({ text, startSelector, endSelector = startSelector, collapsed = false }) {
+        const range = document.createRange();
+        const startNode = document.querySelector(startSelector).firstChild;
+        const endNode = document.querySelector(endSelector).firstChild;
+        range.setStart(startNode, 0);
+        range.setEnd(endNode, endNode.length);
+        vi.spyOn(window, 'getSelection').mockReturnValue({
+            rangeCount: 1,
+            isCollapsed: collapsed,
+            anchorNode: startNode,
+            getRangeAt: () => range,
+            toString: () => text,
+        });
+        return range;
+    }
+
+    it('opens the form on the selected line seeded with a citation', () => {
+        const component = makeComponent();
+        stubSelection({
+            text: 'Identify the single most undeniable paper cut',
+            startSelector: '[data-line-new="13"] .diff-cell-content',
+        });
+
+        component.commentOnSelection();
+
+        expect(component.showForm).toBe(true);
+        expect(component.formSide).toBe('right');
+        expect(component.formLine).toBe(13);
+        expect(component.formEndLine).toBe(13);
+        expect(component.formBody).toBe('> Identify the single most undeniable paper cut\n\n');
+        expect(component.$refs.commentInput.focus).toHaveBeenCalled();
+    });
+
+    it('anchors a multi-line selection across the spanned rows', () => {
+        const component = makeComponent();
+        stubSelection({
+            text: 'line thirteen\nline fourteen',
+            startSelector: '[data-line-new="13"] .diff-cell-content',
+            endSelector: '[data-line-new="14"] .diff-cell-content',
+        });
+
+        component.commentOnSelection();
+
+        expect(component.formLine).toBe(13);
+        expect(component.formEndLine).toBe(14);
+        expect(component.formBody).toBe('> line thirteen\n> line fourteen\n\n');
+    });
+
+    it('does nothing when the selection is collapsed', () => {
+        const component = makeComponent();
+        stubSelection({ text: '', startSelector: '[data-line-new="13"] .diff-cell-content', collapsed: true });
+
+        component.commentOnSelection();
+
+        expect(component.showForm).toBe(false);
+        expect(component.formBody).toBe('');
+    });
+
+    it('does not overwrite text already in the composer', () => {
+        const component = makeComponent();
+        component.formBody = 'half-written thought';
+        stubSelection({
+            text: 'Identify the single most undeniable paper cut',
+            startSelector: '[data-line-new="13"] .diff-cell-content',
+        });
+
+        component.commentOnSelection();
+
+        expect(component.formBody).toBe('half-written thought');
+        expect(component.formLine).toBe(13);
+    });
+});
+
+describe('citation pre-fill on the drag path', () => {
+    beforeEach(() => {
+        globalThis.Alpine = { store: () => ({ collapseAll: false }) };
+    });
+
+    afterEach(() => {
+        delete globalThis.Alpine;
+    });
+
+    function makeComponent() {
+        const component = createDiffFile({ fileId: 'file-1', filePath: 'README.md', isReviewed: false });
+        component.$dispatch = vi.fn();
+        component.$nextTick = (fn) => fn();
+        component.$refs = { commentInput: { focus: vi.fn(), value: '', setSelectionRange: vi.fn() } };
+        return component;
+    }
+
+    it('applies the pending citation when the line drag ends', () => {
+        const component = makeComponent();
+        component.isDragging = true;
+        component.setLineSelection({ line: 13, side: 'right' });
+        component._pendingCitation = '> cited line\n\n';
+
+        component.endDrag();
+
+        expect(component.showForm).toBe(true);
+        expect(component.formBody).toBe('> cited line\n\n');
+        expect(component._pendingCitation).toBe('');
+    });
+
+    it('does not overwrite an existing draft when the drag ends', () => {
+        const component = makeComponent();
+        component.isDragging = true;
+        component.formBody = 'existing draft';
+        component._pendingCitation = '> cited line\n\n';
+
+        component.endDrag();
+
+        expect(component.formBody).toBe('existing draft');
+        expect(component._pendingCitation).toBe('');
+    });
+
+    it('clears any pending citation on cancel', () => {
+        const component = makeComponent();
+        component._pendingCitation = '> cited line\n\n';
+
+        component.cancelForm();
+
+        expect(component._pendingCitation).toBe('');
+        expect(component.formBody).toBe('');
     });
 });
