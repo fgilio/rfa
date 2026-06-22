@@ -288,16 +288,11 @@
                 const clickedPoint = createLinePoint(lineNum, side);
                 if (clickedPoint == null) return;
 
-                // Snapshot any active text selection as a citation now: the
-                // gutter's `mousedown.prevent` stops the click from collapsing it,
-                // but it must be read before the form (drag end / shift-click) opens.
-                const citation = formatCitation(this._selectionTextWithinFile());
-
                 if (event.shiftKey && this.lastClickedPoint?.side === clickedPoint.side) {
                     this.setLineSelection(this.lastClickedPoint, clickedPoint);
-                    if (citation && this.formBody.trim() === '') {
-                        this.formBody = citation;
-                    }
+                    // The gutter's `mousedown.prevent` keeps the text selection
+                    // alive, so it's still readable here to seed the citation.
+                    this._prefillCitation(formatCitation(this._selectionTextWithinFile()));
                     this.showForm = true;
                     this.focusCommentInput();
                     return;
@@ -323,7 +318,9 @@
                 this.isDragging = true;
                 this.dragStartPoint = clickedPoint;
                 this.dragSide = side;
-                this._pendingCitation = citation;
+                // Snapshot the selection now (mousedown.prevent keeps it alive);
+                // it's applied when the drag ends and the form opens.
+                this._pendingCitation = formatCitation(this._selectionTextWithinFile());
                 this.setLineSelection(clickedPoint, clickedPoint);
                 this.showForm = false;
 
@@ -364,9 +361,7 @@
                 this.stopDragTracking();
                 this._cachedFileHeader = null;
                 this.showForm = true;
-                if (this._pendingCitation && this.formBody.trim() === '') {
-                    this.formBody = this._pendingCitation;
-                }
+                this._prefillCitation(this._pendingCitation);
                 this._pendingCitation = '';
                 this.lastClickedPoint = this.formEndPoint ? { ...this.formEndPoint } : null;
                 this.focusCommentInput();
@@ -506,23 +501,39 @@
                 });
             },
 
-            // Keyboard entry point (catalog id `review.comment-selection`, 'c'):
-            // open the line-comment composer on the row(s) under the current text
-            // selection, seeded with that text as a citation. Every diff-file
-            // receives the window event; only the one containing the selection
-            // acts (selectionLineRange returns null for the rest).
-            commentOnSelection() {
+            // The window's current text selection, or null when there is none,
+            // it's collapsed, or it carries no range. Centralizes the
+            // window-resolution + empty-guard for the citation readers below.
+            _activeSelection() {
                 const win = this.$el?.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : null);
                 const selection = win?.getSelection?.();
                 if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-                    return;
+                    return null;
                 }
 
-                const range = selection.getRangeAt(0);
-                const lineRange = selectionLineRange(range, this.$el);
-                if (!lineRange) return;
+                return selection;
+            },
 
-                const citation = formatCitation(selection.toString());
+            // Seeds an empty composer with a citation; a non-empty body (an
+            // in-progress draft) is left untouched. Shared by every form-open
+            // path that can carry a selection (shift-click, drag end, keyboard).
+            _prefillCitation(citation) {
+                if (citation && this.formBody.trim() === '') {
+                    this.formBody = citation;
+                }
+            },
+
+            // Keyboard entry point (catalog id `review.comment-selection`, 'c'):
+            // open the line-comment composer on the row(s) under the current text
+            // selection, seeded with that text as a citation. The page resolves
+            // which file owns the selection and targets this handler by id; the
+            // selectionLineRange guard keeps it correct if called directly.
+            commentOnSelection() {
+                const selection = this._activeSelection();
+                if (!selection) return;
+
+                const lineRange = selectionLineRange(selection.getRangeAt(0), this.$el);
+                if (!lineRange) return;
 
                 this.autoExpandedForComment = false;
                 this.editingCommentId = null;
@@ -531,9 +542,7 @@
                     createLinePoint(lineRange.endLine, lineRange.side),
                 );
                 this.lastClickedPoint = this.formEndPoint ? { ...this.formEndPoint } : null;
-                if (citation && this.formBody.trim() === '') {
-                    this.formBody = citation;
-                }
+                this._prefillCitation(formatCitation(selection.toString()));
                 this.showForm = true;
                 this.focusCommentInput();
             },
@@ -542,11 +551,8 @@
             // this file's diff rows — so a stray selection elsewhere (a comment,
             // another file) never leaks into this file's citation. '' otherwise.
             _selectionTextWithinFile() {
-                const win = this.$el?.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : null);
-                const selection = win?.getSelection?.();
-                if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-                    return '';
-                }
+                const selection = this._activeSelection();
+                if (!selection) return '';
                 const row = closestDiffLine(selection.anchorNode);
                 if (!row || !this.$el?.contains(row)) {
                     return '';
@@ -649,15 +655,10 @@
             },
 
             _updateSelectionFromPoint() {
-                const el = document.elementFromPoint(this._dragMouseX, this._dragMouseY);
-                if (!el) return;
-                const row = el.closest('.diff-line');
+                const row = closestDiffLine(document.elementFromPoint(this._dragMouseX, this._dragMouseY));
                 if (!row || !this.$el.contains(row)) return;
 
-                const lineNum = this.dragSide === 'left'
-                    ? (row.dataset.lineOld ? parseInt(row.dataset.lineOld) : null)
-                    : (row.dataset.lineNew ? parseInt(row.dataset.lineNew) : null);
-                const point = createLinePoint(lineNum, this.dragSide);
+                const point = createLinePoint(rowLineForSide(row, this.dragSide), this.dragSide);
                 if (point === null || this.dragStartPoint === null) return;
 
                 this.setLineSelection(this.dragStartPoint, point);

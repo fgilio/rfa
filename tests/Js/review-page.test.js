@@ -357,3 +357,63 @@ describe('createReviewPage path helpers', () => {
         expect(page.$wire.toggleReviewed).not.toHaveBeenCalled();
     });
 });
+
+describe('review.comment-selection shortcut', () => {
+    afterEach(() => {
+        document.body.innerHTML = '';
+        vi.restoreAllMocks();
+    });
+
+    function pageWithShortcut() {
+        const handlers = {};
+        const page = createReviewPage({});
+        page.registeredShortcutIds = [];
+        page.$store = { shortcuts: { register: (id, handler) => { handlers[id] = handler; } }, settings: {} };
+        page.$dispatch = vi.fn();
+        page.$refs = {};
+        page.registerShortcuts();
+        return { page, fire: handlers['review.comment-selection'] };
+    }
+
+    function stubSelection({ startSelector, collapsed = false }) {
+        const node = startSelector ? document.querySelector(startSelector).firstChild : null;
+        vi.spyOn(window, 'getSelection').mockReturnValue({
+            rangeCount: node ? 1 : 0,
+            isCollapsed: collapsed,
+            getRangeAt: () => ({ startContainer: node }),
+        });
+    }
+
+    it('targets the file that owns the selection by id', () => {
+        document.body.innerHTML = `
+            <div data-file-id="file-9">
+                <div class="diff-line" data-line-new="3"><div class="diff-cell-content">hello</div></div>
+            </div>`;
+        const { page, fire } = pageWithShortcut();
+        stubSelection({ startSelector: '[data-file-id="file-9"] .diff-cell-content' });
+
+        fire();
+
+        expect(page.$dispatch).toHaveBeenCalledWith('rfa-comment-selection', { fileId: 'file-9' });
+    });
+
+    it('does nothing when the selection is collapsed', () => {
+        document.body.innerHTML = '<div data-file-id="file-9"><div class="diff-cell-content">hi</div></div>';
+        const { page, fire } = pageWithShortcut();
+        stubSelection({ startSelector: '.diff-cell-content', collapsed: true });
+
+        fire();
+
+        expect(page.$dispatch).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the selection is not inside a file', () => {
+        document.body.innerHTML = '<div class="sidebar">unrelated text</div>';
+        const { page, fire } = pageWithShortcut();
+        stubSelection({ startSelector: '.sidebar' });
+
+        fire();
+
+        expect(page.$dispatch).not.toHaveBeenCalled();
+    });
+});
