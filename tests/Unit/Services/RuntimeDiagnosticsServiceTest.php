@@ -308,6 +308,55 @@ SH);
         ->and($process['command_features']['disabled'])->toContain('MacWebContentsOcclusion');
 });
 
+test('process snapshots force the C locale so comma-decimal locales still parse', function () {
+    $originalPath = getenv('PATH') ?: '';
+    $originalNumeric = getenv('LC_NUMERIC');
+    $fakeBin = $this->diagnosticsDir.'/bin';
+    $fakePs = $fakeBin.'/ps';
+
+    // Emits comma decimals (12,5) unless the C locale was forced — mimicking a
+    // host whose LC_NUMERIC uses a comma. Without the LC_ALL=C override the
+    // %cpu/%mem capture groups would never match and the snapshot would be empty.
+    mkdir($fakeBin, 0755, true);
+    file_put_contents($fakePs, <<<'SH'
+#!/bin/sh
+if [ "$LC_ALL" = "C" ]; then
+    printf ' 123 1 12.5 3.4 204800 S 01:02:03 /Applications/rfa.app/Contents/MacOS/rfa /Applications/rfa.app/Contents/MacOS/rfa --type=renderer\n'
+else
+    printf ' 123 1 12,5 3,4 204800 S 01:02:03 /Applications/rfa.app/Contents/MacOS/rfa /Applications/rfa.app/Contents/MacOS/rfa --type=renderer\n'
+fi
+SH);
+    chmod($fakePs, 0755);
+
+    config([
+        'rfa.diagnostics.process_snapshots' => true,
+        'rfa.diagnostics.process_snapshot_timeout_seconds' => 1,
+    ]);
+
+    putenv('PATH='.$fakeBin.':'.$originalPath);
+    putenv('LC_NUMERIC=de_DE.UTF-8');
+
+    try {
+        app(RuntimeDiagnosticsService::class)->recordBrowserSample([
+            'reason' => 'heartbeat',
+            'includeProcessSnapshot' => true,
+        ]);
+    } finally {
+        putenv('PATH='.$originalPath);
+        putenv($originalNumeric === false ? 'LC_NUMERIC' : 'LC_NUMERIC='.$originalNumeric);
+    }
+
+    $entries = collect(file($this->diagnosticsPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES))
+        ->map(fn (string $line): array => json_decode($line, true))
+        ->all();
+
+    $process = $entries[1]['context']['processes'][0];
+
+    expect($process['pid'])->toBe(123)
+        ->and($process['cpu_percent'])->toBe(12.5)
+        ->and($process['memory_percent'])->toBe(3.4);
+});
+
 test('browser sample drops urls without a path', function () {
     app(RuntimeDiagnosticsService::class)->recordBrowserSample([
         'reason' => 'heartbeat',

@@ -130,7 +130,14 @@ final class RuntimeDiagnosticsService
             return [];
         }
 
-        $processList = new Process(['ps', '-axo', 'pid=,ppid=,%cpu=,%mem=,rss=,stat=,etime=,comm=,command=']);
+        // Force the C locale so `ps` prints %cpu/%mem with a period decimal.
+        // Under a comma-decimal locale (e.g. LC_NUMERIC=de_DE) it emits "12,5",
+        // which the numeric capture groups in parseProcessLine cannot match,
+        // dropping every process from the snapshot.
+        $processList = new Process(
+            ['ps', '-axo', 'pid=,ppid=,%cpu=,%mem=,rss=,stat=,etime=,comm=,command='],
+            env: ['LC_ALL' => 'C'],
+        );
         $processList->setTimeout((float) config('rfa.diagnostics.process_snapshot_timeout_seconds', 2));
 
         try {
