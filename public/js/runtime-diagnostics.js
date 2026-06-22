@@ -58,7 +58,25 @@
     }
 
     function uniqueStringList(values, limit = 20) {
-        return Array.from(new Set(stringList(values, limit * 2))).slice(0, limit);
+        if (!Array.isArray(values)) {
+            return [];
+        }
+
+        const unique = [];
+
+        for (const value of values) {
+            const string = shortString(value, 96);
+
+            if (string && !unique.includes(string)) {
+                unique.push(string);
+
+                if (unique.length >= limit) {
+                    break;
+                }
+            }
+        }
+
+        return unique;
     }
 
     function bytesToMegabytes(bytes) {
@@ -212,7 +230,10 @@
         };
     }
 
-    function collectClassCounters(doc) {
+    // One DOM walk feeds both the dom.* class counters and the animation
+    // classSummary; collectSample shares the result so a single sample never
+    // scans every [class] element twice.
+    function scanClasses(doc, classSummaryLimit) {
         const counters = {
             animatedElements: 0,
             animateSpin: 0,
@@ -221,6 +242,7 @@
             backdropBlur: 0,
             sticky: 0,
         };
+        const counts = new Map();
 
         for (const el of doc.querySelectorAll('[class]')) {
             const classes = Array.from(el.classList || []);
@@ -231,9 +253,22 @@
             if (classes.some(name => name.includes('animate-pulse'))) counters.animatePulse++;
             if (classes.some(name => name.includes('backdrop-blur'))) counters.backdropBlur++;
             if (classes.includes('sticky')) counters.sticky++;
+
+            for (const className of classes) {
+                if (!className.includes('animate-') && !className.includes('backdrop-blur') && className !== 'sticky') {
+                    continue;
+                }
+
+                counts.set(className, (counts.get(className) || 0) + 1);
+            }
         }
 
-        return counters;
+        const classSummary = Array.from(counts.entries())
+            .map(([name, count]) => ({ name: shortString(name, 96), count }))
+            .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+            .slice(0, classSummaryLimit);
+
+        return { counters, classSummary };
     }
 
     function diagnosticClassNames(el, limit = 20) {
@@ -319,23 +354,29 @@
         };
     }
 
-    function elementState(root, el) {
+    function computedStyleFor(root, el) {
         if (typeof root.getComputedStyle !== 'function') {
-            return {};
+            return null;
         }
 
         try {
-            const style = root.getComputedStyle(el);
-
-            return {
-                computedDisplay: shortString(style.display, 32),
-                computedVisibility: shortString(style.visibility, 32),
-                computedOpacity: shortString(style.opacity, 32),
-                computedPointerEvents: shortString(style.pointerEvents, 32),
-            };
+            return root.getComputedStyle(el);
         } catch {
+            return null;
+        }
+    }
+
+    function elementStateFromStyle(style) {
+        if (!style) {
             return {};
         }
+
+        return {
+            computedDisplay: shortString(style.display, 32),
+            computedVisibility: shortString(style.visibility, 32),
+            computedOpacity: shortString(style.opacity, 32),
+            computedPointerEvents: shortString(style.pointerEvents, 32),
+        };
     }
 
     function interactiveElementDetails(el) {
@@ -376,23 +417,18 @@
         };
     }
 
-    function computedAnimationStyle(root, el) {
-        if (typeof root.getComputedStyle !== 'function') {
+    function computedAnimationFromStyle(style) {
+        if (!style) {
             return {};
         }
 
-        try {
-            const style = root.getComputedStyle(el);
-            const hasCssAnimation = style.animationName && style.animationName !== 'none';
+        const hasCssAnimation = style.animationName && style.animationName !== 'none';
 
-            return {
-                cssAnimationName: hasCssAnimation ? shortString(style.animationName, 96) : null,
-                cssAnimationDuration: hasCssAnimation && style.animationDuration !== '0s' ? shortString(style.animationDuration, 64) : null,
-                cssAnimationPlayState: hasCssAnimation ? shortString(style.animationPlayState, 64) : null,
-            };
-        } catch {
-            return {};
-        }
+        return {
+            cssAnimationName: hasCssAnimation ? shortString(style.animationName, 96) : null,
+            cssAnimationDuration: hasCssAnimation && style.animationDuration !== '0s' ? shortString(style.animationDuration, 64) : null,
+            cssAnimationPlayState: hasCssAnimation ? shortString(style.animationPlayState, 64) : null,
+        };
     }
 
     function isVisibleElement(el) {
@@ -401,6 +437,7 @@
 
     function describeAnimatedElement(root, el) {
         const livewire = livewireElementDetails(root, el);
+        const style = computedStyleFor(root, el);
 
         return {
             signature: elementSignature(el),
@@ -422,28 +459,9 @@
             nearestDiffFileState: nearestAttribute(el, '[data-rfa-diff-file]', 'data-collapsed'),
             ...interactiveElementDetails(el),
             ...elementBounds(el),
-            ...elementState(root, el),
-            ...computedAnimationStyle(root, el),
+            ...elementStateFromStyle(style),
+            ...computedAnimationFromStyle(style),
         };
-    }
-
-    function collectAnimationClassSummary(doc, limit) {
-        const counts = new Map();
-
-        for (const el of doc.querySelectorAll('[class]')) {
-            for (const className of Array.from(el.classList || [])) {
-                if (!className.includes('animate-') && !className.includes('backdrop-blur') && className !== 'sticky') {
-                    continue;
-                }
-
-                counts.set(className, (counts.get(className) || 0) + 1);
-            }
-        }
-
-        return Array.from(counts.entries())
-            .map(([name, count]) => ({ name: shortString(name, 96), count }))
-            .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-            .slice(0, limit);
     }
 
     function animationName(animation) {
@@ -597,13 +615,17 @@
         return Math.min(maximum, Math.max(0, Math.round(limit)));
     }
 
-    function collectAnimations(root) {
+    function collectAnimations(root, classData) {
         const config = root.rfaDiagnosticsConfig || {};
         const detailLimit = boundedLimit(config.animationDetailLimit, DEFAULT_ANIMATION_DETAIL_LIMIT, 50);
         const classSummaryLimit = boundedLimit(config.animationClassSummaryLimit, DEFAULT_ANIMATION_CLASS_SUMMARY_LIMIT, 50);
+        const classSummary = classData
+            ? classData.classSummary
+            : scanClasses(root.document, classSummaryLimit).classSummary;
+        const hasAnimationsApi = typeof root.document.getAnimations === 'function';
         let animations = [];
 
-        if (typeof root.document.getAnimations === 'function') {
+        if (hasAnimationsApi) {
             try {
                 animations = root.document.getAnimations({ subtree: true }) || [];
             } catch {
@@ -611,23 +633,28 @@
             }
         }
 
-        const rows = animations.length > 0
+        // Trust the Animations API when it exists: an idle page returns [] and
+        // must report zero active animations. Only scrape the DOM for
+        // animation-class elements when the API is genuinely unavailable, so a
+        // quiet page never reports phantom "active" animations.
+        const rows = hasAnimationsApi
             ? collectAnimationRows(root, animations, detailLimit)
             : fallbackAnimationRows(root, detailLimit);
 
         return {
-            activeCount: animations.length || rows.length,
+            activeCount: hasAnimationsApi ? animations.length : rows.length,
             runningCount: animations.filter(animation => animation.playState === 'running').length,
             cssAnimationCount: animations.filter(animation => animationKind(animation) === 'animation').length,
             cssTransitionCount: animations.filter(animation => animationKind(animation) === 'transition').length,
-            classSummary: collectAnimationClassSummary(root.document, classSummaryLimit),
+            classSummary,
             elementGroups: collectAnimationGroups(rows, detailLimit),
             elements: rows,
         };
     }
 
-    function collectDom(doc) {
+    function collectDom(doc, classCounters) {
         const diffFiles = Array.from(doc.querySelectorAll('[data-rfa-diff-file]'));
+        const counters = classCounters || scanClasses(doc, 0).counters;
 
         return {
             nodes: doc.getElementsByTagName('*').length,
@@ -636,7 +663,7 @@
             expandedDiffFiles: diffFiles.filter((el) => el.dataset.collapsed === 'false').length,
             diffLines: doc.querySelectorAll('.diff-line').length,
             comments: doc.querySelectorAll('[id^="comment-"]').length,
-            ...collectClassCounters(doc),
+            ...counters,
         };
     }
 
@@ -688,6 +715,10 @@
     }
 
     function collectSample(root, reason, includeProcessSnapshot, timings = {}) {
+        const config = root.rfaDiagnosticsConfig || {};
+        const classSummaryLimit = boundedLimit(config.animationClassSummaryLimit, DEFAULT_ANIMATION_CLASS_SUMMARY_LIMIT, 50);
+        const classData = scanClasses(root.document, classSummaryLimit);
+
         return {
             reason,
             includeProcessSnapshot,
@@ -704,8 +735,8 @@
             activity: collectActivity(root),
             scroll: collectScroll(root),
             heap: collectHeap(root),
-            dom: collectDom(root.document),
-            animations: collectAnimations(root),
+            dom: collectDom(root.document, classData.counters),
+            animations: collectAnimations(root, classData),
             navigation: collectNavigation(root),
             poll: collectPoll(root),
             timings: {
