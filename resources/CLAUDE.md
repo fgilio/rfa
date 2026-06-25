@@ -10,7 +10,7 @@
 - Use `rfa-logo` class for the "rfa" wordmark (bold, tight tracking)
 - Use `section-label` class for uppercase section headers (e.g. "Files", "Reviews", "Local", "Remote"). Defaults to display font; add `font-mono` when the label content is technical data like a path or hash (see the picker's group header over `$commonDir`)
 - Use `tracking-brutal` (-0.04em) on headings and `tracking-brutal-tight` (-0.06em) for display sizes
-- Diff code areas stay dense: `font-mono text-xs leading-5`
+- Diff code areas stay dense and `font-mono`. The `.diff-grid` wrapper carries `text-xs leading-5` as the baseline for inline comment/expand rows (`.diff-fullspan`); the code cells themselves (`.diff-cell`) are bumped to `font-size: 1rem` (text-base) with a proportional `line-height: 1.667` in `layouts/app.blade.php`, so the diff text renders ~two zoom steps larger than the surrounding chrome.
 
 ## Paths & identifiers
 
