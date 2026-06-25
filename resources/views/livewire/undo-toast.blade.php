@@ -108,7 +108,10 @@
                         data-testid="undo-ok-button"
                     >OK</button>
                 </template>
-                <span class="font-mono text-xs text-gh-muted tabular-nums" x-text="remaining + 's'"></span>
+                {{-- aria-hidden so the per-second countdown inside this aria-live
+                     region doesn't re-announce the toast every tick; the message and
+                     Undo action stay announced. --}}
+                <span class="font-mono text-xs text-gh-muted tabular-nums" x-text="remaining + 's'" aria-hidden="true"></span>
             </div>
         </div>
         <button
