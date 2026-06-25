@@ -85,25 +85,31 @@
     role="status"
     aria-live="polite"
     data-testid="undo-toast"
-    class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 max-w-sm"
+    class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 w-96 max-w-[calc(100vw-2rem)]"
 >
-    <div class="p-2 flex rounded-xl shadow-lg bg-gh-surface border border-gh-border"
+    <div class="p-2 flex items-center rounded-xl shadow-lg bg-gh-surface border border-gh-border"
         :class="current?.type === 'discard' && 'border-l-2 border-l-gh-accent'">
-        <div class="flex-1 flex items-center gap-3 py-1.5 px-2.5 text-sm">
-            <span x-text="current?.message" class="font-medium text-gh-text"></span>
-            <button
-                @click="undo()"
-                class="font-medium text-gh-link hover:underline shrink-0"
-                data-testid="undo-button"
-            >Undo</button>
-            <template x-if="current?.type === 'discard'">
+        <div class="flex-1 min-w-0 flex items-center gap-3 py-1.5 px-2.5 text-sm">
+            <span
+                x-text="current?.message"
+                :title="current?.message"
+                class="min-w-0 flex-1 truncate font-medium text-gh-text"
+            ></span>
+            <div class="flex items-center gap-3 shrink-0">
                 <button
-                    @click="dismiss()"
-                    class="font-medium text-gh-muted hover:text-gh-text shrink-0"
-                    data-testid="undo-ok-button"
-                >OK</button>
-            </template>
-            <span class="font-mono text-xs text-gh-muted tabular-nums shrink-0" x-text="remaining + 's'"></span>
+                    @click="undo()"
+                    class="font-medium text-gh-link hover:underline"
+                    data-testid="undo-button"
+                >Undo</button>
+                <template x-if="current?.type === 'discard'">
+                    <button
+                        @click="dismiss()"
+                        class="font-medium text-gh-muted hover:text-gh-text"
+                        data-testid="undo-ok-button"
+                    >OK</button>
+                </template>
+                <span class="font-mono text-xs text-gh-muted tabular-nums" x-text="remaining + 's'"></span>
+            </div>
         </div>
         <button
             @click="dismiss()"
