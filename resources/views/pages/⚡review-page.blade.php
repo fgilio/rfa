@@ -1741,14 +1741,16 @@ new #[Layout('layouts.app')] class extends Component
                                 <button @click="collapsed = !collapsed"
                                     :aria-label="collapsed ? 'Expand review' : 'Collapse review'"
                                     :aria-expanded="!collapsed"
-                                    class="text-gh-muted hover:text-gh-text transition-colors">
+                                    class="shrink-0 text-gh-muted hover:text-gh-text transition-colors">
                                     <flux:icon icon="chevron-down" variant="outline" class="!size-4" x-show="!collapsed" />
                                     <flux:icon icon="chevron-right" variant="outline" class="!size-4" x-show="collapsed" x-cloak />
                                 </button>
-                                <span class="text-[10px] font-mono font-medium text-gh-link shrink-0">R</span>
-                                <span class="font-mono text-sm truncate" title="{{ $pair['displayName'] }}">{{ $pair['displayName'] }}</span>
-                                <span class="text-[10px] font-mono text-gh-muted">.md</span>
-                                <span class="ml-auto">
+                                <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                                    <span class="text-[10px] font-mono font-medium text-gh-link shrink-0">R</span>
+                                    <span class="font-mono text-sm truncate min-w-0" title="{{ $pair['displayName'] }}">{{ $pair['displayName'] }}</span>
+                                    <span class="text-[10px] font-mono text-gh-muted shrink-0">.md</span>
+                                </div>
+                                <span class="shrink-0">
                                     <x-arm-commit-button
                                         icon="trash"
                                         tooltip="Delete review"
