@@ -1742,8 +1742,8 @@ new #[Layout('layouts.app')] class extends Component
                                     :aria-label="collapsed ? 'Expand review' : 'Collapse review'"
                                     :aria-expanded="!collapsed"
                                     class="text-gh-muted hover:text-gh-text transition-colors">
-                                    <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
-                                    <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
+                                    <flux:icon icon="chevron-down" variant="outline" class="!size-4" x-show="!collapsed" />
+                                    <flux:icon icon="chevron-right" variant="outline" class="!size-4" x-show="collapsed" x-cloak />
                                 </button>
                                 <span class="text-[10px] font-mono font-medium text-gh-link shrink-0">R</span>
                                 <span class="font-mono text-sm truncate" title="{{ $pair['displayName'] }}">{{ $pair['displayName'] }}</span>

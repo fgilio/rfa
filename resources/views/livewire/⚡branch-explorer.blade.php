@@ -249,7 +249,7 @@ new class extends Component {
                                             :data-selected="selectedIndex === i"
                                             :title="branch.name"
                                         >
-                                            <flux:icon icon="check" variant="outline" class="shrink-0" x-show="branch.isCurrent" x-cloak />
+                                            <flux:icon icon="check" variant="outline" class="!size-3 shrink-0" x-show="branch.isCurrent" x-cloak />
                                             <span class="shrink-0 w-3" x-show="!branch.isCurrent"></span>
                                             <span class="truncate" x-text="branch.name"></span>
                                         </button>
@@ -304,7 +304,7 @@ new class extends Component {
                 <div class="flex-1 flex flex-col min-h-0 min-w-0">
                     {{-- Commits header --}}
                     <div class="px-4 py-2.5 border-b border-gh-border flex items-center gap-2 shrink-0">
-                        <flux:icon icon="clock" variant="outline" class="text-gh-muted" />
+                        <flux:icon icon="clock" variant="outline" class="!size-4 text-gh-muted" />
                         <span class="text-xs font-semibold tracking-brutal text-gh-text truncate" x-text="selectedBranch || 'Select a branch'" :title="selectedBranch"></span>
                         <span class="text-xs font-mono text-gh-muted" x-show="$wire.commits.length > 0" x-text="'(' + $wire.commits.length + ($wire.hasMore ? '+' : '') + ')'"></span>
 

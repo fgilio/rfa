@@ -28,8 +28,8 @@
         <button :aria-label="collapsed ? 'Expand file' : 'Collapse file'"
                 :aria-expanded="!collapsed"
                 class="text-gh-muted hover:text-gh-text transition-colors">
-            <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
-            <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
+            <flux:icon icon="chevron-down" variant="outline" class="!size-4" x-show="!collapsed" />
+            <flux:icon icon="chevron-right" variant="outline" class="!size-4" x-show="collapsed" x-cloak />
         </button>
 
         <x-file-path
