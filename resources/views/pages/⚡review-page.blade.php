@@ -87,6 +87,12 @@ new #[Layout('layouts.app')] class extends Component
 
     public bool $submitted = false;
 
+    /**
+     * Basename of the review file the "Review submitted" bar currently points
+     * at. Lets a delete of that same review reset the bar (see deleteReviewPair).
+     */
+    public ?string $submittedReviewBasename = null;
+
     public ?string $gitError = null;
 
     /** @var array<string, string> */
@@ -1042,6 +1048,12 @@ new #[Layout('layouts.app')] class extends Component
             array_filter($this->reviewPairs, fn ($p) => $p['basename'] !== $basename)
         );
 
+        // The "Review submitted" bar points at this file — deleting it leaves
+        // the bar referencing a file that no longer exists, so drop back to the editor.
+        if ($basename === $this->submittedReviewBasename) {
+            $this->resetSubmittedState();
+        }
+
         Flux::toast(text: 'Review deleted', variant: 'success');
     }
 
@@ -1056,6 +1068,10 @@ new #[Layout('layouts.app')] class extends Component
         app(DeleteReviewFilesAction::class)->handle($this->repoPath, $basenames);
 
         $this->reviewPairs = [];
+
+        if (in_array($this->submittedReviewBasename, $basenames, true)) {
+            $this->resetSubmittedState();
+        }
 
         Flux::toast(text: 'All reviews deleted', variant: 'success');
     }

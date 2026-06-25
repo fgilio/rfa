@@ -6,6 +6,7 @@ namespace App\Concerns\ReviewPage;
 
 use App\Actions\ExportReviewAction;
 use App\Actions\ExportReviewSnapshotAction;
+use App\DTOs\ReviewFilePair;
 use Flux\Flux;
 
 /**
@@ -18,7 +19,8 @@ use Flux\Flux;
  * editor returns.
  *
  * Component state read/written: $comments, $globalComment, $files,
- * $reviewedFiles, $repoPath, $projectName, $exportResult, $submitted. Calls
+ * $reviewedFiles, $repoPath, $projectName, $exportResult, $submitted,
+ * $submittedReviewBasename. Calls
  * into the coordinator (saveSession, buildDiffTarget, scanReviewFiles,
  * dispatchFileComments, the reviewState computed) and the render pipeline
  * (skipRender, dispatch). submitReview renders (it swaps the submit bar);
@@ -36,6 +38,7 @@ trait ExportsReview
         $result = app(ExportReviewAction::class)->handle($this->repoPath, $finalizedComments, $this->globalComment, $this->files, $target);
 
         $this->exportResult = $result['clipboard'];
+        $this->submittedReviewBasename = ReviewFilePair::extractBasename($result['md']);
         $this->submitted = true;
 
         $this->scanReviewFiles();
@@ -129,7 +132,17 @@ trait ExportsReview
 
     public function startNewReview(): void
     {
+        $this->resetSubmittedState();
+    }
+
+    /**
+     * Return the submit bar to its editing state and forget the review file it
+     * referenced. Shared by startNewReview and by deleting the submitted review.
+     */
+    private function resetSubmittedState(): void
+    {
         $this->submitted = false;
         $this->exportResult = null;
+        $this->submittedReviewBasename = null;
     }
 }
