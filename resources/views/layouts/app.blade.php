@@ -118,7 +118,14 @@
         .diff-grid[data-view-mode="split"] .diff-line[data-type="context"] { grid-column: 1 / -1; }
 
         .diff-grid .diff-fullspan { grid-column: 1 / -1; }
-        .diff-cell { min-width: 0; }
+        /* Diff code text size. Bumped two type-scale steps up from the
+           inherited text-xs (12px) to text-base (16px) so the diff reads
+           larger by default — equivalent to two browser zoom-in presses.
+           line-height keeps the prior 20/12 density ratio (1.667) so rows
+           scale proportionally, exactly like zoom. Scoped to the cells, not
+           the .diff-grid wrapper, so inline comment/expand rows
+           (.diff-fullspan) keep their own smaller sizing. */
+        .diff-cell { min-width: 0; font-size: 1rem; line-height: 1.667; }
         .diff-cell-num {
             padding: 0 0.5rem;
             text-align: right;

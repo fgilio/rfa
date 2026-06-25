@@ -45,7 +45,7 @@
         @click.stop.prevent="handle()"
         x-bind:class="armed && '!text-gh-red hover:!bg-gh-red/10'"
     >
-        <flux:icon :icon="$icon" variant="outline" />
+        <flux:icon :icon="$icon" variant="outline" class="!size-4" />
     </flux:button>
     <div
         aria-hidden="true"

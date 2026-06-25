@@ -2,6 +2,7 @@
 
 use App\Actions\BackfillGlobalGitignoreAction;
 use App\Actions\CleanExpiredTrashAction;
+use App\Actions\DeleteReviewFilesAction;
 use App\Actions\DiscardFileChangesAction;
 use App\Actions\ExportReviewAction;
 use App\Actions\GetFileListAction;
@@ -355,6 +356,71 @@ test('submitReview refreshes file list and populates reviewPairs', function () {
 
     expect($component->get('reviewPairs'))->toHaveCount(1);
     expect($component->get('submitted'))->toBeTrue();
+});
+
+test('deleting the submitted review resets the submit bar', function () {
+    $basename = '20260227_173000_comments_abcd1234';
+
+    app()->bind(ExportReviewAction::class, fn () => new class($basename)
+    {
+        public function __construct(private string $basename) {}
+
+        public function handle(string $repoPath, array $comments, string $globalComment, array $files, ?DiffTarget $target = null): array
+        {
+            return [
+                'md' => ".rfa/{$this->basename}.md",
+                'clipboard' => 'review exported',
+                'submittedIds' => array_column($comments, 'id'),
+            ];
+        }
+    });
+    app()->bind(DeleteReviewFilesAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, array|string $basenames): void {}
+    });
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Test comment')
+        ->call('submitReview');
+
+    expect($component->get('submitted'))->toBeTrue();
+    expect($component->get('submittedReviewBasename'))->toBe($basename);
+
+    $component->call('deleteReviewPair', $basename);
+
+    expect($component->get('submitted'))->toBeFalse();
+    expect($component->get('exportResult'))->toBeNull();
+    expect($component->get('submittedReviewBasename'))->toBeNull();
+});
+
+test('deleting a different review leaves the submit bar untouched', function () {
+    $basename = '20260227_173000_comments_abcd1234';
+
+    app()->bind(ExportReviewAction::class, fn () => new class($basename)
+    {
+        public function __construct(private string $basename) {}
+
+        public function handle(string $repoPath, array $comments, string $globalComment, array $files, ?DiffTarget $target = null): array
+        {
+            return [
+                'md' => ".rfa/{$this->basename}.md",
+                'clipboard' => 'review exported',
+                'submittedIds' => array_column($comments, 'id'),
+            ];
+        }
+    });
+    app()->bind(DeleteReviewFilesAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, array|string $basenames): void {}
+    });
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Test comment')
+        ->call('submitReview')
+        ->call('deleteReviewPair', '20251010_090000_comments_zzzz9999');
+
+    expect($component->get('submitted'))->toBeTrue();
+    expect($component->get('submittedReviewBasename'))->toBe($basename);
 });
 
 test('startNewReview returns the submit bar to the input state', function () {

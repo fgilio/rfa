@@ -31,7 +31,7 @@
     @if($submitted)
         <div class="px-5 py-3.5 flex items-center justify-between gap-4">
             <div class="flex items-center gap-3 min-w-0">
-                <flux:icon icon="check-circle" variant="outline" class="text-gh-green shrink-0" />
+                <flux:icon icon="check-circle" variant="outline" class="!size-4 text-gh-green shrink-0" />
                 <span class="font-semibold tracking-brutal shrink-0">{{ $submittedHeading }}</span>
                 <x-stat-chip class="truncate">{{ $exportResult }}</x-stat-chip>
             </div>

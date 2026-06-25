@@ -87,6 +87,12 @@ new #[Layout('layouts.app')] class extends Component
 
     public bool $submitted = false;
 
+    /**
+     * Basename of the review file the "Review submitted" bar currently points
+     * at. Lets a delete of that same review reset the bar (see deleteReviewPair).
+     */
+    public ?string $submittedReviewBasename = null;
+
     public ?string $gitError = null;
 
     /** @var array<string, string> */
@@ -1042,6 +1048,12 @@ new #[Layout('layouts.app')] class extends Component
             array_filter($this->reviewPairs, fn ($p) => $p['basename'] !== $basename)
         );
 
+        // The "Review submitted" bar points at this file — deleting it leaves
+        // the bar referencing a file that no longer exists, so drop back to the editor.
+        if ($basename === $this->submittedReviewBasename) {
+            $this->resetSubmittedState();
+        }
+
         Flux::toast(text: 'Review deleted', variant: 'success');
     }
 
@@ -1056,6 +1068,10 @@ new #[Layout('layouts.app')] class extends Component
         app(DeleteReviewFilesAction::class)->handle($this->repoPath, $basenames);
 
         $this->reviewPairs = [];
+
+        if (in_array($this->submittedReviewBasename, $basenames, true)) {
+            $this->resetSubmittedState();
+        }
 
         Flux::toast(text: 'All reviews deleted', variant: 'success');
     }
@@ -1725,14 +1741,16 @@ new #[Layout('layouts.app')] class extends Component
                                 <button @click="collapsed = !collapsed"
                                     :aria-label="collapsed ? 'Expand review' : 'Collapse review'"
                                     :aria-expanded="!collapsed"
-                                    class="text-gh-muted hover:text-gh-text transition-colors">
-                                    <flux:icon icon="chevron-down" variant="outline" x-show="!collapsed" />
-                                    <flux:icon icon="chevron-right" variant="outline" x-show="collapsed" x-cloak />
+                                    class="shrink-0 text-gh-muted hover:text-gh-text transition-colors">
+                                    <flux:icon icon="chevron-down" variant="outline" class="!size-4" x-show="!collapsed" />
+                                    <flux:icon icon="chevron-right" variant="outline" class="!size-4" x-show="collapsed" x-cloak />
                                 </button>
-                                <span class="text-[10px] font-mono font-medium text-gh-link shrink-0">R</span>
-                                <span class="font-mono text-sm truncate" title="{{ $pair['displayName'] }}">{{ $pair['displayName'] }}</span>
-                                <span class="text-[10px] font-mono text-gh-muted">.md</span>
-                                <span class="ml-auto">
+                                <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                                    <span class="text-[10px] font-mono font-medium text-gh-link shrink-0">R</span>
+                                    <span class="font-mono text-sm truncate min-w-0" title="{{ $pair['displayName'] }}">{{ $pair['displayName'] }}</span>
+                                    <span class="text-[10px] font-mono text-gh-muted shrink-0">.md</span>
+                                </div>
+                                <span class="shrink-0">
                                     <x-arm-commit-button
                                         icon="trash"
                                         tooltip="Delete review"

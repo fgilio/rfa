@@ -8,7 +8,7 @@
      navigation — the actions only navigate within the commit context the
      bar describes. --}}
 <div data-testid="commit-context-bar" class="sticky top-[var(--header-h)] z-40 bg-gh-surface border-b border-gh-border px-5 py-2.5 flex items-center gap-3 text-xs" style="--commit-bar-h: 40px;">
-    <flux:icon icon="code-bracket" variant="outline" class="text-gh-muted shrink-0" />
+    <flux:icon icon="code-bracket" variant="outline" class="!size-4 text-gh-muted shrink-0" />
     <x-stat-chip class="shrink-0">{{ $commitInfo['shortHash'] }}</x-stat-chip>
     <span class="text-gh-text truncate font-medium" title="{{ $commitInfo['message'] }}">{{ $commitInfo['message'] }}</span>
     <span class="text-gh-muted shrink-0">{{ $commitInfo['author'] }}</span>

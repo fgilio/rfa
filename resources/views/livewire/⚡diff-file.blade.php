@@ -475,7 +475,7 @@ HTML;
         @if(($file['isSymlink'] ?? false) || ($diffData['isSymlink'] ?? false))
             @php $target = $file['symlinkTarget'] ?? ($diffData['symlinkTarget'] ?? ''); @endphp
             <div class="px-4 py-8 text-center">
-                <flux:icon icon="link" variant="outline" class="inline-block text-gh-muted mr-1" aria-hidden="true" />
+                <flux:icon icon="link" variant="outline" class="!size-4 inline-block text-gh-muted mr-1" aria-hidden="true" />
                 <flux:text variant="subtle" size="sm" inline>
                     Symbolic link &rarr; <span class="font-mono">{{ $target }}</span>
                 </flux:text>
@@ -541,12 +541,12 @@ HTML;
             </div>
         @elseif($diffData['tooLarge'] ?? false)
             <div class="px-4 py-8 text-center">
-                <flux:icon icon="exclamation-triangle" variant="outline" class="inline-block text-gh-muted mr-1" />
+                <flux:icon icon="exclamation-triangle" variant="outline" class="!size-4 inline-block text-gh-muted mr-1" />
                 <flux:text variant="subtle" size="sm" inline>File diff too large to display</flux:text>
             </div>
         @elseif($diffData['error'] ?? false)
             <div class="px-4 py-8 text-center">
-                <flux:icon icon="exclamation-triangle" variant="outline" class="inline-block text-gh-red mr-1" />
+                <flux:icon icon="exclamation-triangle" variant="outline" class="!size-4 inline-block text-gh-red mr-1" />
                 <flux:text variant="subtle" size="sm" inline>Git error: {{ $diffData['error'] }}</flux:text>
             </div>
         @elseif(empty($diffData['hunks']))
