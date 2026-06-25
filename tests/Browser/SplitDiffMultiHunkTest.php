@@ -34,7 +34,10 @@ test('split view does not pair removes and adds across hunk boundaries', functio
 test('split view context lines render at one line-height', function () {
     // Regression: Phiki emits a trailing "\n" token on every line. With
     // white-space: pre-wrap on the cell, that newline rendered as a visible
-    // second line, doubling each context row to 40px.
+    // second line, doubling each context row. At the diff code size
+    // (.diff-cell: 16px text, 1.667 line-height) one row is ~26.7px, so a
+    // doubled row would be ~53px — the bounds below bracket the single-line
+    // height and stay well under the doubled threshold.
     $page = $this->visitAndLoad($this->projectUrl());
     $page->page()->getByLabel('Switch to split view')->click();
     $page->page()->locator('[data-testid="diff-table"][data-view-mode="split"]')->first()->waitFor();
@@ -50,6 +53,6 @@ test('split view context lines render at one line-height', function () {
     expect($heights)->toHaveCount(5);
 
     foreach ($heights as $h) {
-        expect($h)->toBeGreaterThan(15.0)->toBeLessThan(25.0);
+        expect($h)->toBeGreaterThan(20.0)->toBeLessThan(40.0);
     }
 });
