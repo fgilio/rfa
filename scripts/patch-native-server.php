@@ -64,10 +64,20 @@ JS;
             // alone: NativePHP injects a fresh per-launch API port and secret
             // that PHP reads through config(), so a reused config cache would
             // point the PHP server at a stale port and break the native bridge.
+            //
+            // Probe the route/event caches at the directory Laravel actually
+            // writes them to for this build type. NativePHP only redirects
+            // APP_ROUTES_CACHE/APP_EVENTS_CACHE into userData/bootstrap/cache
+            // for a *secure* build; an unsecure build (what `native:build`
+            // produces without a bundle — RFA's shipping shape) leaves them at
+            // <appPath>/bootstrap/cache. Checking bootstrapCache unconditionally
+            // would never find them in an unsecure build, so the gate would trip
+            // every launch and pay the full optimize anyway.
+            const rfaCacheDir = runningSecureBuild() ? bootstrapCache : join(getAppPath(), 'bootstrap', 'cache');
             const rfaVersionChanged = store.get('optimized_version') !== app.getVersion();
             const rfaNeedsFullOptimize = rfaVersionChanged
-                || !existsSync(join(bootstrapCache, 'routes-v7.php'))
-                || !existsSync(join(bootstrapCache, 'events.php'));
+                || !existsSync(join(rfaCacheDir, 'routes-v7.php'))
+                || !existsSync(join(rfaCacheDir, 'events.php'));
             const rfaCommand = rfaNeedsFullOptimize ? 'optimize' : 'config:cache';
             console.log(rfaNeedsFullOptimize ? 'Caching views, routes, and config...' : 'Refreshing config cache...');
             let result = callPhpSync(['artisan', rfaCommand], phpOptions, phpIniSettings);
@@ -191,10 +201,12 @@ JS;
         return __awaiter(this, void 0, void 0, function* () {
             // [rfa preflight cache] native:config is static per app version; reuse
             // a cached copy to skip a full PHP boot. Fail open on any error.
+            // accessPropertiesByDotNotation:false keeps the dotted version in the
+            // key (e.g. preflight_config_1.0.0) literal instead of nesting it.
             const rfaKey = 'preflight_config_' + app.getVersion();
             if (process.env.NODE_ENV !== 'development') {
                 try {
-                    const rfaCached = new Store({ name: 'nativephp' }).get(rfaKey);
+                    const rfaCached = new Store({ name: 'nativephp', accessPropertiesByDotNotation: false }).get(rfaKey);
                     if (rfaCached) {
                         return rfaCached;
                     }
@@ -207,7 +219,7 @@ JS;
                 config = JSON.parse(result.stdout);
                 if (process.env.NODE_ENV !== 'development') {
                     try {
-                        new Store({ name: 'nativephp' }).set(rfaKey, config);
+                        new Store({ name: 'nativephp', accessPropertiesByDotNotation: false }).set(rfaKey, config);
                     }
                     catch (rfaError) { }
                 }
@@ -241,10 +253,12 @@ JS;
         return __awaiter(this, void 0, void 0, function* () {
             // [rfa preflight cache] native:php-ini is static per app version; reuse
             // a cached copy to skip a full PHP boot. Fail open on any error.
+            // accessPropertiesByDotNotation:false keeps the dotted version in the
+            // key (e.g. preflight_phpini_1.0.0) literal instead of nesting it.
             const rfaKey = 'preflight_phpini_' + app.getVersion();
             if (process.env.NODE_ENV !== 'development') {
                 try {
-                    const rfaCached = new Store({ name: 'nativephp' }).get(rfaKey);
+                    const rfaCached = new Store({ name: 'nativephp', accessPropertiesByDotNotation: false }).get(rfaKey);
                     if (rfaCached) {
                         return rfaCached;
                     }
@@ -257,7 +271,7 @@ JS;
                 config = JSON.parse(result.stdout);
                 if (process.env.NODE_ENV !== 'development') {
                     try {
-                        new Store({ name: 'nativephp' }).set(rfaKey, config);
+                        new Store({ name: 'nativephp', accessPropertiesByDotNotation: false }).set(rfaKey, config);
                     }
                     catch (rfaError) { }
                 }

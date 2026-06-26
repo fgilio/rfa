@@ -122,8 +122,13 @@ test('patches the optimize block and returns patched', function () {
         ->toContain('[rfa patch]')
         ->toContain('const rfaNeedsFullOptimize')
         ->toContain("rfaNeedsFullOptimize ? 'optimize' : 'config:cache'")
-        ->toContain("existsSync(join(bootstrapCache, 'routes-v7.php'))")
-        ->toContain("existsSync(join(bootstrapCache, 'events.php'))");
+        // The cache dir is build-type aware: userData/bootstrap/cache for a
+        // secure build, <appPath>/bootstrap/cache for an unsecure one. Probing
+        // bootstrapCache unconditionally would never trip the gate in an
+        // unsecure build (RFA's shipping shape), paying the full optimize.
+        ->toContain("const rfaCacheDir = runningSecureBuild() ? bootstrapCache : join(getAppPath(), 'bootstrap', 'cache')")
+        ->toContain("existsSync(join(rfaCacheDir, 'routes-v7.php'))")
+        ->toContain("existsSync(join(rfaCacheDir, 'events.php'))");
 });
 
 test('warms the pre-flight artisan calls with a persistent opcache file cache', function () {
@@ -249,6 +254,9 @@ test('pre-flight: caches native:config and native:php-ini per app version, fail-
         ->toContain('import Store from "electron-store"; // [rfa preflight cache]')
         ->toContain("const rfaKey = 'preflight_config_' + app.getVersion();")
         ->toContain("const rfaKey = 'preflight_phpini_' + app.getVersion();")
+        // Dot-notation off so the dotted version (preflight_config_1.0.0) stays a
+        // literal key instead of nesting into {preflight_config_1:{0:{0:…}}}.
+        ->toContain("new Store({ name: 'nativephp', accessPropertiesByDotNotation: false })")
         // Gated off in development so a dev always sees fresh config.
         ->toContain("process.env.NODE_ENV !== 'development'")
         // Fail open: the live retrieve* call is still present as the fallback.
