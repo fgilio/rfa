@@ -18,9 +18,9 @@ namespace App\Support;
 final class FilePathSorter
 {
     /**
-     * Compare two paths folders-first. At the first differing segment, a path
-     * that still has directories below it wins over one whose segment is a
-     * leaf; otherwise the segments are compared byte-wise, matching git.
+     * Compare two paths folders-first. At each segment a path that still has
+     * directories below it sorts before one whose segment is a leaf; otherwise
+     * the segments are compared byte-wise, matching git.
      */
     public static function compare(string $a, string $b): int
     {
@@ -31,23 +31,27 @@ final class FilePathSorter
         $shared = min($countA, $countB);
 
         for ($i = 0; $i < $shared; $i++) {
-            if ($segmentsA[$i] === $segmentsB[$i]) {
-                continue;
-            }
-
             $aIsDirectory = $i < $countA - 1;
             $bIsDirectory = $i < $countB - 1;
 
+            // Folder beats file the moment the paths part ways - including when
+            // the segment names match but one path descends further (a file `a`
+            // replaced by a directory `a/...`). Settling this at the divergence
+            // point rather than via a post-loop length fallback keeps the order
+            // a true total order: a length tiebreaker disagrees with this rule
+            // (`b/a` < `a`, yet `a` < `a/a`), which makes `usort` non-transitive
+            // and the file list order depend on git's incoming order.
             if ($aIsDirectory !== $bIsDirectory) {
                 return $aIsDirectory ? -1 : 1;
             }
 
-            return strcmp($segmentsA[$i], $segmentsB[$i]);
+            if ($segmentsA[$i] !== $segmentsB[$i]) {
+                return strcmp($segmentsA[$i], $segmentsB[$i]);
+            }
         }
 
-        // One path is a prefix of the other (e.g. `a/b` vs `a/b/c`); the
-        // shallower one sorts first. Distinct files never nest this way, but
-        // handle it deterministically regardless.
+        // Reached only when every segment matched in both name and depth, i.e.
+        // the paths are identical.
         return $countA <=> $countB;
     }
 }

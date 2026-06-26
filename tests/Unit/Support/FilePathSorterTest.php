@@ -48,6 +48,28 @@ test('sorts directories alphabetically then files alphabetically', function () {
     ]);
 });
 
+test('puts a directory before a same-named file it replaces', function () {
+    // A file `a` deleted and re-added as the directory `a/` can both appear in
+    // one diff; the directory must win so the order stays a total order.
+    expect(sortPaths([
+        'a',
+        'a/a',
+    ]))->toBe([
+        'a/a',
+        'a',
+    ]);
+});
+
+test('stays transitive across a path, its nested child, and a sibling directory', function () {
+    // The cycle a naive length fallback produced: a < a/a, a/a < b/a, b/a < a.
+    // A total order must sort these identically regardless of input order.
+    $expected = ['a/a', 'b/a', 'a'];
+
+    expect(sortPaths(['a', 'a/a', 'b/a']))->toBe($expected)
+        ->and(sortPaths(['b/a', 'a', 'a/a']))->toBe($expected)
+        ->and(sortPaths(['a/a', 'b/a', 'a']))->toBe($expected);
+});
+
 test('keeps deep nesting grouped under its directory', function () {
     expect(sortPaths([
         'a/readme.md',
