@@ -7,15 +7,17 @@
  * `electron-vite build` bundles directly — it does not run the plugin's `tsc`
  * step):
  *
- *  1. Optimize once per version. NativePHP runs `php artisan optimize`
- *     synchronously before the PHP server starts, on every launch. That
- *     recompiles all Blade views (~1s) and blocks the window. Compiled views
- *     persist in userData and self-heal via on-demand compilation, so the full
- *     optimize is only needed on a version change (fresh install / post-update)
- *     or when the route/event caches are missing. On same-version launches we
- *     re-cache config alone, because NativePHP injects a fresh per-launch API
- *     port and secret that PHP reads through config() — a reused config cache
- *     would point the PHP server at a stale port and break the native bridge.
+ *  1. Optimize once per version, then skip the cache step on warm launches.
+ *     NativePHP runs `php artisan optimize` synchronously before the PHP server
+ *     starts, on every launch. That recompiles all Blade views and re-caches
+ *     config/routes/events (~1s) and blocks the window. The compiled caches
+ *     persist in the build's bootstrap/cache, so the full optimize is only
+ *     needed on a version change (fresh install / post-update) or when a cache
+ *     file is missing. On same-version launches the cache step is skipped
+ *     ENTIRELY: the only per-launch-varying config (the native API port and IPC
+ *     secret) is re-read from the live process environment at runtime by
+ *     RehydrateNativeRuntimeConfigAction, so the persisted config stays valid
+ *     without a per-launch config:cache boot.
  *
  *  2. Warm opcode for the launch-time `php artisan` calls. NativePHP shells out
  *     to `native:php-ini` and `native:config` before the server starts, each a
@@ -55,37 +57,43 @@ JS;
 
     $optimizeReplace = <<<'JS'
         if (shouldOptimize(store)) {
-            // [rfa patch] `php artisan optimize` recompiles every Blade view
-            // (~1s) and previously ran on every launch, blocking the window.
-            // Compiled views persist in userData and self-heal via on-demand
-            // compilation, so the full optimize is only needed when the app
-            // version changes (fresh install / post-update) or the route/event
-            // caches are missing. On same-version launches we re-cache config
-            // alone: NativePHP injects a fresh per-launch API port and secret
-            // that PHP reads through config(), so a reused config cache would
-            // point the PHP server at a stale port and break the native bridge.
+            // [rfa patch] `php artisan optimize` recompiles every Blade view and
+            // re-caches config/routes/events (~1s) and previously ran on every
+            // launch, blocking the window. The compiled caches persist in the
+            // build's bootstrap/cache, so the full optimize is only needed when
+            // the app version changes (fresh install / post-update) or a cache
+            // file is missing.
             //
-            // Probe the route/event caches at the directory Laravel actually
-            // writes them to for this build type. NativePHP only redirects
-            // APP_ROUTES_CACHE/APP_EVENTS_CACHE into userData/bootstrap/cache
-            // for a *secure* build; an unsecure build (what `native:build`
-            // produces without a bundle — RFA's shipping shape) leaves them at
-            // <appPath>/bootstrap/cache. Checking bootstrapCache unconditionally
-            // would never find them in an unsecure build, so the gate would trip
-            // every launch and pay the full optimize anyway.
+            // On a same-version launch we skip the cache step ENTIRELY — including
+            // the config:cache the earlier RFA patch ran for the fresh per-launch
+            // API port and IPC secret. Those two values are the only per-launch
+            // config that varies, and the app now re-reads them from the live
+            // process environment at runtime (RehydrateNativeRuntimeConfigAction
+            // in AppServiceProvider), so the persisted version-cached config stays
+            // valid and we avoid a full framework boot on every warm launch.
+            //
+            // Probe the caches at the directory Laravel actually writes them to
+            // for this build type. NativePHP only redirects APP_*_CACHE into
+            // userData/bootstrap/cache for a *secure* build; an unsecure build
+            // (what `native:build` produces without a bundle — RFA's shipping
+            // shape) leaves them at <appPath>/bootstrap/cache. Checking
+            // bootstrapCache unconditionally would never find them in an unsecure
+            // build, so the gate would trip every launch and pay the full optimize.
             const rfaCacheDir = runningSecureBuild() ? bootstrapCache : join(getAppPath(), 'bootstrap', 'cache');
             const rfaVersionChanged = store.get('optimized_version') !== app.getVersion();
             const rfaNeedsFullOptimize = rfaVersionChanged
+                || !existsSync(join(rfaCacheDir, 'config.php'))
                 || !existsSync(join(rfaCacheDir, 'routes-v7.php'))
                 || !existsSync(join(rfaCacheDir, 'events.php'));
-            const rfaCommand = rfaNeedsFullOptimize ? 'optimize' : 'config:cache';
-            console.log(rfaNeedsFullOptimize ? 'Caching views, routes, and config...' : 'Refreshing config cache...');
-            let result = callPhpSync(['artisan', rfaCommand], phpOptions, phpIniSettings);
-            if (result.status !== 0) {
-                console.error('Failed to cache framework bootstrap:', result.stderr.toString());
-            }
-            else if (rfaNeedsFullOptimize) {
-                store.set('optimized_version', app.getVersion());
+            if (rfaNeedsFullOptimize) {
+                console.log('Caching views, routes, and config...');
+                let result = callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings);
+                if (result.status !== 0) {
+                    console.error('Failed to cache framework bootstrap:', result.stderr.toString());
+                }
+                else {
+                    store.set('optimized_version', app.getVersion());
+                }
             }
         }
 JS;

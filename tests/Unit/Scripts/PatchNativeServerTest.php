@@ -121,12 +121,17 @@ test('patches the optimize block and returns patched', function () {
     expect($content)
         ->toContain('[rfa patch]')
         ->toContain('const rfaNeedsFullOptimize')
-        ->toContain("rfaNeedsFullOptimize ? 'optimize' : 'config:cache'")
+        // The full optimize only runs behind the version/cache gate; the warm
+        // path falls through with no cache step at all.
+        ->toContain('if (rfaNeedsFullOptimize) {')
         // The cache dir is build-type aware: userData/bootstrap/cache for a
         // secure build, <appPath>/bootstrap/cache for an unsecure one. Probing
         // bootstrapCache unconditionally would never trip the gate in an
         // unsecure build (RFA's shipping shape), paying the full optimize.
         ->toContain("const rfaCacheDir = runningSecureBuild() ? bootstrapCache : join(getAppPath(), 'bootstrap', 'cache')")
+        // The config cache is probed too: skipping config:cache on warm launches
+        // is only safe while a persisted config.php is present to fall back on.
+        ->toContain("existsSync(join(rfaCacheDir, 'config.php'))")
         ->toContain("existsSync(join(rfaCacheDir, 'routes-v7.php'))")
         ->toContain("existsSync(join(rfaCacheDir, 'events.php'))");
 });
@@ -146,16 +151,21 @@ test('warms the pre-flight artisan calls with a persistent opcache file cache', 
     expect(substr_count($content, '[rfa opcache] reuse compiled opcode'))->toBe(2);
 });
 
-test('the unconditional every-launch optimize call is gone after patching', function () {
+test('the cache step only runs behind the version gate after patching', function () {
     $path = tempServer(stockServer());
 
     patchNativeServerOptimize($path);
     $content = file_get_contents($path);
 
-    // The stock build always ran the full `optimize`; after patching the only
-    // unconditional command is the version-gated choice, never a bare optimize.
-    expect($content)->not->toContain("callPhpSync(['artisan', 'optimize']");
-    expect($content)->toContain("callPhpSync(['artisan', rfaCommand]");
+    // The stock build ran `optimize` unconditionally on every launch. After
+    // patching the only `optimize` call lives inside `if (rfaNeedsFullOptimize)`,
+    // and the warm path runs no cache step at all — not even config:cache (which
+    // the previous patch revision still paid every launch).
+    expect($content)
+        ->toContain('if (rfaNeedsFullOptimize) {')
+        ->toContain("callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings)")
+        ->not->toContain("'artisan', 'config:cache'")
+        ->not->toContain('rfaCommand');
 });
 
 // -- Idempotency --
