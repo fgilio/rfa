@@ -23,6 +23,15 @@ final readonly class ResolveDivergenceStateAction
     /**
      * @param  Closure(): bool  $hasPersistedComments
      * @param  Closure(): int  $persistedCommentCount
+     * @param  bool  $isInitialResolve  True on the first resolve after mount (a
+     *                                  fresh open, e.g. the `rfa` CLI deep-link).
+     *                                  There is no in-progress review to protect
+     *                                  yet, so a stored target that no longer
+     *                                  exists auto-follows HEAD's checked-out
+     *                                  branch instead of surfacing the blocking
+     *                                  missing-target banner. Poll ticks pass
+     *                                  false so a branch vanishing mid-review
+     *                                  still surfaces the banner.
      */
     public function handle(
         CurrentHeadResult $head,
@@ -31,6 +40,7 @@ final readonly class ResolveDivergenceStateAction
         ?string $dismissedAtBranch,
         Closure $hasPersistedComments,
         Closure $persistedCommentCount,
+        bool $isInitialResolve = false,
     ): DivergenceDecision {
         // Sentinel: GetCurrentHeadAction returns sha='' when git fails transiently
         // (e.g. mid-rebase). Leave state untouched and retry next tick.
@@ -55,6 +65,13 @@ final readonly class ResolveDivergenceStateAction
         if ($target !== '' && $head->targetExists === false) {
             if ($dismissedAtBranch === $head->branch) {
                 return DivergenceDecision::aligned();
+            }
+
+            // Fresh open: the stored target is just stale state from a prior
+            // session, and the gone branch can't be reviewed anyway. Land the
+            // user on the branch they have checked out rather than nagging.
+            if ($isInitialResolve) {
+                return DivergenceDecision::autoFollow((string) $head->branch);
             }
 
             return DivergenceDecision::missingTarget($target, (string) $head->branch, $head->sha);
