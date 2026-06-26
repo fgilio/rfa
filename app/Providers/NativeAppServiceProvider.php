@@ -340,6 +340,16 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             return;
         }
 
+        // A packaged build is the one NativePHP has already run
+        // `php artisan optimize` (cached config) and `migrate --force` against
+        // at launch, so this scan is pure redundant work there. PHP's built-in
+        // server re-bootstraps Laravel on every request, so without this guard
+        // the shipped app re-runs the migration scan on each one. Only the
+        // un-optimized dev runtime (`native:run`) leaves the config uncached.
+        if (app()->configurationIsCached()) {
+            return;
+        }
+
         if (self::$nativeDevelopmentDatabaseChecked) {
             return;
         }
@@ -372,6 +382,17 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     private function clearCompiledViewsForDev(): void
     {
         if (! config('app.debug')) {
+            return;
+        }
+
+        // A packaged build runs `php artisan optimize` at launch, compiling
+        // every Blade view up front. PHP's built-in server re-bootstraps
+        // Laravel on every request, so re-clearing those freshly compiled
+        // views here would force a full recompile on each navigation — the
+        // single biggest cold-start and "feels sluggish" cost. The cached
+        // configuration is what distinguishes the optimized/packaged runtime
+        // from `native:run`, where clearing still keeps Blade edits visible.
+        if (app()->configurationIsCached()) {
             return;
         }
 
