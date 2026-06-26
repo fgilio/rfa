@@ -50,6 +50,25 @@ test('loads typed changeset using existing file entries', function () {
         ->and($changeset->filesToArray()[0])->toHaveKeys(['id', 'path', 'status', 'additions', 'deletions', 'isBinary', 'isUntracked']);
 });
 
+test('returns the changeset files folders-first', function () {
+    // `z/` sorts after the root file `a.txt` in git's flat path order, so a
+    // folders-first result (directory contents first, nested folders before
+    // loose files) proves changeset() applies FilePathSorter, not git's order.
+    File::makeDirectory($this->tmpDir.'/z/c', recursive: true);
+    File::put($this->tmpDir.'/a.txt', "a\n");
+    File::put($this->tmpDir.'/z/b.txt', "b\n");
+    File::put($this->tmpDir.'/z/c/d.txt', "d\n");
+
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class));
+    $paths = collect($action->changeset($this->tmpDir)->files)->map(fn ($file) => $file->path)->all();
+
+    expect($paths)->toBe([
+        'z/c/d.txt',
+        'z/b.txt',
+        'a.txt',
+    ]);
+});
+
 test('clears cache by default', function () {
     File::put($this->tmpDir.'/file.txt', "changed\n");
 

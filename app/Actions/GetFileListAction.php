@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
+use App\DTOs\FileListEntry;
 use App\DTOs\ReviewChangeset;
 use App\Models\Project;
 use App\Services\ExternalFilesService;
 use App\Services\GitDiffService;
 use App\Support\DiffCacheKey;
+use App\Support\FilePathSorter;
 
 final readonly class GetFileListAction
 {
@@ -59,6 +61,8 @@ final readonly class GetFileListAction
                 ];
             }
         }
+
+        usort($files, fn (FileListEntry $a, FileListEntry $b): int => FilePathSorter::compare($a->path, $b->path));
 
         return new ReviewChangeset(
             repoPath: $repoPath,
