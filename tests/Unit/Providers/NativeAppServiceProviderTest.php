@@ -72,6 +72,32 @@ test('dev compiled view cleanup skips deletion in testing environment', function
     File::delete($sentinel);
 });
 
+// -- phpIni / opcache --
+
+test('phpIni enables opcache with a persistent file cache for the bundled PHP', function () {
+    $ini = (new NativeAppServiceProvider)->phpIni();
+
+    expect($ini)
+        ->toHaveKey('memory_limit', '512M')
+        ->toHaveKey('opcache.enable', 1)
+        ->toHaveKey('opcache.enable_cli', 1)
+        // Keep correctness in dev and across updates: recompile changed files.
+        ->toHaveKey('opcache.validate_timestamps', 1)
+        ->toHaveKey('opcache.file_cache', storage_path('framework/opcache'));
+});
+
+test('phpIni ensures the opcache file-cache directory exists', function () {
+    $cacheDir = storage_path('framework/opcache');
+
+    if (is_dir($cacheDir)) {
+        File::deleteDirectory($cacheDir);
+    }
+
+    (new NativeAppServiceProvider)->phpIni();
+
+    expect(is_dir($cacheDir))->toBeTrue();
+});
+
 // -- Menu structure --
 
 test('the View submenu declares the review menu items with their accelerators', function () {

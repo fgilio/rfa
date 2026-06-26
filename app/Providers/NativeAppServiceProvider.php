@@ -331,6 +331,48 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     {
         return [
             'memory_limit' => '512M',
+            ...$this->opcacheIniSettings(),
+        ];
+    }
+
+    /**
+     * Opcode caching for the bundled PHP.
+     *
+     * NativePHP serves the app through PHP's built-in server (CLI SAPI, where
+     * opcache is off by default) and shells out to short-lived `php artisan`
+     * processes during launch (e.g. `config:cache`). Without opcache each of
+     * those recompiles the whole framework on every boot.
+     *
+     * `enable` + `enable_cli` turn it on for both. `file_cache` persists the
+     * compiled opcode to disk so every short-lived process — and the first
+     * request after launch — reuses opcode produced by earlier runs instead of
+     * recompiling (measured ~210ms -> ~120ms per artisan boot here). The
+     * directory lives under the (userData) storage path and survives across
+     * launches; `validate_timestamps` keeps it correct in dev (`native:run`)
+     * and across updates by recompiling only the files whose mtime changed.
+     *
+     * opcache must be able to write its cache directory, and it does not create
+     * one itself, so ensure it exists. If the bundled PHP lacks opcache the
+     * `-d opcache.*` flags are simply ignored.
+     *
+     * @return array<string, string|int>
+     */
+    private function opcacheIniSettings(): array
+    {
+        $cacheDir = storage_path('framework/opcache');
+
+        if (! is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+
+        return [
+            'opcache.enable' => 1,
+            'opcache.enable_cli' => 1,
+            'opcache.validate_timestamps' => 1,
+            'opcache.revalidate_freq' => 0,
+            'opcache.memory_consumption' => 192,
+            'opcache.max_accelerated_files' => 30000,
+            'opcache.file_cache' => $cacheDir,
         ];
     }
 
