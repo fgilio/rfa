@@ -190,6 +190,119 @@ test('preserves the surrounding server code', function () {
         ->toContain("store.set('optimized_version', app.getVersion())");
 });
 
+// -- Pre-flight cache (dist/index.js) --
+
+function stockIndex(): string
+{
+    return <<<'JS'
+import electronUpdater from 'electron-updater';
+class App {
+    loadConfig() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let config = {};
+            try {
+                const result = yield retrieveNativePHPConfig();
+                config = JSON.parse(result.stdout);
+            }
+            catch (error) {
+                console.error(error);
+            }
+            return config;
+        });
+    }
+    loadPhpIni() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let config = {};
+            try {
+                const result = yield retrievePhpIniSettings();
+                config = JSON.parse(result.stdout);
+            }
+            catch (error) {
+                console.error(error);
+            }
+            return config;
+        });
+    }
+}
+JS;
+}
+
+test('pre-flight: returns not_found when index file does not exist', function () {
+    expect(patchNativePreflightCache(tempServer()))->toBe('not_found');
+});
+
+test('pre-flight: returns block_not_found when the load methods are missing', function () {
+    $path = tempServer('const x = 1;');
+
+    expect(patchNativePreflightCache($path))->toBe('block_not_found');
+    expect(file_get_contents($path))->toBe('const x = 1;');
+});
+
+test('pre-flight: caches native:config and native:php-ini per app version, fail-open', function () {
+    $path = tempServer(stockIndex());
+
+    expect(patchNativePreflightCache($path))->toBe('patched');
+
+    $content = file_get_contents($path);
+
+    expect($content)
+        ->toContain('import Store from "electron-store"; // [rfa preflight cache]')
+        ->toContain("const rfaKey = 'preflight_config_' + app.getVersion();")
+        ->toContain("const rfaKey = 'preflight_phpini_' + app.getVersion();")
+        // Gated off in development so a dev always sees fresh config.
+        ->toContain("process.env.NODE_ENV !== 'development'")
+        // Fail open: the live retrieve* call is still present as the fallback.
+        ->toContain('yield retrieveNativePHPConfig()')
+        ->toContain('yield retrievePhpIniSettings()');
+
+    // The Store import is added exactly once.
+    expect(substr_count($content, 'import Store from "electron-store"; // [rfa preflight cache]'))->toBe(1);
+});
+
+test('pre-flight: returns block_not_found when only one method can be patched (partial)', function () {
+    // Only loadConfig present — loadPhpIni reshaped by a NativePHP bump. Must not
+    // report success with the pre-flight cache half-applied.
+    $configOnly = <<<'JS'
+import electronUpdater from 'electron-updater';
+    loadConfig() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let config = {};
+            try {
+                const result = yield retrieveNativePHPConfig();
+                config = JSON.parse(result.stdout);
+            }
+            catch (error) {
+                console.error(error);
+            }
+            return config;
+        });
+    }
+JS;
+    $path = tempServer($configOnly);
+
+    expect(patchNativePreflightCache($path))->toBe('block_not_found');
+    expect(file_get_contents($path))->toBe($configOnly);
+});
+
+test('pre-flight: is idempotent', function () {
+    $path = tempServer(stockIndex());
+
+    patchNativePreflightCache($path);
+    $first = file_get_contents($path);
+
+    expect(patchNativePreflightCache($path))->toBe('already_patched');
+    expect(file_get_contents($path))->toBe($first);
+});
+
+test('the vendored NativePHP main bootstrap carries the pre-flight cache', function () {
+    $indexPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js';
+
+    expect(file_get_contents($indexPath))
+        ->toContain("'preflight_config_'")
+        ->toContain("'preflight_phpini_'")
+        ->toContain('import Store from "electron-store"; // [rfa preflight cache]');
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
+
 // -- Applied to the real vendored file --
 
 test('the vendored NativePHP server carries the optimize patch', function () {

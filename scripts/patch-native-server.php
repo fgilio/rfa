@@ -141,11 +141,173 @@ JS;
     return 'patched';
 }
 
+/**
+ * Cache the per-launch pre-flight PHP boots in the compiled main bootstrap
+ * (`dist/index.js`).
+ *
+ * Before the window opens, NativePHP shells out to `native:config`
+ * (= config('nativephp')) and `native:php-ini` (= phpIni()), each a full
+ * framework boot. Both outputs are static per app version — the per-launch
+ * secret and API port live in the separate nativephp-internal config, read
+ * directly by the PHP client, never in these outputs — so cache them in the
+ * Electron store keyed by app version and reuse them on same-version launches,
+ * skipping two PHP boots (~240ms warm here). Fail open: any cache miss, parse,
+ * or store error falls through to the original live call, so the worst case is
+ * exactly today's behaviour. Disabled under NODE_ENV=development so a developer
+ * always sees fresh config.
+ *
+ * @return 'patched'|'already_patched'|'block_not_found'|'not_found'
+ */
+function patchNativePreflightCache(string $indexPath): string
+{
+    if (! file_exists($indexPath)) {
+        return 'not_found';
+    }
+
+    $content = file_get_contents($indexPath);
+
+    $importFind = "import electronUpdater from 'electron-updater';";
+    $importMarker = 'import Store from "electron-store"; // [rfa preflight cache]';
+    $importReplace = $importFind."\n".$importMarker;
+
+    $configFind = <<<'JS'
+    loadConfig() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let config = {};
+            try {
+                const result = yield retrieveNativePHPConfig();
+                config = JSON.parse(result.stdout);
+            }
+            catch (error) {
+                console.error(error);
+            }
+            return config;
+        });
+    }
+JS;
+
+    $configReplace = <<<'JS'
+    loadConfig() {
+        return __awaiter(this, void 0, void 0, function* () {
+            // [rfa preflight cache] native:config is static per app version; reuse
+            // a cached copy to skip a full PHP boot. Fail open on any error.
+            const rfaKey = 'preflight_config_' + app.getVersion();
+            if (process.env.NODE_ENV !== 'development') {
+                try {
+                    const rfaCached = new Store({ name: 'nativephp' }).get(rfaKey);
+                    if (rfaCached) {
+                        return rfaCached;
+                    }
+                }
+                catch (rfaError) { }
+            }
+            let config = {};
+            try {
+                const result = yield retrieveNativePHPConfig();
+                config = JSON.parse(result.stdout);
+                if (process.env.NODE_ENV !== 'development') {
+                    try {
+                        new Store({ name: 'nativephp' }).set(rfaKey, config);
+                    }
+                    catch (rfaError) { }
+                }
+            }
+            catch (error) {
+                console.error(error);
+            }
+            return config;
+        });
+    }
+JS;
+
+    $phpIniFind = <<<'JS'
+    loadPhpIni() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let config = {};
+            try {
+                const result = yield retrievePhpIniSettings();
+                config = JSON.parse(result.stdout);
+            }
+            catch (error) {
+                console.error(error);
+            }
+            return config;
+        });
+    }
+JS;
+
+    $phpIniReplace = <<<'JS'
+    loadPhpIni() {
+        return __awaiter(this, void 0, void 0, function* () {
+            // [rfa preflight cache] native:php-ini is static per app version; reuse
+            // a cached copy to skip a full PHP boot. Fail open on any error.
+            const rfaKey = 'preflight_phpini_' + app.getVersion();
+            if (process.env.NODE_ENV !== 'development') {
+                try {
+                    const rfaCached = new Store({ name: 'nativephp' }).get(rfaKey);
+                    if (rfaCached) {
+                        return rfaCached;
+                    }
+                }
+                catch (rfaError) { }
+            }
+            let config = {};
+            try {
+                const result = yield retrievePhpIniSettings();
+                config = JSON.parse(result.stdout);
+                if (process.env.NODE_ENV !== 'development') {
+                    try {
+                        new Store({ name: 'nativephp' }).set(rfaKey, config);
+                    }
+                    catch (rfaError) { }
+                }
+            }
+            catch (error) {
+                console.error(error);
+            }
+            return config;
+        });
+    }
+JS;
+
+    $patched = $content;
+
+    if (str_contains($patched, $importFind) && ! str_contains($patched, $importMarker)) {
+        $patched = str_replace($importFind, $importReplace, $patched);
+    }
+
+    if (str_contains($patched, $configFind)) {
+        $patched = str_replace($configFind, $configReplace, $patched);
+    }
+
+    if (str_contains($patched, $phpIniFind)) {
+        $patched = str_replace($phpIniFind, $phpIniReplace, $patched);
+    }
+
+    // Only success when both methods and the Store import are present, so a
+    // NativePHP bump that reshapes one method can't half-apply silently.
+    $fullyPatched = str_contains($patched, $importMarker)
+        && str_contains($patched, "'preflight_config_'")
+        && str_contains($patched, "'preflight_phpini_'");
+
+    if (! $fullyPatched) {
+        return 'block_not_found';
+    }
+
+    if ($patched === $content) {
+        return 'already_patched';
+    }
+
+    file_put_contents($indexPath, $patched);
+
+    return 'patched';
+}
+
 // Run when executed directly (not when required by tests)
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
-    $serverPath = __DIR__.'/../vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/php.js';
+    $electronPlugin = __DIR__.'/../vendor/nativephp/desktop/resources/electron/electron-plugin/dist';
 
-    $result = patchNativeServerOptimize($serverPath);
+    $result = patchNativeServerOptimize($electronPlugin.'/server/php.js');
 
     match ($result) {
         'patched' => print "  NativePHP server patched: optimize once per version + opcache warm boots.\n",
@@ -154,9 +316,18 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
         'not_found' => null,
     };
 
-    // Fail the composer hook when the file exists but no longer matches: a
-    // NativePHP bump must not silently ship without the startup optimization.
-    if ($result === 'block_not_found') {
+    $preflightResult = patchNativePreflightCache($electronPlugin.'/index.js');
+
+    match ($preflightResult) {
+        'patched' => print "  NativePHP pre-flight cached: native:config / native:php-ini reused per version.\n",
+        'already_patched' => print "  NativePHP pre-flight already cached.\n",
+        'block_not_found' => fwrite(STDERR, "  ERROR: NativePHP main bootstrap changed shape — pre-flight cache NOT applied. Update scripts/patch-native-server.php to match the new dist/index.js.\n"),
+        'not_found' => null,
+    };
+
+    // Fail the composer hook when a file exists but no longer matches: a
+    // NativePHP bump must not silently ship without the startup optimizations.
+    if ($result === 'block_not_found' || $preflightResult === 'block_not_found') {
         exit(1);
     }
 }
