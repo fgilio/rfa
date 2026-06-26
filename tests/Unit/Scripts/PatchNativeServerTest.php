@@ -86,6 +86,29 @@ test('returns block_not_found when the optimize block is missing', function () {
     expect(file_get_contents($path))->toBe('const something = "no optimize block here";');
 });
 
+test('returns block_not_found when only some edits can apply (partial patch)', function () {
+    // A file where the optimize block exists but the opcache anchors do not —
+    // e.g. a NativePHP bump reshaped the mkdir / pre-flight blocks. The optimize
+    // edit alone must NOT be reported as already_patched, or the opcache warm-up
+    // would silently vanish. The file must also be left untouched.
+    $optimizeOnly = <<<'JS'
+        if (shouldOptimize(store)) {
+            console.log('Caching view and routes...');
+            let result = callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings);
+            if (result.status !== 0) {
+                console.error('Failed to cache view and routes:', result.stderr.toString());
+            }
+            else {
+                store.set('optimized_version', app.getVersion());
+            }
+        }
+JS;
+    $path = tempServer($optimizeOnly);
+
+    expect(patchNativeServerOptimize($path))->toBe('block_not_found');
+    expect(file_get_contents($path))->toBe($optimizeOnly);
+});
+
 // -- Fresh patch --
 
 test('patches the optimize block and returns patched', function () {

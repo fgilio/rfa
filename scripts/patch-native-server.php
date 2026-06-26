@@ -105,37 +105,40 @@ JS;
         return yield promisify(execFile)(state.php, command, phpOptions);
 JS;
 
-    $applied = 0;
+    $patched = $content;
 
-    if (str_contains($content, $optimizeFind)) {
-        $content = str_replace($optimizeFind, $optimizeReplace, $content);
-        $applied++;
+    if (str_contains($patched, $optimizeFind)) {
+        $patched = str_replace($optimizeFind, $optimizeReplace, $patched);
     }
 
-    if (str_contains($content, $mkdirFind) && ! str_contains($content, "'framework', 'opcache'")) {
-        $content = str_replace($mkdirFind, $mkdirReplace, $content);
-        $applied++;
+    if (str_contains($patched, $mkdirFind) && ! str_contains($patched, "'framework', 'opcache'")) {
+        $patched = str_replace($mkdirFind, $mkdirReplace, $patched);
     }
 
-    // Both pre-flight functions share this exact tail; replace_all handles both.
-    if (str_contains($content, $preflightFind)) {
-        $content = str_replace($preflightFind, $preflightReplace, $content);
-        $applied++;
+    // Both pre-flight functions share this exact tail; str_replace handles both.
+    if (str_contains($patched, $preflightFind)) {
+        $patched = str_replace($preflightFind, $preflightReplace, $patched);
     }
 
-    if ($applied > 0) {
-        file_put_contents($serverPath, $content);
+    // Only report success when every edit is present in the result. Checking the
+    // optimize marker alone would mis-report a half-applied file (e.g. NativePHP
+    // changed one block's shape) as already_patched, silently dropping the
+    // opcache optimization. The pre-flight edit lands in both retrieve* helpers.
+    $fullyPatched = str_contains($patched, 'rfaNeedsFullOptimize')
+        && str_contains($patched, "'framework', 'opcache'")
+        && substr_count($patched, '[rfa opcache] reuse compiled opcode') === 2;
 
-        return 'patched';
+    if (! $fullyPatched) {
+        return 'block_not_found';
     }
 
-    // Nothing left to apply: either fully patched already, or the file no longer
-    // matches any expected block (NativePHP changed shape).
-    if (str_contains($content, 'rfaNeedsFullOptimize')) {
+    if ($patched === $content) {
         return 'already_patched';
     }
 
-    return 'block_not_found';
+    file_put_contents($serverPath, $patched);
+
+    return 'patched';
 }
 
 // Run when executed directly (not when required by tests)
@@ -147,7 +150,13 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
     match ($result) {
         'patched' => print "  NativePHP server patched: optimize once per version + opcache warm boots.\n",
         'already_patched' => print "  NativePHP server already patched (optimize + opcache).\n",
-        'block_not_found' => fwrite(STDERR, "  WARNING: NativePHP server blocks not found. Patch skipped.\n"),
+        'block_not_found' => fwrite(STDERR, "  ERROR: NativePHP server bootstrap changed shape — startup patch NOT applied. Update scripts/patch-native-server.php to match the new dist/server/php.js.\n"),
         'not_found' => null,
     };
+
+    // Fail the composer hook when the file exists but no longer matches: a
+    // NativePHP bump must not silently ship without the startup optimization.
+    if ($result === 'block_not_found') {
+        exit(1);
+    }
 }

@@ -33,8 +33,9 @@ runs:
         restore-keys: composer-${{ runner.os }}-php${{ inputs.php-version }}-
     # Restoring vendor/ + the post-autoload-dump artefacts (packages.php /
     # services.php) lets us skip `composer install` entirely on a cache hit.
-    # Key includes patch-native-preload.php because that script runs as a
-    # post-autoload-dump hook and mutates files inside vendor/.
+    # Key includes the patch-native-*.php scripts because they run as
+    # post-autoload-dump hooks and mutate files inside vendor/ — if one changes
+    # without a Composer change, the cache must miss so the new patch is applied.
     - name: Cache vendor + bootstrap/cache
       id: vendor-cache
       uses: actions/cache@v5
@@ -43,7 +44,7 @@ runs:
           vendor
           bootstrap/cache/packages.php
           bootstrap/cache/services.php
-        key: vendor-${{ runner.os }}-php${{ inputs.php-version }}-${{ hashFiles('composer.lock', 'composer.json', 'scripts/patch-native-preload.php') }}
+        key: vendor-${{ runner.os }}-php${{ inputs.php-version }}-${{ hashFiles('composer.lock', 'composer.json', 'scripts/patch-native-preload.php', 'scripts/patch-native-server.php') }}
     - name: Install Composer dependencies
       if: steps.vendor-cache.outputs.cache-hit != 'true'
       shell: bash
