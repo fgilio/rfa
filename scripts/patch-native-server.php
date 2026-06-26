@@ -325,6 +325,167 @@ JS;
     return 'patched';
 }
 
+/**
+ * Show an early splash window in the compiled main bootstrap (`dist/index.js`).
+ *
+ * NativePHP creates no window until the very end of the launch chain: Electron
+ * boots, the PHP server starts, the `_native/api/booted` round-trip fires,
+ * NativeAppServiceProvider::boot() calls Window::open, Electron then creates the
+ * real BrowserWindow (show:false) and only `.show()`s it on `did-finish-load`.
+ * So the user stares at a blank screen for the entire Electron-boot + PHP-boot +
+ * first-render duration — the screen is dark until everything is ready.
+ *
+ * This opens a lightweight, frameless splash the instant `app.whenReady()`
+ * resolves — before the PHP server boots — giving immediate visual feedback, and
+ * hands off seamlessly: the splash closes the moment the real window finishes
+ * loading (the first non-splash window created, via Window::open). The splash is
+ * a self-contained `data:` URL so there is nothing extra to bundle, and the
+ * whole thing is fail-open — any error just means no splash, i.e. today's
+ * behaviour. On macOS (RFA's only desktop target) closing the splash while it is
+ * the only window does not quit the app: `window-all-closed` is darwin-guarded.
+ *
+ * @return 'patched'|'already_patched'|'block_not_found'|'not_found'
+ */
+function patchNativeSplashWindow(string $indexPath): string
+{
+    if (! file_exists($indexPath)) {
+        return 'not_found';
+    }
+
+    $content = file_get_contents($indexPath);
+
+    // 1. Pull BrowserWindow into the electron import so the splash can create one.
+    $importFind = 'import { app, session, powerMonitor } from "electron";';
+    $importReplace = 'import { app, session, powerMonitor, BrowserWindow } from "electron";';
+
+    // 2. The splash markup, embedded as a module-level const (no asset to ship).
+    $htmlAnchor = 'const { autoUpdater } = electronUpdater;';
+    $htmlConst = <<<'JS'
+// [rfa splash] Self-contained splash markup — inline styles only, no external
+// resources, so it loads instantly from a data: URL with nothing to bundle.
+const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#0d1117;overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e6edf3;-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid rgba(230,237,243,.18);border-top-color:#58a6ff;border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
+JS;
+
+    // 3. The splash lifecycle methods, injected as class members.
+    $methodsAnchor = '    bootstrapApp(app) {';
+    $methods = <<<'JS'
+    rfaShowSplash() {
+        // [rfa splash] Open a lightweight window the instant Electron is ready —
+        // before the PHP server boots and the real window is created — so the
+        // launch shows immediate feedback instead of a blank screen. Fail-open:
+        // any error just leaves no splash (today's behaviour).
+        try {
+            const splash = new BrowserWindow({
+                width: 480,
+                height: 320,
+                frame: false,
+                resizable: false,
+                movable: false,
+                center: true,
+                show: false,
+                skipTaskbar: true,
+                backgroundColor: '#0d1117',
+                title: 'rfa',
+            });
+            this.rfaSplash = splash;
+            splash.once('ready-to-show', () => {
+                try {
+                    if (!splash.isDestroyed()) {
+                        splash.show();
+                    }
+                }
+                catch (rfaError) { }
+            });
+            splash.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(RFA_SPLASH_HTML));
+            // Seamless handoff: the first non-splash window created is the main
+            // window (opened via Window::open once PHP has booted). Close the
+            // splash on that window's `show` — which NativePHP fires only after
+            // `did-finish-load` — so the real window is painted before the splash
+            // disappears, leaving no blank frame in between.
+            const rfaOnCreated = (_, window) => {
+                if (window === this.rfaSplash) {
+                    return;
+                }
+                app.removeListener('browser-window-created', rfaOnCreated);
+                window.once('show', () => this.rfaCloseSplash());
+            };
+            app.on('browser-window-created', rfaOnCreated);
+            // Safety net: never leave a spinner stuck if no window ever opens.
+            this.rfaSplashTimer = setTimeout(() => this.rfaCloseSplash(), 60000);
+        }
+        catch (rfaError) {
+            this.rfaSplash = null;
+        }
+    }
+    rfaCloseSplash() {
+        try {
+            if (this.rfaSplashTimer) {
+                clearTimeout(this.rfaSplashTimer);
+                this.rfaSplashTimer = null;
+            }
+        }
+        catch (rfaError) { }
+        const splash = this.rfaSplash;
+        this.rfaSplash = null;
+        try {
+            if (splash && !splash.isDestroyed()) {
+                splash.close();
+            }
+        }
+        catch (rfaError) { }
+    }
+    bootstrapApp(app) {
+JS;
+
+    // 4. Fire the splash the instant Electron is ready, before any PHP boot.
+    $callFind = <<<'JS'
+            yield app.whenReady();
+            const config = yield this.loadConfig();
+JS;
+    $callReplace = <<<'JS'
+            yield app.whenReady();
+            this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots
+            const config = yield this.loadConfig();
+JS;
+
+    $patched = $content;
+
+    if (str_contains($patched, $importFind) && ! str_contains($patched, 'powerMonitor, BrowserWindow')) {
+        $patched = str_replace($importFind, $importReplace, $patched);
+    }
+
+    if (str_contains($patched, $htmlAnchor) && ! str_contains($patched, 'const RFA_SPLASH_HTML')) {
+        $patched = str_replace($htmlAnchor, $htmlAnchor."\n".$htmlConst, $patched);
+    }
+
+    if (str_contains($patched, $methodsAnchor) && ! str_contains($patched, 'rfaShowSplash() {')) {
+        $patched = str_replace($methodsAnchor, $methods, $patched);
+    }
+
+    if (str_contains($patched, $callFind) && ! str_contains($patched, 'this.rfaShowSplash()')) {
+        $patched = str_replace($callFind, $callReplace, $patched);
+    }
+
+    // Only success when every edit is present, so a NativePHP bump that reshapes
+    // one anchor can't half-apply (e.g. a splash that is created but never shown).
+    $fullyPatched = str_contains($patched, 'powerMonitor, BrowserWindow')
+        && str_contains($patched, 'const RFA_SPLASH_HTML')
+        && str_contains($patched, 'rfaShowSplash() {')
+        && str_contains($patched, 'this.rfaShowSplash()');
+
+    if (! $fullyPatched) {
+        return 'block_not_found';
+    }
+
+    if ($patched === $content) {
+        return 'already_patched';
+    }
+
+    file_put_contents($indexPath, $patched);
+
+    return 'patched';
+}
+
 // Run when executed directly (not when required by tests)
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
     $electronPlugin = __DIR__.'/../vendor/nativephp/desktop/resources/electron/electron-plugin/dist';
@@ -351,13 +512,22 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
         'not_found' => null,
     };
 
+    $splashResult = patchNativeSplashWindow($electronPlugin.'/index.js');
+
+    match ($splashResult) {
+        'patched' => print "  NativePHP splash window added: instant feedback before PHP boots.\n",
+        'already_patched' => print "  NativePHP splash window already present.\n",
+        'block_not_found' => fwrite(STDERR, "  ERROR: NativePHP main bootstrap changed shape — splash window NOT applied. Update scripts/patch-native-server.php to match the new dist/index.js.\n"),
+        'not_found' => null,
+    };
+
     // Fail the composer hook only when a vendored file is present but no longer
     // matches (block_not_found): a NativePHP bump that reshaped the bootstrap must
     // not silently ship without the startup optimizations. `not_found` is NOT
     // fatal — the release build re-runs this hook via `composer install --no-dev`
     // on a pruned copy where the dist legitimately isn't at this path, and that
     // must not break the build (the bundled dist was already patched on install).
-    if ($result === 'block_not_found' || $preflightResult === 'block_not_found') {
+    if ($result === 'block_not_found' || $preflightResult === 'block_not_found' || $splashResult === 'block_not_found') {
         exit(1);
     }
 }

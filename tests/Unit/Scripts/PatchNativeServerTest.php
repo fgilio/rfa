@@ -321,6 +321,113 @@ test('the vendored NativePHP main bootstrap carries the pre-flight cache', funct
         ->toContain('import Store from "electron-store"; // [rfa preflight cache]');
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
 
+// -- Splash window (dist/index.js) --
+
+function stockIndexForSplash(): string
+{
+    return <<<'JS'
+import { app, session, powerMonitor } from "electron";
+import electronUpdater from 'electron-updater';
+const { autoUpdater } = electronUpdater;
+class NativePHP {
+    registerListeners(app) {
+        app.on("browser-window-created", (_, window) => {
+            optimizer.watchWindowShortcuts(window);
+        });
+    }
+    bootstrapApp(app) {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield app.whenReady();
+            const config = yield this.loadConfig();
+            yield this.startPhpApp();
+            yield notifyLaravel("booted");
+        });
+    }
+}
+JS;
+}
+
+test('splash: returns not_found when index file does not exist', function () {
+    expect(patchNativeSplashWindow(tempServer()))->toBe('not_found');
+});
+
+test('splash: returns block_not_found when the bootstrap anchors are missing', function () {
+    $path = tempServer('const x = 1;');
+
+    expect(patchNativeSplashWindow($path))->toBe('block_not_found');
+    expect(file_get_contents($path))->toBe('const x = 1;');
+});
+
+test('splash: opens an early window before PHP boots, hands off, and is fail-open', function () {
+    $path = tempServer(stockIndexForSplash());
+
+    expect(patchNativeSplashWindow($path))->toBe('patched');
+
+    $content = file_get_contents($path);
+
+    expect($content)
+        // BrowserWindow is pulled into the electron import so the splash can open.
+        ->toContain('import { app, session, powerMonitor, BrowserWindow } from "electron";')
+        // The markup is embedded as a self-contained data URL — nothing to bundle.
+        ->toContain('const RFA_SPLASH_HTML')
+        ->toContain("loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(RFA_SPLASH_HTML))")
+        // Fired the instant Electron is ready, before any PHP boot.
+        ->toContain('this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots')
+        // Seamless handoff: the splash closes once the real window is shown.
+        ->toContain("window.once('show', () => this.rfaCloseSplash())")
+        // Fail-open: splash creation is wrapped so any error just means no splash.
+        ->toContain('catch (rfaError)');
+
+    // The splash fires before the first PHP boot (loadConfig), not after.
+    expect(strpos($content, 'this.rfaShowSplash()'))
+        ->toBeLessThan(strpos($content, 'const config = yield this.loadConfig()'));
+
+    // Each edit lands exactly once.
+    expect(substr_count($content, 'powerMonitor, BrowserWindow'))->toBe(1)
+        ->and(substr_count($content, 'rfaShowSplash() {'))->toBe(1)
+        ->and(substr_count($content, 'const RFA_SPLASH_HTML'))->toBe(1);
+});
+
+test('splash: preserves the existing browser-window-created listener', function () {
+    $path = tempServer(stockIndexForSplash());
+
+    patchNativeSplashWindow($path);
+
+    // The patch adds its own handoff listener without clobbering NativePHP's.
+    expect(file_get_contents($path))
+        ->toContain('optimizer.watchWindowShortcuts(window)');
+});
+
+test('splash: is idempotent', function () {
+    $path = tempServer(stockIndexForSplash());
+
+    patchNativeSplashWindow($path);
+    $first = file_get_contents($path);
+
+    expect(patchNativeSplashWindow($path))->toBe('already_patched');
+    expect(file_get_contents($path))->toBe($first);
+});
+
+test('splash: returns block_not_found when only the import anchor is present (partial)', function () {
+    // A NativePHP bump that reshaped the class but left the electron import. The
+    // import edit alone must not report success with the splash half-applied, and
+    // the file must be left untouched.
+    $importOnly = 'import { app, session, powerMonitor } from "electron";';
+    $path = tempServer($importOnly);
+
+    expect(patchNativeSplashWindow($path))->toBe('block_not_found');
+    expect(file_get_contents($path))->toBe($importOnly);
+});
+
+test('the vendored NativePHP main bootstrap carries the splash window', function () {
+    $indexPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js';
+
+    expect(file_get_contents($indexPath))
+        ->toContain('powerMonitor, BrowserWindow')
+        ->toContain('const RFA_SPLASH_HTML')
+        ->toContain('this.rfaShowSplash()');
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
+
 // -- Applied to the real vendored file --
 
 test('the vendored NativePHP server carries the optimize patch', function () {
