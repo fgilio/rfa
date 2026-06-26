@@ -327,7 +327,7 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
         'patched' => print "  NativePHP server patched: optimize once per version + opcache warm boots.\n",
         'already_patched' => print "  NativePHP server already patched (optimize + opcache).\n",
         'block_not_found' => fwrite(STDERR, "  ERROR: NativePHP server bootstrap changed shape — startup patch NOT applied. Update scripts/patch-native-server.php to match the new dist/server/php.js.\n"),
-        'not_found' => null,
+        'not_found' => fwrite(STDERR, "  ERROR: NativePHP server bootstrap not found at dist/server/php.js — startup patch NOT applied. The vendored path likely moved in a NativePHP bump; update scripts/patch-native-server.php.\n"),
     };
 
     $preflightResult = patchNativePreflightCache($electronPlugin.'/index.js');
@@ -336,12 +336,16 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
         'patched' => print "  NativePHP pre-flight cached: native:config / native:php-ini reused per version.\n",
         'already_patched' => print "  NativePHP pre-flight already cached.\n",
         'block_not_found' => fwrite(STDERR, "  ERROR: NativePHP main bootstrap changed shape — pre-flight cache NOT applied. Update scripts/patch-native-server.php to match the new dist/index.js.\n"),
-        'not_found' => null,
+        'not_found' => fwrite(STDERR, "  ERROR: NativePHP main bootstrap not found at dist/index.js — pre-flight cache NOT applied. The vendored path likely moved in a NativePHP bump; update scripts/patch-native-server.php.\n"),
     };
 
-    // Fail the composer hook when a file exists but no longer matches: a
-    // NativePHP bump must not silently ship without the startup optimizations.
-    if ($result === 'block_not_found' || $preflightResult === 'block_not_found') {
+    // Fail the composer hook when the patch can't be applied — whether the file
+    // is missing (not_found: vendored path moved / package absent) or present but
+    // reshaped (block_not_found). nativephp/desktop is a `require` dependency, so
+    // these files always exist by the time post-autoload-dump runs; a miss means
+    // a NativePHP bump that must not silently ship without the startup optimizations.
+    if (in_array($result, ['block_not_found', 'not_found'], true)
+        || in_array($preflightResult, ['block_not_found', 'not_found'], true)) {
         exit(1);
     }
 }
