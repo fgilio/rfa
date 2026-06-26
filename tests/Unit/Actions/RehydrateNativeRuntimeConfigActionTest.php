@@ -1,9 +1,18 @@
 <?php
 
 use App\Actions\RehydrateNativeRuntimeConfigAction;
+use Illuminate\Foundation\Bootstrap\RegisterProviders;
 use Tests\TestCase;
 
 uses(TestCase::class);
+
+test('is wired in bootstrap to run before any provider registers', function () {
+    // bootstrap/app.php hooks the rehydration onto beforeBootstrapping(
+    // RegisterProviders) — i.e. after the config loads but before NativePHP's
+    // package provider builds EventWatcher's Client from cached config. Asserting
+    // the listener exists guards that wiring (an app provider would be too late).
+    expect(app('events')->hasListeners('bootstrapping: '.RegisterProviders::class))->toBeTrue();
+});
 
 /**
  * configurationIsCached() returns the bound `config_loaded_from_cache` flag, so

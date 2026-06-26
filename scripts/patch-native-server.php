@@ -98,6 +98,49 @@ JS;
         }
 JS;
 
+    // The optimize block as the PREVIOUS RFA revision left it: a same-version
+    // launch re-ran `config:cache` via an rfaCommand ternary (no config.php
+    // probe). The stock find above no longer matches such a file, so without
+    // this an already-patched vendor copy would keep paying config:cache every
+    // warm launch. Replacing the whole old block upgrades it to the current
+    // skip-entirely shape, byte-identical to a fresh patch.
+    $oldOptimizeFind = <<<'JS'
+        if (shouldOptimize(store)) {
+            // [rfa patch] `php artisan optimize` recompiles every Blade view
+            // (~1s) and previously ran on every launch, blocking the window.
+            // Compiled views persist in userData and self-heal via on-demand
+            // compilation, so the full optimize is only needed when the app
+            // version changes (fresh install / post-update) or the route/event
+            // caches are missing. On same-version launches we re-cache config
+            // alone: NativePHP injects a fresh per-launch API port and secret
+            // that PHP reads through config(), so a reused config cache would
+            // point the PHP server at a stale port and break the native bridge.
+            //
+            // Probe the route/event caches at the directory Laravel actually
+            // writes them to for this build type. NativePHP only redirects
+            // APP_ROUTES_CACHE/APP_EVENTS_CACHE into userData/bootstrap/cache
+            // for a *secure* build; an unsecure build (what `native:build`
+            // produces without a bundle — RFA's shipping shape) leaves them at
+            // <appPath>/bootstrap/cache. Checking bootstrapCache unconditionally
+            // would never find them in an unsecure build, so the gate would trip
+            // every launch and pay the full optimize anyway.
+            const rfaCacheDir = runningSecureBuild() ? bootstrapCache : join(getAppPath(), 'bootstrap', 'cache');
+            const rfaVersionChanged = store.get('optimized_version') !== app.getVersion();
+            const rfaNeedsFullOptimize = rfaVersionChanged
+                || !existsSync(join(rfaCacheDir, 'routes-v7.php'))
+                || !existsSync(join(rfaCacheDir, 'events.php'));
+            const rfaCommand = rfaNeedsFullOptimize ? 'optimize' : 'config:cache';
+            console.log(rfaNeedsFullOptimize ? 'Caching views, routes, and config...' : 'Refreshing config cache...');
+            let result = callPhpSync(['artisan', rfaCommand], phpOptions, phpIniSettings);
+            if (result.status !== 0) {
+                console.error('Failed to cache framework bootstrap:', result.stderr.toString());
+            }
+            else if (rfaNeedsFullOptimize) {
+                store.set('optimized_version', app.getVersion());
+            }
+        }
+JS;
+
     // Create the opcache file-cache directory at module load, before any PHP
     // call runs. opcache will not create it itself, and the pre-flight calls
     // below need it to already exist.
@@ -129,6 +172,13 @@ JS;
         $patched = str_replace($optimizeFind, $optimizeReplace, $patched);
     }
 
+    // Upgrade a file left patched by the previous RFA revision in place. Only one
+    // of these two finds can match (stock OR old-patched), so this never double-
+    // applies; on the current shape neither matches.
+    if (str_contains($patched, $oldOptimizeFind)) {
+        $patched = str_replace($oldOptimizeFind, $optimizeReplace, $patched);
+    }
+
     if (str_contains($patched, $mkdirFind) && ! str_contains($patched, "'framework', 'opcache'")) {
         $patched = str_replace($mkdirFind, $mkdirReplace, $patched);
     }
@@ -138,11 +188,15 @@ JS;
         $patched = str_replace($preflightFind, $preflightReplace, $patched);
     }
 
-    // Only report success when every edit is present in the result. Checking the
-    // optimize marker alone would mis-report a half-applied file (e.g. NativePHP
-    // changed one block's shape) as already_patched, silently dropping the
-    // opcache optimization. The pre-flight edit lands in both retrieve* helpers.
-    $fullyPatched = str_contains($patched, 'rfaNeedsFullOptimize')
+    // Only report success when every edit is present in the result. The config.php
+    // probe is the marker UNIQUE to the current skip-entirely shape — requiring it
+    // (not just `rfaNeedsFullOptimize`, which the previous revision also had) means
+    // a file still carrying the old config:cache warm-launch branch is treated as
+    // not-yet-patched rather than mis-reported as already_patched. The opcache
+    // markers guard against a half-applied file; the pre-flight edit lands in both
+    // retrieve* helpers.
+    $fullyPatched = str_contains($patched, "existsSync(join(rfaCacheDir, 'config.php'))")
+        && str_contains($patched, 'rfaNeedsFullOptimize')
         && str_contains($patched, "'framework', 'opcache'")
         && substr_count($patched, '[rfa opcache] reuse compiled opcode') === 2;
 

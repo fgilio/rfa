@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use App\Actions\RehydrateNativeRuntimeConfigAction;
 use App\Services\GitFileContentService;
 use App\Services\ReviewConfigService;
 use App\Support\LocalAsset;
@@ -21,13 +20,6 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(base_path('config/rfa.php'), 'rfa');
-
-        // Point the (version-cached) config at THIS launch's native API port and
-        // IPC secret. NativePHP injects them fresh per launch, so this lets the
-        // startup patch keep the cached config across launches and skip the
-        // per-launch config:cache boot. Runs in register() so it lands before any
-        // provider boots and before PreventRegularBrowserAccess checks the secret.
-        (new RehydrateNativeRuntimeConfigAction)->handle();
 
         // Singleton so hashAt() memoization survives across every caller in a
         // single request. RFA runs as NativePHP / built-in server (shared-nothing),

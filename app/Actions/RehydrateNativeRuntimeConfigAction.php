@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
-use App\Providers\AppServiceProvider;
 use Native\Desktop\Client\Client;
+use Native\Desktop\Events\EventWatcher;
 use Native\Desktop\Http\Middleware\PreventRegularBrowserAccess;
 
 /**
@@ -18,11 +18,13 @@ use Native\Desktop\Http\Middleware\PreventRegularBrowserAccess;
  * same install — every other injected value (storage/database/user paths) is
  * install-stable. Both are read through `config('nativephp-internal.*')`:
  *
- *   - {@see Client} signs every native API call with the
- *     secret and targets the API URL, and
- *   - {@see PreventRegularBrowserAccess} compares
- *     the secret on the `_native/api/booted` / `_native/api/events` requests that
- *     drive the window and native events.
+ *   - {@see Client} signs every native API call with the secret and targets the
+ *     API URL — and {@see EventWatcher} constructs a long-lived Client during
+ *     NativePHP's package registration, capturing both values at that moment for
+ *     every custom `nativephp`-channel broadcast it later posts, and
+ *   - {@see PreventRegularBrowserAccess} compares the secret on the
+ *     `_native/api/booted` / `_native/api/events` requests that drive the window
+ *     and native events.
  *
  * A version-cached config froze those two values at cache time, so without this
  * the launch would have to re-run `config:cache` to re-bake them. Because they
@@ -31,8 +33,10 @@ use Native\Desktop\Http\Middleware\PreventRegularBrowserAccess;
  * keeps the persisted config valid and lets the startup patch skip the
  * per-launch `config:cache` boot entirely (see scripts/patch-native-server.php).
  *
- * Run from {@see AppServiceProvider::register()} so it lands
- * before any provider boots and before the request middleware runs.
+ * Run from a `beforeBootstrapping(RegisterProviders)` hook in bootstrap/app.php
+ * so it lands after the config is loaded but BEFORE any provider registers —
+ * NativePHP builds {@see EventWatcher}'s Client during package registration, so
+ * an app provider (which registers after package providers) would be too late.
  */
 final readonly class RehydrateNativeRuntimeConfigAction
 {

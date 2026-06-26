@@ -168,6 +168,152 @@ test('the cache step only runs behind the version gate after patching', function
         ->not->toContain('rfaCommand');
 });
 
+// -- Upgrading a file patched by the previous RFA revision --
+
+// The full optimize block the CURRENT patch injects (comment + code), and the
+// full block the PREVIOUS revision injected (config:cache warm branch). Used to
+// synthesize a faithfully old-patched file from the current patch output.
+function currentServerOptimizeBlock(): string
+{
+    return <<<'JS'
+        if (shouldOptimize(store)) {
+            // [rfa patch] `php artisan optimize` recompiles every Blade view and
+            // re-caches config/routes/events (~1s) and previously ran on every
+            // launch, blocking the window. The compiled caches persist in the
+            // build's bootstrap/cache, so the full optimize is only needed when
+            // the app version changes (fresh install / post-update) or a cache
+            // file is missing.
+            //
+            // On a same-version launch we skip the cache step ENTIRELY — including
+            // the config:cache the earlier RFA patch ran for the fresh per-launch
+            // API port and IPC secret. Those two values are the only per-launch
+            // config that varies, and the app now re-reads them from the live
+            // process environment at runtime (RehydrateNativeRuntimeConfigAction
+            // in AppServiceProvider), so the persisted version-cached config stays
+            // valid and we avoid a full framework boot on every warm launch.
+            //
+            // Probe the caches at the directory Laravel actually writes them to
+            // for this build type. NativePHP only redirects APP_*_CACHE into
+            // userData/bootstrap/cache for a *secure* build; an unsecure build
+            // (what `native:build` produces without a bundle — RFA's shipping
+            // shape) leaves them at <appPath>/bootstrap/cache. Checking
+            // bootstrapCache unconditionally would never find them in an unsecure
+            // build, so the gate would trip every launch and pay the full optimize.
+            const rfaCacheDir = runningSecureBuild() ? bootstrapCache : join(getAppPath(), 'bootstrap', 'cache');
+            const rfaVersionChanged = store.get('optimized_version') !== app.getVersion();
+            const rfaNeedsFullOptimize = rfaVersionChanged
+                || !existsSync(join(rfaCacheDir, 'config.php'))
+                || !existsSync(join(rfaCacheDir, 'routes-v7.php'))
+                || !existsSync(join(rfaCacheDir, 'events.php'));
+            if (rfaNeedsFullOptimize) {
+                console.log('Caching views, routes, and config...');
+                let result = callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings);
+                if (result.status !== 0) {
+                    console.error('Failed to cache framework bootstrap:', result.stderr.toString());
+                }
+                else {
+                    store.set('optimized_version', app.getVersion());
+                }
+            }
+        }
+JS;
+}
+
+function previousRevisionServerOptimizeBlock(): string
+{
+    return <<<'JS'
+        if (shouldOptimize(store)) {
+            // [rfa patch] `php artisan optimize` recompiles every Blade view
+            // (~1s) and previously ran on every launch, blocking the window.
+            // Compiled views persist in userData and self-heal via on-demand
+            // compilation, so the full optimize is only needed when the app
+            // version changes (fresh install / post-update) or the route/event
+            // caches are missing. On same-version launches we re-cache config
+            // alone: NativePHP injects a fresh per-launch API port and secret
+            // that PHP reads through config(), so a reused config cache would
+            // point the PHP server at a stale port and break the native bridge.
+            //
+            // Probe the route/event caches at the directory Laravel actually
+            // writes them to for this build type. NativePHP only redirects
+            // APP_ROUTES_CACHE/APP_EVENTS_CACHE into userData/bootstrap/cache
+            // for a *secure* build; an unsecure build (what `native:build`
+            // produces without a bundle — RFA's shipping shape) leaves them at
+            // <appPath>/bootstrap/cache. Checking bootstrapCache unconditionally
+            // would never find them in an unsecure build, so the gate would trip
+            // every launch and pay the full optimize anyway.
+            const rfaCacheDir = runningSecureBuild() ? bootstrapCache : join(getAppPath(), 'bootstrap', 'cache');
+            const rfaVersionChanged = store.get('optimized_version') !== app.getVersion();
+            const rfaNeedsFullOptimize = rfaVersionChanged
+                || !existsSync(join(rfaCacheDir, 'routes-v7.php'))
+                || !existsSync(join(rfaCacheDir, 'events.php'));
+            const rfaCommand = rfaNeedsFullOptimize ? 'optimize' : 'config:cache';
+            console.log(rfaNeedsFullOptimize ? 'Caching views, routes, and config...' : 'Refreshing config cache...');
+            let result = callPhpSync(['artisan', rfaCommand], phpOptions, phpIniSettings);
+            if (result.status !== 0) {
+                console.error('Failed to cache framework bootstrap:', result.stderr.toString());
+            }
+            else if (rfaNeedsFullOptimize) {
+                store.set('optimized_version', app.getVersion());
+            }
+        }
+JS;
+}
+
+// Build a file exactly as the previous revision left it: the current patch
+// output (real opcache edits) with the optimize block reverted to old config:cache.
+function oldPatchedServer(): string
+{
+    $path = tempServer(stockServer());
+    patchNativeServerOptimize($path);
+    $current = file_get_contents($path);
+
+    // Guard: if the current patch reshaped, this revert would silently no-op and
+    // the "old" fixture would actually be the new shape. Assert it really swaps.
+    expect($current)->toContain(currentServerOptimizeBlock());
+
+    return str_replace(currentServerOptimizeBlock(), previousRevisionServerOptimizeBlock(), $current);
+}
+
+test('a file patched by the previous revision is NOT mistaken for already_patched', function () {
+    // The old block still carries `rfaNeedsFullOptimize` and the opcache markers,
+    // so the pre-config.php-probe check would have returned already_patched and
+    // left the config:cache-every-warm-launch branch in place.
+    $old = oldPatchedServer();
+
+    expect($old)
+        ->toContain('rfaCommand')
+        ->not->toContain("existsSync(join(rfaCacheDir, 'config.php'))");
+});
+
+test('upgrades a previously-patched file to the skip-entirely shape', function () {
+    $path = tempServer(oldPatchedServer());
+
+    expect(patchNativeServerOptimize($path))->toBe('patched');
+
+    $content = file_get_contents($path);
+
+    expect($content)
+        // The old config:cache warm-launch branch is gone…
+        ->not->toContain('rfaCommand')
+        ->not->toContain("'artisan', 'config:cache'")
+        // …replaced by the current skip-entirely gate.
+        ->toContain("existsSync(join(rfaCacheDir, 'config.php'))")
+        ->toContain('if (rfaNeedsFullOptimize) {');
+
+    // The upgrade is byte-identical to a fresh stock → current patch.
+    $fresh = tempServer(stockServer());
+    patchNativeServerOptimize($fresh);
+    expect($content)->toBe(file_get_contents($fresh));
+});
+
+test('upgrading a previously-patched file is idempotent', function () {
+    $path = tempServer(oldPatchedServer());
+
+    patchNativeServerOptimize($path);
+
+    expect(patchNativeServerOptimize($path))->toBe('already_patched');
+});
+
 // -- Idempotency --
 
 test('returns already_patched on second run', function () {
