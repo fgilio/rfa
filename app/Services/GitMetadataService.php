@@ -111,17 +111,35 @@ class GitMetadataService
         return trim($this->git->run($directory, ['rev-parse', 'HEAD']));
     }
 
-    public function branchExists(string $directory, string $branch): bool
+    /**
+     * Whether `$branch` exists as a local ref.
+     *
+     * Tri-state so callers can tell a confirmed absence apart from a probe that
+     * could not complete: `true` exists, `false` is a confirmed absence (git
+     * reported the ref as unknown), `null` is indeterminate (timeout, lock, or
+     * any other git failure). Collapsing every error to `false` would let a
+     * transient git hiccup read as a deletion — and downstream that can silently
+     * retarget a review away from a branch that is still there.
+     */
+    public function branchExists(string $directory, string $branch): ?bool
     {
         if ($branch === '' || str_starts_with($branch, '-')) {
             return false;
         }
 
-        return rescue(function () use ($directory, $branch): bool {
+        try {
             $this->git->run($directory, ['rev-parse', '--verify', '--quiet', 'refs/heads/'.$branch]);
 
             return true;
-        }, rescue: false, report: false);
+        } catch (GitCommandException $e) {
+            // `rev-parse --verify --quiet` exits 1 with no output for an unknown
+            // ref; any other exit code (e.g. 128 for "not a git repository") is a
+            // failure we can't read as a definitive absence.
+            return $e->exitCode === 1 ? false : null;
+        } catch (\Throwable) {
+            // Timeout / process error: we genuinely don't know.
+            return null;
+        }
     }
 
     public function getFileContent(string $repoPath, string $path, string $ref = GitRef::Working->value): ?string

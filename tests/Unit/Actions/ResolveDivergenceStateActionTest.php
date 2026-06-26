@@ -23,13 +23,14 @@ beforeEach(function () {
         return 3;
     };
 
-    $this->resolve = fn (CurrentHeadResult $head, string $branch = 'main', ?string $dismissedAtHead = null, ?string $dismissedAtBranch = null) => $this->action->handle(
+    $this->resolve = fn (CurrentHeadResult $head, string $branch = 'main', ?string $dismissedAtHead = null, ?string $dismissedAtBranch = null, bool $isInitialResolve = false) => $this->action->handle(
         $head,
         $branch,
         $dismissedAtHead,
         $dismissedAtBranch,
         $this->hasComments,
         $this->commentCount,
+        $isInitialResolve,
     );
 });
 
@@ -94,6 +95,57 @@ test('surfaces a missing-target banner when the reviewed branch no longer exists
             'currentSha' => 'abc1234',
             'shortSha' => 'abc1234',
         ]);
+});
+
+test('auto-follows HEAD on the initial resolve when the reviewed branch is gone', function () {
+    $decision = ($this->resolve)(
+        new CurrentHeadResult(branch: 'feature', sha: 'abc1234', detached: false, targetExists: false),
+        'main',
+        isInitialResolve: true,
+    );
+
+    // A fresh open lands on the checked-out branch rather than the blocking
+    // banner — the stored target is gone and can't be reviewed anyway.
+    expect($decision->kind)->toBe(DivergenceDecisionKind::AutoFollow)
+        ->and($decision->autoFollowBranch)->toBe('feature')
+        ->and($this->hasCommentsCalls)->toBe(0)
+        ->and($this->countCalls)->toBe(0);
+});
+
+test('keeps the recoverable banner on the initial resolve when branch existence is unverifiable', function () {
+    // targetExists === null means the existence probe couldn't complete (a
+    // transient git failure), not a confirmed deletion. The initial-resolve
+    // auto-follow must NOT fire here: silently persisting a retarget could
+    // strand the user off a branch that still exists.
+    $decision = ($this->resolve)(
+        new CurrentHeadResult(branch: 'feature', sha: 'abc1234', detached: false, targetExists: null),
+        'main',
+        isInitialResolve: true,
+    );
+
+    expect($decision->kind)->toBe(DivergenceDecisionKind::Show)
+        ->and($decision->state)->toBe(DivergenceState::MissingTarget);
+});
+
+test('surfaces the missing-target banner on a poll tick when existence is unverifiable', function () {
+    $decision = ($this->resolve)(
+        new CurrentHeadResult(branch: 'feature', sha: 'abc1234', detached: false, targetExists: null),
+        'main',
+    );
+
+    expect($decision->kind)->toBe(DivergenceDecisionKind::Show)
+        ->and($decision->state)->toBe(DivergenceState::MissingTarget);
+});
+
+test('a missing target dismissed by branch identity wins over the initial-resolve auto-follow', function () {
+    $decision = ($this->resolve)(
+        new CurrentHeadResult(branch: 'feature', sha: 'abc1234', detached: false, targetExists: false),
+        'main',
+        dismissedAtBranch: 'feature',
+        isInitialResolve: true,
+    );
+
+    expect($decision->kind)->toBe(DivergenceDecisionKind::Aligned);
 });
 
 test('aligns a missing target the user dismissed by branch identity', function () {

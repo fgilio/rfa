@@ -66,8 +66,12 @@ trait ReviewsBranchDivergence
      * Kept separate from `checkHeadDivergence()` so callers like `softRefresh`
      * can update divergence without latching `skipRender()` onto a response
      * that still needs to morph because files did change.
+     *
+     * `$isInitialResolve` is set only by the mount path: on a fresh open a
+     * stored target that has since disappeared auto-follows HEAD instead of
+     * surfacing the missing-target banner.
      */
-    private function refreshDivergenceState(): bool
+    private function refreshDivergenceState(bool $isInitialResolve = false): bool
     {
         if ($this->isCommitMode()) {
             $changed = ! $this->divergenceChecked;
@@ -79,7 +83,7 @@ trait ReviewsBranchDivergence
         $before = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->dismissedAtBranch, $this->projectBranch];
 
         $head = app(GetCurrentHeadAction::class)->handle($this->repoPath, $this->projectBranch ?: null);
-        $this->resolveDivergenceState($head);
+        $this->resolveDivergenceState($head, $isInitialResolve);
 
         $after = [$this->divergenceState, $this->divergenceContext, $this->dismissedAtHead, $this->dismissedAtBranch, $this->projectBranch];
 
@@ -89,7 +93,7 @@ trait ReviewsBranchDivergence
         return $changed;
     }
 
-    private function resolveDivergenceState(CurrentHeadResult $head): void
+    private function resolveDivergenceState(CurrentHeadResult $head, bool $isInitialResolve = false): void
     {
         $decision = app(ResolveDivergenceStateAction::class)->handle(
             $head,
@@ -98,6 +102,7 @@ trait ReviewsBranchDivergence
             $this->dismissedAtBranch,
             fn (): bool => $this->hasPersistedComments(),
             fn (): int => $this->persistedCommentCount(),
+            $isInitialResolve,
         );
 
         match ($decision->kind) {

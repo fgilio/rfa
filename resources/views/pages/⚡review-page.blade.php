@@ -256,7 +256,10 @@ new #[Layout('layouts.app')] class extends Component
         $this->isSinceBeginningView = $this->diffTo === null && $this->diffFrom === DiffTarget::EMPTY_TREE_HASH;
 
         $this->rehydrateForTarget();
-        $this->checkHeadDivergence();
+        // Initial resolve: a stored target that has since vanished auto-follows
+        // the checked-out branch instead of greeting a fresh open (e.g. the
+        // `rfa` CLI deep-link) with the missing-target banner.
+        $this->refreshDivergenceState(isInitialResolve: true);
 
         $this->persistCurrentView($hash, $from, $to, $ref, $baseRef, $rangeFromWorking);
 

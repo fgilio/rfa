@@ -156,14 +156,46 @@ test('detached banner shown when HEAD is detached', function () {
     $component->assertSeeHtml('data-testid="divergence-banner-detached"');
 });
 
-test('missing_target banner shown when target branch no longer exists', function () {
-    bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'feature-x', sha: 'e'.str_repeat('0', 39), detached: false, targetExists: false));
+test('missing_target banner shown when the target vanishes mid-review', function () {
+    // Mount aligned, then the target branch disappears under an active session.
+    $fake = bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'main', sha: 'a'.str_repeat('0', 39), detached: false, targetExists: true));
 
     $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Aligned);
+
+    $fake->result = new CurrentHeadResult(branch: 'feature-x', sha: 'e'.str_repeat('0', 39), detached: false, targetExists: false);
+    $component->call('checkHeadDivergence');
 
     expect($component->get('divergenceState'))->toBe(DivergenceState::MissingTarget);
     expect($component->get('divergenceContext.target'))->toBe('main');
     expect($component->get('divergenceContext.currentBranch'))->toBe('feature-x');
+    $component->assertSeeHtml('data-testid="divergence-banner-missing"');
+});
+
+test('initial open auto-follows the checked-out branch when the stored target is gone', function () {
+    // A fresh open (e.g. the `rfa` CLI deep-link) where the persisted target
+    // branch no longer exists: land on HEAD's branch, no banner.
+    bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'feature-x', sha: 'e'.str_repeat('0', 39), detached: false, targetExists: false));
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Aligned);
+    expect($component->get('projectBranch'))->toBe('feature-x');
+    expect($this->project->fresh()->branch)->toBe('feature-x');
+    $component->assertDontSeeHtml('data-testid="divergence-banner-missing"');
+});
+
+test('initial open keeps the banner and does not retarget when branch existence is unverifiable', function () {
+    // The existence probe couldn't complete (transient git failure) — targetExists
+    // is null, not a confirmed false. A fresh open must not silently overwrite the
+    // saved target; it shows the recoverable banner instead.
+    bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'feature-x', sha: 'e'.str_repeat('0', 39), detached: false, targetExists: null));
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+
+    expect($component->get('divergenceState'))->toBe(DivergenceState::MissingTarget);
+    expect($component->get('projectBranch'))->toBe('main');
+    expect($this->project->fresh()->branch)->toBe('main');
     $component->assertSeeHtml('data-testid="divergence-banner-missing"');
 });
 
@@ -359,9 +391,15 @@ test('switchReviewToHead is undoable and undo restores the original target', fun
 });
 
 test('dismissMissingTarget suppresses the missing-target banner for that branch', function () {
-    $fake = bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'feature-x', sha: 'e'.str_repeat('0', 39), detached: false, targetExists: false));
+    // Mount aligned so the initial resolve doesn't auto-follow the gone target;
+    // the banner is a mid-review (poll-tick) state.
+    $fake = bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'main', sha: 'a'.str_repeat('0', 39), detached: false, targetExists: true));
 
     $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Aligned);
+
+    $fake->result = new CurrentHeadResult(branch: 'feature-x', sha: 'e'.str_repeat('0', 39), detached: false, targetExists: false);
+    $component->call('checkHeadDivergence');
     expect($component->get('divergenceState'))->toBe(DivergenceState::MissingTarget);
 
     $component->call('dismissMissingTarget');
