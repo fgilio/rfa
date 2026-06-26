@@ -340,12 +340,11 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             return;
         }
 
-        // A packaged build is the one NativePHP has already run
-        // `php artisan optimize` (cached config) and `migrate --force` against
-        // at launch, so this scan is pure redundant work there. PHP's built-in
-        // server re-bootstraps Laravel on every request, so without this guard
-        // the shipped app re-runs the migration scan on each one. Only the
-        // un-optimized dev runtime (`native:run`) leaves the config uncached.
+        // Defence in depth: in a packaged build NativePHP runs `migrate --force`
+        // itself at launch, so this dev-only scan is redundant there. A packaged
+        // build already reports APP_DEBUG=false (covered by the guard above);
+        // keying off the config cache keeps the scan scoped to the un-optimized
+        // dev runtime (`native:run`) regardless of how debug is configured.
         if (app()->configurationIsCached()) {
             return;
         }
@@ -385,13 +384,14 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             return;
         }
 
-        // A packaged build runs `php artisan optimize` at launch, compiling
-        // every Blade view up front. PHP's built-in server re-bootstraps
-        // Laravel on every request, so re-clearing those freshly compiled
-        // views here would force a full recompile on each navigation — the
-        // single biggest cold-start and "feels sluggish" cost. The cached
-        // configuration is what distinguishes the optimized/packaged runtime
-        // from `native:run`, where clearing still keeps Blade edits visible.
+        // Defence in depth against ever clearing the Blade cache in a packaged
+        // build. NativePHP runs `php artisan optimize` at launch (compiling
+        // every view) and serves requests through PHP's built-in server, which
+        // re-bootstraps Laravel per request — so clearing here would force a
+        // full recompile on every navigation. A packaged build already reports
+        // APP_DEBUG=false (so the guard above covers it today), but keying off
+        // the config cache keeps view clearing scoped to the un-optimized dev
+        // runtime (`native:run`) regardless of how debug is configured.
         if (app()->configurationIsCached()) {
             return;
         }
