@@ -62,15 +62,23 @@ final readonly class ResolveDivergenceStateAction
             return DivergenceDecision::detached($target, $head->sha);
         }
 
-        if ($target !== '' && $head->targetExists === false) {
+        // `targetExists` is tri-state: true exists, false is a confirmed
+        // absence, null means the existence probe couldn't complete (transient
+        // git failure). Treat anything that isn't a confirmed presence as a
+        // missing target for banner purposes, but only *persist* a retarget when
+        // the absence is confirmed (see below).
+        if ($target !== '' && $head->targetExists !== true) {
             if ($dismissedAtBranch === $head->branch) {
                 return DivergenceDecision::aligned();
             }
 
-            // Fresh open: the stored target is just stale state from a prior
-            // session, and the gone branch can't be reviewed anyway. Land the
-            // user on the branch they have checked out rather than nagging.
-            if ($isInitialResolve) {
+            // Fresh open with the target confirmed gone: it's stale state from a
+            // prior session and can't be reviewed anyway, so land the user on the
+            // branch they have checked out rather than nagging. An unconfirmed
+            // (null) probe stays on the recoverable banner — silently overwriting
+            // the saved target on a transient failure could strand the user off a
+            // branch that still exists.
+            if ($isInitialResolve && $head->targetExists === false) {
                 return DivergenceDecision::autoFollow((string) $head->branch);
             }
 

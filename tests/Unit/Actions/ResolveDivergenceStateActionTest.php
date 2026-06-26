@@ -112,6 +112,31 @@ test('auto-follows HEAD on the initial resolve when the reviewed branch is gone'
         ->and($this->countCalls)->toBe(0);
 });
 
+test('keeps the recoverable banner on the initial resolve when branch existence is unverifiable', function () {
+    // targetExists === null means the existence probe couldn't complete (a
+    // transient git failure), not a confirmed deletion. The initial-resolve
+    // auto-follow must NOT fire here: silently persisting a retarget could
+    // strand the user off a branch that still exists.
+    $decision = ($this->resolve)(
+        new CurrentHeadResult(branch: 'feature', sha: 'abc1234', detached: false, targetExists: null),
+        'main',
+        isInitialResolve: true,
+    );
+
+    expect($decision->kind)->toBe(DivergenceDecisionKind::Show)
+        ->and($decision->state)->toBe(DivergenceState::MissingTarget);
+});
+
+test('surfaces the missing-target banner on a poll tick when existence is unverifiable', function () {
+    $decision = ($this->resolve)(
+        new CurrentHeadResult(branch: 'feature', sha: 'abc1234', detached: false, targetExists: null),
+        'main',
+    );
+
+    expect($decision->kind)->toBe(DivergenceDecisionKind::Show)
+        ->and($decision->state)->toBe(DivergenceState::MissingTarget);
+});
+
 test('a missing target dismissed by branch identity wins over the initial-resolve auto-follow', function () {
     $decision = ($this->resolve)(
         new CurrentHeadResult(branch: 'feature', sha: 'abc1234', detached: false, targetExists: false),

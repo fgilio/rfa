@@ -185,6 +185,20 @@ test('initial open auto-follows the checked-out branch when the stored target is
     $component->assertDontSeeHtml('data-testid="divergence-banner-missing"');
 });
 
+test('initial open keeps the banner and does not retarget when branch existence is unverifiable', function () {
+    // The existence probe couldn't complete (transient git failure) — targetExists
+    // is null, not a confirmed false. A fresh open must not silently overwrite the
+    // saved target; it shows the recoverable banner instead.
+    bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'feature-x', sha: 'e'.str_repeat('0', 39), detached: false, targetExists: null));
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+
+    expect($component->get('divergenceState'))->toBe(DivergenceState::MissingTarget);
+    expect($component->get('projectBranch'))->toBe('main');
+    expect($this->project->fresh()->branch)->toBe('main');
+    $component->assertSeeHtml('data-testid="divergence-banner-missing"');
+});
+
 test('keepReviewing suppresses the banner for that branch, even across new commits', function () {
     Comment::create([
         'id' => 'c1',
