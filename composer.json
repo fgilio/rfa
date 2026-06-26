@@ -73,7 +73,6 @@
         "test:arch": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Arch",
         "test:browser": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Browser",
         "test:browser:headed": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Browser --headed",
-        "test:screenshots": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Screenshots",
         "test:perf": "@php artisan rfa:benchmark-perf",
         "test:perf:smoke": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Performance",
         "test:js": "npm test --silent",

@@ -31,7 +31,7 @@ function absoluteSourceSpec(string $absolutePath): Closure
 }
 
 uses(TestCase::class, LazilyRefreshDatabase::class, Browsable::class, CreatesTestRepo::class)
-    ->in('Browser', 'Screenshots');
+    ->in('Browser');
 
 uses(TestCase::class, LazilyRefreshDatabase::class)
     ->in('Performance');
