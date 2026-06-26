@@ -7,6 +7,27 @@ require_once dirname(__DIR__, 3).'/scripts/patch-native-server.php';
 function stockServer(): string
 {
     return <<<'JS'
+mkdirpSync(join(storagePath, 'framework', 'sessions'));
+mkdirpSync(join(storagePath, 'framework', 'views'));
+mkdirpSync(join(storagePath, 'framework', 'testing'));
+function retrievePhpIniSettings() {
+    return __awaiter(this, void 0, void 0, function* () {
+        let command = ['artisan', 'native:php-ini'];
+        if (runningSecureBuild()) {
+            command.unshift(join(appPath, 'build', '__nativephp_app_bundle'));
+        }
+        return yield promisify(execFile)(state.php, command, phpOptions);
+    });
+}
+function retrieveNativePHPConfig() {
+    return __awaiter(this, void 0, void 0, function* () {
+        let command = ['artisan', 'native:config'];
+        if (runningSecureBuild()) {
+            command.unshift(join(appPath, 'build', '__nativephp_app_bundle'));
+        }
+        return yield promisify(execFile)(state.php, command, phpOptions);
+    });
+}
         if (env.NIGHTWATCH_INGEST_URI && phpNightWatchPort) {
             console.log('Starting Nightwatch server...');
         }
@@ -82,6 +103,21 @@ test('patches the optimize block and returns patched', function () {
         ->toContain("existsSync(join(bootstrapCache, 'events.php'))");
 });
 
+test('warms the pre-flight artisan calls with a persistent opcache file cache', function () {
+    $path = tempServer(stockServer());
+
+    patchNativeServerOptimize($path);
+    $content = file_get_contents($path);
+
+    expect($content)
+        // Cache directory created at module load, before any PHP call runs.
+        ->toContain("mkdirpSync(join(storagePath, 'framework', 'opcache'))")
+        // Both native:php-ini and native:config get the opcache flags.
+        ->toContain("command.unshift('-d', 'opcache.enable_cli=1'");
+
+    expect(substr_count($content, '[rfa opcache] reuse compiled opcode'))->toBe(2);
+});
+
 test('the unconditional every-launch optimize call is gone after patching', function () {
     $path = tempServer(stockServer());
 
@@ -136,9 +172,12 @@ test('preserves the surrounding server code', function () {
 test('the vendored NativePHP server carries the optimize patch', function () {
     $serverPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/php.js';
 
-    // post-autoload-dump applies this patch on install. Assert the marker is
-    // present (non-mutating) so a NativePHP bump that reshapes the optimize
-    // block — making the patch silently no-op (block_not_found) and shipping an
-    // every-launch optimize again — fails loudly here instead.
-    expect(file_get_contents($serverPath))->toContain('rfaNeedsFullOptimize');
+    // post-autoload-dump applies this patch on install. Assert the markers are
+    // present (non-mutating) so a NativePHP bump that reshapes a block — making
+    // an edit silently no-op and shipping an every-launch optimize / cold
+    // pre-flight boots again — fails loudly here instead.
+    expect(file_get_contents($serverPath))
+        ->toContain('rfaNeedsFullOptimize')
+        ->toContain("mkdirpSync(join(storagePath, 'framework', 'opcache'))")
+        ->toContain("command.unshift('-d', 'opcache.enable_cli=1'");
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/php.js'), 'NativePHP desktop electron plugin not installed');
