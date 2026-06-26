@@ -154,15 +154,13 @@ return [
 
     /**
      * The queue workers that get auto-started on your application start.
+     *
+     * RFA dispatches no queued jobs — notifications, native events, and the
+     * auto-updater are all synchronous. Leaving this empty avoids spawning a
+     * persistent `queue:work`/`queue:listen` PHP process (a second full
+     * framework boot plus continuous SQLite polling) on every launch.
      */
-    'queue_workers' => [
-        'default' => [
-            'queues' => ['default'],
-            'memory_limit' => 128,
-            'timeout' => 60,
-            'sleep' => 3,
-        ],
-    ],
+    'queue_workers' => [],
 
     /**
      * Define your own scripts to run before and after the build process.

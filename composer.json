@@ -74,6 +74,7 @@
         "test:browser": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Browser",
         "test:browser:headed": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Browser --headed",
         "test:perf": "@php artisan rfa:benchmark-perf",
+        "startup:measure": "@php artisan rfa:startup-bench",
         "test:perf:smoke": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Performance",
         "test:js": "npm test --silent",
         "test:all": [
@@ -85,12 +86,14 @@
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi",
-            "@php scripts/patch-native-preload.php"
+            "@php scripts/patch-native-preload.php",
+            "@php scripts/patch-native-server.php"
         ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force",
             "@php artisan native:install --force --quiet ",
-            "@php scripts/patch-native-preload.php"
+            "@php scripts/patch-native-preload.php",
+            "@php scripts/patch-native-server.php"
         ],
         "native:dev": [
             "Composer\\Config::disableProcessTimeout",
