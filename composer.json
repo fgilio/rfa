@@ -75,6 +75,7 @@
         "test:browser:headed": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Browser --headed",
         "test:screenshots": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Screenshots",
         "test:perf": "@php artisan rfa:benchmark-perf",
+        "startup:measure": "@php artisan rfa:startup-bench",
         "test:perf:smoke": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Performance",
         "test:js": "npm test --silent",
         "test:all": [
