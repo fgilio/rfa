@@ -9,6 +9,7 @@ const {
     areLinePointsEqual,
     rowContainsLinePoint,
     formatCitation,
+    selectionSourceText,
     closestDiffLine,
     selectionLineRange,
     createDiffFile,
@@ -634,6 +635,97 @@ describe('formatCitation', () => {
     });
 });
 
+describe('selectionSourceText', () => {
+    let root;
+
+    afterEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    // Builds a Range from the first occurrence of `startStr` in the start cell's
+    // text to the end of the first occurrence of `endStr` in the end cell's text.
+    function rangeFromText(startSelector, startStr, endSelector, endStr) {
+        const startNode = document.querySelector(startSelector).firstChild;
+        const endNode = document.querySelector(endSelector).firstChild;
+        const range = document.createRange();
+        range.setStart(startNode, startNode.textContent.indexOf(startStr));
+        range.setEnd(endNode, endNode.textContent.indexOf(endStr) + endStr.length);
+        return range;
+    }
+
+    it('excludes the line-number and +/- prefix gutters when a selection crosses a row', () => {
+        // The reported bug: selecting "Otwell … Porzio)" across a hard-wrapped
+        // markdown paragraph dragged the line-number (6) and add-marker (+)
+        // gutter cells of the second row into the citation.
+        document.body.innerHTML = `
+            <div id="file-root">
+                <div class="diff-line" data-line-new="5"><div class="diff-cell-num"></div><div class="diff-cell-num">5</div><div class="diff-cell-prefix">+</div><div class="diff-cell-content">standards and the simplification panel (Otwell, DHH, Wathan,</div></div>
+                <div class="diff-line" data-line-new="6"><div class="diff-cell-num"></div><div class="diff-cell-num">6</div><div class="diff-cell-prefix">+</div><div class="diff-cell-content">   Porzio), merged into one prioritized list.</div></div>
+            </div>
+        `;
+        root = document.getElementById('file-root');
+        const range = rangeFromText(
+            '[data-line-new="5"] .diff-cell-content', 'Otwell',
+            '[data-line-new="6"] .diff-cell-content', 'Porzio)',
+        );
+
+        const text = selectionSourceText(range, root);
+
+        // Real source only — no `5`, `6`, or `+` chrome — with each row's own
+        // line break and indentation preserved.
+        expect(text).toBe('Otwell, DHH, Wathan,\n   Porzio)');
+        expect(formatCitation(text)).toBe('> Otwell, DHH, Wathan,\n>    Porzio)\n\n');
+    });
+
+    it('returns the clamped substring for a selection within a single line', () => {
+        document.body.innerHTML = `
+            <div id="file-root">
+                <div class="diff-line" data-line-new="9"><div class="diff-cell-num">9</div><div class="diff-cell-prefix"> </div><div class="diff-cell-content">    const value = compute(input);</div></div>
+            </div>
+        `;
+        root = document.getElementById('file-root');
+        const range = rangeFromText(
+            '[data-line-new="9"] .diff-cell-content', 'compute',
+            '[data-line-new="9"] .diff-cell-content', 'compute',
+        );
+
+        expect(selectionSourceText(range, root)).toBe('compute');
+    });
+
+    it('preserves the leading indentation of a whole-line selection', () => {
+        document.body.innerHTML = `
+            <div id="file-root">
+                <div class="diff-line" data-line-new="9"><div class="diff-cell-num">9</div><div class="diff-cell-prefix">+</div><div class="diff-cell-content">    indented();</div></div>
+            </div>
+        `;
+        root = document.getElementById('file-root');
+        const cell = document.querySelector('.diff-cell-content');
+        const range = document.createRange();
+        range.selectNodeContents(cell);
+
+        expect(selectionSourceText(range, root)).toBe('    indented();');
+    });
+
+    it('quotes a split-view context row once, not once per mirror cell', () => {
+        document.body.innerHTML = `
+            <div id="file-root">
+                <div class="diff-line" data-line-old="3" data-line-new="3"><div class="diff-cell-num">3</div><div class="diff-cell-content">shared context</div><div class="diff-cell-content diff-cell-content-mirror" aria-hidden="true">shared context</div></div>
+            </div>
+        `;
+        root = document.getElementById('file-root');
+        const cell = document.querySelector('.diff-cell-content:not(.diff-cell-content-mirror)');
+        const range = document.createRange();
+        range.selectNodeContents(cell);
+
+        expect(selectionSourceText(range, root)).toBe('shared context');
+    });
+
+    it('returns an empty string when the range or root is missing', () => {
+        expect(selectionSourceText(null, document.body)).toBe('');
+        expect(selectionSourceText(document.createRange(), null)).toBe('');
+    });
+});
+
 describe('closestDiffLine', () => {
     afterEach(() => {
         document.body.innerHTML = '';
@@ -779,8 +871,8 @@ describe('comment on text selection', () => {
         globalThis.Alpine = { store: () => ({ collapseAll: false }) };
         document.body.innerHTML = `
             <div id="file-root">
-                <div class="diff-line" data-line-new="13"><div class="diff-cell-content">> Identify the single most undeniable paper cut</div></div>
-                <div class="diff-line" data-line-new="14"><div class="diff-cell-content">more context</div></div>
+                <div class="diff-line" data-line-new="13"><div class="diff-cell-num"></div><div class="diff-cell-num">13</div><div class="diff-cell-prefix">+</div><div class="diff-cell-content">Identify the single most undeniable paper cut</div></div>
+                <div class="diff-line" data-line-new="14"><div class="diff-cell-num"></div><div class="diff-cell-num">14</div><div class="diff-cell-prefix">+</div><div class="diff-cell-content">more context</div></div>
             </div>
         `;
         root = document.getElementById('file-root');
@@ -834,10 +926,10 @@ describe('comment on text selection', () => {
         expect(component.$refs.commentInput.focus).toHaveBeenCalled();
     });
 
-    it('anchors a multi-line selection across the spanned rows', () => {
+    it('anchors a multi-line selection across the spanned rows and excludes the gutter chrome', () => {
         const component = makeComponent();
         stubSelection({
-            text: 'line thirteen\nline fourteen',
+            text: 'ignored — citation reads source text from the DOM, not toString()',
             startSelector: '[data-line-new="13"] .diff-cell-content',
             endSelector: '[data-line-new="14"] .diff-cell-content',
         });
@@ -846,7 +938,9 @@ describe('comment on text selection', () => {
 
         expect(component.formLine).toBe(13);
         expect(component.formEndLine).toBe(14);
-        expect(component.formBody).toBe('> line thirteen\n> line fourteen\n\n');
+        // The line-number (13/14) and `+` prefix cells the range spans never
+        // leak into the quote — each row contributes only its source line.
+        expect(component.formBody).toBe('> Identify the single most undeniable paper cut\n> more context\n\n');
     });
 
     it('does nothing when the selection is collapsed', () => {

@@ -95,6 +95,48 @@
         return lines.map((line) => `> ${line}`).join('\n') + '\n\n';
     }
 
+    // Reconstructs the selected text from `range`, scoped to `root` (one diff
+    // file), reading only the source-text content cells. `Selection.toString()`
+    // serializes every Text node the range spans, including the line-number and
+    // +/- prefix gutters — which are `user-select: none` (so they never render
+    // as selected) yet still land in the string once a selection crosses a row
+    // boundary, leaking `6`/`+` chrome into a citation. Walking the
+    // `.diff-cell-content` cells instead keeps the quote to real source: each
+    // row contributes one line, clamped to the selection's start/end offsets,
+    // joined with newlines so the citation mirrors the source's own line breaks
+    // and indentation. Returns '' when the range covers no content cell.
+    function selectionSourceText(range, root) {
+        if (!range || !root) return '';
+        const doc = root.ownerDocument || (typeof document !== 'undefined' ? document : null);
+        if (!doc) return '';
+
+        const seenRows = new Set();
+        const pieces = [];
+        root.querySelectorAll('.diff-cell-content').forEach((cell) => {
+            if (!range.intersectsNode(cell)) return;
+            const row = cell.closest('.diff-line');
+            // A split-view context row carries the same text in its primary and
+            // mirror cells; keep the first that the range touches so the line
+            // isn't quoted twice.
+            if (row) {
+                if (seenRows.has(row)) return;
+                seenRows.add(row);
+            }
+
+            const cellRange = doc.createRange();
+            cellRange.selectNodeContents(cell);
+            if (cell.contains(range.startContainer)) {
+                cellRange.setStart(range.startContainer, range.startOffset);
+            }
+            if (cell.contains(range.endContainer)) {
+                cellRange.setEnd(range.endContainer, range.endOffset);
+            }
+            pieces.push(cellRange.toString());
+        });
+
+        return pieces.join('\n');
+    }
+
     // Walks up from a Selection/Range node to the `.diff-line` row it sits in.
     // Text nodes resolve through their parent element. Returns null when the
     // node isn't inside a diff row (e.g. a selection in a comment box).
@@ -564,14 +606,16 @@
                     createLinePoint(lineRange.endLine, lineRange.side),
                 );
                 this.lastClickedPoint = this.formEndPoint ? { ...this.formEndPoint } : null;
-                this._prefillCitation(formatCitation(selection.toString()));
+                this._prefillCitation(formatCitation(selectionSourceText(selection.getRangeAt(0), this.$el)));
                 this.showForm = true;
                 this.focusCommentInput();
             },
 
-            // Current text selection as a string, but only when it begins inside
-            // this file's diff rows — so a stray selection elsewhere (a comment,
-            // another file) never leaks into this file's citation. '' otherwise.
+            // Current text selection as source text, but only when it begins
+            // inside this file's diff rows — so a stray selection elsewhere (a
+            // comment, another file) never leaks into this file's citation. Reads
+            // through selectionSourceText so the diff chrome (line-number / +-
+            // prefix gutters) is excluded. '' otherwise.
             _selectionTextWithinFile() {
                 const selection = this._activeSelection();
                 if (!selection) return '';
@@ -580,7 +624,7 @@
                     return '';
                 }
 
-                return selection.toString();
+                return selectionSourceText(selection.getRangeAt(0), this.$el);
             },
 
             submitComment(isDraft = false) {
@@ -740,6 +784,7 @@
         areLinePointsEqual,
         rowContainsLinePoint,
         formatCitation,
+        selectionSourceText,
         closestDiffLine,
         selectionLineRange,
         createDiffFile,
