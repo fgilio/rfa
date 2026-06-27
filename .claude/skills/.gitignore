@@ -1,0 +1,13 @@
+# Skills fetched at session start by scripts/sync-org-skills.sh land here in
+# web sessions and must NOT be committed. Ignore every skill directory, then
+# allow-list the ones that are genuinely part of this repo.
+/*/
+!/blaze-optimize/
+!/fluxui-development/
+!/laravel-best-practices/
+!/livewire-development/
+!/pest-testing/
+!/release/
+!/rfa-debug/
+!/wide-events/
+!/wide-events-audit/
