@@ -43,3 +43,6 @@
 /tests/Browser/Screenshots
 /Thumbs.db
 /vendor
+
+# Skills fetched at session start (scripts/sync-org-skills.sh) — clone cache.
+/.claude/.skill-cache/
