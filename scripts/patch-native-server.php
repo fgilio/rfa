@@ -68,9 +68,11 @@ JS;
             // the config:cache the earlier RFA patch ran for the fresh per-launch
             // API port and IPC secret. Those two values are the only per-launch
             // config that varies, and the app now re-reads them from the live
-            // process environment at runtime (RehydrateNativeRuntimeConfigAction
-            // in AppServiceProvider), so the persisted version-cached config stays
-            // valid and we avoid a full framework boot on every warm launch.
+            // process environment at runtime (RehydrateNativeRuntimeConfigAction,
+            // wired in bootstrap/app.php via a beforeBootstrapping(RegisterProviders)
+            // hook that runs before any provider registers), so the persisted
+            // version-cached config stays valid and we avoid a full framework boot
+            // on every warm launch.
             //
             // Probe the caches at the directory Laravel actually writes them to
             // for this build type. NativePHP only redirects APP_*_CACHE into
@@ -179,7 +181,7 @@ JS;
         $patched = str_replace($oldOptimizeFind, $optimizeReplace, $patched);
     }
 
-    if (str_contains($patched, $mkdirFind) && ! str_contains($patched, "'framework', 'opcache'")) {
+    if (str_contains($patched, $mkdirFind) && ! str_contains($patched, '[rfa opcache] persistent opcode cache dir')) {
         $patched = str_replace($mkdirFind, $mkdirReplace, $patched);
     }
 
@@ -192,12 +194,16 @@ JS;
     // probe is the marker UNIQUE to the current skip-entirely shape — requiring it
     // (not just `rfaNeedsFullOptimize`, which the previous revision also had) means
     // a file still carrying the old config:cache warm-launch branch is treated as
-    // not-yet-patched rather than mis-reported as already_patched. The opcache
-    // markers guard against a half-applied file; the pre-flight edit lands in both
-    // retrieve* helpers.
+    // not-yet-patched rather than mis-reported as already_patched. The two opcache
+    // markers are each UNIQUE to their edit: the mkdir comment proves the cache
+    // directory is created, and the pre-flight banner (×2) proves both retrieve*
+    // helpers reuse it. (`'framework', 'opcache'` alone would be ambiguous — the
+    // pre-flight `opcache.file_cache=…` path contains that same substring, so a
+    // file with only the pre-flight edit could mis-report as fully patched while
+    // the cache directory is never created.)
     $fullyPatched = str_contains($patched, "existsSync(join(rfaCacheDir, 'config.php'))")
         && str_contains($patched, 'rfaNeedsFullOptimize')
-        && str_contains($patched, "'framework', 'opcache'")
+        && str_contains($patched, '[rfa opcache] persistent opcode cache dir')
         && substr_count($patched, '[rfa opcache] reuse compiled opcode') === 2;
 
     if (! $fullyPatched) {
@@ -408,16 +414,25 @@ function patchNativeSplashWindow(string $indexPath): string
 
     $content = file_get_contents($indexPath);
 
-    // 1. Pull BrowserWindow into the electron import so the splash can create one.
+    // 1. Pull BrowserWindow + nativeTheme into the electron import so the splash
+    //    can create a window and tint it to the OS light/dark appearance.
     $importFind = 'import { app, session, powerMonitor } from "electron";';
-    $importReplace = 'import { app, session, powerMonitor, BrowserWindow } from "electron";';
+    $importReplace = 'import { app, session, powerMonitor, BrowserWindow, nativeTheme } from "electron";';
 
     // 2. The splash markup, embedded as a module-level const (no asset to ship).
+    //    Colors mirror RFA's own light/dark tokens (config/theme.php) and the
+    //    splash themes ITSELF via `prefers-color-scheme`: an Electron data: URL
+    //    follows nativeTheme (default themeSource 'system'), so on a light OS the
+    //    media query stays unmatched (light palette) and on a dark OS it flips to
+    //    the dark palette — matching RFA, which follows the system appearance by
+    //    default. No JS in the page; the native window backgroundColor is tinted
+    //    to the same appearance below so there is no wrong-color flash on open.
     $htmlAnchor = 'const { autoUpdater } = electronUpdater;';
     $htmlConst = <<<'JS'
 // [rfa splash] Self-contained splash markup — inline styles only, no external
-// resources, so it loads instantly from a data: URL with nothing to bundle.
-const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#0d1117;overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e6edf3;-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid rgba(230,237,243,.18);border-top-color:#58a6ff;border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
+// resources, so it loads instantly from a data: URL with nothing to bundle. It
+// theme-matches the OS (and thus RFA's default appearance) via prefers-color-scheme.
+const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>:root{--rfa-bg:#ffffff;--rfa-fg:#09090b;--rfa-track:rgba(9,9,11,.14);--rfa-accent:#3b82f6}@media (prefers-color-scheme:dark){:root{--rfa-bg:#09090b;--rfa-fg:#fafafa;--rfa-track:rgba(250,250,250,.18);--rfa-accent:#60a5fa}}html,body{margin:0;height:100%;background:var(--rfa-bg);overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--rfa-fg);-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid var(--rfa-track);border-top-color:var(--rfa-accent);border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
 JS;
 
     // 3. The splash lifecycle methods, injected as class members.
@@ -438,7 +453,10 @@ JS;
                 center: true,
                 show: false,
                 skipTaskbar: true,
-                backgroundColor: '#0d1117',
+                // Tint the native window fill to the OS appearance so the frame
+                // shown before the data: URL paints matches the splash content
+                // (and RFA's default system-following theme) — no light/dark flash.
+                backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff',
                 title: 'rfa',
             });
             this.rfaSplash = splash;
@@ -461,8 +479,14 @@ JS;
                     return;
                 }
                 app.removeListener('browser-window-created', rfaOnCreated);
+                this.rfaSplashListener = null;
+                // Close on `show` (painted — the seamless handoff) and on `closed`
+                // (a window torn down before it ever shows — e.g. a failed load —
+                // must not strand the splash until the 60s timer).
                 window.once('show', () => this.rfaCloseSplash());
+                window.once('closed', () => this.rfaCloseSplash());
             };
+            this.rfaSplashListener = rfaOnCreated;
             app.on('browser-window-created', rfaOnCreated);
             // Safety net: never leave a spinner stuck if no window ever opens.
             this.rfaSplashTimer = setTimeout(() => this.rfaCloseSplash(), 60000);
@@ -476,6 +500,17 @@ JS;
             if (this.rfaSplashTimer) {
                 clearTimeout(this.rfaSplashTimer);
                 this.rfaSplashTimer = null;
+            }
+        }
+        catch (rfaError) { }
+        try {
+            // Drop the browser-window-created listener if the handoff never ran
+            // (no main window was ever created — e.g. PHP boot failed). Otherwise
+            // the closure, and the App instance it captures, leaks for the life of
+            // the process.
+            if (this.rfaSplashListener) {
+                app.removeListener('browser-window-created', this.rfaSplashListener);
+                this.rfaSplashListener = null;
             }
         }
         catch (rfaError) { }
@@ -504,7 +539,7 @@ JS;
 
     $patched = $content;
 
-    if (str_contains($patched, $importFind) && ! str_contains($patched, 'powerMonitor, BrowserWindow')) {
+    if (str_contains($patched, $importFind) && ! str_contains($patched, 'BrowserWindow, nativeTheme')) {
         $patched = str_replace($importFind, $importReplace, $patched);
     }
 
@@ -520,10 +555,59 @@ JS;
         $patched = str_replace($callFind, $callReplace, $patched);
     }
 
+    // -- Upgrade a file left splash-patched by the PREVIOUS RFA revision in place --
+    // The earlier splash was dark-only (fixed #0d1117, no nativeTheme). A plain
+    // `composer install` re-runs this hook over such a vendor copy; the guards above
+    // skip when their markers exist, so the themed edits would never reach it AND
+    // the success gate below (which now requires nativeTheme) would reject it and
+    // fail the hook. These three finds are unique to the old shape — each is a no-op
+    // on stock (handled above) and on an already-themed file — so re-patching
+    // converges to a result byte-identical to a fresh stock patch.
+
+    // a) Add nativeTheme to an old BrowserWindow-only import.
+    $oldSplashImport = 'import { app, session, powerMonitor, BrowserWindow } from "electron";';
+    if (str_contains($patched, $oldSplashImport) && ! str_contains($patched, 'BrowserWindow, nativeTheme')) {
+        $patched = str_replace($oldSplashImport, $importReplace, $patched);
+    }
+
+    // b) Swap the dark-only splash markup for the OS-following themed markup.
+    $oldSplashHtmlBlock = <<<'JS'
+// [rfa splash] Self-contained splash markup — inline styles only, no external
+// resources, so it loads instantly from a data: URL with nothing to bundle.
+const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#0d1117;overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e6edf3;-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid rgba(230,237,243,.18);border-top-color:#58a6ff;border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
+JS;
+    if (str_contains($patched, $oldSplashHtmlBlock)) {
+        $patched = str_replace($oldSplashHtmlBlock, $htmlConst, $patched);
+    }
+
+    // c) Tint the native window fill to the OS appearance instead of a fixed dark.
+    //    The replacement must stay byte-identical to the same lines baked into
+    //    $methods above (so an upgraded file equals a fresh stock patch).
+    $oldSplashBgBlock = <<<'JS'
+                show: false,
+                skipTaskbar: true,
+                backgroundColor: '#0d1117',
+                title: 'rfa',
+JS;
+    $newSplashBgBlock = <<<'JS'
+                show: false,
+                skipTaskbar: true,
+                // Tint the native window fill to the OS appearance so the frame
+                // shown before the data: URL paints matches the splash content
+                // (and RFA's default system-following theme) — no light/dark flash.
+                backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff',
+                title: 'rfa',
+JS;
+    if (str_contains($patched, $oldSplashBgBlock)) {
+        $patched = str_replace($oldSplashBgBlock, $newSplashBgBlock, $patched);
+    }
+
     // Only success when every edit is present, so a NativePHP bump that reshapes
-    // one anchor can't half-apply (e.g. a splash that is created but never shown).
-    $fullyPatched = str_contains($patched, 'powerMonitor, BrowserWindow')
+    // one anchor can't half-apply (e.g. a splash that is created but never shown,
+    // or themed markup without the nativeTheme import that tints the window).
+    $fullyPatched = str_contains($patched, 'BrowserWindow, nativeTheme')
         && str_contains($patched, 'const RFA_SPLASH_HTML')
+        && str_contains($patched, 'nativeTheme.shouldUseDarkColors')
         && str_contains($patched, 'rfaShowSplash() {')
         && str_contains($patched, 'this.rfaShowSplash()');
 
