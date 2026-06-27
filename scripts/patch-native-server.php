@@ -7,15 +7,17 @@
  * `electron-vite build` bundles directly — it does not run the plugin's `tsc`
  * step):
  *
- *  1. Optimize once per version. NativePHP runs `php artisan optimize`
- *     synchronously before the PHP server starts, on every launch. That
- *     recompiles all Blade views (~1s) and blocks the window. Compiled views
- *     persist in userData and self-heal via on-demand compilation, so the full
- *     optimize is only needed on a version change (fresh install / post-update)
- *     or when the route/event caches are missing. On same-version launches we
- *     re-cache config alone, because NativePHP injects a fresh per-launch API
- *     port and secret that PHP reads through config() — a reused config cache
- *     would point the PHP server at a stale port and break the native bridge.
+ *  1. Optimize once per version, then skip the cache step on warm launches.
+ *     NativePHP runs `php artisan optimize` synchronously before the PHP server
+ *     starts, on every launch. That recompiles all Blade views and re-caches
+ *     config/routes/events (~1s) and blocks the window. The compiled caches
+ *     persist in the build's bootstrap/cache, so the full optimize is only
+ *     needed on a version change (fresh install / post-update) or when a cache
+ *     file is missing. On same-version launches the cache step is skipped
+ *     ENTIRELY: the only per-launch-varying config (the native API port and IPC
+ *     secret) is re-read from the live process environment at runtime by
+ *     RehydrateNativeRuntimeConfigAction, so the persisted config stays valid
+ *     without a per-launch config:cache boot.
  *
  *  2. Warm opcode for the launch-time `php artisan` calls. NativePHP shells out
  *     to `native:php-ini` and `native:config` before the server starts, each a
@@ -54,6 +56,57 @@ function patchNativeServerOptimize(string $serverPath): string
 JS;
 
     $optimizeReplace = <<<'JS'
+        if (shouldOptimize(store)) {
+            // [rfa patch] `php artisan optimize` recompiles every Blade view and
+            // re-caches config/routes/events (~1s) and previously ran on every
+            // launch, blocking the window. The compiled caches persist in the
+            // build's bootstrap/cache, so the full optimize is only needed when
+            // the app version changes (fresh install / post-update) or a cache
+            // file is missing.
+            //
+            // On a same-version launch we skip the cache step ENTIRELY — including
+            // the config:cache the earlier RFA patch ran for the fresh per-launch
+            // API port and IPC secret. Those two values are the only per-launch
+            // config that varies, and the app now re-reads them from the live
+            // process environment at runtime (RehydrateNativeRuntimeConfigAction,
+            // wired in bootstrap/app.php via a beforeBootstrapping(RegisterProviders)
+            // hook that runs before any provider registers), so the persisted
+            // version-cached config stays valid and we avoid a full framework boot
+            // on every warm launch.
+            //
+            // Probe the caches at the directory Laravel actually writes them to
+            // for this build type. NativePHP only redirects APP_*_CACHE into
+            // userData/bootstrap/cache for a *secure* build; an unsecure build
+            // (what `native:build` produces without a bundle — RFA's shipping
+            // shape) leaves them at <appPath>/bootstrap/cache. Checking
+            // bootstrapCache unconditionally would never find them in an unsecure
+            // build, so the gate would trip every launch and pay the full optimize.
+            const rfaCacheDir = runningSecureBuild() ? bootstrapCache : join(getAppPath(), 'bootstrap', 'cache');
+            const rfaVersionChanged = store.get('optimized_version') !== app.getVersion();
+            const rfaNeedsFullOptimize = rfaVersionChanged
+                || !existsSync(join(rfaCacheDir, 'config.php'))
+                || !existsSync(join(rfaCacheDir, 'routes-v7.php'))
+                || !existsSync(join(rfaCacheDir, 'events.php'));
+            if (rfaNeedsFullOptimize) {
+                console.log('Caching views, routes, and config...');
+                let result = callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings);
+                if (result.status !== 0) {
+                    console.error('Failed to cache framework bootstrap:', result.stderr.toString());
+                }
+                else {
+                    store.set('optimized_version', app.getVersion());
+                }
+            }
+        }
+JS;
+
+    // The optimize block as the PREVIOUS RFA revision left it: a same-version
+    // launch re-ran `config:cache` via an rfaCommand ternary (no config.php
+    // probe). The stock find above no longer matches such a file, so without
+    // this an already-patched vendor copy would keep paying config:cache every
+    // warm launch. Replacing the whole old block upgrades it to the current
+    // skip-entirely shape, byte-identical to a fresh patch.
+    $oldOptimizeFind = <<<'JS'
         if (shouldOptimize(store)) {
             // [rfa patch] `php artisan optimize` recompiles every Blade view
             // (~1s) and previously ran on every launch, blocking the window.
@@ -121,7 +174,14 @@ JS;
         $patched = str_replace($optimizeFind, $optimizeReplace, $patched);
     }
 
-    if (str_contains($patched, $mkdirFind) && ! str_contains($patched, "'framework', 'opcache'")) {
+    // Upgrade a file left patched by the previous RFA revision in place. Only one
+    // of these two finds can match (stock OR old-patched), so this never double-
+    // applies; on the current shape neither matches.
+    if (str_contains($patched, $oldOptimizeFind)) {
+        $patched = str_replace($oldOptimizeFind, $optimizeReplace, $patched);
+    }
+
+    if (str_contains($patched, $mkdirFind) && ! str_contains($patched, '[rfa opcache] persistent opcode cache dir')) {
         $patched = str_replace($mkdirFind, $mkdirReplace, $patched);
     }
 
@@ -130,12 +190,20 @@ JS;
         $patched = str_replace($preflightFind, $preflightReplace, $patched);
     }
 
-    // Only report success when every edit is present in the result. Checking the
-    // optimize marker alone would mis-report a half-applied file (e.g. NativePHP
-    // changed one block's shape) as already_patched, silently dropping the
-    // opcache optimization. The pre-flight edit lands in both retrieve* helpers.
-    $fullyPatched = str_contains($patched, 'rfaNeedsFullOptimize')
-        && str_contains($patched, "'framework', 'opcache'")
+    // Only report success when every edit is present in the result. The config.php
+    // probe is the marker UNIQUE to the current skip-entirely shape — requiring it
+    // (not just `rfaNeedsFullOptimize`, which the previous revision also had) means
+    // a file still carrying the old config:cache warm-launch branch is treated as
+    // not-yet-patched rather than mis-reported as already_patched. The two opcache
+    // markers are each UNIQUE to their edit: the mkdir comment proves the cache
+    // directory is created, and the pre-flight banner (×2) proves both retrieve*
+    // helpers reuse it. (`'framework', 'opcache'` alone would be ambiguous — the
+    // pre-flight `opcache.file_cache=…` path contains that same substring, so a
+    // file with only the pre-flight edit could mis-report as fully patched while
+    // the cache directory is never created.)
+    $fullyPatched = str_contains($patched, "existsSync(join(rfaCacheDir, 'config.php'))")
+        && str_contains($patched, 'rfaNeedsFullOptimize')
+        && str_contains($patched, '[rfa opcache] persistent opcode cache dir')
         && substr_count($patched, '[rfa opcache] reuse compiled opcode') === 2;
 
     if (! $fullyPatched) {
@@ -317,6 +385,245 @@ JS;
     return 'patched';
 }
 
+/**
+ * Show an early splash window in the compiled main bootstrap (`dist/index.js`).
+ *
+ * NativePHP creates no window until the very end of the launch chain: Electron
+ * boots, the PHP server starts, the `_native/api/booted` round-trip fires,
+ * NativeAppServiceProvider::boot() calls Window::open, Electron then creates the
+ * real BrowserWindow (show:false) and only `.show()`s it on `did-finish-load`.
+ * So the user stares at a blank screen for the entire Electron-boot + PHP-boot +
+ * first-render duration — the screen is dark until everything is ready.
+ *
+ * This opens a lightweight, frameless splash the instant `app.whenReady()`
+ * resolves — before the PHP server boots — giving immediate visual feedback, and
+ * hands off seamlessly: the splash closes the moment the real window finishes
+ * loading (the first non-splash window created, via Window::open). The splash is
+ * a self-contained `data:` URL so there is nothing extra to bundle, and the
+ * whole thing is fail-open — any error just means no splash, i.e. today's
+ * behaviour. On macOS (RFA's only desktop target) closing the splash while it is
+ * the only window does not quit the app: `window-all-closed` is darwin-guarded.
+ *
+ * @return 'patched'|'already_patched'|'block_not_found'|'not_found'
+ */
+function patchNativeSplashWindow(string $indexPath): string
+{
+    if (! file_exists($indexPath)) {
+        return 'not_found';
+    }
+
+    $content = file_get_contents($indexPath);
+
+    // 1. Pull BrowserWindow + nativeTheme into the electron import so the splash
+    //    can create a window and tint it to the OS light/dark appearance.
+    $importFind = 'import { app, session, powerMonitor } from "electron";';
+    $importReplace = 'import { app, session, powerMonitor, BrowserWindow, nativeTheme } from "electron";';
+
+    // 2. The splash markup, embedded as a module-level const (no asset to ship).
+    //    Colors mirror RFA's own light/dark tokens (config/theme.php) and the
+    //    splash themes ITSELF via `prefers-color-scheme`: an Electron data: URL
+    //    follows nativeTheme (default themeSource 'system'), so on a light OS the
+    //    media query stays unmatched (light palette) and on a dark OS it flips to
+    //    the dark palette — matching RFA, which follows the system appearance by
+    //    default. No JS in the page; the native window backgroundColor is tinted
+    //    to the same appearance below so there is no wrong-color flash on open.
+    $htmlAnchor = 'const { autoUpdater } = electronUpdater;';
+    $htmlConst = <<<'JS'
+// [rfa splash] Self-contained splash markup — inline styles only, no external
+// resources, so it loads instantly from a data: URL with nothing to bundle. It
+// theme-matches the OS (and thus RFA's default appearance) via prefers-color-scheme.
+const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>:root{--rfa-bg:#ffffff;--rfa-fg:#09090b;--rfa-track:rgba(9,9,11,.14);--rfa-accent:#3b82f6}@media (prefers-color-scheme:dark){:root{--rfa-bg:#09090b;--rfa-fg:#fafafa;--rfa-track:rgba(250,250,250,.18);--rfa-accent:#60a5fa}}html,body{margin:0;height:100%;background:var(--rfa-bg);overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--rfa-fg);-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid var(--rfa-track);border-top-color:var(--rfa-accent);border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
+JS;
+
+    // 3. The splash lifecycle methods, injected as class members.
+    $methodsAnchor = '    bootstrapApp(app) {';
+    $methods = <<<'JS'
+    rfaShowSplash() {
+        // [rfa splash] Open a lightweight window the instant Electron is ready —
+        // before the PHP server boots and the real window is created — so the
+        // launch shows immediate feedback instead of a blank screen. Fail-open:
+        // any error just leaves no splash (today's behaviour).
+        try {
+            const splash = new BrowserWindow({
+                width: 480,
+                height: 320,
+                frame: false,
+                resizable: false,
+                movable: false,
+                center: true,
+                show: false,
+                skipTaskbar: true,
+                // Tint the native window fill to the OS appearance so the frame
+                // shown before the data: URL paints matches the splash content
+                // (and RFA's default system-following theme) — no light/dark flash.
+                backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff',
+                title: 'rfa',
+            });
+            this.rfaSplash = splash;
+            splash.once('ready-to-show', () => {
+                try {
+                    if (!splash.isDestroyed()) {
+                        splash.show();
+                    }
+                }
+                catch (rfaError) { }
+            });
+            splash.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(RFA_SPLASH_HTML));
+            // Seamless handoff: the first non-splash window created is the main
+            // window (opened via Window::open once PHP has booted). Close the
+            // splash on that window's `show` — which NativePHP fires only after
+            // `did-finish-load` — so the real window is painted before the splash
+            // disappears, leaving no blank frame in between.
+            const rfaOnCreated = (_, window) => {
+                if (window === this.rfaSplash) {
+                    return;
+                }
+                app.removeListener('browser-window-created', rfaOnCreated);
+                this.rfaSplashListener = null;
+                // Close on `show` (painted — the seamless handoff) and on `closed`
+                // (a window torn down before it ever shows — e.g. a failed load —
+                // must not strand the splash until the 60s timer).
+                window.once('show', () => this.rfaCloseSplash());
+                window.once('closed', () => this.rfaCloseSplash());
+            };
+            this.rfaSplashListener = rfaOnCreated;
+            app.on('browser-window-created', rfaOnCreated);
+            // Safety net: never leave a spinner stuck if no window ever opens.
+            this.rfaSplashTimer = setTimeout(() => this.rfaCloseSplash(), 60000);
+        }
+        catch (rfaError) {
+            this.rfaSplash = null;
+        }
+    }
+    rfaCloseSplash() {
+        try {
+            if (this.rfaSplashTimer) {
+                clearTimeout(this.rfaSplashTimer);
+                this.rfaSplashTimer = null;
+            }
+        }
+        catch (rfaError) { }
+        try {
+            // Drop the browser-window-created listener if the handoff never ran
+            // (no main window was ever created — e.g. PHP boot failed). Otherwise
+            // the closure, and the App instance it captures, leaks for the life of
+            // the process.
+            if (this.rfaSplashListener) {
+                app.removeListener('browser-window-created', this.rfaSplashListener);
+                this.rfaSplashListener = null;
+            }
+        }
+        catch (rfaError) { }
+        const splash = this.rfaSplash;
+        this.rfaSplash = null;
+        try {
+            if (splash && !splash.isDestroyed()) {
+                splash.close();
+            }
+        }
+        catch (rfaError) { }
+    }
+    bootstrapApp(app) {
+JS;
+
+    // 4. Fire the splash the instant Electron is ready, before any PHP boot.
+    $callFind = <<<'JS'
+            yield app.whenReady();
+            const config = yield this.loadConfig();
+JS;
+    $callReplace = <<<'JS'
+            yield app.whenReady();
+            this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots
+            const config = yield this.loadConfig();
+JS;
+
+    $patched = $content;
+
+    if (str_contains($patched, $importFind) && ! str_contains($patched, 'BrowserWindow, nativeTheme')) {
+        $patched = str_replace($importFind, $importReplace, $patched);
+    }
+
+    if (str_contains($patched, $htmlAnchor) && ! str_contains($patched, 'const RFA_SPLASH_HTML')) {
+        $patched = str_replace($htmlAnchor, $htmlAnchor."\n".$htmlConst, $patched);
+    }
+
+    if (str_contains($patched, $methodsAnchor) && ! str_contains($patched, 'rfaShowSplash() {')) {
+        $patched = str_replace($methodsAnchor, $methods, $patched);
+    }
+
+    if (str_contains($patched, $callFind) && ! str_contains($patched, 'this.rfaShowSplash()')) {
+        $patched = str_replace($callFind, $callReplace, $patched);
+    }
+
+    // -- Upgrade a file left splash-patched by the PREVIOUS RFA revision in place --
+    // The earlier splash was dark-only (fixed #0d1117, no nativeTheme). A plain
+    // `composer install` re-runs this hook over such a vendor copy; the guards above
+    // skip when their markers exist, so the themed edits would never reach it AND
+    // the success gate below (which now requires nativeTheme) would reject it and
+    // fail the hook. These three finds are unique to the old shape — each is a no-op
+    // on stock (handled above) and on an already-themed file — so re-patching
+    // converges to a result byte-identical to a fresh stock patch.
+
+    // a) Add nativeTheme to an old BrowserWindow-only import.
+    $oldSplashImport = 'import { app, session, powerMonitor, BrowserWindow } from "electron";';
+    if (str_contains($patched, $oldSplashImport) && ! str_contains($patched, 'BrowserWindow, nativeTheme')) {
+        $patched = str_replace($oldSplashImport, $importReplace, $patched);
+    }
+
+    // b) Swap the dark-only splash markup for the OS-following themed markup.
+    $oldSplashHtmlBlock = <<<'JS'
+// [rfa splash] Self-contained splash markup — inline styles only, no external
+// resources, so it loads instantly from a data: URL with nothing to bundle.
+const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#0d1117;overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e6edf3;-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid rgba(230,237,243,.18);border-top-color:#58a6ff;border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
+JS;
+    if (str_contains($patched, $oldSplashHtmlBlock)) {
+        $patched = str_replace($oldSplashHtmlBlock, $htmlConst, $patched);
+    }
+
+    // c) Tint the native window fill to the OS appearance instead of a fixed dark.
+    //    The replacement must stay byte-identical to the same lines baked into
+    //    $methods above (so an upgraded file equals a fresh stock patch).
+    $oldSplashBgBlock = <<<'JS'
+                show: false,
+                skipTaskbar: true,
+                backgroundColor: '#0d1117',
+                title: 'rfa',
+JS;
+    $newSplashBgBlock = <<<'JS'
+                show: false,
+                skipTaskbar: true,
+                // Tint the native window fill to the OS appearance so the frame
+                // shown before the data: URL paints matches the splash content
+                // (and RFA's default system-following theme) — no light/dark flash.
+                backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff',
+                title: 'rfa',
+JS;
+    if (str_contains($patched, $oldSplashBgBlock)) {
+        $patched = str_replace($oldSplashBgBlock, $newSplashBgBlock, $patched);
+    }
+
+    // Only success when every edit is present, so a NativePHP bump that reshapes
+    // one anchor can't half-apply (e.g. a splash that is created but never shown,
+    // or themed markup without the nativeTheme import that tints the window).
+    $fullyPatched = str_contains($patched, 'BrowserWindow, nativeTheme')
+        && str_contains($patched, 'const RFA_SPLASH_HTML')
+        && str_contains($patched, 'nativeTheme.shouldUseDarkColors')
+        && str_contains($patched, 'rfaShowSplash() {')
+        && str_contains($patched, 'this.rfaShowSplash()');
+
+    if (! $fullyPatched) {
+        return 'block_not_found';
+    }
+
+    if ($patched === $content) {
+        return 'already_patched';
+    }
+
+    file_put_contents($indexPath, $patched);
+
+    return 'patched';
+}
+
 // Run when executed directly (not when required by tests)
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
     $electronPlugin = __DIR__.'/../vendor/nativephp/desktop/resources/electron/electron-plugin/dist';
@@ -343,13 +650,22 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
         'not_found' => null,
     };
 
+    $splashResult = patchNativeSplashWindow($electronPlugin.'/index.js');
+
+    match ($splashResult) {
+        'patched' => print "  NativePHP splash window added: instant feedback before PHP boots.\n",
+        'already_patched' => print "  NativePHP splash window already present.\n",
+        'block_not_found' => fwrite(STDERR, "  ERROR: NativePHP main bootstrap changed shape — splash window NOT applied. Update scripts/patch-native-server.php to match the new dist/index.js.\n"),
+        'not_found' => null,
+    };
+
     // Fail the composer hook only when a vendored file is present but no longer
     // matches (block_not_found): a NativePHP bump that reshaped the bootstrap must
     // not silently ship without the startup optimizations. `not_found` is NOT
     // fatal — the release build re-runs this hook via `composer install --no-dev`
     // on a pruned copy where the dist legitimately isn't at this path, and that
     // must not break the build (the bundled dist was already patched on install).
-    if ($result === 'block_not_found' || $preflightResult === 'block_not_found') {
+    if ($result === 'block_not_found' || $preflightResult === 'block_not_found' || $splashResult === 'block_not_found') {
         exit(1);
     }
 }
