@@ -26,7 +26,7 @@ class GitMetadataService
             Log::warning('git.excludes_file.resolve_failed', [
                 'reason' => 'global_excludes_file_resolve_failed',
                 'repo' => $repoPath,
-                'error' => $e->getMessage(),
+                'exit_code' => $e->exitCode,
             ]);
 
             return null;
@@ -198,7 +198,7 @@ class GitMetadataService
                 'repo' => $repoPath,
                 'ref' => $ref,
                 'path' => $path,
-                'error' => $e->getMessage(),
+                'exit_code' => $e->exitCode,
             ]);
 
             return null;
@@ -220,7 +220,7 @@ class GitMetadataService
                 'reason' => 'git_ref_resolve_failed',
                 'repo' => $repoPath,
                 'ref' => $ref,
-                'error' => $e->getMessage(),
+                'exit_code' => $e->exitCode,
             ]);
 
             return null;
@@ -248,7 +248,7 @@ class GitMetadataService
                 'reason' => 'commit_parents_read_failed',
                 'repo' => $repoPath,
                 'hash' => $hash,
-                'error' => $e->getMessage(),
+                'exit_code' => $e->exitCode,
             ]);
 
             return [];
@@ -272,7 +272,7 @@ class GitMetadataService
                 'reason' => 'root_commit_check_failed',
                 'repo' => $repoPath,
                 'ref' => $ref,
-                'error' => $e->getMessage(),
+                'exit_code' => $e->exitCode,
             ]);
 
             return false;
@@ -317,7 +317,7 @@ class GitMetadataService
                 'reason' => 'child_commit_read_failed',
                 'repo' => $repoPath,
                 'hash' => $hash,
-                'error' => $e->getMessage(),
+                'exit_code' => $e->exitCode,
             ]);
 
             return null;
@@ -390,7 +390,7 @@ class GitMetadataService
             Log::warning('git.commit_log.read_failed', [
                 'reason' => 'commit_log_read_failed',
                 'repo' => $repoPath,
-                'error' => $e->getMessage(),
+                'exit_code' => $e->exitCode,
             ]);
 
             return [];

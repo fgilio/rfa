@@ -18,6 +18,14 @@ The event name says what happened. Structured context lives in Laravel `Context:
 
 Log outcomes, IDs, counts, booleans, durations, and rejection reasons. Do not narrate internal steps.
 
+## Relationship to Laravel's Context Facade
+
+RFA uses Laravel's `Context` facade as the carrier for canonical-event fields, but deliberately uses only a thin slice of its API: `Context::add()` and `Context::flush()`. The broader facade surface — `scope()`, `addHidden()`, `when()/unless()`, stacks (`push()/pop()`), `increment()/decrement()`, the `dehydrating()/hydrated()` queue hooks, and `#[Context]` attribute injection — is intentionally unused. We are not a queue-driven web app; we are a single-window desktop app, so most of those features solve problems we do not have.
+
+One rule is the deliberate inverse of the facade's usual default. Laravel's headline use case is Context **surviving** across boundaries: it serializes into the queue payload and rehydrates so trace IDs persist. RFA mandates the opposite — `Context::flush()` at the start of every logging owner (see Context Lifecycle) — because NativePHP runs **one long-lived PHP process**. The danger here is not losing context across a hop; it is stale context bleeding from one operation into the next. Same principle (accurate execution metadata), different runtime.
+
+The facade's own guidance still governs *what* belongs in a field: if the code cannot run without the value, pass it explicitly as a parameter; if the value only helps **explain** the execution, it may belong in Context. Context is observability metadata, never hidden business state or an authorization input.
+
 ## Enforcement Model
 
 Rules are tagged by enforcement tier:
@@ -58,7 +66,7 @@ Pure helpers and tiny methods do not need logs.
 
 ### Context Lifecycle
 
-**[CI MUST]** All static `Context::add()` keys start with `rfa.`.
+**[CI MUST]** All static `Context` keys start with `rfa.`. This covers every key-taking method the codebase might use — `add`, `addIf`, `addHidden`, `push`, `increment`, `decrement` — not just `add`.
 
 **[Agent MUST]** The logging owner calls `Context::flush()` before adding fields.
 
@@ -88,7 +96,9 @@ Children should use inline payloads for transient warning/error details. They ma
 
 **[Agent MUST]** Canonical events include `rfa.duration_ms`. There are no duration exemptions. Near-instant operations should still record the measured duration.
 
-For listener-owned events, duration measures the callback unless the listener has a reliable operation start time.
+For listener-owned events, duration measures the callback unless the listener has a reliable operation start time. A start time pulled from shared mutable state (e.g. a cache key written by more than one process) is *not* reliable — prefer the callback duration over a value that can be raced.
+
+**[Agent MUST]** A listener-owned unit of work emits its canonical info event on **every** terminal outcome, including failure. If the success paths emit `updater.available` / `updater.downloaded`, the failure path must also emit a canonical `Log::info('updater.failed')` (with `rfa.outcome = error`) from `finally` — not just a `Log::error()`. Otherwise the outcome distribution for that unit is unqueryable, because failures have a different shape than successes.
 
 Use this pattern only in the logging owner:
 
@@ -118,17 +128,24 @@ try {
 
 **[CI MUST]** Warning payloads include `reason`.
 
+**[CI MUST]** No `Log::warning()` / `error()` / `critical()` payload and no `Context` field passes a raw exception message, stack trace, or process stderr as a value (`$e->getMessage()`, `$e->getTraceAsString()`, `$e->stderr` used directly after `=>` or as a positional argument). Wrap such text in `LogSanitizer::summary()` instead.
+
 **[Agent MUST]** Warning payloads avoid raw file contents, raw stderr, secrets, and avoidable absolute paths.
 
 Warnings are for invariant violations, fallback behavior, and degraded-but-recoverable paths.
 
-Use stable reason codes:
+Prefer cheap, privacy-safe diagnostic fields over free text:
+
+- `exit_code` — `App\Exceptions\GitCommandException` exposes `$e->exitCode` (an int). It separates "ref not found" (1) from "not a git repository" (128) from a timeout, which is exactly the triage signal `$e->getMessage()` would otherwise carry, minus the absolute paths the message embeds.
+- `error_class` — `$e::class` for a generic `Throwable`. A class name is always safe and tells you the failure mode.
+- `stderr_summary` — `LogSanitizer::summary($e->stderr)`. The sanitizer strips ANSI, collapses whitespace, replaces the user's home directory with `~`, and truncates. See `app/Support/LogSanitizer.php`.
 
 ```php
 Log::warning('git.diff.failed', [
-    'reason' => 'process_failed',
+    'reason' => 'diff_process_failed',
     'path' => $relativePath,
-    'stderr_summary' => $sanitizedSummary,
+    'exit_code' => $e->exitCode,
+    'stderr_summary' => LogSanitizer::summary($e->stderr),
 ]);
 ```
 
@@ -138,7 +155,7 @@ Do not warn for every normal rejected input. Use the owner canonical event with 
 
 **[Agent MUST]** Use `Log::error()` only when the exception is handled or converted into a non-throwing path.
 
-**[Agent MUST]** Do not log raw exception messages unless they are known safe or redacted. Exception messages often contain absolute paths, SQL, stderr, or user data.
+**[Agent MUST]** Do not log raw exception messages unless they are known safe or redacted. Exception messages often contain absolute paths, SQL, stderr, or user data. Redact with `LogSanitizer::summary()` (the raw-text ban is now CI-enforced — see Warnings). This applies to externally-sourced error fields too, e.g. an updater error's `message`/`stack`.
 
 `Log::error()` is diagnostic. It never replaces the owner canonical info event.
 
@@ -219,7 +236,9 @@ Put variables in context, not event names.
 
 ### Privacy
 
-**[CI MUST]** No static `Context::add()` key is named `rfa.absolute_path`, `rfa.full_path`, `rfa.root_path`, `rfa.repo_path`, `rfa.repoPath`, or ends in `.absolute_path`.
+**[CI MUST]** No static `Context` key is named `rfa.absolute_path`, `rfa.full_path`, `rfa.root_path`, `rfa.repo_path`, `rfa.repoPath`, or ends in `.absolute_path`.
+
+**[CI MUST]** No payload value or `Context` field is a raw exception message, stack trace, or stderr (see Warnings → the raw-text ban). Sanitize with `LogSanitizer::summary()`.
 
 **[Agent MUST]** All logs avoid private data.
 
@@ -259,7 +278,7 @@ Logs must remain local.
 
 **[CI MUST]** Remote channel definitions from Laravel scaffolding may exist, but they are not active in the default channel or default stack.
 
-The CI check should resolve `config('logging.default')`. If that channel is a stack, recursively inspect every configured channel in the stack.
+This is enforced by `tests/Feature/LogChannelPostureTest.php`, which resolves `config('logging.default')`, recursively expands any `stack` driver, and asserts no resolved channel is remote. It needs the resolved Laravel config (env + stack expansion), so it lives in `tests/Feature/` rather than `tests/Arch/`, which runs without app context.
 
 Disallowed active channels:
 
@@ -270,7 +289,7 @@ Disallowed active channels:
 
 ## CI Checklist
 
-Enforce these with Pest architecture tests where practical:
+C1–C7 and C9 live in `tests/Arch/LoggingConventionsTest.php` (file scanners, no app context). C8 lives in `tests/Feature/LogChannelPostureTest.php` (needs resolved config). All are enforced today — keep them passing, and extend them rather than loosening when a new pattern appears.
 
 C1. No `Log::debug()` in `app/` or `resources/views`.
 
@@ -278,15 +297,17 @@ C2. Every production `Log::info()` passes no manual context array.
 
 C3. Every production `Log::info()` event name is a lowercase dot-separated literal with two to four segments.
 
-C4. Every static `Context::add()` key starts with `rfa.`.
+C4. Every static `Context` key (`add`/`addIf`/`addHidden`/`push`/`increment`/`decrement`) starts with `rfa.`.
 
-C5. Every `Log::warning()` payload includes `reason`.
+C5. Every `Log::warning()` / `error()` / `critical()` payload includes `reason`.
 
 C6. Every static `rfa.outcome` literal belongs to the approved vocabulary.
 
-C7. No `Context::add()` call uses banned static absolute-path keys.
+C7. No static `Context` key is a banned absolute-path key.
 
 C8. Remote logging channels are not part of the default channel or recursively resolved default stack.
+
+C9. No `Log::warning()` / `error()` / `critical()` payload and no `Context` field passes a raw exception message, stack trace, or stderr as a value. Wrapped forms like `LogSanitizer::summary($e->stderr)` are allowed.
 
 ## Agent Review Checklist
 
@@ -314,6 +335,10 @@ A10. `Log::error()` is not duplicated when exceptions are rethrown to a logged p
 
 A11. `Log::error()` is used only for swallowed or converted unexpected failures where extra diagnostic detail is needed.
 
+A12. Diagnostic detail uses safe fields (`exit_code`, `error_class`, `LogSanitizer::summary(...)`) rather than raw exception text — and the chosen fields actually aid triage, not just satisfy the linter.
+
+A13. A listener-owned unit of work emits its canonical info event on every outcome, including failure (not only `Log::error()`).
+
 ## Good Examples
 
 Canonical event with context:
@@ -328,25 +353,52 @@ Context::add('rfa.duration_ms', 12);
 Log::info('review.refreshed');
 ```
 
-Recoverable warning:
+Recoverable warning with sanitized, privacy-safe diagnostics:
 
 ```php
 Log::warning('git.diff.failed', [
-    'reason' => 'process_failed',
+    'reason' => 'diff_process_failed',
     'path' => $relativePath,
-    'stderr_summary' => $sanitizedSummary,
+    'exit_code' => $e->exitCode,
+    'stderr_summary' => LogSanitizer::summary($e->stderr),
 ]);
+```
+
+Listener-owned unit that stays canonical on the failure path (diagnostic `Log::error()` plus a canonical `Log::info()` of the same name from `finally`):
+
+```php
+Event::listen(UpdateError::class, function (UpdateError $event) {
+    Context::flush();
+
+    $startedAt = microtime(true);
+
+    try {
+        Log::error('updater.failed', [
+            'reason' => 'updater_error',
+            'message' => LogSanitizer::summary($event->message),
+            'stack' => LogSanitizer::summary($event->stack, 500),
+        ]);
+        // ...recover, notify...
+    } finally {
+        Context::add('rfa.outcome', 'error');
+        Context::add('rfa.reason', 'updater_error');
+        Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
+        Log::info('updater.failed');
+    }
+});
 ```
 
 ## Anti-Patterns
 
 ```php
-Log::debug('Review page refreshed', ['files' => $files]);
-Log::info('Review refreshed for '.$project->name);
-Log::info('review.refreshed', ['project' => $project->slug]);
-Context::add('project_slug', $project->slug);
-Context::add('rfa.error', $e->getMessage());
-Log::warning('Git diff failed', ['stderr' => $e->stderr]);
+Log::debug('Review page refreshed', ['files' => $files]);     // C1: no debug logs
+Log::info('Review refreshed for '.$project->name);            // C3: dynamic/prose event name
+Log::info('review.refreshed', ['project' => $project->slug]); // C2: info takes no payload array
+Context::add('project_slug', $project->slug);                 // C4: key must be rfa.*
+Context::add('rfa.error', $e->getMessage());                  // C9: raw exception message
+Log::warning('Git diff failed', ['stderr' => $e->stderr]);    // C3 + C5 + C9: prose name, no reason, raw stderr
+Context::add('rfa.repo_path', $absolutePath);                 // C7: banned absolute-path key
+Context::add('rfa.outcome', 'done');                          // C6: not in the outcome vocabulary
 ```
 
 ## Audit Commands
@@ -367,7 +419,10 @@ rg -n -U -P "Log::info\((?s:.*?)\[" app resources/views -g'*.php'
 rg -n "Log::warning\(" app resources/views -g'*.php'
 
 # Non-namespaced static context keys. Should be 0.
-rg -n "Context::add\(['\"](?!rfa\.)" app resources/views -g'*.php' -P
+rg -n "Context::(add|addIf|addHidden|push|increment|decrement)\(['\"](?!rfa\.)" app resources/views -g'*.php' -P
+
+# Raw exception text / stderr passed straight into a payload value. Should be 0.
+rg -n -P "(=>|,)\s*\\\$[A-Za-z_]\w*->(getMessage\(\)|getTraceAsString\(\)|stderr\b)" app resources/views -g'*.php'
 
 # Context fields. Review nearby code for owner flush and child preservation.
 rg -n "Context::(flush|add)\(" app resources/views -g'*.php'
@@ -392,6 +447,8 @@ Focus on:
 - warning logs include reason and use stable reason codes
 - no duplicate Log::error() when exceptions are rethrown
 - no file contents, clipboard data, secrets, exported review text, raw stderr, raw exception messages, or avoidable absolute paths
+- diagnostic detail uses safe fields (exit_code, error_class, LogSanitizer::summary) instead of raw exception text, and the fields actually aid triage
+- listener-owned units emit a canonical info event on every outcome, including failure
 
 Return findings only. Include file and line references. If there are no issues, say so and list residual risks.
 ```

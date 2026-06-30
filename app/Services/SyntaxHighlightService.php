@@ -247,7 +247,7 @@ class SyntaxHighlightService
             Log::warning('syntax.highlighting.failed', [
                 'reason' => 'tempest_highlighting_failed',
                 'language' => $language,
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
             ]);
 
             return null;
@@ -554,7 +554,7 @@ class SyntaxHighlightService
         } catch (Throwable $e) {
             Log::warning('syntax.highlighting.failed', [
                 'reason' => 'phiki_highlighting_failed',
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
             ]);
 
             return [];

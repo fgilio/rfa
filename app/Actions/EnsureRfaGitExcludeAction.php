@@ -52,7 +52,7 @@ final readonly class EnsureRfaGitExcludeAction
             Log::warning('git.exclude.append_failed', [
                 'reason' => 'exclude_append_failed',
                 'repo' => $repoPath,
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
             ]);
         }
     }
@@ -76,7 +76,7 @@ final readonly class EnsureRfaGitExcludeAction
             Log::warning('git.exclude.resolve_failed', [
                 'reason' => 'exclude_path_resolve_failed',
                 'repo' => $repoPath,
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
             ]);
 
             return null;

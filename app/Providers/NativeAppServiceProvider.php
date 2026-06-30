@@ -15,6 +15,7 @@ use App\Listeners\HandleMenuItemClicked;
 use App\Listeners\HandleZoomShortcutPressed;
 use App\Listeners\RegisterNativeGlobalShortcuts;
 use App\Listeners\UnregisterNativeGlobalShortcuts;
+use App\Support\LogSanitizer;
 use App\Support\Shortcuts;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -92,22 +93,28 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
         Event::listen(UpdateAvailable::class, function (UpdateAvailable $event) {
             Context::flush();
-            Context::add('rfa.update_version', $event->version);
-            Context::add('rfa.outcome', 'completed');
-            Log::info('updater.available');
 
-            $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
-            Cache::put('native-update-state', [
-                'status' => 'downloading',
-                'version' => $event->version,
-                'releaseNotes' => $releaseNotes,
-                'percent' => 0,
-            ], now()->addMinutes(30));
+            $startedAt = microtime(true);
 
-            Notification::new()
-                ->title('Update Available')
-                ->message("Version {$event->version} is available and downloading.")
-                ->show();
+            try {
+                $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
+                Cache::put('native-update-state', [
+                    'status' => 'downloading',
+                    'version' => $event->version,
+                    'releaseNotes' => $releaseNotes,
+                    'percent' => 0,
+                ], now()->addMinutes(30));
+
+                Notification::new()
+                    ->title('Update Available')
+                    ->message("Version {$event->version} is available and downloading.")
+                    ->show();
+            } finally {
+                Context::add('rfa.update_version', $event->version);
+                Context::add('rfa.outcome', 'completed');
+                Context::add('rfa.duration_ms', $this->elapsedMs($startedAt));
+                Log::info('updater.available');
+            }
         });
 
         Event::listen(DownloadProgress::class, function (DownloadProgress $event) {
@@ -127,39 +134,70 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
         Event::listen(UpdateDownloaded::class, function (UpdateDownloaded $event) {
             Context::flush();
-            Context::add('rfa.update_version', $event->version);
-            Context::add('rfa.outcome', 'completed');
-            Log::info('updater.downloaded');
 
-            $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
-            Cache::put('native-update-state', [
-                'status' => 'ready',
-                'version' => $event->version,
-                'releaseNotes' => $releaseNotes,
-                'percent' => 100,
-            ], now()->addHours(24));
+            $startedAt = microtime(true);
 
-            Notification::new()
-                ->title('Update Ready')
-                ->message("Version {$event->version} will be installed on restart.")
-                ->show();
+            try {
+                $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
+                Cache::put('native-update-state', [
+                    'status' => 'ready',
+                    'version' => $event->version,
+                    'releaseNotes' => $releaseNotes,
+                    'percent' => 100,
+                ], now()->addHours(24));
+
+                Notification::new()
+                    ->title('Update Ready')
+                    ->message("Version {$event->version} will be installed on restart.")
+                    ->show();
+            } finally {
+                Context::add('rfa.update_version', $event->version);
+                Context::add('rfa.outcome', 'completed');
+                Context::add('rfa.duration_ms', $this->elapsedMs($startedAt));
+                Log::info('updater.downloaded');
+            }
         });
 
         Event::listen(UpdateError::class, function (UpdateError $event) {
             Context::flush();
-            Context::add('rfa.outcome', 'error');
-            Context::add('rfa.reason', 'updater_error');
-            Log::error('updater.failed', [
-                'reason' => 'updater_error',
-                'message' => $event->message,
-                'stack' => $event->stack,
-            ]);
-            Cache::put('native-update-state', ['status' => 'error'], now()->addMinutes(5));
-            Notification::new()
-                ->title('Update Error')
-                ->message('Could not check for updates. Try again later.')
-                ->show();
+
+            $startedAt = microtime(true);
+
+            try {
+                // Diagnostic detail for triage. The canonical info event below
+                // keeps the failure path the same shape as the success paths so
+                // `rfa.outcome` distribution stays queryable across outcomes.
+                Log::error('updater.failed', [
+                    'reason' => 'updater_error',
+                    'message' => LogSanitizer::summary($event->message),
+                    'stack' => LogSanitizer::summary($event->stack, 500),
+                ]);
+                Cache::put('native-update-state', ['status' => 'error'], now()->addMinutes(5));
+                Notification::new()
+                    ->title('Update Error')
+                    ->message('Could not check for updates. Try again later.')
+                    ->show();
+            } finally {
+                Context::add('rfa.outcome', 'error');
+                Context::add('rfa.reason', 'updater_error');
+                Context::add('rfa.duration_ms', $this->elapsedMs($startedAt));
+                Log::info('updater.failed');
+            }
         });
+    }
+
+    /**
+     * Milliseconds elapsed since `$startedAt` (a {@see microtime()} float).
+     *
+     * The updater listeners have no reliable end-to-end operation start time —
+     * the `native-update-state` cache is written by both this main process and
+     * the renderer banner, so its `startedAt` can be raced. Per the wide-events
+     * protocol, a listener-owned event without a trustworthy start time records
+     * its callback duration instead.
+     */
+    private function elapsedMs(float $startedAt): int
+    {
+        return (int) round((microtime(true) - $startedAt) * 1000);
     }
 
     /** @param array<string>|string|null $notes */
