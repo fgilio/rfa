@@ -7,27 +7,20 @@ new class extends Component {};
 
 <div
     x-data
-    x-init="
-        document.cookie = 'rfa_theme=' + (document.documentElement.classList.contains('dark') ? 'dark' : 'light') + ';path=/;max-age=31536000;SameSite=Lax';
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-            if (!localStorage.getItem('flux.appearance')) {
-                document.cookie = 'rfa_theme=' + (e.matches ? 'dark' : 'light') + ';path=/;max-age=31536000;SameSite=Lax';
-            }
-        });
-    "
+    {{-- Mirror the resolved theme into the rfa_theme cookie. $flux.dark is reactive
+         to both explicit picks and OS changes while in system mode, so this single
+         effect covers all three states without a separate matchMedia listener. --}}
+    x-effect="document.cookie = 'rfa_theme=' + ($flux.dark ? 'dark' : 'light') + ';path=/;max-age=31536000;SameSite=Lax'"
 >
-    <flux:tooltip content="Switch to dark mode">
-        <flux:button
-            x-on:click="$flux.dark = !$flux.dark; document.cookie = 'rfa_theme=' + ($flux.dark ? 'dark' : 'light') + ';path=/;max-age=31536000;SameSite=Lax'"
-            variant="ghost" size="sm" aria-label="Switch to dark mode"
-            icon="moon" icon:variant="outline" x-show="!$flux.dark" x-cloak
-        />
-    </flux:tooltip>
-    <flux:tooltip content="Switch to light mode">
-        <flux:button
-            x-on:click="$flux.dark = !$flux.dark; document.cookie = 'rfa_theme=' + ($flux.dark ? 'dark' : 'light') + ';path=/;max-age=31536000;SameSite=Lax'"
-            variant="ghost" size="sm" aria-label="Switch to light mode"
-            icon="sun" icon:variant="outline" x-show="$flux.dark"
-        />
-    </flux:tooltip>
+    <flux:radio.group x-model="$flux.appearance" variant="segmented" size="sm" aria-label="Theme">
+        <flux:tooltip content="Light">
+            <flux:radio value="light" icon="sun" icon:variant="outline" aria-label="Light theme" />
+        </flux:tooltip>
+        <flux:tooltip content="Dark">
+            <flux:radio value="dark" icon="moon" icon:variant="outline" aria-label="Dark theme" />
+        </flux:tooltip>
+        <flux:tooltip content="Match system">
+            <flux:radio value="system" icon="computer-desktop" icon:variant="outline" aria-label="Match system theme" />
+        </flux:tooltip>
+    </flux:radio.group>
 </div>
