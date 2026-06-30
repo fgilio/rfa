@@ -386,11 +386,12 @@ new class extends Component {
                         <div
                             data-testid="since-base-row"
                             class="px-4 py-2.5 border-b border-gh-border/50 group"
-                            :class="sinceBaseActionable
-                                ? ('cursor-pointer hover:bg-gh-border/20 transition-colors'
-                                    + (sinceBaseSelected ? ' bg-gh-link/5 border-l-2 border-l-gh-link'
-                                        : (sinceBaseActive ? ' bg-gh-text/5 border-l-2 border-l-gh-text' : '')))
-                                : 'opacity-60 cursor-not-allowed'"
+                            :class="{
+                                'cursor-pointer hover:bg-gh-border/20 transition-colors': sinceBaseActionable,
+                                'opacity-60 cursor-not-allowed': !sinceBaseActionable,
+                                'bg-gh-link/5 border-l-2 border-l-gh-link': sinceBaseActionable && sinceBaseSelected,
+                                'bg-gh-text/5 border-l-2 border-l-gh-text': sinceBaseActionable && sinceBaseActive && !sinceBaseSelected,
+                            }"
                             :aria-disabled="sinceBaseActionable ? null : 'true'"
                             :aria-current="sinceBaseActionable && sinceBaseActive ? 'true' : null"
                             @click="sinceBaseActionable && viewSinceBase()"

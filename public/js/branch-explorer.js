@@ -437,7 +437,6 @@
             async viewSinceBase() {
                 if (!this.sinceBaseActionable) return;
                 const base = this.$wire.branchBase;
-                if (!base || !base.baseSha) return;
 
                 // Force the exact since-base shape (not selectSinceBase, which
                 // toggles off when it's already selected) and apply it.

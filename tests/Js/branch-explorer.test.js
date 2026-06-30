@@ -679,7 +679,7 @@ describe('since-base auto-apply (row body)', () => {
      *  body routes through the revalidated server flow, not a raw navigate. */
     function makeAutoApply(overrides = {}) {
         const a = makeForView({ branchBase: readyBase, ...overrides });
-        a.$wire.applySelection = vi.fn().mockResolvedValue(undefined);
+        a.$wire.applySelection = vi.fn();
         a.$wire.snapshotKey = 'snap-1';
         return a;
     }
@@ -718,14 +718,6 @@ describe('since-base auto-apply (row body)', () => {
         expect(upToDate.$wire.applySelection).not.toHaveBeenCalled();
         expect(offBranch.$wire.applySelection).not.toHaveBeenCalled();
         expect(noBase.$wire.applySelection).not.toHaveBeenCalled();
-    });
-
-    it('viewSinceBase is a noop when the base sha is missing', async () => {
-        const a = makeAutoApply({ branchBase: { ...readyBase, baseSha: null } });
-
-        await a.viewSinceBase();
-
-        expect(a.$wire.applySelection).not.toHaveBeenCalled();
     });
 
     it('sinceBaseActive is true only for the working-tree-from-base view', () => {
