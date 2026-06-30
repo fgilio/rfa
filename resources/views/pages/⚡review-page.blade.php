@@ -406,6 +406,21 @@ new #[Layout('layouts.app')] class extends Component
         $this->isSinceBaseView = $this->detectSinceBaseView();
     }
 
+    /**
+     * Mirror a base-branch change made inside the branch picker back onto the
+     * page so the settings input and the "Since {base}" header label stay in
+     * sync. The picker already persisted it and re-resolved its own snapshot.
+     * Skipping the render keeps the picker (keyed on `defaultBaseBranch`) from
+     * remounting out from under the open panel.
+     */
+    #[On('default-base-branch-changed')]
+    public function syncDefaultBaseBranch(string $value): void
+    {
+        $this->defaultBaseBranch = trim($value);
+        $this->isSinceBaseView = $this->detectSinceBaseView();
+        $this->skipRender();
+    }
+
     public function addExternalPath(): void
     {
         $this->pickAndLinkExternalPath(isFile: false);
@@ -1311,6 +1326,7 @@ new #[Layout('layouts.app')] class extends Component
                     <livewire:branch-explorer
                         :key="'branch-explorer-'.$projectId.'-'.md5($projectBranch.'|'.$defaultBaseBranch)"
                         :repo-path="$repoPath"
+                        :project-id="$projectId"
                         :current-branch="$projectBranch"
                         :project-slug="$projectSlug"
                         :active-commit-hash="$diffTo"

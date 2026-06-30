@@ -657,7 +657,7 @@ describe('since-base row predictability', () => {
         expect(withBase(BranchBaseState.UpToDate).sinceBaseReason).toBe('no commits ahead');
         expect(withBase(BranchBaseState.MissingRef).sinceBaseReason).toBe('base ref not found locally (run git fetch)');
         expect(withBase(BranchBaseState.OnBaseBranch).sinceBaseReason).toBe("you're on the base branch");
-        expect(withBase(BranchBaseState.NotConfigured).sinceBaseReason).toBe('set a base branch in project settings');
+        expect(withBase(BranchBaseState.NotConfigured).sinceBaseReason).toBe('set a base branch to compare');
     });
 
     it('explains the off-branch case with the current branch name', () => {
@@ -726,6 +726,100 @@ describe('since-base auto-apply (row body)', () => {
         expect(makeForView({ activeCommitHash: 'basesha', activeDiffFrom: 'basesha', branchBase: readyBase }).sinceBaseActive).toBe(false);
         expect(makeForView({ activeCommitHash: null, activeDiffFrom: 'basesha', branchBase: readyBase, branch: 'feature/x' }).sinceBaseActive).toBe(false);
         expect(makeForView({ activeCommitHash: null, activeDiffFrom: 'basesha', branchBase: null }).sinceBaseActive).toBe(false);
+    });
+});
+
+describe('inline base-branch editor', () => {
+    function makeEditable({ branchBase = null, defaultBaseBranch = '' } = {}) {
+        const a = makeForView({ branchBase });
+        a.$wire.defaultBaseBranch = defaultBaseBranch;
+        a.$wire.setDefaultBaseBranch = vi.fn(async () => {});
+        a.$wire.applySelection = vi.fn(async () => {});
+        a.$wire.snapshotKey = 'snap-1';
+        a.$nextTick = (cb) => cb && cb();
+        a.$refs = { baseInput: { focus: vi.fn() } };
+        return a;
+    }
+
+    it('hasBaseBranch reflects the configured base from branchBase or the prop', () => {
+        expect(makeEditable().hasBaseBranch).toBe(false);
+        expect(makeEditable({ defaultBaseBranch: 'dev' }).hasBaseBranch).toBe(true);
+        expect(makeEditable({ branchBase: { state: BranchBaseState.MissingRef, baseBranch: 'dev' } }).hasBaseBranch).toBe(true);
+    });
+
+    it('startEditBase seeds the draft from the configured base and focuses the input', () => {
+        const a = makeEditable({ branchBase: { state: BranchBaseState.Ready, baseBranch: 'dev', hashesInRange: [] } });
+
+        a.startEditBase();
+
+        expect(a.baseEditing).toBe(true);
+        expect(a.baseDraft).toBe('dev');
+        expect(a.$refs.baseInput.focus).toHaveBeenCalledTimes(1);
+    });
+
+    it('startEditBase falls back to the defaultBaseBranch prop when branchBase has no name', () => {
+        const a = makeEditable({ defaultBaseBranch: 'main' });
+
+        a.startEditBase();
+
+        expect(a.baseDraft).toBe('main');
+    });
+
+    it('saveBase trims the draft, persists through the wire, and closes the editor', async () => {
+        const a = makeEditable();
+        a.baseEditing = true;
+        a.baseDraft = '  dev  ';
+
+        await a.saveBase();
+
+        expect(a.$wire.setDefaultBaseBranch).toHaveBeenCalledWith('dev');
+        expect(a.baseEditing).toBe(false);
+    });
+
+    it('saveBase passes an empty string to clear the base', async () => {
+        const a = makeEditable({ defaultBaseBranch: 'dev' });
+        a.baseEditing = true;
+        a.baseDraft = '   ';
+
+        await a.saveBase();
+
+        expect(a.$wire.setDefaultBaseBranch).toHaveBeenCalledWith('');
+    });
+
+    it('cancelEditBase closes the editor and discards the draft', () => {
+        const a = makeEditable();
+        a.baseEditing = true;
+        a.baseDraft = 'typed-but-discarded';
+
+        a.cancelEditBase();
+
+        expect(a.baseEditing).toBe(false);
+        expect(a.baseDraft).toBe('');
+    });
+
+    it('row click applies since-base when actionable, otherwise opens the editor', () => {
+        const ready = makeEditable({ branchBase: { state: BranchBaseState.Ready, baseBranch: 'dev', baseSha: 'base', hashesInRange: ['aaa1'] } });
+        ready.$wire.commits = commits;
+        ready.onSinceBaseRowClick();
+        // Actionable row body routes through the auto-apply path, not the editor.
+        expect(ready.baseEditing).toBe(false);
+        expect(ready.workingTreeSelected).toBe(true);
+        expect(ready.$wire.applySelection).toHaveBeenCalled();
+
+        const unset = makeEditable();
+        unset.onSinceBaseRowClick();
+        expect(unset.baseEditing).toBe(true);
+        expect(unset.$wire.applySelection).not.toHaveBeenCalled();
+    });
+
+    it('row click is a no-op while the editor is open', () => {
+        const a = makeEditable({ branchBase: { state: BranchBaseState.Ready, baseBranch: 'dev', baseSha: 'base', hashesInRange: ['aaa1'] } });
+        a.baseEditing = true;
+
+        a.onSinceBaseRowClick();
+
+        expect(a.workingTreeSelected).toBe(false);
+        expect(a.$wire.applySelection).not.toHaveBeenCalled();
     });
 });
 

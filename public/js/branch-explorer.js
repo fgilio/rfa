@@ -107,6 +107,10 @@
             activeDiffFrom: activeDiffFrom || 'HEAD',
             projectSlug,
             selectionError: '',
+            // Inline base-branch editor state for the "Since {base}" row. Lets the
+            // user set the project base without opening project settings.
+            baseEditing: false,
+            baseDraft: '',
             selectedHashes: [],
             workingTreeSelected: false,
             // Shift-click anchor. At most one is active at a time:
@@ -145,6 +149,22 @@
             },
 
             /**
+             * The configured base branch name, preferring the resolved snapshot
+             * value and falling back to the project setting. Empty when none is
+             * set. Single source of truth for the row label, the edit affordance,
+             * and the editor's initial draft.
+             */
+            get baseBranchName() {
+                const base = this.$wire.branchBase;
+                return (base && base.baseBranch) || this.$wire.defaultBaseBranch || '';
+            },
+
+            /** True when a base branch is configured (drives the edit affordance label). */
+            get hasBaseBranch() {
+                return Boolean(this.baseBranchName);
+            },
+
+            /**
              * One-line explanation under the "Since {base}" row. For the ready
              * state it's the scope summary; otherwise it names why the row can't
              * be used right now. Null-safe: the row renders before branchBase
@@ -167,7 +187,7 @@
                     case BranchBaseState.OnBaseBranch:
                         return "you're on the base branch";
                     case BranchBaseState.NotConfigured:
-                        return 'set a base branch in project settings';
+                        return 'set a base branch to compare';
                     default:
                         return '';
                 }
@@ -261,6 +281,8 @@
                 this.open = true;
                 this.search = '';
                 this.selectedIndex = 0;
+                this.baseEditing = false;
+                this.baseDraft = '';
                 this._clearSelectionError();
                 Alpine.store('overlays').open('branch-explorer');
 
@@ -654,6 +676,46 @@
                         variant: 'info',
                     });
                 }
+            },
+
+            /**
+             * Row click router for the "Since {base}" row body. With a usable
+             * base it applies the since-base diff (the row body's default
+             * one-click path). Otherwise it opens the inline editor, the only
+             * thing the user can do here when no base resolves.
+             */
+            onSinceBaseRowClick() {
+                if (this.baseEditing) return;
+                if (this.sinceBaseActionable) {
+                    this.viewSinceBase();
+                    return;
+                }
+                this.startEditBase();
+            },
+
+            /** Reveal the inline editor, seeded with the current base, and focus it. */
+            startEditBase() {
+                this.baseDraft = this.baseBranchName;
+                this.baseEditing = true;
+                this._clearSelectionError();
+                this.$nextTick(() => this.$refs.baseInput?.focus());
+            },
+
+            /**
+             * Persist the typed base branch through the component, which re-resolves
+             * the "Since {base}" row in place and syncs the page. An empty value
+             * clears the base (mirrors the settings input).
+             */
+            async saveBase() {
+                const value = this.baseDraft.trim();
+                this.baseEditing = false;
+                this._clearSelectionError();
+                await this.$wire.setDefaultBaseBranch(value);
+            },
+
+            cancelEditBase() {
+                this.baseEditing = false;
+                this.baseDraft = '';
             },
 
             /**

@@ -2,6 +2,7 @@
 
 use App\Actions\LoadBranchExplorerSnapshotAction;
 use App\Actions\ResolveBranchExplorerSelectionAction;
+use App\Actions\UpdateProjectSettingAction;
 use App\DTOs\BranchExplorerSnapshot;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Renderless;
@@ -10,6 +11,9 @@ use Livewire\Component;
 new class extends Component {
     #[Locked]
     public string $repoPath = '';
+
+    #[Locked]
+    public int $projectId = 0;
 
     #[Locked]
     public string $currentBranch = '';
@@ -77,6 +81,37 @@ new class extends Component {
         );
 
         $this->hydrateSnapshot($snapshot);
+    }
+
+    /**
+     * Persist the project's base branch from inside the picker and re-resolve
+     * the snapshot in place, so the "Since {base}" row reflects the new base
+     * without remounting (a remount would close the open panel). Mirrors the
+     * settings dropdown's {@see updatedDefaultBaseBranch}. The dispatched event
+     * keeps the page in sync so both entry points agree.
+     */
+    #[Renderless]
+    public function setDefaultBaseBranch(string $branch): void
+    {
+        $value = trim($branch);
+
+        // Skip the DB write and snapshot reload when the base is unchanged.
+        if ($value === $this->defaultBaseBranch) {
+            return;
+        }
+
+        $this->defaultBaseBranch = $value;
+
+        app(UpdateProjectSettingAction::class)->handle($this->projectId, [
+            'default_base_branch' => $value === '' ? null : $value,
+        ]);
+
+        $this->loadSnapshot(
+            $this->snapshotBranch !== '' ? $this->snapshotBranch : $this->currentBranch,
+            count($this->commits),
+        );
+
+        $this->dispatch('default-base-branch-changed', value: $value);
     }
 
     #[Renderless]
@@ -380,23 +415,25 @@ new class extends Component {
                         </div>
 
                         {{-- "Since {base}" row: always present so its position never
-                             shifts. Clickable when the base is configured, resolved,
-                             and HEAD is ahead; otherwise disabled with a reason that
-                             names why it can't be used right now. --}}
+                             shifts. With a usable base (configured, resolved, HEAD
+                             ahead) the row body applies the since-base diff and the
+                             checkbox seeds the selection. Without one, a reason names
+                             why, and clicking the row (or the pencil) opens an inline
+                             editor to set the base without leaving the picker. The
+                             project-settings input does the same thing. --}}
                         <div
                             data-testid="since-base-row"
                             class="px-4 py-2.5 border-b border-gh-border/50 group"
                             :class="{
-                                'cursor-pointer hover:bg-gh-border/20 transition-colors': sinceBaseActionable,
-                                'opacity-60 cursor-not-allowed': !sinceBaseActionable,
-                                'bg-gh-link/5 border-l-2 border-l-gh-link': sinceBaseActionable && sinceBaseSelected,
-                                'bg-gh-text/5 border-l-2 border-l-gh-text': sinceBaseActionable && sinceBaseActive && !sinceBaseSelected,
+                                'cursor-pointer hover:bg-gh-border/20 transition-colors': !baseEditing,
+                                'bg-gh-link/5 border-l-2 border-l-gh-link': !baseEditing && sinceBaseActionable && sinceBaseSelected,
+                                'bg-gh-text/5 border-l-2 border-l-gh-text': !baseEditing && sinceBaseActionable && sinceBaseActive && !sinceBaseSelected,
                             }"
-                            :aria-disabled="sinceBaseActionable ? null : 'true'"
                             :aria-current="sinceBaseActionable && sinceBaseActive ? 'true' : null"
-                            @click="sinceBaseActionable && viewSinceBase()"
+                            @click="onSinceBaseRowClick()"
                         >
-                            <div class="flex items-start gap-2">
+                            {{-- Display mode --}}
+                            <div class="flex items-start gap-2" x-show="!baseEditing">
                                 <button
                                     type="button"
                                     data-testid="since-base-select-toggle"
@@ -420,10 +457,61 @@ new class extends Component {
                                 </button>
                                 <div class="min-w-0 flex-1">
                                     <div class="text-xs text-gh-text truncate font-medium tracking-tight">
-                                        Since <span class="font-mono" x-text="($wire.branchBase && $wire.branchBase.baseBranch) || 'base branch'"></span>
+                                        Since <span class="font-mono" x-text="baseBranchName || 'base branch'"></span>
                                     </div>
                                     <span class="block mt-0.5 text-[10px] font-mono text-gh-muted" x-text="sinceBaseReason"></span>
                                 </div>
+                                {{-- Set / change the base branch without leaving the picker. --}}
+                                <button
+                                    type="button"
+                                    data-testid="since-base-edit"
+                                    @click.stop="startEditBase()"
+                                    class="shrink-0 flex items-center justify-center size-6 rounded-md text-gh-muted hover:text-gh-text hover:bg-gh-border/40 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+                                    :class="{ '!opacity-100': !hasBaseBranch }"
+                                    :title="hasBaseBranch ? 'Change base branch' : 'Set base branch'"
+                                    :aria-label="hasBaseBranch ? 'Change base branch' : 'Set base branch'"
+                                >
+                                    <flux:icon icon="pencil-square" variant="outline" class="!size-3.5" />
+                                </button>
+                            </div>
+
+                            {{-- Edit mode: type a branch name to set the project base. --}}
+                            <div class="flex items-start gap-2" x-show="baseEditing" x-cloak @click.stop>
+                                <span class="mt-0.5 size-4 shrink-0" aria-hidden="true"></span>
+                                <div class="min-w-0 flex-1">
+                                    <flux:input
+                                        x-ref="baseInput"
+                                        x-model="baseDraft"
+                                        @keydown.enter.stop.prevent="saveBase()"
+                                        @keydown.escape.stop.prevent="cancelEditBase()"
+                                        placeholder="dev, master, main..."
+                                        size="sm"
+                                        variant="filled"
+                                        class="!font-mono text-xs"
+                                        data-testid="since-base-input"
+                                    />
+                                    <span class="block mt-1 text-[10px] font-mono text-gh-muted">Enter to save &middot; Esc to cancel</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    data-testid="since-base-save"
+                                    @click.stop="saveBase()"
+                                    class="shrink-0 flex items-center justify-center size-6 rounded-md text-gh-link hover:bg-gh-link/15 transition-colors cursor-pointer"
+                                    title="Save base branch"
+                                    aria-label="Save base branch"
+                                >
+                                    <flux:icon icon="check" variant="outline" class="!size-3.5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    data-testid="since-base-cancel"
+                                    @click.stop="cancelEditBase()"
+                                    class="shrink-0 flex items-center justify-center size-6 rounded-md text-gh-muted hover:text-gh-text hover:bg-gh-border/40 transition-colors cursor-pointer"
+                                    title="Cancel"
+                                    aria-label="Cancel"
+                                >
+                                    <flux:icon icon="x-mark" variant="outline" class="!size-3.5" />
+                                </button>
                             </div>
                         </div>
 
