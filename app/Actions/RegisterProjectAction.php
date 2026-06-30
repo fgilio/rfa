@@ -72,6 +72,9 @@ final readonly class RegisterProjectAction
             'branch' => $this->git->getCurrentBranch($directory),
             'remote_url' => $this->git->getRemoteUrl($path),
             'global_gitignore_path' => $this->git->resolveGlobalExcludesFile($path),
+            // Seed a sensible base only on first registration; once the project
+            // exists this is a user-editable setting we must not clobber.
+            'default_base_branch' => $this->git->detectDefaultBaseBranch($path),
         ];
 
         try {

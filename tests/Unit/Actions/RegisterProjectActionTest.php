@@ -41,6 +41,39 @@ test('seeds branch on first registration', function () {
     expect($project->branch)->toBe('main');
 });
 
+test('seeds default base branch from main on first registration', function () {
+    $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
+
+    expect($project->default_base_branch)->toBe('main');
+});
+
+test('seeds default base branch from master when the repo uses master', function () {
+    $this->runTestRepoCommand($this->testRepoPath, 'git branch -m main master');
+
+    $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
+
+    expect($project->default_base_branch)->toBe('master');
+});
+
+test('leaves default base branch unset when neither main nor master exists', function () {
+    $this->runTestRepoCommand($this->testRepoPath, 'git branch -m main trunk');
+
+    $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
+
+    expect($project->default_base_branch)->toBeNull();
+});
+
+test('does not overwrite a user-chosen base branch on re-registration', function () {
+    $project = app(RegisterProjectAction::class)->handle($this->testRepoPath);
+
+    // User narrows the review to a different base; re-registration must respect it.
+    $project->update(['default_base_branch' => 'develop']);
+
+    $refreshed = app(RegisterProjectAction::class)->handle($this->testRepoPath);
+
+    expect($refreshed->default_base_branch)->toBe('develop');
+});
+
 test('does not overwrite branch on re-registration', function () {
     app(RegisterProjectAction::class)->handle($this->testRepoPath);
 
