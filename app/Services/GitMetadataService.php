@@ -101,8 +101,17 @@ class GitMetadataService
     public function detectDefaultBaseBranch(string $directory): ?string
     {
         foreach (['main', 'master'] as $candidate) {
-            if ($this->branchExists($directory, $candidate) === true) {
+            $exists = $this->branchExists($directory, $candidate);
+
+            if ($exists === true) {
                 return $candidate;
+            }
+
+            // An indeterminate probe (timeout, lock) isn't a confirmed absence,
+            // so don't fall through to a lower-priority candidate and risk
+            // seeding `master` while `main` may well exist. Leave the base unset.
+            if ($exists === null) {
+                return null;
             }
         }
 
