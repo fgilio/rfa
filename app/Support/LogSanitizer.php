@@ -39,6 +39,10 @@ final class LogSanitizer
     /**
      * Replace the current user's home directory with `~` so absolute paths under
      * it (the common case for a repo on disk) never reach the log verbatim.
+     *
+     * The match is anchored to a path boundary — end of string, or a character
+     * that cannot continue a directory name — so a sibling like `/home/user2`
+     * is left intact rather than mangled into `~2`.
      */
     private static function scrubHomeDirectory(string $text): string
     {
@@ -48,6 +52,6 @@ final class LogSanitizer
             return $text;
         }
 
-        return str_replace(rtrim($home, '/'), '~', $text);
+        return (string) preg_replace('#'.preg_quote(rtrim($home, '/'), '#').'(?![\w-])#', '~', $text);
     }
 }

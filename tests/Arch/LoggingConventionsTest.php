@@ -435,11 +435,20 @@ test('static context keys never expose absolute filesystem paths', function () {
 });
 
 test('log and context payloads never carry raw exception text', function () {
-    // A raw exception message, stack trace, or process stderr passed straight
-    // into a payload value (after `=>` or as a positional argument). Wrapped
-    // forms such as `LogSanitizer::summary($e->stderr)` are allowed because the
-    // delimiter that precedes the property access is `(`, not `=>` / `,`.
-    $rawExceptionText = '/(=>|,)\s*\$[A-Za-z_]\w*->(getMessage\(\)|getTraceAsString\(\)|stderr\b)/';
+    // A raw exception message, stack trace, or process stderr reaching a payload
+    // value, in any argument position (including the nullsafe `?->` form).
+    // `LogSanitizer::summary(...)` is the one sanctioned wrapper, so its argument
+    // list is stripped before the check — `summary($e->stderr)` is allowed, a
+    // bare `$e->stderr` anywhere else is not.
+    $sanctionedWrapper = '/LogSanitizer::summary\([^)]*\)/';
+    $rawExceptionText = '/\$[A-Za-z_]\w*\??->(getMessage\(\)|getTraceAsString\(\)|stderr\b)/';
+
+    $carriesRawText = function (string $source) use ($sanctionedWrapper, $rawExceptionText): bool {
+        $stripped = (string) preg_replace($sanctionedWrapper, '', $source);
+
+        return (bool) preg_match($rawExceptionText, $stripped);
+    };
+
     $violations = [];
 
     foreach (loggingConventionCalls() as $call) {
@@ -447,13 +456,13 @@ test('log and context payloads never carry raw exception text', function () {
             continue;
         }
 
-        if (preg_match($rawExceptionText, $call['source'])) {
+        if ($carriesRawText($call['source'])) {
             $violations[] = "{$call['path']}:{$call['line']} {$call['source']}";
         }
     }
 
     foreach (contextConventionCalls() as $call) {
-        if (preg_match($rawExceptionText, $call['source'])) {
+        if ($carriesRawText($call['source'])) {
             $violations[] = "{$call['path']}:{$call['line']} {$call['source']}";
         }
     }

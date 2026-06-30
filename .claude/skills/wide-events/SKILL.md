@@ -128,7 +128,7 @@ try {
 
 **[CI MUST]** Warning payloads include `reason`.
 
-**[CI MUST]** No `Log::warning()` / `error()` / `critical()` payload and no `Context` field passes a raw exception message, stack trace, or process stderr as a value (`$e->getMessage()`, `$e->getTraceAsString()`, `$e->stderr` used directly after `=>` or as a positional argument). Wrap such text in `LogSanitizer::summary()` instead.
+**[CI MUST]** No `Log::warning()` / `error()` / `critical()` payload and no `Context` field passes a raw exception message, stack trace, or process stderr as a value (`$e->getMessage()`, `$e->getTraceAsString()`, `$e->stderr`) in any argument position, including the nullsafe `?->` form. Wrap such text in `LogSanitizer::summary()` instead — that wrapper is the one allowed form.
 
 **[Agent MUST]** Warning payloads avoid raw file contents, raw stderr, secrets, and avoidable absolute paths.
 
@@ -271,7 +271,7 @@ Logs must remain local.
     'driver' => 'daily',
     'path' => storage_path('logs/laravel.log'),
     'level' => env('LOG_LEVEL', 'info'),
-    'days' => 7,
+    'days' => env('LOG_DAILY_DAYS', 7),
     'replace_placeholders' => true,
 ],
 ```
@@ -421,8 +421,9 @@ rg -n "Log::warning\(" app resources/views -g'*.php'
 # Non-namespaced static context keys. Should be 0.
 rg -n "Context::(add|addIf|addHidden|push|increment|decrement)\(['\"](?!rfa\.)" app resources/views -g'*.php' -P
 
-# Raw exception text / stderr passed straight into a payload value. Should be 0.
-rg -n -P "(=>|,)\s*\\\$[A-Za-z_]\w*->(getMessage\(\)|getTraceAsString\(\)|stderr\b)" app resources/views -g'*.php'
+# Raw exception text / stderr in any payload position. Review each hit — it is
+# allowed only inside LogSanitizer::summary(...); otherwise it is a C9 violation.
+rg -n -P "\\\$[A-Za-z_]\w*\??->(getMessage\(\)|getTraceAsString\(\)|stderr\b)" app resources/views -g'*.php'
 
 # Context fields. Review nearby code for owner flush and child preservation.
 rg -n "Context::(flush|add)\(" app resources/views -g'*.php'
