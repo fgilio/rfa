@@ -7,18 +7,10 @@ new class extends Component {};
 
 <div
     x-data
-    x-effect="
-        document.cookie = 'rfa_theme=' + (
-            ($flux.appearance === 'dark' || ($flux.appearance === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) ? 'dark' : 'light'
-        ) + ';path=/;max-age=31536000;SameSite=Lax';
-    "
-    x-init="
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-            if ($flux.appearance === 'system') {
-                document.cookie = 'rfa_theme=' + (e.matches ? 'dark' : 'light') + ';path=/;max-age=31536000;SameSite=Lax';
-            }
-        });
-    "
+    {{-- Mirror the resolved theme into the rfa_theme cookie. $flux.dark is reactive
+         to both explicit picks and OS changes while in system mode, so this single
+         effect covers all three states without a separate matchMedia listener. --}}
+    x-effect="document.cookie = 'rfa_theme=' + ($flux.dark ? 'dark' : 'light') + ';path=/;max-age=31536000;SameSite=Lax'"
 >
     <flux:radio.group x-model="$flux.appearance" variant="segmented" size="sm" aria-label="Theme">
         <flux:tooltip content="Light">
