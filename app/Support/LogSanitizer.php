@@ -26,7 +26,7 @@ final class LogSanitizer
     public static function summary(string $raw, int $maxLength = self::DEFAULT_MAX_LENGTH): string
     {
         $text = AnsiText::strip($raw);
-        $text = (string) preg_replace('/\s+/', ' ', $text);
+        $text = preg_replace('/\s+/', ' ', $text) ?? $text;
         $text = self::scrubHomeDirectory(trim($text));
 
         if (mb_strlen($text) <= $maxLength) {
@@ -52,6 +52,6 @@ final class LogSanitizer
             return $text;
         }
 
-        return (string) preg_replace('#'.preg_quote(rtrim($home, '/'), '#').'(?![\w-])#', '~', $text);
+        return preg_replace('#'.preg_quote(rtrim($home, '/'), '#').'(?![\w-])#', '~', $text) ?? $text;
     }
 }
