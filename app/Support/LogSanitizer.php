@@ -22,10 +22,14 @@ final class LogSanitizer
      * summary: ANSI color stripped, whitespace collapsed, the user's home
      * directory replaced with `~`, and the result truncated with an ellipsis
      * marker when it exceeds `$maxLength`.
+     *
+     * `$raw` is nullable on purpose: it is frequently fed optional exception
+     * fields (an updater error's `?string $stack`, say). A null is treated as
+     * empty so a sanitizer on an error path never itself throws.
      */
-    public static function summary(string $raw, int $maxLength = self::DEFAULT_MAX_LENGTH): string
+    public static function summary(?string $raw, int $maxLength = self::DEFAULT_MAX_LENGTH): string
     {
-        $text = AnsiText::strip($raw);
+        $text = AnsiText::strip($raw ?? '');
         $text = preg_replace('/\s+/', ' ', $text) ?? $text;
         $text = self::scrubHomeDirectory(trim($text));
 

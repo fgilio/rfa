@@ -54,3 +54,9 @@ test('trims a trailing space at the truncation boundary before the marker', func
 test('leaves short clean text untouched', function () {
     expect(LogSanitizer::summary('unknown revision'))->toBe('unknown revision');
 });
+
+test('treats null as empty rather than throwing', function () {
+    // Optional exception fields (e.g. an updater error's ?string $stack) can be
+    // null; a sanitizer on an error path must never itself throw.
+    expect(LogSanitizer::summary(null))->toBe('');
+});
