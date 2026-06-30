@@ -2,11 +2,13 @@
 
 use App\DTOs\BranchEntry;
 use App\DTOs\CommitEntry;
+use App\Models\Project;
 use App\Services\GitMetadataService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
 
-uses(TestCase::class);
+uses(TestCase::class, RefreshDatabase::class);
 
 function fakeGitMetadata(array $branches = ['local' => [], 'remote' => []], array $commits = []): GitMetadataService
 {
@@ -162,6 +164,50 @@ test('applySelection dispatches an inline error for non-contiguous commits', fun
         ->assertDispatched('branch-explorer-selection-error', function (string $event, array $params): bool {
             return str_contains($params['message'] ?? '', 'pick every commit');
         });
+});
+
+test('setDefaultBaseBranch persists the base, reloads the snapshot, and notifies the page', function () {
+    $mock = fakeGitMetadata(commits: [
+        new CommitEntry('h1', 'h1', 'tip commit', 'me', '1m', '2026-01-01'),
+    ]);
+    // Resolved ref but no merge base keeps resolution off the real git binary
+    // while still proving the reload picked up the newly-configured base.
+    $mock->shouldReceive('getMergeBase')->andReturn(null);
+
+    $project = Project::factory()->create(['default_base_branch' => null]);
+
+    $component = Livewire::test('branch-explorer', [
+        'repoPath' => '/tmp/repo',
+        'projectId' => $project->id,
+        'currentBranch' => 'main',
+    ])->call('loadSnapshot', 'main');
+
+    expect($component->get('branchBase')['state'])->toBe('not_configured');
+
+    $component
+        ->call('setDefaultBaseBranch', '  dev  ')
+        ->assertSet('defaultBaseBranch', 'dev')
+        ->assertDispatched('default-base-branch-changed', value: 'dev');
+
+    expect($project->fresh()->default_base_branch)->toBe('dev')
+        ->and($component->get('branchBase')['baseBranch'])->toBe('dev');
+});
+
+test('setDefaultBaseBranch with a blank value clears the project base', function () {
+    fakeGitMetadata();
+
+    $project = Project::factory()->create(['default_base_branch' => 'dev']);
+
+    $component = Livewire::test('branch-explorer', [
+        'repoPath' => '/tmp/repo',
+        'projectId' => $project->id,
+        'currentBranch' => 'main',
+        'defaultBaseBranch' => 'dev',
+    ])->call('setDefaultBaseBranch', '   ');
+
+    $component->assertSet('defaultBaseBranch', '');
+
+    expect($project->fresh()->default_base_branch)->toBeNull();
 });
 
 test('applySelection refreshes and dispatches stale when the snapshot key changed', function () {
