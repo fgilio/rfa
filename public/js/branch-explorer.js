@@ -183,6 +183,21 @@
                 return this.activeCommitHash === null && this.activeDiffFrom === EMPTY_TREE_HASH;
             },
 
+            /**
+             * True when the active view IS the since-base range - working-tree
+             * target diffed from the configured base sha. Lights the row up as
+             * the current view (like an active commit row), distinct from
+             * `sinceBaseSelected`, which tracks an in-progress, not-yet-applied
+             * selection. Only meaningful on the current branch, where
+             * activeDiffFrom is HEAD-relative.
+             */
+            get sinceBaseActive() {
+                const base = this.$wire.branchBase;
+                if (!base || base.state !== BranchBaseState.Ready || !base.baseSha) return false;
+                if (this.selectedBranch !== this.currentBranch) return false;
+                return this.activeCommitHash === null && this.activeDiffFrom === base.baseSha;
+            },
+
             get sinceBaseSelected() {
                 const base = this.$wire.branchBase;
                 if (!base || base.state !== BranchBaseState.Ready) return false;
@@ -404,6 +419,36 @@
                 Livewire.navigate(`/p/${this.projectSlug}/rw/${EMPTY_TREE_HASH}`);
             },
 
+            /**
+             * Click handler for the "Since {base}" row body. Auto-applies the
+             * whole base..HEAD + working tree range as one diff - the one-click
+             * counterpart to the row's seed-and-trim checkbox ({@see
+             * selectSinceBase}).
+             *
+             * Unlike a commit row (immutable sha) or "Since the beginning"
+             * (constant empty tree), the since-base endpoint is a *resolved*
+             * merge-base that can move if the repo advances while the drawer is
+             * open. So this routes through the same server `applySelection`
+             * flow as Apply rather than a raw client navigate: that re-reads
+             * git, revalidates `snapshotKey`, and recomputes a fresh base sha -
+             * falling back to a stale-refresh toast instead of stranding the
+             * user on an outdated diff.
+             */
+            async viewSinceBase() {
+                if (!this.sinceBaseActionable) return;
+                const base = this.$wire.branchBase;
+
+                // Force the exact since-base shape (not selectSinceBase, which
+                // toggles off when it's already selected) and apply it.
+                this._clearSelectionError();
+                this.selectedHashes = [...base.hashesInRange];
+                this.workingTreeSelected = true;
+                this.lastSelectionIndex = -1;
+                this.lastSelectionAnchorIsWT = false;
+
+                await this.applySelection();
+            },
+
             isSelected(hash) {
                 return this.selectedHashes.includes(hash);
             },
@@ -612,11 +657,12 @@
             },
 
             /**
-             * Click handler for the "Since {base}" row. Fills the multi-select
-             * with every commit in `base..HEAD` plus working tree, so the user
-             * sees scope visually and can trim before pressing Apply. Toggles
-             * off when invoked while the exact since-base shape is already
-             * selected.
+             * Click handler for the "Since {base}" row's checkbox. Fills the
+             * multi-select with every commit in `base..HEAD` plus working tree,
+             * so the user sees scope visually and can trim before pressing
+             * Apply. (The row body itself auto-applies via {@see viewSinceBase};
+             * this checkbox is the seed-and-trim path.) Toggles off when invoked
+             * while the exact since-base shape is already selected.
              */
             selectSinceBase() {
                 if (!this.sinceBaseActionable) return;

@@ -672,6 +672,63 @@ describe('since-base row predictability', () => {
     });
 });
 
+describe('since-base auto-apply (row body)', () => {
+    const readyBase = { state: BranchBaseState.Ready, baseBranch: 'dev', baseSha: 'basesha', commitCount: 2, hashesInRange: ['tip', 'mid'] };
+
+    /** makeForView wired with an applySelection spy so we can assert the row
+     *  body routes through the revalidated server flow, not a raw navigate. */
+    function makeAutoApply(overrides = {}) {
+        const a = makeForView({ branchBase: readyBase, ...overrides });
+        a.$wire.applySelection = vi.fn();
+        a.$wire.snapshotKey = 'snap-1';
+        return a;
+    }
+
+    it('viewSinceBase applies the exact since-base shape through the server flow', async () => {
+        const a = makeAutoApply();
+
+        await a.viewSinceBase();
+
+        // Forces WT + every range hash, then hands off to applySelection so the
+        // server re-reads git and recomputes a fresh base sha before navigating.
+        expect(a.selectedHashes).toEqual(['tip', 'mid']);
+        expect(a.workingTreeSelected).toBe(true);
+        expect(a.$wire.applySelection).toHaveBeenCalledWith('main', ['tip', 'mid'], true, 'snap-1');
+    });
+
+    it('viewSinceBase does not seed a shift anchor', async () => {
+        const a = makeAutoApply();
+
+        await a.viewSinceBase();
+
+        expect(a.lastSelectionIndex).toBe(-1);
+        expect(a.lastSelectionAnchorIsWT).toBe(false);
+    });
+
+    it('viewSinceBase is a noop when the row is not actionable', async () => {
+        const upToDate = makeAutoApply({ branchBase: { ...readyBase, state: BranchBaseState.UpToDate } });
+        const offBranch = makeAutoApply({ branch: 'feature/x' });
+        const noBase = makeAutoApply({ branchBase: null });
+        noBase.$wire.applySelection = vi.fn();
+
+        await upToDate.viewSinceBase();
+        await offBranch.viewSinceBase();
+        await noBase.viewSinceBase();
+
+        expect(upToDate.$wire.applySelection).not.toHaveBeenCalled();
+        expect(offBranch.$wire.applySelection).not.toHaveBeenCalled();
+        expect(noBase.$wire.applySelection).not.toHaveBeenCalled();
+    });
+
+    it('sinceBaseActive is true only for the working-tree-from-base view', () => {
+        expect(makeForView({ activeCommitHash: null, activeDiffFrom: 'basesha', branchBase: readyBase }).sinceBaseActive).toBe(true);
+        expect(makeForView({ activeCommitHash: null, activeDiffFrom: 'HEAD', branchBase: readyBase }).sinceBaseActive).toBe(false);
+        expect(makeForView({ activeCommitHash: 'basesha', activeDiffFrom: 'basesha', branchBase: readyBase }).sinceBaseActive).toBe(false);
+        expect(makeForView({ activeCommitHash: null, activeDiffFrom: 'basesha', branchBase: readyBase, branch: 'feature/x' }).sinceBaseActive).toBe(false);
+        expect(makeForView({ activeCommitHash: null, activeDiffFrom: 'basesha', branchBase: null }).sinceBaseActive).toBe(false);
+    });
+});
+
 describe('snapshot loading', () => {
     afterEach(() => {
         delete global.Alpine;

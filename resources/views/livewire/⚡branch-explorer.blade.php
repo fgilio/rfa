@@ -386,27 +386,38 @@ new class extends Component {
                         <div
                             data-testid="since-base-row"
                             class="px-4 py-2.5 border-b border-gh-border/50 group"
-                            :class="sinceBaseActionable
-                                ? ('cursor-pointer hover:bg-gh-border/20 transition-colors' + (sinceBaseSelected ? ' bg-gh-link/5 border-l-2 border-l-gh-link' : ''))
-                                : 'opacity-60 cursor-not-allowed'"
+                            :class="{
+                                'cursor-pointer hover:bg-gh-border/20 transition-colors': sinceBaseActionable,
+                                'opacity-60 cursor-not-allowed': !sinceBaseActionable,
+                                'bg-gh-link/5 border-l-2 border-l-gh-link': sinceBaseActionable && sinceBaseSelected,
+                                'bg-gh-text/5 border-l-2 border-l-gh-text': sinceBaseActionable && sinceBaseActive && !sinceBaseSelected,
+                            }"
                             :aria-disabled="sinceBaseActionable ? null : 'true'"
-                            :aria-pressed="sinceBaseActionable ? (sinceBaseSelected ? 'true' : 'false') : null"
-                            @click="sinceBaseActionable && selectSinceBase()"
+                            :aria-current="sinceBaseActionable && sinceBaseActive ? 'true' : null"
+                            @click="sinceBaseActionable && viewSinceBase()"
                         >
                             <div class="flex items-start gap-2">
-                                <span
-                                    class="mt-0.5 size-4 shrink-0 grid place-items-center rounded border transition-colors"
+                                <button
+                                    type="button"
+                                    data-testid="since-base-select-toggle"
+                                    @click.stop="selectSinceBase()"
+                                    @mousedown.stop
+                                    :disabled="!sinceBaseActionable"
+                                    class="mt-0.5 size-4 shrink-0 grid place-items-center rounded border transition-colors cursor-pointer"
                                     :class="!sinceBaseActionable
-                                        ? 'border-gh-border opacity-30'
+                                        ? 'border-gh-border opacity-30 cursor-not-allowed'
                                         : (sinceBaseSelected
                                             ? 'border-gh-link bg-gh-link/20 text-gh-link'
-                                            : 'border-gh-border opacity-0 group-hover:opacity-100')"
-                                    aria-hidden="true"
+                                            : 'border-gh-border opacity-0 group-hover:opacity-100 hover:border-gh-text/40')"
+                                    :aria-pressed="sinceBaseActionable ? (sinceBaseSelected ? 'true' : 'false') : null"
+                                    :title="!sinceBaseActionable
+                                        ? null
+                                        : (sinceBaseSelected ? 'Clear selection' : 'Add base..HEAD + working tree to selection to trim before applying')"
                                 >
                                     <template x-if="sinceBaseActionable && sinceBaseSelected">
                                         <flux:icon icon="check" variant="outline" class="!size-3" />
                                     </template>
-                                </span>
+                                </button>
                                 <div class="min-w-0 flex-1">
                                     <div class="text-xs text-gh-text truncate font-medium tracking-tight">
                                         Since <span class="font-mono" x-text="($wire.branchBase && $wire.branchBase.baseBranch) || 'base branch'"></span>
