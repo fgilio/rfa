@@ -183,6 +183,21 @@
                 return this.activeCommitHash === null && this.activeDiffFrom === EMPTY_TREE_HASH;
             },
 
+            /**
+             * True when the active view IS the since-base range - working-tree
+             * target diffed from the configured base sha. Lights the row up as
+             * the current view (like an active commit row), distinct from
+             * `sinceBaseSelected`, which tracks an in-progress, not-yet-applied
+             * selection. Only meaningful on the current branch, where
+             * activeDiffFrom is HEAD-relative.
+             */
+            get sinceBaseActive() {
+                const base = this.$wire.branchBase;
+                if (!base || base.state !== BranchBaseState.Ready || !base.baseSha) return false;
+                if (this.selectedBranch !== this.currentBranch) return false;
+                return this.activeCommitHash === null && this.activeDiffFrom === base.baseSha;
+            },
+
             get sinceBaseSelected() {
                 const base = this.$wire.branchBase;
                 if (!base || base.state !== BranchBaseState.Ready) return false;
@@ -404,6 +419,20 @@
                 Livewire.navigate(`/p/${this.projectSlug}/rw/${EMPTY_TREE_HASH}`);
             },
 
+            /**
+             * Click handler for the "Since {base}" row body. Auto-applies the
+             * whole base..HEAD + working tree range as one diff, mirroring how a
+             * commit-row click navigates straight to that commit. The row's
+             * checkbox (see {@see selectSinceBase}) is the separate
+             * seed-and-trim affordance; the body is the one-click apply.
+             */
+            viewSinceBase() {
+                if (!this.sinceBaseActionable) return;
+                const base = this.$wire.branchBase;
+                if (!base || !base.baseSha) return;
+                Livewire.navigate(`/p/${this.projectSlug}/rw/${base.baseSha}`);
+            },
+
             isSelected(hash) {
                 return this.selectedHashes.includes(hash);
             },
@@ -612,11 +641,12 @@
             },
 
             /**
-             * Click handler for the "Since {base}" row. Fills the multi-select
-             * with every commit in `base..HEAD` plus working tree, so the user
-             * sees scope visually and can trim before pressing Apply. Toggles
-             * off when invoked while the exact since-base shape is already
-             * selected.
+             * Click handler for the "Since {base}" row's checkbox. Fills the
+             * multi-select with every commit in `base..HEAD` plus working tree,
+             * so the user sees scope visually and can trim before pressing
+             * Apply. (The row body itself auto-applies via {@see viewSinceBase};
+             * this checkbox is the seed-and-trim path.) Toggles off when invoked
+             * while the exact since-base shape is already selected.
              */
             selectSinceBase() {
                 if (!this.sinceBaseActionable) return;

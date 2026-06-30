@@ -672,6 +672,52 @@ describe('since-base row predictability', () => {
     });
 });
 
+describe('since-base auto-apply (row body)', () => {
+    afterEach(() => {
+        delete global.Livewire;
+        delete window.Livewire;
+    });
+
+    const readyBase = { state: BranchBaseState.Ready, baseBranch: 'dev', baseSha: 'basesha', commitCount: 2, hashesInRange: ['tip', 'mid'] };
+
+    it('viewSinceBase navigates straight to the base..working-tree URL', () => {
+        const navigate = vi.fn();
+        global.Livewire = window.Livewire = { navigate };
+
+        makeForView({ branchBase: readyBase }).viewSinceBase();
+
+        expect(navigate).toHaveBeenCalledWith('/p/p/rw/basesha');
+    });
+
+    it('viewSinceBase is a noop when the row is not actionable', () => {
+        const navigate = vi.fn();
+        global.Livewire = window.Livewire = { navigate };
+
+        makeForView({ branchBase: { ...readyBase, state: BranchBaseState.UpToDate } }).viewSinceBase();
+        makeForView({ branchBase: readyBase, branch: 'feature/x' }).viewSinceBase();
+        makeForView({ branchBase: null }).viewSinceBase();
+
+        expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('viewSinceBase is a noop when the base sha is missing', () => {
+        const navigate = vi.fn();
+        global.Livewire = window.Livewire = { navigate };
+
+        makeForView({ branchBase: { ...readyBase, baseSha: null } }).viewSinceBase();
+
+        expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('sinceBaseActive is true only for the working-tree-from-base view', () => {
+        expect(makeForView({ activeCommitHash: null, activeDiffFrom: 'basesha', branchBase: readyBase }).sinceBaseActive).toBe(true);
+        expect(makeForView({ activeCommitHash: null, activeDiffFrom: 'HEAD', branchBase: readyBase }).sinceBaseActive).toBe(false);
+        expect(makeForView({ activeCommitHash: 'basesha', activeDiffFrom: 'basesha', branchBase: readyBase }).sinceBaseActive).toBe(false);
+        expect(makeForView({ activeCommitHash: null, activeDiffFrom: 'basesha', branchBase: readyBase, branch: 'feature/x' }).sinceBaseActive).toBe(false);
+        expect(makeForView({ activeCommitHash: null, activeDiffFrom: 'basesha', branchBase: null }).sinceBaseActive).toBe(false);
+    });
+});
+
 describe('snapshot loading', () => {
     afterEach(() => {
         delete global.Alpine;
