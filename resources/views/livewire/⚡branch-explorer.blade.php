@@ -87,16 +87,15 @@ new class extends Component {
      * Persist the project's base branch from inside the picker and re-resolve
      * the snapshot in place, so the "Since {base}" row reflects the new base
      * without remounting (a remount would close the open panel). Mirrors the
-     * settings dropdown's {@see updatedDefaultBaseBranch}; the page is kept in
-     * sync via the dispatched event so both entry points agree.
+     * settings dropdown's {@see updatedDefaultBaseBranch}. The dispatched event
+     * keeps the page in sync so both entry points agree.
      */
     #[Renderless]
     public function setDefaultBaseBranch(string $branch): void
     {
         $value = trim($branch);
 
-        // A no-op save (same base) would still hit the DB and re-resolve the
-        // snapshot for no visible change - skip the whole round-trip.
+        // Skip the DB write and snapshot reload when the base is unchanged.
         if ($value === $this->defaultBaseBranch) {
             return;
         }
@@ -417,10 +416,11 @@ new class extends Component {
 
                         {{-- "Since {base}" row: always present so its position never
                              shifts. With a usable base (configured, resolved, HEAD
-                             ahead) the row toggles the since-base selection; otherwise
-                             a reason names why, and clicking the row — or the pencil —
-                             opens an inline editor to set the base without leaving the
-                             picker. The project-settings input does the same thing. --}}
+                             ahead) the row body applies the since-base diff and the
+                             checkbox seeds the selection. Without one, a reason names
+                             why, and clicking the row (or the pencil) opens an inline
+                             editor to set the base without leaving the picker. The
+                             project-settings input does the same thing. --}}
                         <div
                             data-testid="since-base-row"
                             class="px-4 py-2.5 border-b border-gh-border/50 group"

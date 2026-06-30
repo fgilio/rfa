@@ -409,9 +409,9 @@ new #[Layout('layouts.app')] class extends Component
     /**
      * Mirror a base-branch change made inside the branch picker back onto the
      * page so the settings input and the "Since {base}" header label stay in
-     * sync. The picker already persisted it and re-resolved its own snapshot;
-     * we skip the render so the picker (keyed on `defaultBaseBranch`) isn't
-     * remounted out from under the open panel.
+     * sync. The picker already persisted it and re-resolved its own snapshot.
+     * Skipping the render keeps the picker (keyed on `defaultBaseBranch`) from
+     * remounting out from under the open panel.
      */
     #[On('default-base-branch-changed')]
     public function syncDefaultBaseBranch(string $value): void

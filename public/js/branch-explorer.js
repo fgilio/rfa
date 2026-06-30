@@ -681,7 +681,7 @@
             /**
              * Row click router for the "Since {base}" row body. With a usable
              * base it applies the since-base diff (the row body's default
-             * one-click path); otherwise it opens the inline editor - the only
+             * one-click path). Otherwise it opens the inline editor, the only
              * thing the user can do here when no base resolves.
              */
             onSinceBaseRowClick() {
