@@ -1,11 +1,17 @@
-{{-- Settings dropdown for the review page: global .gitignore toggle, default base branch, and linked external paths. Rendered inside the page, so wire: bindings and component props resolve against it. The caller guards on isCommitMode(). --}}
+{{-- Project settings dropdown for the review page: global .gitignore toggle, default base branch, and linked external paths. Rendered inside the page, so wire: bindings and component props resolve against it. The caller guards on isCommitMode(). --}}
 
 <flux:dropdown position="bottom" align="end">
-    <flux:tooltip content="Settings">
+    <flux:tooltip content="Project settings">
         <flux:button variant="ghost" size="sm" icon="cog-6-tooth" icon:variant="outline"
-            aria-label="Settings" />
+            aria-label="Project settings" />
     </flux:tooltip>
     <flux:menu>
+        <div class="px-3 pt-2 pb-1">
+            <span class="section-label text-[10px] font-display font-semibold uppercase tracking-brutal text-gh-muted">
+                Project settings
+            </span>
+        </div>
+        <flux:menu.separator />
         <flux:menu.item keep-open>
             <flux:checkbox wire:model.live="respectGlobalGitignore" label="Global .gitignore" class="text-xs whitespace-nowrap" />
         </flux:menu.item>
