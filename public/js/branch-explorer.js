@@ -421,16 +421,33 @@
 
             /**
              * Click handler for the "Since {base}" row body. Auto-applies the
-             * whole base..HEAD + working tree range as one diff, mirroring how a
-             * commit-row click navigates straight to that commit. The row's
-             * checkbox (see {@see selectSinceBase}) is the separate
-             * seed-and-trim affordance; the body is the one-click apply.
+             * whole base..HEAD + working tree range as one diff - the one-click
+             * counterpart to the row's seed-and-trim checkbox ({@see
+             * selectSinceBase}).
+             *
+             * Unlike a commit row (immutable sha) or "Since the beginning"
+             * (constant empty tree), the since-base endpoint is a *resolved*
+             * merge-base that can move if the repo advances while the drawer is
+             * open. So this routes through the same server `applySelection`
+             * flow as Apply rather than a raw client navigate: that re-reads
+             * git, revalidates `snapshotKey`, and recomputes a fresh base sha -
+             * falling back to a stale-refresh toast instead of stranding the
+             * user on an outdated diff.
              */
-            viewSinceBase() {
+            async viewSinceBase() {
                 if (!this.sinceBaseActionable) return;
                 const base = this.$wire.branchBase;
                 if (!base || !base.baseSha) return;
-                Livewire.navigate(`/p/${this.projectSlug}/rw/${base.baseSha}`);
+
+                // Force the exact since-base shape (not selectSinceBase, which
+                // toggles off when it's already selected) and apply it.
+                this._clearSelectionError();
+                this.selectedHashes = [...base.hashesInRange];
+                this.workingTreeSelected = true;
+                this.lastSelectionIndex = -1;
+                this.lastSelectionAnchorIsWT = false;
+
+                await this.applySelection();
             },
 
             isSelected(hash) {
