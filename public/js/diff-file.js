@@ -107,8 +107,7 @@
     // and indentation. Returns '' when the range covers no content cell.
     function selectionSourceText(range, root) {
         if (!range || !root) return '';
-        const doc = root.ownerDocument || (typeof document !== 'undefined' ? document : null);
-        if (!doc) return '';
+        const doc = root.ownerDocument;
 
         const seenRows = new Set();
         const pieces = [];
