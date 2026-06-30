@@ -92,6 +92,33 @@ class GitMetadataService
     }
 
     /**
+     * Best-effort guess at the branch a review should diff against: a local
+     * `main`, else a local `master`. Favours `main` when both exist — it's the
+     * modern default, and the user can change it if the repo prefers otherwise.
+     * Returns null when neither is present so callers leave the base unset
+     * rather than committing to an arbitrary branch.
+     */
+    public function detectDefaultBaseBranch(string $directory): ?string
+    {
+        foreach (['main', 'master'] as $candidate) {
+            $exists = $this->branchExists($directory, $candidate);
+
+            if ($exists === true) {
+                return $candidate;
+            }
+
+            // An indeterminate probe (timeout, lock) isn't a confirmed absence,
+            // so don't fall through to a lower-priority candidate and risk
+            // seeding `master` while `main` may well exist. Leave the base unset.
+            if ($exists === null) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Read the URL configured for `origin`. Returns null when no origin is set
      * (e.g. repos with no remote, or remotes under a different name).
      */
