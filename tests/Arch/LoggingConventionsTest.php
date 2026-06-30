@@ -16,15 +16,24 @@
  * config and lives in tests/Feature/LogChannelPostureTest.php, since arch tests
  * run without app context.
  */
+/**
+ * @return list<string>
+ */
 function loggingConventionFiles(): array
 {
+    static $files;
+
+    if ($files !== null) {
+        return $files;
+    }
+
     $root = dirname(__DIR__, 2);
     $directories = [
         $root.'/app',
         $root.'/resources/views',
     ];
 
-    $files = [];
+    $found = [];
 
     foreach ($directories as $directory) {
         $iterator = new RecursiveIteratorIterator(
@@ -33,31 +42,63 @@ function loggingConventionFiles(): array
 
         foreach ($iterator as $file) {
             if ($file->isFile() && $file->getExtension() === 'php') {
-                $files[] = $file->getPathname();
+                $found[] = $file->getPathname();
             }
         }
     }
 
-    sort($files);
+    sort($found);
 
-    return $files;
+    return $files = $found;
 }
 
 /**
- * @return list<array{level: string, source: string, line: int, path: string}>
+ * Production file contents, keyed by path and read once per process. Every rule
+ * scans the same files, so the read happens a single time for the whole suite.
+ *
+ * @return array<string, string>
  */
-function loggingConventionCalls(): array
+function loggingConventionFileContents(): array
 {
-    $calls = [];
+    static $contents;
+
+    if ($contents !== null) {
+        return $contents;
+    }
+
+    $contents = [];
 
     foreach (loggingConventionFiles() as $file) {
-        $contents = file_get_contents($file);
+        $raw = file_get_contents($file);
 
-        if ($contents === false) {
-            continue;
+        if ($raw !== false) {
+            $contents[$file] = $raw;
         }
+    }
 
-        preg_match_all('/Log::(debug|info|warning|error|critical)\s*\(/', $contents, $matches, PREG_OFFSET_CAPTURE);
+    return $contents;
+}
+
+/**
+ * Every paren-balanced call whose opening `Facade::method(` matches $pattern,
+ * where the pattern's first capture group is the method name (stored as
+ * `match`). Memoized per pattern; reused by the Log:: and Context:: scanners.
+ *
+ * @return list<array{match: string, source: string, line: int, path: string}>
+ */
+function conventionCalls(string $pattern): array
+{
+    static $cache = [];
+
+    if (array_key_exists($pattern, $cache)) {
+        return $cache[$pattern];
+    }
+
+    $root = dirname(__DIR__, 2).'/';
+    $calls = [];
+
+    foreach (loggingConventionFileContents() as $file => $contents) {
+        preg_match_all($pattern, $contents, $matches, PREG_OFFSET_CAPTURE);
 
         foreach ($matches[0] as $index => $match) {
             $offset = $match[1];
@@ -68,15 +109,31 @@ function loggingConventionCalls(): array
             }
 
             $calls[] = [
-                'level' => $matches[1][$index][0],
+                'match' => $matches[1][$index][0],
                 'source' => $source,
                 'line' => substr_count(substr($contents, 0, $offset), "\n") + 1,
-                'path' => str_replace(dirname(__DIR__, 2).'/', '', $file),
+                'path' => str_replace($root, '', $file),
             ];
         }
     }
 
-    return $calls;
+    return $cache[$pattern] = $calls;
+}
+
+/**
+ * @return list<array{level: string, source: string, line: int, path: string}>
+ */
+function loggingConventionCalls(): array
+{
+    return array_map(
+        fn (array $call): array => [
+            'level' => $call['match'],
+            'source' => $call['source'],
+            'line' => $call['line'],
+            'path' => $call['path'],
+        ],
+        conventionCalls('/Log::(debug|info|warning|error|critical)\s*\(/'),
+    );
 }
 
 function extractLoggingConventionCall(string $contents, int $offset): ?string
@@ -315,35 +372,15 @@ test('warning and error logs include a stable reason payload', function () {
  */
 function contextConventionCalls(): array
 {
-    $calls = [];
-
-    foreach (loggingConventionFiles() as $file) {
-        $contents = file_get_contents($file);
-
-        if ($contents === false) {
-            continue;
-        }
-
-        preg_match_all('/Context::(add|addIf|addHidden|push|increment|decrement)\s*\(/', $contents, $matches, PREG_OFFSET_CAPTURE);
-
-        foreach ($matches[0] as $index => $match) {
-            $offset = $match[1];
-            $source = extractLoggingConventionCall($contents, $offset);
-
-            if ($source === null) {
-                continue;
-            }
-
-            $calls[] = [
-                'method' => $matches[1][$index][0],
-                'source' => $source,
-                'line' => substr_count(substr($contents, 0, $offset), "\n") + 1,
-                'path' => str_replace(dirname(__DIR__, 2).'/', '', $file),
-            ];
-        }
-    }
-
-    return $calls;
+    return array_map(
+        fn (array $call): array => [
+            'method' => $call['match'],
+            'source' => $call['source'],
+            'line' => $call['line'],
+            'path' => $call['path'],
+        ],
+        conventionCalls('/Context::(add|addIf|addHidden|push|increment|decrement)\s*\(/'),
+    );
 }
 
 /**
