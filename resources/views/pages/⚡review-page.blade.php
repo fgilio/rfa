@@ -1412,7 +1412,7 @@ new #[Layout('layouts.app')] class extends Component
                     </div>
                 @endif
 
-                {{-- Settings --}}
+                {{-- Project settings --}}
                 @if(! $this->isCommitMode())
                     @include('pages.partials.review-settings-dropdown')
                 @endif
