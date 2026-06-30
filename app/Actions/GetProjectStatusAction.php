@@ -8,6 +8,7 @@ use App\DTOs\FileListEntry;
 use App\DTOs\ReviewFilePair;
 use App\Exceptions\GitCommandException;
 use App\Services\GitDiffService;
+use App\Support\LogSanitizer;
 use Illuminate\Support\Facades\Log;
 
 final readonly class GetProjectStatusAction
@@ -26,8 +27,9 @@ final readonly class GetProjectStatusAction
         } catch (GitCommandException $e) {
             Log::warning('project.status.failed', [
                 'reason' => 'project_status_failed',
-                'repoPath' => $repoPath,
-                'stderr' => $e->stderr,
+                'repo' => $repoPath,
+                'exit_code' => $e->exitCode,
+                'stderr_summary' => LogSanitizer::summary($e->stderr),
             ]);
 
             return ['dirty' => false, 'fileCount' => 0, 'additions' => 0, 'deletions' => 0];

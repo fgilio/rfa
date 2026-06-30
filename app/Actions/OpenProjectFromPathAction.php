@@ -36,7 +36,7 @@ final readonly class OpenProjectFromPathAction
             Log::warning('project.registration.failed', [
                 'reason' => 'project_registration_failed',
                 'path' => $path,
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
             ]);
 
             return null;

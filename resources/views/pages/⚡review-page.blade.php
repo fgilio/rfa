@@ -550,8 +550,8 @@ new #[Layout('layouts.app')] class extends Component
             $this->dispatch('refresh-completed', changedCount: $changedCount);
         } catch (\Throwable $e) {
             $outcome = 'error';
-            Context::add('rfa.error', $e->getMessage());
             Context::add('rfa.error_class', $e::class);
+            Context::add('rfa.reason', 'refresh_failed');
 
             throw $e;
         } finally {

@@ -84,7 +84,7 @@ final readonly class ResolveBranchBaseAction
                 'repo' => $repoPath,
                 'from' => $from,
                 'to' => $to,
-                'error' => $e->getMessage(),
+                'exit_code' => $e->exitCode,
             ]);
 
             return [];

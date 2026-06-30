@@ -18,7 +18,11 @@ return [
     |
     */
 
-    'default' => env('LOG_CHANNEL', 'stack'),
+    // RFA ships to user machines and keeps logs strictly local. The default
+    // resolves to the bounded `daily` channel (info level, 7-day retention) so
+    // a release build never grows an unbounded `laravel.log` or accepts
+    // debug-level noise. See .claude/skills/wide-events/SKILL.md → Storage.
+    'default' => env('LOG_CHANNEL', 'daily'),
 
     /*
     |--------------------------------------------------------------------------
@@ -61,15 +65,15 @@ return [
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => env('LOG_LEVEL', 'info'),
             'replace_placeholders' => true,
         ],
 
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
-            'days' => env('LOG_DAILY_DAYS', 14),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => env('LOG_DAILY_DAYS', 7),
             'replace_placeholders' => true,
         ],
 
