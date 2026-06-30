@@ -43,9 +43,10 @@ When a path's text content is set client-side (e.g. `x-text` from a JS object), 
 - Prefer raw text `text-gh-green`/`text-gh-red` over `flux:badge` for +/- counts in headers
 
 ## Dark Mode
-- Managed by Flux's `@fluxAppearance` + `$flux.dark`
-- Toggle: `$flux.dark = ! $flux.dark`
-- System preference detection is automatic via Flux
+- Managed by Flux's `@fluxAppearance` + `$flux.appearance` (`'light' | 'dark' | 'system'`)
+- The `theme-switcher` SFC is a segmented `flux:radio.group` bound `x-model="$flux.appearance"` — three states: light, dark, and system (follows the OS via `prefers-color-scheme`). `system` is the default when the user hasn't chosen.
+- Flux applies/removes the `dark` class on `<html>` and tracks the OS in system mode; read the resolved state via `$flux.dark` when you only need the boolean.
+- The switcher also mirrors the *resolved* theme into the persistent `rfa_theme` cookie (`dark`/`light`, 1-year) so non-Livewire consumers can read it without JS. Keep that cookie write in sync if you change the switcher.
 
 ## Visual Style
 - Brutalist/raw aesthetic: bold type, dramatic scale contrast, generous whitespace in chrome
