@@ -148,10 +148,20 @@
                 return base.state === BranchBaseState.Ready;
             },
 
+            /**
+             * The configured base branch name, preferring the resolved snapshot
+             * value and falling back to the project setting. Empty when none is
+             * set. Single source of truth for the row label, the edit affordance,
+             * and the editor's initial draft.
+             */
+            get baseBranchName() {
+                const base = this.$wire.branchBase;
+                return (base && base.baseBranch) || this.$wire.defaultBaseBranch || '';
+            },
+
             /** True when a base branch is configured (drives the edit affordance label). */
             get hasBaseBranch() {
-                const base = this.$wire.branchBase;
-                return Boolean((base && base.baseBranch) || this.$wire.defaultBaseBranch);
+                return Boolean(this.baseBranchName);
             },
 
             /**
@@ -288,8 +298,6 @@
 
             closePanel() {
                 this.open = false;
-                this.baseEditing = false;
-                this.baseDraft = '';
                 if (Alpine.store('overlays').is('branch-explorer')) Alpine.store('overlays').close();
             },
 
@@ -687,8 +695,7 @@
 
             /** Reveal the inline editor, seeded with the current base, and focus it. */
             startEditBase() {
-                const base = this.$wire.branchBase;
-                this.baseDraft = (base && base.baseBranch) || this.$wire.defaultBaseBranch || '';
+                this.baseDraft = this.baseBranchName;
                 this.baseEditing = true;
                 this._clearSelectionError();
                 this.$nextTick(() => this.$refs.baseInput?.focus());

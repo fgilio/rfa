@@ -193,6 +193,21 @@ test('setDefaultBaseBranch persists the base, reloads the snapshot, and notifies
         ->and($component->get('branchBase')['baseBranch'])->toBe('dev');
 });
 
+test('setDefaultBaseBranch is a no-op when the base is unchanged', function () {
+    fakeGitMetadata();
+
+    $project = Project::factory()->create(['default_base_branch' => 'dev']);
+
+    Livewire::test('branch-explorer', [
+        'repoPath' => '/tmp/repo',
+        'projectId' => $project->id,
+        'currentBranch' => 'main',
+        'defaultBaseBranch' => 'dev',
+    ])
+        ->call('setDefaultBaseBranch', '  dev  ')
+        ->assertNotDispatched('default-base-branch-changed');
+});
+
 test('setDefaultBaseBranch with a blank value clears the project base', function () {
     fakeGitMetadata();
 

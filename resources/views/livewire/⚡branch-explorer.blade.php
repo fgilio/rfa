@@ -94,6 +94,13 @@ new class extends Component {
     public function setDefaultBaseBranch(string $branch): void
     {
         $value = trim($branch);
+
+        // A no-op save (same base) would still hit the DB and re-resolve the
+        // snapshot for no visible change - skip the whole round-trip.
+        if ($value === $this->defaultBaseBranch) {
+            return;
+        }
+
         $this->defaultBaseBranch = $value;
 
         app(UpdateProjectSettingAction::class)->handle($this->projectId, [
@@ -450,7 +457,7 @@ new class extends Component {
                                 </button>
                                 <div class="min-w-0 flex-1">
                                     <div class="text-xs text-gh-text truncate font-medium tracking-tight">
-                                        Since <span class="font-mono" x-text="(($wire.branchBase && $wire.branchBase.baseBranch) || $wire.defaultBaseBranch) || 'base branch'"></span>
+                                        Since <span class="font-mono" x-text="baseBranchName || 'base branch'"></span>
                                     </div>
                                     <span class="block mt-0.5 text-[10px] font-mono text-gh-muted" x-text="sinceBaseReason"></span>
                                 </div>
