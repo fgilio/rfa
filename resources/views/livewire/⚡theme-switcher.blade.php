@@ -14,8 +14,13 @@ new class extends Component {};
 >
     <flux:dropdown position="bottom" align="end">
         {{-- Trigger mirrors the current appearance: the icon swaps to whichever
-             mode is active so the collapsed control always reads as "current mode". --}}
-        <flux:button variant="ghost" size="sm" square aria-label="Theme" data-testid="theme-switcher-trigger">
+             mode is active so the collapsed control always reads as "current mode".
+             The accessible name tracks the same state so assistive tech announces
+             the active theme without opening the menu (static label is the
+             pre-hydration fallback). --}}
+        <flux:button variant="ghost" size="sm" square data-testid="theme-switcher-trigger"
+            aria-label="Theme"
+            x-bind:aria-label="'Theme: ' + { light: 'Light', dark: 'Dark', system: 'System' }[$flux.appearance]">
             <flux:icon.sun variant="outline" class="size-5" x-show="$flux.appearance === 'light'" x-cloak />
             <flux:icon.moon variant="outline" class="size-5" x-show="$flux.appearance === 'dark'" x-cloak />
             <flux:icon.computer-desktop variant="outline" class="size-5" x-show="$flux.appearance === 'system'" x-cloak />

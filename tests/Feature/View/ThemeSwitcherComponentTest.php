@@ -27,6 +27,11 @@ test('collapses into a dropdown whose trigger reflects the current mode', functi
         ->assertSeeHtml("x-show=\"\$flux.appearance === 'system'\"");
 });
 
+test('announces the active theme in the trigger accessible name', function () {
+    Livewire::test('theme-switcher')
+        ->assertSeeHtml("x-bind:aria-label=\"'Theme: ' + { light: 'Light', dark: 'Dark', system: 'System' }[\$flux.appearance]\"");
+});
+
 test('mirrors the resolved theme into the rfa_theme cookie', function () {
     Livewire::test('theme-switcher')
         ->assertSeeHtml('rfa_theme');
