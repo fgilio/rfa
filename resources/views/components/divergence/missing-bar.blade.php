@@ -5,7 +5,10 @@
     longer exists (deleted / renamed / mid-rebase). Unlike Diverged/Detached
     (quiet header marker), this stays a full-width bar — but on-brand (house
     pattern from update-banner, gh-* tokens) rather than a stock-Flux callout,
-    and now dismissible. Buttons call ReviewPage actions directly.
+    and now dismissible. Rendered inside the review page's
+    `divergence-missing-bar` island, where a wire:click would scope its
+    render to the island: buttons instead `$dispatch` bubbling `rfa-*`
+    window events that the page-root Alpine forwards to `$wire`.
 --}}
 @props(['state', 'context' => []])
 
@@ -28,9 +31,9 @@
                 </p>
             </div>
             <div class="flex items-center gap-1 shrink-0">
-                <button type="button" wire:click="dismissMissingTarget" class="text-xs font-medium text-gh-muted hover:text-gh-text px-2.5 py-1.5 rounded-md transition-colors">Dismiss</button>
+                <button type="button" @click="$dispatch('rfa-dismiss-missing-target')" class="text-xs font-medium text-gh-muted hover:text-gh-text px-2.5 py-1.5 rounded-md transition-colors">Dismiss</button>
                 @if($currentBranch)
-                    <button type="button" wire:click="switchReviewToHead" class="text-xs font-medium font-display rounded-md px-3 py-1.5 bg-gh-accent text-gh-bg hover:opacity-90 transition-opacity">Switch review here</button>
+                    <button type="button" @click="$dispatch('rfa-switch-review-to-head')" class="text-xs font-medium font-display rounded-md px-3 py-1.5 bg-gh-accent text-gh-bg hover:opacity-90 transition-opacity">Switch review here</button>
                 @endif
             </div>
         </div>

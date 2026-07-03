@@ -151,6 +151,14 @@ test('diverged banner shown when HEAD differs and a comment exists', function ()
     expect($component->get('divergenceContext.commentCount'))->toBe(1);
     expect($component->get('projectBranch'))->toBe('main');
     $component->assertSeeHtml('data-testid="divergence-banner-diverged"');
+
+    // The banner sits inside the divergence-marker island, where a wire:click
+    // would settle only that island. Its actions must bridge through window
+    // events that the page root forwards to $wire at page scope.
+    $component->assertSeeHtml("\$dispatch('rfa-switch-review-to-head')");
+    $component->assertSeeHtml("\$dispatch('rfa-keep-reviewing')");
+    $component->assertSeeHtml('x-on:rfa-switch-review-to-head.window');
+    $component->assertSeeHtml('x-on:rfa-keep-reviewing.window');
 });
 
 test('detached banner shown when HEAD is detached', function () {
@@ -205,6 +213,12 @@ test('initial open keeps the banner and does not retarget when branch existence 
     expect($component->get('projectBranch'))->toBe('main');
     expect($this->project->fresh()->branch)->toBe('main');
     $component->assertSeeHtml('data-testid="divergence-banner-missing"');
+
+    // The bar sits inside the divergence-missing-bar island; its actions
+    // bridge through window events so they run at page scope.
+    $component->assertSeeHtml("\$dispatch('rfa-dismiss-missing-target')");
+    $component->assertSeeHtml('x-on:rfa-dismiss-missing-target.window');
+    $component->assertSeeHtml('x-on:rfa-dismiss-detached-banner.window');
 });
 
 test('keepReviewing suppresses the banner for that branch, even across new commits', function () {

@@ -1217,6 +1217,14 @@ new #[Layout('layouts.app')] class extends Component
     x-on:rfa-hide-reviewed.window="hideReviewedFiles()"
     x-on:rfa-show-all-files.window="showAllFiles()"
     x-on:rfa-clear-recently-reviewed.window="clearRecentlyReviewed()"
+    {{-- Divergence banner buttons sit inside the divergence islands, where a
+         wire:click would scope its render to that island. They bridge through
+         these window events so the actions run at page scope: switching and
+         keep/dismiss all settle more than the banner they were clicked in. --}}
+    x-on:rfa-keep-reviewing.window="$wire.keepReviewing()"
+    x-on:rfa-switch-review-to-head.window="$wire.switchReviewToHead()"
+    x-on:rfa-dismiss-detached-banner.window="$wire.dismissDetachedBanner()"
+    x-on:rfa-dismiss-missing-target.window="$wire.dismissMissingTarget()"
     {{-- Filter/file/commit shortcuts are registered through the keymap store
          (see registerShortcuts() in review-page.js). Only the in-input Escape
          that clears the file filter stays here, since the store suppresses
