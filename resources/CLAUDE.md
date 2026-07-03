@@ -182,6 +182,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `toggleReviewed` | Yes | Always skips the parent render; refreshes the `reviewed-toggle`, `reviewed-counter`, and `file-list` islands, plus the visibility islands (`source-diff-list`, `file-count`, `file-list-header`, `status-strip-copy-paths`) in Hide-reviewed mode where the toggle drops the file from the visible set. |
 | `hideReviewedFiles` / `showAllFiles` | Yes | Skip the parent render; refresh `reviewed-toggle`, `reviewed-counter`, `file-list`, and the visibility islands as files drop in/out of the visible set. |
 | `clearRecentlyReviewed` | Yes | Skip the parent render; refresh `file-list` only in Hide-reviewed mode (where the Recently-reviewed group shows). |
+| `checkHeadDivergence` | Yes | Poller transitions settle through the `divergence-marker` and `divergence-missing-bar` islands instead of morphing the page. Renders the page only when auto-follow rehydrated the file list, or when the file list is empty (the divergence empty-state message lives outside the islands and there are no children to re-hydrate). |
 | `submitReview` | No | Replaces entire submit bar UI (submitted state) |
 | `discardFileChanges` | No | Structural change: file removed from list, trash updated |
 | `restoreDiscardedFile` | No | Structural change: file reappears in list |

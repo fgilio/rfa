@@ -17,6 +17,13 @@ use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
+function divergenceIslandFragments(mixed $component, string $name): string
+{
+    return collect($component->effects['islandFragments'] ?? [])
+        ->filter(fn (string $fragment): bool => str_contains($fragment, "name={$name}|"))
+        ->implode("\n");
+}
+
 /**
  * Install a controllable GetCurrentHeadAction fake in the container.
  * Tests mutate `$fake->result` to simulate a HEAD move across poll ticks.
@@ -169,7 +176,8 @@ test('missing_target banner shown when the target vanishes mid-review', function
     expect($component->get('divergenceState'))->toBe(DivergenceState::MissingTarget);
     expect($component->get('divergenceContext.target'))->toBe('main');
     expect($component->get('divergenceContext.currentBranch'))->toBe('feature-x');
-    $component->assertSeeHtml('data-testid="divergence-banner-missing"');
+    // The bar arrives through its island: the transition skips the page morph.
+    expect(divergenceIslandFragments($component, 'divergence-missing-bar'))->toContain('divergence-banner-missing');
 });
 
 test('initial open auto-follows the checked-out branch when the stored target is gone', function () {
@@ -388,6 +396,171 @@ test('switchReviewToHead is undoable and undo restores the original target', fun
     // HEAD is still on feature-x, so restoring the main target must re-surface
     // divergence — the head poller won't fire on an unchanged HEAD identity.
     expect($component->get('divergenceState'))->toBe(DivergenceState::Diverged);
+});
+
+test('banner-only transition skips the parent render and paints the divergence islands', function () {
+    Comment::create([
+        'id' => 'c1',
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => 'main',
+        'file_path' => 'src/Foo.php',
+        'side' => 'new',
+        'start_line' => 1,
+        'end_line' => 1,
+        'file_content_hash' => 'mock-hash',
+        'body' => 'hello',
+        'is_draft' => false,
+        'submitted_at' => now(),
+    ]);
+
+    $fake = bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'main', sha: 'a'.str_repeat('0', 39), detached: false, targetExists: true));
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Aligned);
+
+    $fake->result = new CurrentHeadResult(branch: 'feature-x', sha: 'b'.str_repeat('0', 39), detached: false, targetExists: true);
+    $component->call('checkHeadDivergence');
+
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Diverged);
+    // A page morph would re-hydrate every diff-file child, so the banner must
+    // travel through its island instead.
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+    expect(divergenceIslandFragments($component, 'divergence-marker'))->toContain('divergence-banner-diverged');
+});
+
+test('unchanged divergence skips the parent render without painting islands', function () {
+    $fake = bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'main', sha: 'a'.str_repeat('0', 39), detached: false, targetExists: true));
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+
+    $component->call('checkHeadDivergence');
+
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+    expect(divergenceIslandFragments($component, 'divergence-marker'))->toBe('');
+    expect(divergenceIslandFragments($component, 'divergence-missing-bar'))->toBe('');
+});
+
+test('auto-follow transition renders the whole page because the file list was rehydrated', function () {
+    // No comments, so a HEAD move silently re-points the review.
+    $fake = bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'main', sha: 'a'.str_repeat('0', 39), detached: false, targetExists: true));
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+
+    $fake->result = new CurrentHeadResult(branch: 'feature-x', sha: 'b'.str_repeat('0', 39), detached: false, targetExists: true);
+    $component->call('checkHeadDivergence');
+
+    expect($component->get('projectBranch'))->toBe('feature-x');
+    expect(\Livewire\store($component->instance())->get('skipRender', false))->toBeFalse();
+});
+
+test('a transition with no files renders the page so the divergence empty state updates', function () {
+    // The divergence empty-state message lives outside the islands; with no
+    // diff-file children the full morph is the cheap and correct path.
+    app()->bind(GetFileListAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        {
+            return [];
+        }
+    });
+
+    Comment::create([
+        'id' => 'c1',
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => 'main',
+        'file_path' => 'src/Foo.php',
+        'side' => 'new',
+        'start_line' => 1,
+        'end_line' => 1,
+        'file_content_hash' => 'mock-hash',
+        'body' => 'hello',
+        'is_draft' => false,
+        'submitted_at' => now(),
+    ]);
+
+    $fake = bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'main', sha: 'a'.str_repeat('0', 39), detached: false, targetExists: true));
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+
+    $fake->result = new CurrentHeadResult(branch: 'feature-x', sha: 'b'.str_repeat('0', 39), detached: false, targetExists: true);
+    $component->call('checkHeadDivergence');
+
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Diverged);
+    expect(\Livewire\store($component->instance())->get('skipRender', false))->toBeFalse();
+    $component->assertSeeHtml('Nothing to review on');
+});
+
+test('deleting a comment skips the parent render when divergence is unchanged', function () {
+    Comment::create([
+        'id' => 'c-1',
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => 'main',
+        'file_path' => 'src/Foo.php',
+        'side' => 'new',
+        'start_line' => 1,
+        'end_line' => 1,
+        'file_content_hash' => 'mock-hash',
+        'body' => 'hello',
+        'is_draft' => false,
+        'submitted_at' => now(),
+    ]);
+
+    bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'main', sha: 'a'.str_repeat('0', 39), detached: false, targetExists: true));
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+
+    $component->set('comments', [[
+        'id' => 'c-1',
+        'fileId' => 'abc123',
+        'file' => 'src/Foo.php',
+        'side' => 'new',
+        'startLine' => 1,
+        'endLine' => 1,
+        'body' => 'hello',
+        'isDraft' => false,
+    ]]);
+    $component->call('deleteComment', 'c-1');
+
+    // The mutation's flag owns the skip; the unchanged divergence re-check
+    // must neither paint islands nor decide the render.
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+    expect(divergenceIslandFragments($component, 'divergence-marker'))->toBe('');
+    expect(divergenceIslandFragments($component, 'divergence-missing-bar'))->toBe('');
+});
+
+test('a divergence transition caught during a comment write paints the divergence islands', function () {
+    Comment::create([
+        'id' => 'c1',
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => 'main',
+        'file_path' => 'src/Foo.php',
+        'side' => 'new',
+        'start_line' => 1,
+        'end_line' => 1,
+        'file_content_hash' => 'mock-hash',
+        'body' => 'hello',
+        'is_draft' => false,
+        'submitted_at' => now(),
+    ]);
+
+    $fake = bindFakeCurrentHeadAction(new CurrentHeadResult(branch: 'main', sha: 'a'.str_repeat('0', 39), detached: false, targetExists: true));
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'divergence-test']);
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Aligned);
+
+    // HEAD moves between poller ticks; the write's re-check catches it first.
+    // The poller will see the state as already applied, so the banner must
+    // paint now, through the islands, despite the mutation's skipRender.
+    $fake->result = new CurrentHeadResult(branch: 'feature-x', sha: 'b'.str_repeat('0', 39), detached: false, targetExists: true);
+    $component->call('addComment', 'abc123', 'right', 1, 1, 'another note');
+
+    expect($component->get('divergenceState'))->toBe(DivergenceState::Diverged);
+    expect(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+    expect(divergenceIslandFragments($component, 'divergence-marker'))->toContain('divergence-banner-diverged');
 });
 
 test('dismissMissingTarget suppresses the missing-target banner for that branch', function () {

@@ -102,7 +102,7 @@ test('update returns null when no row matches the id', function () {
 
 // -- delete --
 
-test('delete removes the comment and offers undo while rendering the parent', function () {
+test('delete removes the comment and offers undo while skipping the parent render', function () {
     $added = ($this->add)([])->comments;
     $commentId = $added[0]['id'];
 
@@ -115,7 +115,7 @@ test('delete removes the comment and offers undo while rendering the parent', fu
         ->and($mutation->undo['payload'][0]['id'])->toBe($commentId)
         ->and($mutation->undo['message'])->toBe('Comment deleted')
         ->and($mutation->checksDivergence)->toBeTrue()
-        ->and($mutation->skipsRender)->toBeFalse();
+        ->and($mutation->skipsRender)->toBeTrue();
 
     expect(Comment::find($commentId))->toBeNull();
 });
@@ -134,12 +134,12 @@ test('delete of a valid id absent from the pool offers no undo and refreshes no 
         ->and($mutation->affectedFileIds)->toBe([])
         ->and($mutation->undo)->toBeNull()
         ->and($mutation->checksDivergence)->toBeTrue()
-        ->and($mutation->skipsRender)->toBeFalse();
+        ->and($mutation->skipsRender)->toBeTrue();
 });
 
 // -- clearAll --
 
-test('clearAll deletes every comment and offers undo while rendering the parent', function () {
+test('clearAll deletes every comment and offers undo while skipping the parent render', function () {
     $first = ($this->add)([], 'file-abc', 'one')->comments;
     $both = ($this->add)($first, 'file-def', 'two')->comments;
 
@@ -152,7 +152,7 @@ test('clearAll deletes every comment and offers undo while rendering the parent'
         ->and($mutation->undo['payload'])->toHaveCount(2)
         ->and($mutation->undo['message'])->toBe('Cleared 2 comments')
         ->and($mutation->checksDivergence)->toBeTrue()
-        ->and($mutation->skipsRender)->toBeFalse();
+        ->and($mutation->skipsRender)->toBeTrue();
 
     expect(Comment::count())->toBe(0);
 });
@@ -182,7 +182,7 @@ test('restore re-persists a removed comment and re-checks divergence without off
         ->and($mutation->affectedFileIds)->toBe(['file-abc'])
         ->and($mutation->undo)->toBeNull()
         ->and($mutation->checksDivergence)->toBeTrue()
-        ->and($mutation->skipsRender)->toBeFalse();
+        ->and($mutation->skipsRender)->toBeTrue();
 
     expect(Comment::where('id', $commentId)->exists())->toBeTrue();
 });

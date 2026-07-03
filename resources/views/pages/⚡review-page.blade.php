@@ -696,8 +696,9 @@ new #[Layout('layouts.app')] class extends Component
      * The new comment reaches its child through the event, so the parent skips
      * its own render where the mutation allows. That avoids re-hydrating every
      * diff-file child (the TooManyComponentsException hazard) and keeps the 1+N
-     * contract. Divergence transitions surface through the head-divergence
-     * poller, not by piggybacking on comment writes.
+     * contract. A divergence transition caught by the write's re-check settles
+     * through the divergence islands, so the banner stays current even when
+     * the mutation skips the parent render.
      */
     private function applyCommentMutation(?ReviewCommentMutation $mutation): void
     {
@@ -721,7 +722,7 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         if ($mutation->checksDivergence) {
-            $this->checkHeadDivergence();
+            $this->recheckDivergenceDuringCommentWrite();
         }
 
         if ($mutation->skipsRender) {
@@ -1337,7 +1338,11 @@ new #[Layout('layouts.app')] class extends Component
                         :default-base-branch="$defaultBaseBranch"
                     />
                     @if(! $this->isCommitMode())
-                        <x-divergence.marker :state="$divergenceState" :context="$divergenceContext" />
+                        {{-- Island so a banner-only divergence transition repaints the
+                             marker without morphing the page (see renderDivergenceIslands). --}}
+                        @island(name: 'divergence-marker', always: true)
+                            <x-divergence.marker :state="$divergenceState" :context="$divergenceContext" />
+                        @endisland
                     @endif
                 @endif
                 <livewire:comments-drawer :repo-path="$repoPath" :project-id="$projectId ?: null" />
@@ -1498,7 +1503,9 @@ new #[Layout('layouts.app')] class extends Component
             :target="$projectBranch"
         />
 
-        <x-divergence.missing-bar :state="$divergenceState" :context="$divergenceContext" />
+        @island(name: 'divergence-missing-bar', always: true)
+            <x-divergence.missing-bar :state="$divergenceState" :context="$divergenceContext" />
+        @endisland
     @endif
 
     @if($commitInfo)
