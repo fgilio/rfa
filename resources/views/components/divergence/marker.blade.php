@@ -7,7 +7,11 @@
     where its cause does. Only shows for the quiet, recoverable states
     (Diverged / Detached); MissingTarget is a blocking bar (<x-divergence.missing-bar>).
 
-    Buttons call ReviewPage actions directly (this is rendered inside its DOM).
+    Rendered inside the review page's `divergence-marker` island, where a
+    wire:click would scope its render to the island. Buttons instead
+    `$dispatch` bubbling `rfa-*` window events that the page-root
+    Alpine forwards to `$wire`, so the actions settle the whole
+    page (see the event schema in resources/CLAUDE.md).
 --}}
 @props(['state', 'context' => []])
 
@@ -80,10 +84,10 @@
 
             <div class="flex items-center justify-end gap-1 px-3 py-2.5 border-t border-gh-border bg-gh-surface/50">
                 @if($isDiverged)
-                    <button type="button" wire:click="keepReviewing" @click="open = false" class="text-xs font-medium text-gh-muted hover:text-gh-text px-2.5 py-1.5 rounded-md transition-colors">Keep reviewing</button>
-                    <button type="button" wire:click="switchReviewToHead" @click="open = false" class="text-xs font-medium font-display rounded-md px-3 py-1.5 bg-gh-accent text-gh-bg hover:opacity-90 transition-opacity">Switch review here</button>
+                    <button type="button" @click="open = false; $dispatch('rfa-keep-reviewing')" class="text-xs font-medium text-gh-muted hover:text-gh-text px-2.5 py-1.5 rounded-md transition-colors">Keep reviewing</button>
+                    <button type="button" @click="open = false; $dispatch('rfa-switch-review-to-head')" class="text-xs font-medium font-display rounded-md px-3 py-1.5 bg-gh-accent text-gh-bg hover:opacity-90 transition-opacity">Switch review here</button>
                 @else
-                    <button type="button" wire:click="dismissDetachedBanner" @click="open = false" class="text-xs font-medium text-gh-muted hover:text-gh-text px-2.5 py-1.5 rounded-md transition-colors">Dismiss</button>
+                    <button type="button" @click="open = false; $dispatch('rfa-dismiss-detached-banner')" class="text-xs font-medium text-gh-muted hover:text-gh-text px-2.5 py-1.5 rounded-md transition-colors">Dismiss</button>
                 @endif
             </div>
         </div>

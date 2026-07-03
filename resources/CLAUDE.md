@@ -182,6 +182,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `toggleReviewed` | Yes | Always skips the parent render; refreshes the `reviewed-toggle`, `reviewed-counter`, and `file-list` islands, plus the visibility islands (`source-diff-list`, `file-count`, `file-list-header`, `status-strip-copy-paths`) in Hide-reviewed mode where the toggle drops the file from the visible set. |
 | `hideReviewedFiles` / `showAllFiles` | Yes | Skip the parent render; refresh `reviewed-toggle`, `reviewed-counter`, `file-list`, and the visibility islands as files drop in/out of the visible set. |
 | `clearRecentlyReviewed` | Yes | Skip the parent render; refresh `file-list` only in Hide-reviewed mode (where the Recently-reviewed group shows). |
+| `checkHeadDivergence` | Yes | Poller transitions settle through the `divergence-marker` and `divergence-missing-bar` islands instead of morphing the page. Renders the page only when auto-follow rehydrated the file list, or when the file list is empty (the divergence empty-state message lives outside the islands and there are no children to re-hydrate). |
 | `submitReview` | No | Replaces entire submit bar UI (submitted state) |
 | `discardFileChanges` | No | Structural change: file removed from list, trash updated |
 | `restoreDiscardedFile` | No | Structural change: file reappears in list |
@@ -198,6 +199,10 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `rfa-hide-reviewed` | `reviewed-toggle` island button `$dispatch` (window) | ReviewPage root Alpine `@window` -> queued `$wire.hideReviewedFiles` | none |
 | `rfa-show-all-files` | `reviewed-toggle` island button `$dispatch` (window) | ReviewPage root Alpine `@window` -> queued `$wire.showAllFiles` | none |
 | `rfa-clear-recently-reviewed` | Recently-reviewed "Clear" button `$dispatch` (window) | ReviewPage root Alpine `@window` -> queued `$wire.clearRecentlyReviewed` | none |
+| `rfa-keep-reviewing` | divergence marker popover button `$dispatch` (window; the marker lives in the `divergence-marker` island, so a wire:click would settle only that island) | ReviewPage root Alpine `@window` -> `$wire.keepReviewing` | none |
+| `rfa-switch-review-to-head` | divergence marker popover + missing-target bar buttons `$dispatch` (window) | ReviewPage root Alpine `@window` -> `$wire.switchReviewToHead` | none |
+| `rfa-dismiss-detached-banner` | divergence marker popover button `$dispatch` (window) | ReviewPage root Alpine `@window` -> `$wire.dismissDetachedBanner` | none |
+| `rfa-dismiss-missing-target` | missing-target bar button `$dispatch` (window; the bar lives in the `divergence-missing-bar` island) | ReviewPage root Alpine `@window` -> `$wire.dismissMissingTarget` | none |
 | `rfa-comment-selection` | ReviewPage Alpine `$dispatch` (window), fired by the `review.comment-selection` shortcut (`c`); resolves the selection's owning file id from its `[data-file-id]` ancestor | DiffFile Alpine `@window` -> `if ($event.detail.fileId === fileId) commentOnSelection()` | `{fileId}` |
 | `comment-updated` | ReviewPage PHP dispatch | DiffFile Alpine `@window` | `{fileId, comments}` |
 | `copy-to-clipboard` | DiffFile Alpine/PHP, ReviewPage PHP, comment-display, comments-drawer, branch-explorer | layout `<body>` Alpine `@window` | `{text, toast?}` (if `toast` string is set, a success toast with that text shows on success) |

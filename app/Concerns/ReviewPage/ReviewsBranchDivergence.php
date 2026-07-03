@@ -25,9 +25,9 @@ use Livewire\Attributes\On;
  *
  * Component state read/written: $divergenceState, $divergenceContext,
  * $dismissedAtHead, $dismissedAtBranch, $divergenceChecked, $projectBranch,
- * $projectId, $repoPath. Calls into the coordinator spine (isCommitMode,
- * softRefresh, rehydrateForTarget) and the render pipeline (skipRender,
- * dispatch).
+ * $projectId, $repoPath, $files. Calls into the coordinator spine
+ * (isCommitMode, softRefresh, rehydrateForTarget) and the render pipeline
+ * (skipRender, forceRender, renderIsland, dispatch).
  */
 trait ReviewsBranchDivergence
 {
@@ -37,9 +37,64 @@ trait ReviewsBranchDivergence
     #[On('head-divergence-transitioned')]
     public function checkHeadDivergence(): void
     {
+        $branchBefore = $this->projectBranch;
+
         if (! $this->refreshDivergenceState()) {
             $this->skipRender();
+
+            return;
         }
+
+        if ($this->divergenceNeedsFullRender($branchBefore)) {
+            return;
+        }
+
+        $this->skipRender();
+        $this->renderDivergenceIslands();
+    }
+
+    /**
+     * Re-check divergence from inside a comment write without settling the
+     * page render, which the mutation's flags own. A transition surfacing
+     * mid-write still refreshes the divergence islands: the poller sees the
+     * state as already applied on its next tick, so a skipRender mutation
+     * that swallowed the repaint would strand a stale banner.
+     */
+    private function recheckDivergenceDuringCommentWrite(): void
+    {
+        $branchBefore = $this->projectBranch;
+
+        if (! $this->refreshDivergenceState()) {
+            return;
+        }
+
+        if ($this->divergenceNeedsFullRender($branchBefore)) {
+            // Pin the render before the mutation's skipRender flag latches.
+            $this->forceRender();
+
+            return;
+        }
+
+        $this->renderDivergenceIslands();
+    }
+
+    /**
+     * Banner-only transitions settle through the divergence islands because
+     * a parent render re-hydrates every diff-file child. Two transitions
+     * still need the whole page: an auto-follow re-pointed the review and
+     * replaced the file list, and an empty file list, whose divergence
+     * empty-state message lives outside the islands (that morph is
+     * cheap: there are no children).
+     */
+    private function divergenceNeedsFullRender(string $branchBefore): bool
+    {
+        return $this->projectBranch !== $branchBefore || $this->files === [];
+    }
+
+    private function renderDivergenceIslands(): void
+    {
+        $this->renderIsland('divergence-marker');
+        $this->renderIsland('divergence-missing-bar');
     }
 
     /**

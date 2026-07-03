@@ -52,8 +52,9 @@ final readonly class ReviewCommentMutation
 
     /**
      * A comment was removed: refresh its file when the id is known, offer undo
-     * when the deleted row was loaded, and re-check divergence. Renders the
-     * parent so the sidebar and empty states reflect the removal.
+     * when the deleted row was loaded, and re-check divergence. The removal
+     * reaches its child through comment-updated, so the parent render
+     * is skipped.
      *
      * @param  array<int, array<string, mixed>>  $comments
      * @param  array<string, mixed>|null  $deletedComment
@@ -67,13 +68,15 @@ final readonly class ReviewCommentMutation
                 ? ['type' => 'delete', 'payload' => [$deletedComment], 'message' => 'Comment deleted']
                 : null,
             checksDivergence: true,
-            skipsRender: false,
+            skipsRender: true,
         );
     }
 
     /**
      * Every loaded comment was cleared: refresh the affected files, offer undo
-     * with the cleared rows, and re-check divergence. Renders the parent.
+     * with the cleared rows, and re-check divergence. The clears reach their
+     * children through comment-updated events, so the parent render
+     * is skipped.
      *
      * @param  array<int, array<string, mixed>>  $comments
      * @param  list<string>  $affectedFileIds
@@ -88,21 +91,22 @@ final readonly class ReviewCommentMutation
             $affectedFileIds,
             ['type' => 'clear-all', 'payload' => $clearedComments, 'message' => 'Cleared '.$count.' comment'.($count === 1 ? '' : 's')],
             checksDivergence: true,
-            skipsRender: false,
+            skipsRender: true,
         );
     }
 
     /**
      * Removed comments were restored (the undo path): refresh the affected
-     * files and re-check divergence. Carries no undo of its own and renders the
-     * parent so the sidebar and empty states reflect the restored comments.
+     * files and re-check divergence. Carries no undo of its own; the restored
+     * rows reach their children through comment-updated events, so the
+     * parent render is skipped.
      *
      * @param  array<int, array<string, mixed>>  $comments
      * @param  list<string>  $affectedFileIds
      */
     public static function restored(array $comments, array $affectedFileIds): self
     {
-        return new self($comments, $affectedFileIds, null, checksDivergence: true, skipsRender: false);
+        return new self($comments, $affectedFileIds, null, checksDivergence: true, skipsRender: true);
     }
 
     /**
