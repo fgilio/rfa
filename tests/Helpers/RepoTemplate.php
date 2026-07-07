@@ -26,8 +26,16 @@ final class RepoTemplate
         File::makeDirectory($base, 0755, true);
 
         try {
+            // gc.auto / maintenance.auto also arrive via GIT_CONFIG_* env in
+            // phpunit.xml, but baking them into the template's .git/config
+            // keeps every copied fixture gc-free even when git runs in a
+            // child process with a sanitized environment (issue #133).
             $execOrThrow(
-                'git init -b main -q '.escapeshellarg($base),
+                implode(' && ', [
+                    'git init -b main -q '.escapeshellarg($base),
+                    'git -C '.escapeshellarg($base).' config gc.auto 0',
+                    'git -C '.escapeshellarg($base).' config maintenance.auto false',
+                ]),
                 'Failed to initialize git repo template',
             );
         } catch (\Throwable $e) {

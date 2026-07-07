@@ -69,6 +69,12 @@ the pattern.
   of running `git init` + 3 `git config` calls. Author/committer/`commit.gpgsign`
   come from `GIT_AUTHOR_*` / `GIT_CONFIG_*` env vars in `phpunit.xml`, so
   don't expect tests to override these via `.git/config`.
+- `gc.auto`/`maintenance.auto` are disabled twice over — via the same
+  `GIT_CONFIG_*` env vars and baked into the template's `.git/config` — so
+  fixture repos never run auto-gc mid-test and lose loose objects under
+  `--parallel` (the "bad tree object HEAD" flake, issue #133). When a repo
+  command does fail, `runTestRepoCommand()` appends a `git count-objects`
+  + `git fsck` snapshot to the exception for forensics.
 
 ## Assertions
 
