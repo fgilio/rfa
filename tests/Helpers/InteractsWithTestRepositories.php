@@ -91,10 +91,33 @@ trait InteractsWithTestRepositories
             ? implode(' && ', $commands)
             : $commands;
 
-        return $this->execOrThrow(
-            'cd '.escapeshellarg($directory)." && {$command}",
-            "Test repository command failed in [{$directory}]: {$command}",
+        try {
+            return $this->execOrThrow(
+                'cd '.escapeshellarg($directory)." && {$command}",
+                "Test repository command failed in [{$directory}]: {$command}",
+            );
+        } catch (\RuntimeException $exception) {
+            throw new \RuntimeException(
+                $exception->getMessage()."\n".$this->describeRepositoryObjectStore($directory),
+                previous: $exception,
+            );
+        }
+    }
+
+    /**
+     * Snapshot the fixture repo's object store for flake forensics. A
+     * "bad tree object" failure means loose objects vanished mid-test
+     * (issue #133), and this records what survived at failure time.
+     */
+    private function describeRepositoryObjectStore(string $directory): string
+    {
+        $output = [];
+        exec(
+            '(cd '.escapeshellarg($directory).' && git count-objects -v && git fsck --no-progress) 2>&1',
+            $output,
         );
+
+        return "Object store state:\n".implode("\n", $output);
     }
 
     private function execOrThrow(string $command, string $errorPrefix): string
