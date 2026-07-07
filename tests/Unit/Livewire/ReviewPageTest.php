@@ -149,7 +149,9 @@ test('mount passes gitignore path when respectGlobalGitignore is true', function
 });
 
 test('diff file lazy loads stay isolated to avoid Livewire max component payload', function () {
-    $files = collect(range(1, 25))
+    $maxComponents = config('livewire.payload.max_components', 20);
+
+    $files = collect(range(1, $maxComponents + 5))
         ->map(fn (int $index): array => [
             'id' => "file-{$index}",
             'path' => "src/File{$index}.php",
@@ -179,7 +181,6 @@ test('diff file lazy loads stay isolated to avoid Livewire max component payload
 
     $html = Livewire::test('pages::review-page', ['slug' => 'test-project'])->html();
     $lazyLoadCount = substr_count($html, '__lazyLoad');
-    $maxComponents = config('livewire.payload.max_components', 20);
 
     expect($lazyLoadCount)
         ->toBeGreaterThan($maxComponents)
