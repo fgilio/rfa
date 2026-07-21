@@ -44,7 +44,7 @@ final readonly class HandleMenuItemClicked
 
             $outcome = match ($id) {
                 'open-repo' => $this->handleOpenRepo(),
-                'scan-directory' => app(ScanDirectoryDialogAction::class)->handle() ? 'completed' : 'cancelled',
+                'scan-directory' => $this->handleScanDirectory(),
                 'check-updates' => $this->handleCheckUpdates(),
                 'show-context' => $this->navigateToActiveProject('context-page', 'menu.show_context.completed'),
                 'review-code' => $this->navigateToActiveProject('review-page', 'menu.review_code.completed'),
@@ -78,6 +78,22 @@ final readonly class HandleMenuItemClicked
         return 'completed';
     }
 
+    private function handleScanDirectory(): string
+    {
+        $result = app(ScanDirectoryDialogAction::class)->handle();
+
+        if (! $result) {
+            return 'cancelled';
+        }
+
+        Context::add('rfa.repos_found', $result->found);
+        Context::add('rfa.repos_registered', $result->registered);
+        Context::add('rfa.repos_already_tracked', $result->alreadyTracked);
+        Context::add('rfa.repos_failed', $result->failed);
+
+        return $result->failed > 0 ? 'partial' : 'completed';
+    }
+
     private function handleShowShortcuts(): string
     {
         ShowShortcutsRequested::dispatch();
@@ -90,7 +106,7 @@ final readonly class HandleMenuItemClicked
         $project = app(OpenRepositoryDialogAction::class)->handle();
 
         if (! $project) {
-            return 'cancelled';
+            return $this->outcomeForDismissedPicker();
         }
 
         Context::add('rfa.project_id', $project->id);
@@ -122,7 +138,7 @@ final readonly class HandleMenuItemClicked
         }
 
         if (! $project) {
-            return 'cancelled';
+            return $this->outcomeForDismissedPicker();
         }
 
         Context::add('rfa.project_id', $project->id);
@@ -138,5 +154,21 @@ final readonly class HandleMenuItemClicked
         Window::get('main')->url(route($routeName, ['slug' => $project->slug]));
 
         return 'completed';
+    }
+
+    /**
+     * A null project from OpenRepositoryDialogAction can mean three things:
+     * the user dismissed the picker (cancelled), picked a non-repo folder
+     * (rejected, rfa.reason = not_a_git_repository), or registration blew up
+     * (error, rfa.reason = project_registration_failed). The action marks the
+     * last two via Context so the canonical outcome stays truthful here.
+     */
+    private function outcomeForDismissedPicker(): string
+    {
+        return match (Context::get('rfa.reason')) {
+            'project_registration_failed' => 'error',
+            'not_a_git_repository' => 'rejected',
+            default => 'cancelled',
+        };
     }
 }

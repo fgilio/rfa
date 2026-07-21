@@ -52,8 +52,15 @@ final readonly class HandleDeepLink
             $project = app(OpenProjectFromPathAction::class)->handle($path);
 
             if (! $project) {
-                $outcome = 'rejected';
-                Context::add('rfa.reason', 'not_a_project');
+                // The action swallows unexpected registration failures and marks
+                // them via Context (rfa.reason = project_registration_failed);
+                // only a genuinely non-project path is a rejection.
+                if (Context::get('rfa.reason') === 'project_registration_failed') {
+                    $outcome = 'error';
+                } else {
+                    $outcome = 'rejected';
+                    Context::add('rfa.reason', 'not_a_project');
+                }
 
                 return;
             }

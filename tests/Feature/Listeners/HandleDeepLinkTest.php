@@ -112,6 +112,28 @@ test('emits a canonical deeplink.opened event with rejected outcome when the pat
         ->and(Context::get('rfa.reason'))->toBe('not_a_project');
 });
 
+test('emits a canonical deeplink.opened event with error outcome when registration fails unexpectedly', function () {
+    app()->bind(OpenProjectFromPathAction::class, fn () => new class
+    {
+        public function handle(string $path): ?Project
+        {
+            // Mirrors the real action's swallowed-Throwable branch.
+            Context::add('rfa.reason', 'project_registration_failed');
+            Context::add('rfa.error_class', RuntimeException::class);
+
+            return null;
+        }
+    });
+
+    Log::spy();
+
+    app(HandleDeepLink::class)->handle(new OpenedFromURL('rfa://open?path=/some/repo'));
+
+    Log::shouldHaveReceived('info')->once()->with('deeplink.opened');
+    expect(Context::get('rfa.outcome'))->toBe('error')
+        ->and(Context::get('rfa.reason'))->toBe('project_registration_failed');
+});
+
 test('routes to review-page when OpenProjectFromPathAction returns null', function () {
     app()->bind(OpenProjectFromPathAction::class, fn () => new class
     {

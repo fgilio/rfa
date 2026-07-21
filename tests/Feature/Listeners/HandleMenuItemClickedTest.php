@@ -3,6 +3,7 @@
 use App\Actions\OpenRepositoryDialogAction;
 use App\Actions\ResolveProjectByIdAction;
 use App\Actions\ScanDirectoryDialogAction;
+use App\DTOs\ScanDirectoryResult;
 use App\Events\ShowShortcutsRequested;
 use App\Listeners\HandleMenuItemClicked;
 use App\Models\Project;
@@ -215,6 +216,90 @@ test('emits a canonical menu.item.clicked event with cancelled outcome when the 
 
     Log::shouldHaveReceived('info')->once()->with('menu.item.clicked');
     expect(Context::get('rfa.outcome'))->toBe('cancelled');
+});
+
+test('emits a canonical menu.item.clicked event with rejected outcome when the picked folder is not a repo', function () {
+    app()->bind(OpenRepositoryDialogAction::class, fn () => new class
+    {
+        public function handle(): ?Project
+        {
+            // Mirrors the real action's NotAGitRepositoryException branch.
+            Context::add('rfa.reason', 'not_a_git_repository');
+
+            return null;
+        }
+    });
+    bindResolveProjectByIdAction(null);
+
+    Log::spy();
+
+    app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'open-repo']));
+
+    Log::shouldHaveReceived('info')->once()->with('menu.item.clicked');
+    expect(Context::get('rfa.outcome'))->toBe('rejected');
+});
+
+test('emits a canonical menu.item.clicked event with error outcome when registration fails unexpectedly', function () {
+    app()->bind(OpenRepositoryDialogAction::class, fn () => new class
+    {
+        public function handle(): ?Project
+        {
+            // Mirrors the real action's swallowed-Throwable branch.
+            Context::add('rfa.reason', 'project_registration_failed');
+            Context::add('rfa.error_class', RuntimeException::class);
+
+            return null;
+        }
+    });
+    bindResolveProjectByIdAction(null);
+
+    Log::spy();
+
+    app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'open-repo']));
+
+    Log::shouldHaveReceived('info')->once()->with('menu.item.clicked');
+    expect(Context::get('rfa.outcome'))->toBe('error');
+});
+
+test('emits a canonical menu.item.clicked event with partial outcome when a scan has failed registrations', function () {
+    app()->bind(ScanDirectoryDialogAction::class, fn () => new class
+    {
+        public function handle(): ScanDirectoryResult
+        {
+            return new ScanDirectoryResult(found: 3, registered: 2, alreadyTracked: 0, failed: 1);
+        }
+    });
+    bindOpenRepositoryDialogAction(null);
+    bindResolveProjectByIdAction(null);
+
+    Log::spy();
+
+    app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'scan-directory']));
+
+    Log::shouldHaveReceived('info')->once()->with('menu.item.clicked');
+    expect(Context::get('rfa.outcome'))->toBe('partial')
+        ->and(Context::get('rfa.repos_found'))->toBe(3)
+        ->and(Context::get('rfa.repos_registered'))->toBe(2)
+        ->and(Context::get('rfa.repos_failed'))->toBe(1);
+});
+
+test('emits a canonical menu.item.clicked event with completed outcome when a scan registers cleanly', function () {
+    app()->bind(ScanDirectoryDialogAction::class, fn () => new class
+    {
+        public function handle(): ScanDirectoryResult
+        {
+            return new ScanDirectoryResult(found: 2, registered: 2, alreadyTracked: 0, failed: 0);
+        }
+    });
+    bindOpenRepositoryDialogAction(null);
+    bindResolveProjectByIdAction(null);
+
+    Log::spy();
+
+    app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'scan-directory']));
+
+    Log::shouldHaveReceived('info')->once()->with('menu.item.clicked');
+    expect(Context::get('rfa.outcome'))->toBe('completed');
 });
 
 test('emits a canonical menu.item.clicked event with skipped outcome for unknown ids', function () {
