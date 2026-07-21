@@ -10,9 +10,12 @@ use App\Actions\ResolveProjectByIdAction;
 use App\Actions\ScanDirectoryDialogAction;
 use App\Events\ShowShortcutsRequested;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\Log;
 use Native\Desktop\Events\Menu\MenuItemClicked;
 use Native\Desktop\Facades\AutoUpdater;
 use Native\Desktop\Facades\Window;
+use Throwable;
 
 final readonly class HandleMenuItemClicked
 {
@@ -25,24 +28,44 @@ final readonly class HandleMenuItemClicked
 
     public function handle(MenuItemClicked $event): void
     {
-        $id = $event->item['id'] ?? null;
+        Context::flush();
 
-        app(RecordRuntimeDiagnosticAction::class)->handle('menu.clicked', [
-            'id' => $id,
-        ]);
+        $startedAt = microtime(true);
+        $outcome = 'skipped';
 
-        match ($id) {
-            'open-repo' => $this->handleOpenRepo(),
-            'scan-directory' => app(ScanDirectoryDialogAction::class)->handle(),
-            'check-updates' => $this->handleCheckUpdates(),
-            'show-context' => $this->navigateToActiveProject('context-page', 'menu.show_context.completed'),
-            'review-code' => $this->navigateToActiveProject('review-page', 'menu.review_code.completed'),
-            'show-shortcuts' => ShowShortcutsRequested::dispatch(),
-            default => null,
-        };
+        try {
+            $id = $event->item['id'] ?? null;
+
+            Context::add('rfa.menu_id', $id);
+
+            app(RecordRuntimeDiagnosticAction::class)->handle('menu.clicked', [
+                'id' => $id,
+            ]);
+
+            $outcome = match ($id) {
+                'open-repo' => $this->handleOpenRepo(),
+                'scan-directory' => app(ScanDirectoryDialogAction::class)->handle() ? 'completed' : 'cancelled',
+                'check-updates' => $this->handleCheckUpdates(),
+                'show-context' => $this->navigateToActiveProject('context-page', 'menu.show_context.completed'),
+                'review-code' => $this->navigateToActiveProject('review-page', 'menu.review_code.completed'),
+                'show-shortcuts' => $this->handleShowShortcuts(),
+                default => 'skipped',
+            };
+        } catch (Throwable $e) {
+            $outcome = 'error';
+            Context::add('rfa.error_class', $e::class);
+            Context::add('rfa.reason', 'menu_click_failed');
+
+            throw $e;
+        } finally {
+            Context::add('rfa.outcome', $outcome);
+            Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
+
+            Log::info('menu.item.clicked');
+        }
     }
 
-    private function handleCheckUpdates(): void
+    private function handleCheckUpdates(): string
     {
         Cache::put('native-update-state', [
             'status' => 'checking',
@@ -51,20 +74,36 @@ final readonly class HandleMenuItemClicked
         ], now()->addMinutes(2));
 
         AutoUpdater::checkForUpdates();
+
+        return 'completed';
     }
 
-    private function handleOpenRepo(): void
+    private function handleShowShortcuts(): string
+    {
+        ShowShortcutsRequested::dispatch();
+
+        return 'completed';
+    }
+
+    private function handleOpenRepo(): string
     {
         $project = app(OpenRepositoryDialogAction::class)->handle();
 
-        if ($project) {
-            app(RecordRuntimeDiagnosticAction::class)->handle('menu.open_repo.completed', [
-                'project_id' => $project->id,
-                'project_slug' => $project->slug,
-            ]);
-
-            Window::get('main')->url(route('review-page', ['slug' => $project->slug]));
+        if (! $project) {
+            return 'cancelled';
         }
+
+        Context::add('rfa.project_id', $project->id);
+        Context::add('rfa.project_slug', $project->slug);
+
+        app(RecordRuntimeDiagnosticAction::class)->handle('menu.open_repo.completed', [
+            'project_id' => $project->id,
+            'project_slug' => $project->slug,
+        ]);
+
+        Window::get('main')->url(route('review-page', ['slug' => $project->slug]));
+
+        return 'completed';
     }
 
     /**
@@ -73,7 +112,7 @@ final readonly class HandleMenuItemClicked
      * picker when the cache is empty or stale (project deleted, or user is on
      * select-repo-page which forgets the key).
      */
-    private function navigateToActiveProject(string $routeName, string $diagnostic): void
+    private function navigateToActiveProject(string $routeName, string $diagnostic): string
     {
         $cachedId = Cache::get(self::ACTIVE_PROJECT_CACHE_KEY);
         $project = is_int($cachedId) ? app(ResolveProjectByIdAction::class)->handle($cachedId) : null;
@@ -82,14 +121,22 @@ final readonly class HandleMenuItemClicked
             $project = app(OpenRepositoryDialogAction::class)->handle();
         }
 
-        if ($project) {
-            app(RecordRuntimeDiagnosticAction::class)->handle($diagnostic, [
-                'project_id' => $project->id,
-                'project_slug' => $project->slug,
-                'used_cached_project' => is_int($cachedId),
-            ]);
-
-            Window::get('main')->url(route($routeName, ['slug' => $project->slug]));
+        if (! $project) {
+            return 'cancelled';
         }
+
+        Context::add('rfa.project_id', $project->id);
+        Context::add('rfa.project_slug', $project->slug);
+        Context::add('rfa.used_cached_project', is_int($cachedId));
+
+        app(RecordRuntimeDiagnosticAction::class)->handle($diagnostic, [
+            'project_id' => $project->id,
+            'project_slug' => $project->slug,
+            'used_cached_project' => is_int($cachedId),
+        ]);
+
+        Window::get('main')->url(route($routeName, ['slug' => $project->slug]));
+
+        return 'completed';
     }
 }

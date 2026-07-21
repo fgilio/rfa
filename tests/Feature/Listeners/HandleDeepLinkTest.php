@@ -4,6 +4,8 @@ use App\Actions\OpenProjectFromPathAction;
 use App\Listeners\HandleDeepLink;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\Log;
 use Native\Desktop\Events\App\OpenedFromURL;
 use Native\Desktop\Facades\Window;
 use Tests\TestCase;
@@ -68,6 +70,46 @@ test('ignores empty path values', function () {
     app(HandleDeepLink::class)->handle(new OpenedFromURL('rfa://open?path='));
 
     expect($this->capturedUrl)->toBeNull();
+});
+
+test('emits a canonical deeplink.opened event with completed outcome on success', function () {
+    Log::spy();
+
+    app(HandleDeepLink::class)->handle(new OpenedFromURL('rfa://open?path=/some/repo'));
+
+    Log::shouldHaveReceived('info')->once()->with('deeplink.opened');
+    expect(Context::get('rfa.outcome'))->toBe('completed')
+        ->and(Context::get('rfa.route'))->toBe('review-page')
+        ->and(Context::get('rfa.project_slug'))->toBe('rfa')
+        ->and(Context::get('rfa.duration_ms'))->toBeInt();
+});
+
+test('emits a canonical deeplink.opened event with rejected outcome for non-rfa urls', function () {
+    Log::spy();
+
+    app(HandleDeepLink::class)->handle(new OpenedFromURL('https://example.com/anything'));
+
+    Log::shouldHaveReceived('info')->once()->with('deeplink.opened');
+    expect(Context::get('rfa.outcome'))->toBe('rejected')
+        ->and(Context::get('rfa.reason'))->toBe('unsupported_url');
+});
+
+test('emits a canonical deeplink.opened event with rejected outcome when the path is not a project', function () {
+    app()->bind(OpenProjectFromPathAction::class, fn () => new class
+    {
+        public function handle(string $path): ?Project
+        {
+            return null;
+        }
+    });
+
+    Log::spy();
+
+    app(HandleDeepLink::class)->handle(new OpenedFromURL('rfa://open?path=/some/repo'));
+
+    Log::shouldHaveReceived('info')->once()->with('deeplink.opened');
+    expect(Context::get('rfa.outcome'))->toBe('rejected')
+        ->and(Context::get('rfa.reason'))->toBe('not_a_project');
 });
 
 test('routes to review-page when OpenProjectFromPathAction returns null', function () {

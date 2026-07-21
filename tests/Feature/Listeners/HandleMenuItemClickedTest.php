@@ -8,7 +8,9 @@ use App\Listeners\HandleMenuItemClicked;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Native\Desktop\Events\Menu\MenuItemClicked;
 use Native\Desktop\Facades\Window;
 use Tests\TestCase;
@@ -184,4 +186,46 @@ test('unknown menu item ids are ignored', function () {
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'whatever']));
 
     expect($this->capturedUrl)->toBeNull();
+});
+
+test('emits a canonical menu.item.clicked event with completed outcome when open-repo picks a project', function () {
+    $project = Project::factory()->create(['slug' => 'opened']);
+
+    bindOpenRepositoryDialogAction($project);
+    bindResolveProjectByIdAction(null);
+
+    Log::spy();
+
+    app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'open-repo']));
+
+    Log::shouldHaveReceived('info')->once()->with('menu.item.clicked');
+    expect(Context::get('rfa.outcome'))->toBe('completed')
+        ->and(Context::get('rfa.menu_id'))->toBe('open-repo')
+        ->and(Context::get('rfa.project_slug'))->toBe('opened')
+        ->and(Context::get('rfa.duration_ms'))->toBeInt();
+});
+
+test('emits a canonical menu.item.clicked event with cancelled outcome when the open-repo dialog is dismissed', function () {
+    bindOpenRepositoryDialogAction(null);
+    bindResolveProjectByIdAction(null);
+
+    Log::spy();
+
+    app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'open-repo']));
+
+    Log::shouldHaveReceived('info')->once()->with('menu.item.clicked');
+    expect(Context::get('rfa.outcome'))->toBe('cancelled');
+});
+
+test('emits a canonical menu.item.clicked event with skipped outcome for unknown ids', function () {
+    bindOpenRepositoryDialogAction(null);
+    bindResolveProjectByIdAction(null);
+
+    Log::spy();
+
+    app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'whatever']));
+
+    Log::shouldHaveReceived('info')->once()->with('menu.item.clicked');
+    expect(Context::get('rfa.outcome'))->toBe('skipped')
+        ->and(Context::get('rfa.menu_id'))->toBe('whatever');
 });
