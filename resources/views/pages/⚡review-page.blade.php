@@ -1227,12 +1227,16 @@ new #[Layout('layouts.app')] class extends Component
     x-on:rfa-dismiss-missing-target.window="$wire.dismissMissingTarget()"
     {{-- Filter/file/commit shortcuts are registered through the keymap store
          (see registerShortcuts() in review-page.js). Only the in-input Escape
-         that clears the file filter stays here, since the store suppresses
-         shortcuts while focus is in an input. --}}
+         stays here, since the store suppresses shortcuts while focus is in an
+         input. It blurs whichever non-comment input has focus, but only
+         clears the file filter when Escape came from the filter input itself —
+         clearing it from other inputs (branch picker, settings, global
+         comment) silently threw away the user's filter text. --}}
     @keydown.escape.window="
         if (($event.target.tagName === 'TEXTAREA' || $event.target.tagName === 'INPUT')
             && !$event.target.closest('[data-comment-form]')) {
-            $wire.clearFileFilter(); $event.target.blur(); $event.preventDefault();
+            if ($event.target.closest('[data-testid=file-filter]')) { $wire.clearFileFilter(); }
+            $event.target.blur(); $event.preventDefault();
         }
     "
 >
@@ -1587,8 +1591,8 @@ new #[Layout('layouts.app')] class extends Component
                     size="sm"
                     variant="filled"
                     class="mb-3"
+                    data-testid="file-filter"
                     x-ref="fileFilterInput"
-                    @keydown.escape="$wire.clearFileFilter(); $el.blur()"
                 />
                 {{-- File list as an island so a reviewed mark/un-mark refreshes the
                      sidebar checkmarks and recovery group without a full page render.

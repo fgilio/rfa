@@ -526,6 +526,34 @@ test('right-click copy full paths prepends repo path to each entry', function ()
         ->each(fn (string $line) => expect($line)->toStartWith($expectedRepoPath.'/'));
 });
 
+test('escape inside the files filter clears it', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $filter = $page->page()->getByPlaceholder('Filter files...');
+    $filter->fill('hello');
+    $page->page()->getByText('utils.php')->first()->waitFor(['state' => 'hidden']);
+
+    $filter->press('Escape');
+
+    $page->page()->getByText('utils.php')->first()->waitFor();
+    expect($page->page()->getByPlaceholder('Filter files...')->inputValue())->toBe('');
+});
+
+test('escape in another input keeps the files filter text', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $filter = $page->page()->getByPlaceholder('Filter files...');
+    $filter->fill('hello');
+    $page->page()->getByText('utils.php')->first()->waitFor(['state' => 'hidden']);
+
+    $globalComment = $page->page()->getByPlaceholder('Overall review comment (optional)');
+    $globalComment->click();
+    $globalComment->press('Escape');
+
+    expect($page->page()->getByPlaceholder('Filter files...')->inputValue())->toBe('hello');
+    expect($page->page()->getByText('utils.php')->count())->toBe(0);
+});
+
 test('copy menu hides when filter excludes all files', function () {
     $page = $this->visit($this->projectUrl());
 
