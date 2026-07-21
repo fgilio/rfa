@@ -246,8 +246,46 @@ test('addComment records a rejected outcome and keeps the diagnostic warning whe
     Livewire::test('pages::context-page', ['slug' => 'test-project'])
         ->call('addComment', 'nope', 'file', null, null, 'hello');
 
-    Log::shouldHaveReceived('warning')->once();
+    Log::shouldHaveReceived('warning')->once()->with('context.comment.rejected', Mockery::type('array'));
     Log::shouldHaveReceived('info')->once()->with('context.comment.written');
     expect(Context::get('rfa.outcome'))->toBe('rejected')
         ->and(Context::get('rfa.reason'))->toBe(ContextCommentRejection::UnknownFileId->value);
+});
+
+test('addComment records a skipped outcome when the workflow produces no comment', function () {
+    app()->bind(ContextCommentWorkflowAction::class, fn () => new class
+    {
+        public function handle(mixed ...$args): ?array
+        {
+            return null;
+        }
+    });
+
+    Log::spy();
+
+    Livewire::test('pages::context-page', ['slug' => 'test-project'])
+        ->call('addComment', 'file-1', 'file', null, null, '');
+
+    Log::shouldHaveReceived('info')->once()->with('context.comment.written');
+    expect(Context::get('rfa.outcome'))->toBe('skipped');
+});
+
+test('addComment records an error outcome and rethrows on unexpected failure', function () {
+    app()->bind(ContextCommentWorkflowAction::class, fn () => new class
+    {
+        public function handle(mixed ...$args): never
+        {
+            throw new RuntimeException('boom');
+        }
+    });
+
+    Log::spy();
+
+    expect(fn () => Livewire::test('pages::context-page', ['slug' => 'test-project'])
+        ->call('addComment', 'file-1', 'file', null, null, 'hello'))
+        ->toThrow(RuntimeException::class);
+
+    Log::shouldHaveReceived('info')->once()->with('context.comment.written');
+    expect(Context::get('rfa.outcome'))->toBe('error')
+        ->and(Context::get('rfa.reason'))->toBe('comment_write_failed');
 });

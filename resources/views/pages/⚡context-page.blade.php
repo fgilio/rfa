@@ -271,11 +271,15 @@ new #[Layout('layouts.app')] class extends Component
                     'end_line' => $endLine,
                 ]);
 
+                $this->skipRender();
+
                 return;
             }
 
             if (! $comment) {
                 $outcome = 'skipped';
+
+                $this->skipRender();
 
                 return;
             }
