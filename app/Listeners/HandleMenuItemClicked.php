@@ -132,6 +132,7 @@ final readonly class HandleMenuItemClicked
     {
         $cachedId = Cache::get(self::ACTIVE_PROJECT_CACHE_KEY);
         $project = is_int($cachedId) ? app(ResolveProjectByIdAction::class)->handle($cachedId) : null;
+        $usedCachedProject = $project !== null;
 
         if (! $project) {
             $project = app(OpenRepositoryDialogAction::class)->handle();
@@ -143,12 +144,12 @@ final readonly class HandleMenuItemClicked
 
         Context::add('rfa.project_id', $project->id);
         Context::add('rfa.project_slug', $project->slug);
-        Context::add('rfa.used_cached_project', is_int($cachedId));
+        Context::add('rfa.used_cached_project', $usedCachedProject);
 
         app(RecordRuntimeDiagnosticAction::class)->handle($diagnostic, [
             'project_id' => $project->id,
             'project_slug' => $project->slug,
-            'used_cached_project' => is_int($cachedId),
+            'used_cached_project' => $usedCachedProject,
         ]);
 
         Window::get('main')->url(route($routeName, ['slug' => $project->slug]));

@@ -65,7 +65,8 @@ test('show-context with cached active-project navigates to context-page for that
 
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'show-context']));
 
-    expect($this->capturedUrl)->toBe(route('context-page', ['slug' => 'rfa']));
+    expect($this->capturedUrl)->toBe(route('context-page', ['slug' => 'rfa']))
+        ->and(Context::get('rfa.used_cached_project'))->toBeTrue();
 });
 
 test('show-context with cache miss falls back to the file-picker flow', function () {
@@ -89,7 +90,8 @@ test('show-context with stale cached id (project deleted) falls back to the file
 
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'show-context']));
 
-    expect($this->capturedUrl)->toBe(route('context-page', ['slug' => 'picked']));
+    expect($this->capturedUrl)->toBe(route('context-page', ['slug' => 'picked']))
+        ->and(Context::get('rfa.used_cached_project'))->toBeFalse();
 });
 
 test('show-context with no cached id and no project picked navigates nowhere', function () {
