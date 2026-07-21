@@ -106,7 +106,7 @@ final readonly class HandleMenuItemClicked
         $project = app(OpenRepositoryDialogAction::class)->handle();
 
         if (! $project) {
-            return $this->outcomeForDismissedPicker();
+            return $this->outcomeForNullProject();
         }
 
         Context::add('rfa.project_id', $project->id);
@@ -138,7 +138,7 @@ final readonly class HandleMenuItemClicked
         }
 
         if (! $project) {
-            return $this->outcomeForDismissedPicker();
+            return $this->outcomeForNullProject();
         }
 
         Context::add('rfa.project_id', $project->id);
@@ -157,13 +157,12 @@ final readonly class HandleMenuItemClicked
     }
 
     /**
-     * A null project from OpenRepositoryDialogAction can mean three things:
-     * the user dismissed the picker (cancelled), picked a non-repo folder
-     * (rejected, rfa.reason = not_a_git_repository), or registration blew up
-     * (error, rfa.reason = project_registration_failed). The action marks the
-     * last two via Context so the canonical outcome stays truthful here.
+     * Map a null project from OpenRepositoryDialogAction to its outcome.
+     *
+     * The action marks non-dismissal causes via Context (rfa.reason), so
+     * a plain dismissal is the only null left unmarked.
      */
-    private function outcomeForDismissedPicker(): string
+    private function outcomeForNullProject(): string
     {
         return match (Context::get('rfa.reason')) {
             'project_registration_failed' => 'error',

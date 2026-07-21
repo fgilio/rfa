@@ -3,6 +3,7 @@
 use App\Actions\OpenProjectFromPathAction;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
@@ -25,7 +26,8 @@ test('returns the registered project for a real git directory', function () {
 test('returns null when path does not exist', function () {
     $missing = sys_get_temp_dir().'/rfa_definitely_not_here_'.uniqid();
 
-    expect(app(OpenProjectFromPathAction::class)->handle($missing))->toBeNull();
+    expect(app(OpenProjectFromPathAction::class)->handle($missing))->toBeNull()
+        ->and(Context::get('rfa.reason'))->toBe('path_not_found');
 });
 
 test('returns null when path is a file rather than a directory', function () {
@@ -37,7 +39,8 @@ test('returns null when path is a file rather than a directory', function () {
 test('returns null and swallows the exception when registration fails', function () {
     $nonGit = $this->createTempDirectory('rfa_open_path_nongit_');
 
-    expect(app(OpenProjectFromPathAction::class)->handle($nonGit))->toBeNull();
+    expect(app(OpenProjectFromPathAction::class)->handle($nonGit))->toBeNull()
+        ->and(Context::get('rfa.reason'))->toBe('not_a_git_repository');
 
     expect(Project::count())->toBe(0);
 });

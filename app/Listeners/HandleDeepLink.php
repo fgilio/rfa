@@ -41,33 +41,35 @@ final readonly class HandleDeepLink
                 return;
             }
 
-            Context::add('rfa.mode', is_string($query['mode'] ?? null) ? $query['mode'] : null);
-            Context::add('rfa.path_hash', hash('xxh128', $path));
+            $mode = is_string($query['mode'] ?? null) ? $query['mode'] : null;
+            $pathHash = hash('xxh128', $path);
+
+            Context::add('rfa.mode', $mode);
+            Context::add('rfa.path_hash', $pathHash);
 
             app(RecordRuntimeDiagnosticAction::class)->handle('deeplink.received', [
-                'mode' => is_string($query['mode'] ?? null) ? $query['mode'] : null,
-                'path_hash' => hash('xxh128', $path),
+                'mode' => $mode,
+                'path_hash' => $pathHash,
             ]);
 
             $project = app(OpenProjectFromPathAction::class)->handle($path);
 
             if (! $project) {
-                // The action swallows unexpected registration failures and marks
-                // them via Context (rfa.reason = project_registration_failed);
-                // only a genuinely non-project path is a rejection.
-                if (Context::get('rfa.reason') === 'project_registration_failed') {
-                    $outcome = 'error';
-                } else {
-                    $outcome = 'rejected';
-                    Context::add('rfa.reason', 'not_a_project');
-                }
+                // The action marks why it returned null via Context: an
+                // unexpected registration failure is an error, everything
+                // else (missing path, not a repo) is a rejection.
+                $outcome = Context::get('rfa.reason') === 'project_registration_failed'
+                    ? 'error'
+                    : 'rejected';
+
+                Context::addIf('rfa.reason', 'not_a_project');
 
                 return;
             }
 
             // Fail open on junk mode values: anything that isn't 'context' lands
             // on review-page rather than failing the whole open.
-            $routeName = (($query['mode'] ?? null) === 'context') ? 'context-page' : 'review-page';
+            $routeName = ($mode === 'context') ? 'context-page' : 'review-page';
 
             Context::add('rfa.route', $routeName);
             Context::add('rfa.project_id', $project->id);
