@@ -39,6 +39,7 @@ use Native\Desktop\Facades\App;
 use Native\Desktop\Facades\Menu;
 use Native\Desktop\Facades\Window;
 use Native\Desktop\Notification;
+use Throwable;
 
 class NativeAppServiceProvider implements ProvidesPhpIni
 {
@@ -95,6 +96,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             Context::flush();
 
             $startedAt = microtime(true);
+            $outcome = 'completed';
 
             try {
                 $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
@@ -109,9 +111,15 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                     ->title('Update Available')
                     ->message("Version {$event->version} is available and downloading.")
                     ->show();
+            } catch (Throwable $e) {
+                $outcome = 'error';
+                Context::add('rfa.error_class', $e::class);
+                Context::add('rfa.reason', 'update_available_handling_failed');
+
+                throw $e;
             } finally {
                 Context::add('rfa.update_version', $event->version);
-                Context::add('rfa.outcome', 'completed');
+                Context::add('rfa.outcome', $outcome);
                 Context::add('rfa.duration_ms', $this->elapsedMs($startedAt));
                 Log::info('updater.available');
             }
@@ -136,6 +144,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             Context::flush();
 
             $startedAt = microtime(true);
+            $outcome = 'completed';
 
             try {
                 $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
@@ -150,9 +159,15 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                     ->title('Update Ready')
                     ->message("Version {$event->version} will be installed on restart.")
                     ->show();
+            } catch (Throwable $e) {
+                $outcome = 'error';
+                Context::add('rfa.error_class', $e::class);
+                Context::add('rfa.reason', 'update_downloaded_handling_failed');
+
+                throw $e;
             } finally {
                 Context::add('rfa.update_version', $event->version);
-                Context::add('rfa.outcome', 'completed');
+                Context::add('rfa.outcome', $outcome);
                 Context::add('rfa.duration_ms', $this->elapsedMs($startedAt));
                 Log::info('updater.downloaded');
             }

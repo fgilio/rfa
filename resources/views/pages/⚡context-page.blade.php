@@ -14,6 +14,7 @@ use App\Events\HardReloadShortcutPressed;
 use App\Events\RefreshShortcutPressed;
 use App\Listeners\HandleMenuItemClicked;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Context;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
@@ -235,43 +236,73 @@ new #[Layout('layouts.app')] class extends Component
 
     private function createComment(string $fileId, string $side, ?int $startLine, ?int $endLine, string $body, ?string $lineSnippet, bool $isDraft): void
     {
+        Context::flush();
+
+        $startedAt = microtime(true);
+        $outcome = 'completed';
+
         try {
-            $comment = app(ContextCommentWorkflowAction::class)->handle(
-                $this->repoPath,
-                $this->projectId ?: null,
-                $this->contextFiles,
-                $fileId,
-                $side,
-                $startLine,
-                $endLine,
-                $body,
-                $isDraft,
-                $lineSnippet,
-            );
-        } catch (\App\Exceptions\ContextCommentRejectedException $e) {
-            // Stale or malformed payload (renderer state drifted from
-            // the actual file). Log the named reason for diagnostics
-            // and treat the action as a no-op so the page never
-            // crashes on a bad screen state.
-            \Illuminate\Support\Facades\Log::warning('context.comment.rejected', [
-                'reason' => $e->reason->value,
-                'fileId' => $fileId,
-                'side' => $side,
-                'startLine' => $startLine,
-                'endLine' => $endLine,
-            ]);
+            try {
+                $comment = app(ContextCommentWorkflowAction::class)->handle(
+                    $this->repoPath,
+                    $this->projectId ?: null,
+                    $this->contextFiles,
+                    $fileId,
+                    $side,
+                    $startLine,
+                    $endLine,
+                    $body,
+                    $isDraft,
+                    $lineSnippet,
+                );
+            } catch (\App\Exceptions\ContextCommentRejectedException $e) {
+                // Stale or malformed payload (renderer state drifted from
+                // the actual file). Log the named reason for diagnostics
+                // and treat the action as a no-op so the page never
+                // crashes on a bad screen state.
+                $outcome = 'rejected';
+                Context::add('rfa.reason', $e->reason->value);
 
-            return;
+                \Illuminate\Support\Facades\Log::warning('context.comment.rejected', [
+                    'reason' => $e->reason->value,
+                    'file_id' => $fileId,
+                    'side' => $side,
+                    'start_line' => $startLine,
+                    'end_line' => $endLine,
+                ]);
+
+                $this->skipRender();
+
+                return;
+            }
+
+            if (! $comment) {
+                $outcome = 'skipped';
+
+                $this->skipRender();
+
+                return;
+            }
+
+            $this->comments[] = $comment;
+            $this->dispatchFileComments($fileId);
+            $this->dispatchSidebarSummary();
+            $this->skipRender();
+        } catch (\Throwable $e) {
+            $outcome = 'error';
+            Context::add('rfa.error_class', $e::class);
+            Context::add('rfa.reason', 'comment_write_failed');
+
+            throw $e;
+        } finally {
+            Context::add('rfa.project_slug', $this->projectSlug);
+            Context::add('rfa.file_id', $fileId);
+            Context::add('rfa.is_draft', $isDraft);
+            Context::add('rfa.outcome', $outcome);
+            Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
+
+            \Illuminate\Support\Facades\Log::info('context.comment.written');
         }
-
-        if (! $comment) {
-            return;
-        }
-
-        $this->comments[] = $comment;
-        $this->dispatchFileComments($fileId);
-        $this->dispatchSidebarSummary();
-        $this->skipRender();
     }
 
     #[On('update-comment')]

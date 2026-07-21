@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\Exceptions\NotAGitRepositoryException;
 use App\Models\Project;
+use Illuminate\Support\Facades\Context;
 use Native\Desktop\Dialog;
 use Native\Desktop\Facades\Alert;
 use Throwable;
@@ -30,6 +31,10 @@ final readonly class OpenRepositoryDialogAction
         try {
             return $this->register->handle($path);
         } catch (NotAGitRepositoryException) {
+            // The Context fields let the calling owner's canonical event tell a
+            // rejected pick apart from a dismissed dialog (both return null).
+            Context::add('rfa.reason', 'not_a_git_repository');
+
             Alert::new()
                 ->type('warning')
                 ->title('Not a Git Repository')
@@ -39,6 +44,9 @@ final readonly class OpenRepositoryDialogAction
         } catch (Throwable $e) {
             // A real failure (e.g. a database error) — don't mislabel it as
             // "not a git repository".
+            Context::add('rfa.reason', 'project_registration_failed');
+            Context::add('rfa.error_class', $e::class);
+
             Alert::new()
                 ->type('warning')
                 ->title('Could Not Open Repository')

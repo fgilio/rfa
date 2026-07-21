@@ -1,14 +1,19 @@
 <?php
 
+use App\Actions\ContextCommentWorkflowAction;
 use App\Actions\DiscoverAgentContextFilesAction;
 use App\Actions\LoadContextCommentsAction;
 use App\Actions\ResolveProjectAction;
+use App\Enums\ContextCommentRejection;
 use App\Events\HardReloadShortcutPressed;
 use App\Events\RefreshShortcutPressed;
+use App\Exceptions\ContextCommentRejectedException;
 use App\Models\Comment;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\Log;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -194,4 +199,93 @@ test('clearAllComments dispatches a clear-all undo event with every removed row'
         ->assertDispatched('undo-available', type: 'clear-all', message: 'Cleared 2 comments');
 
     expect(Comment::whereIn('id', array_column($payload, 'id'))->count())->toBe(0);
+});
+
+test('addComment emits a canonical context.comment.written event with completed outcome', function () {
+    app()->bind(ContextCommentWorkflowAction::class, fn () => new class
+    {
+        /** @return array<string, mixed> */
+        public function handle(mixed ...$args): array
+        {
+            return [
+                'id' => 'c1',
+                'fileId' => 'file-1',
+                'side' => 'file',
+                'startLine' => null,
+                'endLine' => null,
+                'body' => 'hello',
+                'isDraft' => false,
+                'lineSnippet' => null,
+            ];
+        }
+    });
+
+    Log::spy();
+
+    Livewire::test('pages::context-page', ['slug' => 'test-project'])
+        ->call('addComment', 'file-1', 'file', null, null, 'hello');
+
+    Log::shouldHaveReceived('info')->once()->with('context.comment.written');
+    expect(Context::get('rfa.outcome'))->toBe('completed')
+        ->and(Context::get('rfa.file_id'))->toBe('file-1')
+        ->and(Context::get('rfa.is_draft'))->toBeFalse()
+        ->and(Context::get('rfa.duration_ms'))->toBeInt();
+});
+
+test('addComment records a rejected outcome and keeps the diagnostic warning when the payload is rejected', function () {
+    app()->bind(ContextCommentWorkflowAction::class, fn () => new class
+    {
+        public function handle(mixed ...$args): never
+        {
+            throw new ContextCommentRejectedException(ContextCommentRejection::UnknownFileId);
+        }
+    });
+
+    Log::spy();
+
+    Livewire::test('pages::context-page', ['slug' => 'test-project'])
+        ->call('addComment', 'nope', 'file', null, null, 'hello');
+
+    Log::shouldHaveReceived('warning')->once()->with('context.comment.rejected', Mockery::type('array'));
+    Log::shouldHaveReceived('info')->once()->with('context.comment.written');
+    expect(Context::get('rfa.outcome'))->toBe('rejected')
+        ->and(Context::get('rfa.reason'))->toBe(ContextCommentRejection::UnknownFileId->value);
+});
+
+test('addComment records a skipped outcome when the workflow produces no comment', function () {
+    app()->bind(ContextCommentWorkflowAction::class, fn () => new class
+    {
+        public function handle(mixed ...$args): ?array
+        {
+            return null;
+        }
+    });
+
+    Log::spy();
+
+    Livewire::test('pages::context-page', ['slug' => 'test-project'])
+        ->call('addComment', 'file-1', 'file', null, null, '');
+
+    Log::shouldHaveReceived('info')->once()->with('context.comment.written');
+    expect(Context::get('rfa.outcome'))->toBe('skipped');
+});
+
+test('addComment records an error outcome and rethrows on unexpected failure', function () {
+    app()->bind(ContextCommentWorkflowAction::class, fn () => new class
+    {
+        public function handle(mixed ...$args): never
+        {
+            throw new RuntimeException('boom');
+        }
+    });
+
+    Log::spy();
+
+    expect(fn () => Livewire::test('pages::context-page', ['slug' => 'test-project'])
+        ->call('addComment', 'file-1', 'file', null, null, 'hello'))
+        ->toThrow(RuntimeException::class);
+
+    Log::shouldHaveReceived('info')->once()->with('context.comment.written');
+    expect(Context::get('rfa.outcome'))->toBe('error')
+        ->and(Context::get('rfa.reason'))->toBe('comment_write_failed');
 });
