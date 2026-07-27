@@ -178,6 +178,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `deleteComment` | Yes | Dispatches comment-updated event to target child |
 | `clearAllComments` | Yes | Dispatches comment-updated + undo-available events |
 | `restoreComments` | Yes | Dispatches comment-updated events to affected files |
+| `addCommentReply` / `updateCommentReply` / `deleteCommentReply` / `restoreCommentReply` | Yes | Dispatches a targeted comment-thread-updated event; replies do not affect anchors, divergence, or root counts |
 | `updatedGlobalComment` | Yes | No UI change needed server-side |
 | `toggleReviewed` | Yes | Always skips the parent render; refreshes the `reviewed-toggle`, `reviewed-counter`, and `file-list` islands, plus the visibility islands (`source-diff-list`, `file-count`, `file-list-header`, `status-strip-copy-paths`) in Hide-reviewed mode where the toggle drops the file from the visible set. |
 | `hideReviewedFiles` / `showAllFiles` | Yes | Skip the parent render; refresh `reviewed-toggle`, `reviewed-counter`, `file-list`, and the visibility islands as files drop in/out of the visible set. |
@@ -194,6 +195,10 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 |---|---|---|---|
 | `add-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{fileId, side, startLine, endLine, body}` |
 | `delete-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{commentId}` |
+| `rfa-add-comment-reply` | comment-replies Alpine `$dispatch` (window) | ReviewPage/ContextPage root Alpine -> `add-comment-reply` | `{commentId, body}` |
+| `rfa-update-comment-reply` | comment-replies Alpine `$dispatch` (window) | ReviewPage/ContextPage root Alpine -> `update-comment-reply` | `{replyId, body}` |
+| `rfa-delete-comment-reply` | comment-replies Alpine `$dispatch` (window) | ReviewPage/ContextPage root Alpine -> `delete-comment-reply` | `{replyId}` |
+| `comment-thread-updated` | ReviewPage/ContextPage PHP dispatch | targeted DiffFile Alpine + comments-drawer Livewire | `{commentId, fileId?, filePath, replies}` |
 | `toggle-reviewed` | Livewire event — unit tests only; runtime goes via the `rfa-toggle-reviewed` bridge below | ReviewPage `#[On]` -> `toggleReviewed` | `{filePath}` |
 | `rfa-toggle-reviewed` | DiffFile Alpine + sidebar / Recently-reviewed buttons `$dispatch` (bubbles to window) | ReviewPage root Alpine `@window` -> `$wire.toggleReviewed` | `{filePath}` |
 | `rfa-hide-reviewed` | `reviewed-toggle` island button `$dispatch` (window) | ReviewPage root Alpine `@window` -> queued `$wire.hideReviewedFiles` | none |
@@ -210,7 +215,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `collapse-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-all-files` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | none |
 | `expand-file` | ReviewPage Alpine `$dispatch` | DiffFile Alpine `@window` | `{id}` |
-| `undo-available` | ReviewPage PHP dispatch | undo-toast Alpine `@window` | `{type: 'delete'\|'clear-all'\|'discard'\|'mark-reviewed', payload: comment[]\|int\|{filePaths: string[]}, message: string}` |
+| `undo-available` | ReviewPage PHP dispatch | undo-toast Alpine `@window` | `{type: 'delete'\|'clear-all'\|'delete-reply'\|'discard'\|'mark-reviewed', payload: mixed, message: string}` |
 | `reviewed-files-reverted` | ReviewPage PHP dispatch (`unmarkReviewed`) | DiffFile Alpine `@window` | `{fileIds: string[]}` |
 | `discard-file` | DiffFile Alpine `$dispatch` | ReviewPage `#[On]` | `{fileId}` |
 | `fingerprint-reset` | ReviewPage PHP dispatch | change-polling Alpine `@window` | none |
@@ -223,7 +228,9 @@ fired from inside a Livewire island scopes the action to that island, so a
 reviewed control nested in an island could only refresh its own island. The
 controls instead `$dispatch` a bubbling window event that the page-root Alpine
 catches and forwards to `$wire`, letting the action run outside island scope and
-settle every affected island (see the skipRender table).
+settle every affected island (see the skipRender table). Reply events use the
+same bridge so the props-only thread component also works inside the nested
+comments drawer without depending on a particular Livewire host.
 
 ### Known Debt
 

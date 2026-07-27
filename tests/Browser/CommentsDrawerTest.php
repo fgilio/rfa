@@ -82,14 +82,16 @@ test('clicking the copy button on a drawer row does not navigate away', function
 test('the drawer filter narrows the visible comments', function () {
     $page = $this->visitAndLoad($this->projectUrl());
 
-    $page->page()->getByTestId('diff-line-number')->first()->click();
-    $page->page()->getByPlaceholder('Write a comment', false)->fill('apple note');
-    $page->press('Save');
+    $helloFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("hello.php"))');
+    $helloFile->getByTestId('diff-line-number')->first()->click();
+    $helloFile->getByPlaceholder('Write a comment', false)->fill('apple note');
+    $helloFile->getByRole('button', ['name' => 'Save'])->click();
     $page->assertSee('apple note');
 
-    $page->page()->getByTestId('diff-line-number')->nth(2)->click();
-    $page->page()->getByPlaceholder('Write a comment', false)->fill('banana note');
-    $page->press('Save');
+    $configFile = $page->page()->locator('.group:has([data-testid="file-header"]:has-text("config.php"))');
+    $configFile->getByTestId('diff-line-number')->first()->click();
+    $configFile->getByPlaceholder('Write a comment', false)->fill('banana note');
+    $configFile->getByRole('button', ['name' => 'Save'])->click();
     $page->assertSee('banana note');
 
     $page->page()->getByLabel('All comments · ⌘J')->click();

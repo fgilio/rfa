@@ -1,14 +1,20 @@
 <?php
 
 use App\Actions\ClearContextCommentsAction;
+use App\Actions\CommentReplyWorkflowAction;
 use App\Actions\ContextCommentWorkflowAction;
+use App\Actions\CreateCommentThreadSnapshotsAction;
 use App\Actions\DiscoverAgentContextFilesAction;
 use App\Actions\ExportContextFeedbackAction;
 use App\Actions\LoadContextCommentsAction;
 use App\Actions\PersistProjectViewAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveProjectAction;
+use App\Actions\RestoreCommentThreadsAction;
+use App\DTOs\CommentThreadSnapshot;
 use App\DTOs\AgentContextFile;
+use App\DTOs\CommentAuthor;
+use App\DTOs\CommentReplyMutation;
 use App\Enums\LastViewMode;
 use App\Events\HardReloadShortcutPressed;
 use App\Events\RefreshShortcutPressed;
@@ -335,6 +341,17 @@ new #[Layout('layouts.app')] class extends Component
     {
         $deleted = collect($this->comments)->firstWhere('id', $commentId);
         $fileId = $deleted['fileId'] ?? null;
+        $snapshots = $deleted === null
+            ? []
+            : app(CreateCommentThreadSnapshotsAction::class)->handle(
+                $this->repoPath,
+                $this->projectId ?: null,
+                [$deleted],
+            );
+
+        if ($snapshots === []) {
+            return;
+        }
 
         $result = app(ContextCommentWorkflowAction::class)->delete(
             $this->repoPath,
@@ -353,8 +370,91 @@ new #[Layout('layouts.app')] class extends Component
         }
         $this->dispatchSidebarSummary();
 
-        if ($deleted) {
-            $this->dispatch('undo-available', type: 'delete', payload: [$deleted], message: 'Comment deleted');
+        $this->dispatch('undo-available', type: 'delete', payload: $snapshots, message: 'Comment deleted');
+
+        $this->skipRender();
+    }
+
+    #[On('add-comment-reply')]
+    public function addCommentReply(string $commentId, string $body): void
+    {
+        $this->applyCommentReplyMutation(
+            app(CommentReplyWorkflowAction::class)->add(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $commentId,
+                CommentAuthor::human(),
+                $body,
+            ),
+        );
+    }
+
+    #[On('update-comment-reply')]
+    public function updateCommentReply(string $replyId, string $body): void
+    {
+        $this->applyCommentReplyMutation(
+            app(CommentReplyWorkflowAction::class)->update(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $replyId,
+                CommentAuthor::human(),
+                $body,
+            ),
+        );
+    }
+
+    #[On('delete-comment-reply')]
+    public function deleteCommentReply(string $replyId): void
+    {
+        $this->applyCommentReplyMutation(
+            app(CommentReplyWorkflowAction::class)->delete(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $replyId,
+                CommentAuthor::human(),
+            ),
+        );
+    }
+
+    /** @param array<string, mixed> $reply */
+    public function restoreCommentReply(array $reply): void
+    {
+        $this->applyCommentReplyMutation(
+            app(CommentReplyWorkflowAction::class)->restore(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $reply,
+            ),
+        );
+    }
+
+    private function applyCommentReplyMutation(CommentReplyMutation $mutation): void
+    {
+        $index = collect($this->comments)->search(
+            fn (array $comment): bool => ($comment['id'] ?? null) === $mutation->commentId,
+        );
+        $fileId = null;
+
+        if ($index !== false) {
+            $this->comments[$index]['replies'] = $mutation->replies;
+            $fileId = $this->comments[$index]['fileId'] ?? null;
+        }
+
+        $this->dispatch(
+            'comment-thread-updated',
+            commentId: $mutation->commentId,
+            fileId: $fileId,
+            filePath: $mutation->filePath,
+            replies: $mutation->replies,
+        );
+
+        if ($mutation->undo !== null) {
+            $this->dispatch(
+                'undo-available',
+                type: $mutation->undo['type'],
+                payload: $mutation->undo['payload'],
+                message: $mutation->undo['message'],
+            );
         }
 
         $this->skipRender();
@@ -367,10 +467,22 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $deleted = $this->comments;
+        $snapshots = app(CreateCommentThreadSnapshotsAction::class)->handle(
+            $this->repoPath,
+            $this->projectId ?: null,
+            $deleted,
+        );
+
+        if ($snapshots === []) {
+            return;
+        }
+
         app(ClearContextCommentsAction::class)->handle(
             $this->repoPath,
             $this->projectId ?: null,
-            array_column($deleted, 'id'),
+            collect($snapshots)
+                ->map(fn (array $snapshot): string => CommentThreadSnapshot::fromArray($snapshot)->commentId())
+                ->all(),
         );
 
         $this->comments = [];
@@ -382,7 +494,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->dispatchSidebarSummary();
 
         $count = count($deleted);
-        $this->dispatch('undo-available', type: 'clear-all', payload: $deleted,
+        $this->dispatch('undo-available', type: 'clear-all', payload: $snapshots,
             message: "Cleared {$count} comment".($count === 1 ? '' : 's'));
 
         $this->skipRender();
@@ -392,6 +504,7 @@ new #[Layout('layouts.app')] class extends Component
     {
         match ($type) {
             'delete', 'clear-all' => $this->restoreComments($payload),
+            'delete-reply' => $this->restoreCommentReply($payload),
             default => null,
         };
     }
@@ -403,30 +516,18 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
-        foreach ($comments as $c) {
-            \App\Models\Comment::updateOrCreate(
-                ['id' => $c['id']],
-                [
-                    'project_id' => $this->projectId ?: null,
-                    'repo_path' => $this->repoPath,
-                    'origin_ref' => \App\Models\Comment::ORIGIN_CONTEXT,
-                    'file_path' => $c['file'] ?? '',
-                    'side' => $c['side'] ?? 'right',
-                    'start_line' => $c['startLine'] ?? null,
-                    'end_line' => $c['endLine'] ?? null,
-                    'file_content_hash' => $c['fileContentHash'] ?? null,
-                    'line_snippet' => $c['lineSnippet'] ?? null,
-                    'body' => $c['body'] ?? '',
-                    'is_draft' => (bool) ($c['isDraft'] ?? false),
-                    'submitted_at' => null,
-                ],
-            );
-        }
+        app(RestoreCommentThreadsAction::class)->handle(
+            $this->repoPath,
+            $this->projectId ?: null,
+            $comments,
+            \App\Models\Comment::ORIGIN_CONTEXT,
+        );
 
         $this->reloadComments();
         $this->dispatchSidebarSummary();
         collect($comments)
-            ->pluck('fileId')
+            ->map(fn (array $comment): ?string => CommentThreadSnapshot::fromArray($comment)->fileId())
+            ->filter()
             ->unique()
             ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
 
@@ -492,6 +593,10 @@ new #[Layout('layouts.app')] class extends Component
 
 ?>
 
+@assets
+@localScript('js/comment-thread.js')
+@endassets
+
 <div
     data-testid="context-page"
     x-data="{
@@ -509,6 +614,9 @@ new #[Layout('layouts.app')] class extends Component
         },
     }"
     class="min-h-screen flex flex-col"
+    x-on:rfa-add-comment-reply.window="$wire.dispatch('add-comment-reply', $event.detail)"
+    x-on:rfa-update-comment-reply.window="$wire.dispatch('update-comment-reply', $event.detail)"
+    x-on:rfa-delete-comment-reply.window="$wire.dispatch('delete-comment-reply', $event.detail)"
 >
     <x-page-header>
         <div class="flex items-center gap-2 min-w-0">

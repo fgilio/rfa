@@ -9,6 +9,7 @@ use App\Events\HardReloadShortcutPressed;
 use App\Events\RefreshShortcutPressed;
 use App\Exceptions\ContextCommentRejectedException;
 use App\Models\Comment;
+use App\Models\CommentReply;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -199,6 +200,38 @@ test('clearAllComments dispatches a clear-all undo event with every removed row'
         ->assertDispatched('undo-available', type: 'clear-all', message: 'Cleared 2 comments');
 
     expect(Comment::whereIn('id', array_column($payload, 'id'))->count())->toBe(0);
+});
+
+test('context reply events use the same trusted human workflow', function () {
+    $root = Comment::create([
+        'id' => 'c-context-reply',
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => Comment::ORIGIN_CONTEXT,
+        'file_path' => 'CLAUDE.md',
+        'side' => 'right',
+        'body' => 'Root',
+    ]);
+
+    $component = Livewire::test('pages::context-page', ['slug' => 'test-project'])
+        ->set('comments', [[
+            'id' => $root->id,
+            'fileId' => 'ctx-claude',
+            'file' => 'CLAUDE.md',
+            'side' => 'right',
+            'body' => 'Root',
+            'replies' => [],
+        ]])
+        ->dispatch('add-comment-reply', commentId: $root->id, body: 'Context reply');
+
+    $reply = CommentReply::query()->sole();
+
+    expect($reply->author_type->value)->toBe('human')
+        ->and($reply->author_key)->toBe('rfa-ui')
+        ->and($component->get('comments.0.replies.0.body'))->toBe('Context reply')
+        ->and(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+
+    $component->assertDispatched('comment-thread-updated', commentId: $root->id, fileId: 'ctx-claude');
 });
 
 test('addComment emits a canonical context.comment.written event with completed outcome', function () {

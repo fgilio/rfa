@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Comment;
+use App\Models\CommentReply;
 use Faker\Factory as Faker;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Livewire\Livewire;
@@ -120,6 +121,35 @@ test('filter matches on body substring', function () {
     $ids = collect($component->get('groupedComments'))->flatten(1)->pluck('id')->all();
 
     expect($ids)->toBe(['c-open-b']);
+});
+
+test('filter matches reply body and author without changing root count', function () {
+    CommentReply::factory()
+        ->for(Comment::findOrFail('c-open-a'))
+        ->agent('codex-cli', 'Codex')
+        ->create(['body' => 'Agent follow-up']);
+
+    foreach (['follow-up', 'codex-cli', 'Codex'] as $filter) {
+        $component = Livewire::test('comments-drawer', [
+            'repoPath' => '/tmp/proj',
+            'projectId' => $this->project->id,
+        ])->call('toggle')->set('filter', $filter);
+
+        expect(collect($component->get('groupedComments'))->flatten(1)->pluck('id')->all())->toBe(['c-open-a'])
+            ->and($component->get('totalCount'))->toBe(2);
+    }
+});
+
+test('refreshes its thread read model on comment-thread-updated', function () {
+    $component = Livewire::test('comments-drawer', [
+        'repoPath' => '/tmp/proj',
+        'projectId' => $this->project->id,
+    ])->call('toggle');
+
+    CommentReply::factory()->for(Comment::findOrFail('c-open-a'))->create(['body' => 'New reply']);
+
+    $component->dispatch('comment-thread-updated', commentId: 'c-open-a', fileId: 'file-a', replies: [])
+        ->assertSee('1 reply');
 });
 
 test('groupedComments returns empty when the drawer is closed (skips the expensive query)', function () {

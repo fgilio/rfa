@@ -16,6 +16,7 @@ use App\Actions\ResolveRangeAction;
 use App\Actions\ResolveRangeToWorkingAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\ReviewCommentWorkflowAction;
+use App\Actions\CommentReplyWorkflowAction;
 use App\Actions\ScanReviewFilesAction;
 use App\Actions\SessionStateAction;
 use App\Actions\ToggleReviewedAction;
@@ -26,6 +27,8 @@ use App\Concerns\ReviewPage\ExportsReview;
 use App\Concerns\ReviewPage\ManagesReviewTrash;
 use App\Concerns\ReviewPage\ReviewsBranchDivergence;
 use App\DTOs\DiffTarget;
+use App\DTOs\CommentAuthor;
+use App\DTOs\CommentReplyMutation;
 use App\DTOs\FileListEntry;
 use App\DTOs\ReviewCommentMutation;
 use App\DTOs\ReviewState;
@@ -683,8 +686,98 @@ new #[Layout('layouts.app')] class extends Component
     public function deleteComment(string $commentId): void
     {
         $this->applyCommentMutation(
-            app(ReviewCommentWorkflowAction::class)->delete($this->comments, $commentId)
+            app(ReviewCommentWorkflowAction::class)->delete(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $this->comments,
+                $commentId,
+            )
         );
+    }
+
+    #[On('add-comment-reply')]
+    public function addCommentReply(string $commentId, string $body): void
+    {
+        $this->applyCommentReplyMutation(
+            app(CommentReplyWorkflowAction::class)->add(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $commentId,
+                CommentAuthor::human(),
+                $body,
+            ),
+        );
+    }
+
+    #[On('update-comment-reply')]
+    public function updateCommentReply(string $replyId, string $body): void
+    {
+        $this->applyCommentReplyMutation(
+            app(CommentReplyWorkflowAction::class)->update(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $replyId,
+                CommentAuthor::human(),
+                $body,
+            ),
+        );
+    }
+
+    #[On('delete-comment-reply')]
+    public function deleteCommentReply(string $replyId): void
+    {
+        $this->applyCommentReplyMutation(
+            app(CommentReplyWorkflowAction::class)->delete(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $replyId,
+                CommentAuthor::human(),
+            ),
+        );
+    }
+
+    /** @param array<string, mixed> $reply */
+    public function restoreCommentReply(array $reply): void
+    {
+        $this->applyCommentReplyMutation(
+            app(CommentReplyWorkflowAction::class)->restore(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $reply,
+            ),
+        );
+    }
+
+    private function applyCommentReplyMutation(CommentReplyMutation $mutation): void
+    {
+        $index = collect($this->comments)->search(
+            fn (array $comment): bool => ($comment['id'] ?? null) === $mutation->commentId,
+        );
+        $fileId = null;
+
+        if ($index !== false) {
+            $this->comments[$index]['replies'] = $mutation->replies;
+            $fileId = $this->comments[$index]['fileId'] ?? null;
+        }
+
+        $this->dispatch(
+            'comment-thread-updated',
+            commentId: $mutation->commentId,
+            fileId: $fileId,
+            filePath: $mutation->filePath,
+            replies: $mutation->replies,
+        );
+
+        if ($mutation->undo !== null) {
+            $this->dispatch(
+                'undo-available',
+                type: $mutation->undo['type'],
+                payload: $mutation->undo['payload'],
+                message: $mutation->undo['message'],
+            );
+        }
+
+        $this->skipRender();
     }
 
     /**
@@ -733,7 +826,11 @@ new #[Layout('layouts.app')] class extends Component
     public function clearAllComments(): void
     {
         $this->applyCommentMutation(
-            app(ReviewCommentWorkflowAction::class)->clearAll($this->comments)
+            app(ReviewCommentWorkflowAction::class)->clearAll(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $this->comments,
+            )
         );
     }
 
@@ -753,6 +850,7 @@ new #[Layout('layouts.app')] class extends Component
     {
         match ($type) {
             'delete', 'clear-all' => $this->restoreComments($payload),
+            'delete-reply' => $this->restoreCommentReply($payload),
             'discard' => $this->restoreDiscardedFile($payload),
             self::UNDO_TYPE_MARK_REVIEWED => $this->unmarkReviewed($payload['filePaths'] ?? []),
             self::UNDO_TYPE_SWITCH_BRANCH => $this->restoreReviewBranch(is_array($payload) ? $payload : []),
@@ -1186,6 +1284,7 @@ new #[Layout('layouts.app')] class extends Component
 
 @assets
 @localScript('js/diff-file.js')
+@localScript('js/comment-thread.js')
 @localScript('js/review-page.js')
 @endassets
 
@@ -1225,6 +1324,9 @@ new #[Layout('layouts.app')] class extends Component
     x-on:rfa-switch-review-to-head.window="$wire.switchReviewToHead()"
     x-on:rfa-dismiss-detached-banner.window="$wire.dismissDetachedBanner()"
     x-on:rfa-dismiss-missing-target.window="$wire.dismissMissingTarget()"
+    x-on:rfa-add-comment-reply.window="$wire.dispatch('add-comment-reply', $event.detail)"
+    x-on:rfa-update-comment-reply.window="$wire.dispatch('update-comment-reply', $event.detail)"
+    x-on:rfa-delete-comment-reply.window="$wire.dispatch('delete-comment-reply', $event.detail)"
     {{-- Filter/file/commit shortcuts are registered through the keymap store
          (see registerShortcuts() in review-page.js). Only the in-input Escape
          stays here, since the store suppresses shortcuts while focus is in an
