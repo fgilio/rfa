@@ -1,6 +1,5 @@
 <?php
 
-use App\Actions\CommentReplyWorkflowAction;
 use App\Actions\ContextCommentWorkflowAction;
 use App\Actions\DiscoverAgentContextFilesAction;
 use App\Actions\ExportContextFeedbackAction;
@@ -9,10 +8,9 @@ use App\Actions\PersistProjectViewAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreCommentThreadsAction;
+use App\Concerns\ManagesCommentReplies;
 use App\DTOs\CommentThreadSnapshot;
 use App\DTOs\AgentContextFile;
-use App\DTOs\CommentAuthor;
-use App\DTOs\CommentReplyMutation;
 use App\Enums\LastViewMode;
 use App\Events\HardReloadShortcutPressed;
 use App\Events\RefreshShortcutPressed;
@@ -41,6 +39,8 @@ use function Illuminate\Support\defer;
  */
 new #[Layout('layouts.app')] class extends Component
 {
+    use ManagesCommentReplies;
+
     public string $repoPath = '';
 
     public int $projectId = 0;
@@ -363,91 +363,6 @@ new #[Layout('layouts.app')] class extends Component
             payload: $result->snapshots,
             message: 'Comment deleted',
         );
-
-        $this->skipRender();
-    }
-
-    #[On('add-comment-reply')]
-    public function addCommentReply(string $commentId, string $body): void
-    {
-        $this->applyCommentReplyMutation(
-            app(CommentReplyWorkflowAction::class)->handle(
-                $this->repoPath,
-                $this->projectId ?: null,
-                $commentId,
-                CommentAuthor::human(),
-                $body,
-            ),
-        );
-    }
-
-    #[On('update-comment-reply')]
-    public function updateCommentReply(string $replyId, string $body): void
-    {
-        $this->applyCommentReplyMutation(
-            app(CommentReplyWorkflowAction::class)->update(
-                $this->repoPath,
-                $this->projectId ?: null,
-                $replyId,
-                CommentAuthor::human(),
-                $body,
-            ),
-        );
-    }
-
-    #[On('delete-comment-reply')]
-    public function deleteCommentReply(string $replyId): void
-    {
-        $this->applyCommentReplyMutation(
-            app(CommentReplyWorkflowAction::class)->delete(
-                $this->repoPath,
-                $this->projectId ?: null,
-                $replyId,
-                CommentAuthor::human(),
-            ),
-        );
-    }
-
-    /** @param array<string, mixed> $reply */
-    public function restoreCommentReply(array $reply): void
-    {
-        $this->applyCommentReplyMutation(
-            app(CommentReplyWorkflowAction::class)->restore(
-                $this->repoPath,
-                $this->projectId ?: null,
-                $reply,
-            ),
-        );
-    }
-
-    private function applyCommentReplyMutation(CommentReplyMutation $mutation): void
-    {
-        $index = collect($this->comments)->search(
-            fn (array $comment): bool => ($comment['id'] ?? null) === $mutation->commentId,
-        );
-        $fileId = null;
-
-        if ($index !== false) {
-            $this->comments[$index]['replies'] = $mutation->replies;
-            $fileId = $this->comments[$index]['fileId'] ?? null;
-        }
-
-        $this->dispatch(
-            'comment-thread-updated',
-            commentId: $mutation->commentId,
-            fileId: $fileId,
-            filePath: $mutation->filePath,
-            replies: $mutation->replies,
-        );
-
-        if ($mutation->undo !== null) {
-            $this->dispatch(
-                'undo-available',
-                type: $mutation->undo['type'],
-                payload: $mutation->undo['payload'],
-                message: $mutation->undo['message'],
-            );
-        }
 
         $this->skipRender();
     }
