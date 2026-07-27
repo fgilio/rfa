@@ -71,8 +71,14 @@
             "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Core"
         ],
         "test:arch": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Arch",
-        "test:browser": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Browser",
-        "test:browser:headed": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Browser --headed",
+        "test:browser": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Browser"
+        ],
+        "test:browser:headed": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Browser --headed"
+        ],
         "test:perf": "@php artisan rfa:benchmark-perf",
         "startup:measure": "@php artisan rfa:startup-bench",
         "test:perf:smoke": "@php -d memory_limit=512M ./vendor/bin/pest --testsuite=Performance",

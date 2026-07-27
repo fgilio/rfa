@@ -55,7 +55,17 @@ use App\Enums\LineType;
  *     side: string,
  *     startLine: int,
  *     endLine: int,
- *     body: string
+ *     body: string,
+ *     replies: list<array{
+ *         id: string,
+ *         commentId: string,
+ *         authorType: string,
+ *         authorKey: string,
+ *         authorLabel: ?string,
+ *         body: string,
+ *         createdAt: string,
+ *         updatedAt: string
+ *     }>
  * }
  */
 final class DiffFixtureFactory
@@ -211,7 +221,7 @@ final class DiffFixtureFactory
     }
 
     /** @return list<CommentData> */
-    public static function comments(string $fileId, int $count): array
+    public static function comments(string $fileId, int $count, int $repliesPerComment = 0): array
     {
         $comments = [];
 
@@ -227,6 +237,18 @@ final class DiffFixtureFactory
                 'startLine' => $line,
                 'endLine' => $line,
                 'body' => "Review comment #{$i}: Consider refactoring this section for clarity.",
+                'replies' => collect($repliesPerComment > 0 ? range(1, $repliesPerComment) : [])
+                    ->map(fn (int $reply): array => [
+                        'id' => "r-benchmark-{$i}-{$reply}",
+                        'commentId' => 'comment-'.hash('xxh128', "{$fileId}-{$i}"),
+                        'authorType' => $reply % 2 === 0 ? 'agent' : 'human',
+                        'authorKey' => $reply % 2 === 0 ? 'codex-cli' : 'rfa-ui',
+                        'authorLabel' => $reply % 2 === 0 ? 'Codex' : null,
+                        'body' => "Benchmark reply {$reply} on comment {$i}.",
+                        'createdAt' => '2026-07-27T12:00:00+00:00',
+                        'updatedAt' => '2026-07-27T12:00:00+00:00',
+                    ])
+                    ->all(),
             ];
         }
 

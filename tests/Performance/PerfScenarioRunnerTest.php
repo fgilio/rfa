@@ -9,6 +9,7 @@ test('benchmark runner reports all representative scenarios', function () {
         'diff-small',
         'diff-large',
         'diff-with-comments',
+        'drawer-reply-filter',
         'load-file-diff-blade-default-context',
         'load-file-diff-blade-full-context',
         'review-page-20-files',
