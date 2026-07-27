@@ -135,8 +135,9 @@ test('replies to a submitted thread in the drawer without closing it', function 
     ]);
 
     $page = $this->visitAndLoad($this->projectUrl());
-    $page->page()->getByLabel('All comments · ⌘J')->click();
     $panel = $page->page()->getByTestId('overlay-panel-comments-drawer');
+    $panel->waitFor(['state' => 'attached']);
+    $page->page()->getByLabel('All comments · ⌘J')->click();
     $panel->waitFor(['state' => 'visible']);
     $page->page()->evaluate(
         'document.querySelector(\'[aria-label="Show submitted comments"]\').click()',
@@ -181,9 +182,11 @@ test('filtering expands a collapsed drawer thread when its reply matches', funct
     ]);
 
     $page = $this->visitAndLoad($this->projectUrl());
-    $page->page()->getByLabel('All comments · ⌘J')->click();
-
     $panel = $page->page()->getByTestId('overlay-panel-comments-drawer');
+    $panel->waitFor(['state' => 'attached']);
+    $page->page()->getByLabel('All comments · ⌘J')->click();
+    $panel->waitFor(['state' => 'visible']);
+
     $row = $panel->getByTestId('drawer-comment-'.$comment->id);
     $matchingReply = $row->getByText('Unique reply needle', true);
 
