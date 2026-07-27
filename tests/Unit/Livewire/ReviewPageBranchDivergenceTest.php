@@ -127,7 +127,7 @@ test('silent auto-follow when HEAD diverges and no comments exist', function () 
 
 test('diverged banner shown when HEAD differs and a comment exists', function () {
     Comment::create([
-        'id' => 'c1',
+        'id' => 'c-1',
         'project_id' => $this->project->id,
         'repo_path' => $this->project->path,
         'origin_ref' => 'main',
@@ -223,7 +223,7 @@ test('initial open keeps the banner and does not retarget when branch existence 
 
 test('keepReviewing suppresses the banner for that branch, even across new commits', function () {
     Comment::create([
-        'id' => 'c1',
+        'id' => 'c-1',
         'project_id' => $this->project->id,
         'repo_path' => $this->project->path,
         'origin_ref' => 'main',
@@ -269,7 +269,7 @@ test('keepReviewing suppresses the banner for that branch, even across new commi
 
 test('switchReviewToHead persists the new branch and clears the banner', function () {
     Comment::create([
-        'id' => 'c1',
+        'id' => 'c-1',
         'project_id' => $this->project->id,
         'repo_path' => $this->project->path,
         'origin_ref' => 'main',
@@ -297,7 +297,7 @@ test('switchReviewToHead persists the new branch and clears the banner', functio
 
 test('head-divergence-transitioned event triggers checkHeadDivergence on review-page', function () {
     Comment::create([
-        'id' => 'c1',
+        'id' => 'c-1',
         'project_id' => $this->project->id,
         'repo_path' => $this->project->path,
         'origin_ref' => 'main',
@@ -326,7 +326,7 @@ test('head-divergence-transitioned event triggers checkHeadDivergence on review-
 
 test('clearing the last persisted comment while HEAD is diverged auto-follows to HEAD', function () {
     Comment::create([
-        'id' => 'c1',
+        'id' => 'c-1',
         'project_id' => $this->project->id,
         'repo_path' => $this->project->path,
         'origin_ref' => 'main',
@@ -347,7 +347,7 @@ test('clearing the last persisted comment while HEAD is diverged auto-follows to
     expect($component->get('divergenceState'))->toBe(DivergenceState::Diverged);
 
     $component->set('comments', [[
-        'id' => 'c1',
+        'id' => 'c-1',
         'fileId' => 'abc123',
         'file' => 'src/Foo.php',
         'side' => 'new',
@@ -358,6 +358,7 @@ test('clearing the last persisted comment while HEAD is diverged auto-follows to
     ]]);
     $component->call('clearAllComments');
 
+    expect(Comment::query()->whereKey('c-1')->exists())->toBeFalse();
     expect($component->get('divergenceState'))->toBe(DivergenceState::Aligned);
     expect($component->get('projectBranch'))->toBe('feature-x');
 });
@@ -377,7 +378,7 @@ test('sentinel HEAD result leaves state untouched', function () {
 
 test('switchReviewToHead is undoable and undo restores the original target', function () {
     Comment::create([
-        'id' => 'c1',
+        'id' => 'c-1',
         'project_id' => $this->project->id,
         'repo_path' => $this->project->path,
         'origin_ref' => 'main',
@@ -414,7 +415,7 @@ test('switchReviewToHead is undoable and undo restores the original target', fun
 
 test('banner-only transition skips the parent render and paints the divergence islands', function () {
     Comment::create([
-        'id' => 'c1',
+        'id' => 'c-1',
         'project_id' => $this->project->id,
         'repo_path' => $this->project->path,
         'origin_ref' => 'main',
@@ -480,7 +481,7 @@ test('a transition with no files renders the page so the divergence empty state 
     });
 
     Comment::create([
-        'id' => 'c1',
+        'id' => 'c-1',
         'project_id' => $this->project->id,
         'repo_path' => $this->project->path,
         'origin_ref' => 'main',
@@ -547,7 +548,7 @@ test('deleting a comment skips the parent render when divergence is unchanged', 
 
 test('a divergence transition caught during a comment write paints the divergence islands', function () {
     Comment::create([
-        'id' => 'c1',
+        'id' => 'c-1',
         'project_id' => $this->project->id,
         'repo_path' => $this->project->path,
         'origin_ref' => 'main',
