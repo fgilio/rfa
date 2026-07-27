@@ -13,8 +13,8 @@
         <div class="space-y-2">
             @foreach($replies as $reply)
                 @php
-                    $isHumanReply = ($reply['authorType'] ?? null) === 'human'
-                        && ($reply['authorKey'] ?? null) === 'rfa-ui';
+                    $isHumanReply = ($reply['authorType'] ?? null) === \App\Enums\CommentAuthorType::Human->value
+                        && ($reply['authorKey'] ?? null) === \App\DTOs\CommentAuthor::UI_KEY;
                     $author = $isHumanReply
                         ? 'You'
                         : ($reply['authorLabel'] ?? $reply['authorKey'] ?? 'Agent');

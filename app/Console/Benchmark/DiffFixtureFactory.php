@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Benchmark;
 
+use App\DTOs\CommentAuthor;
 use App\DTOs\FileListEntry;
 use App\Enums\DiffSide;
 use App\Enums\LineType;
@@ -242,7 +243,7 @@ final class DiffFixtureFactory
                         'id' => "r-benchmark-{$i}-{$reply}",
                         'commentId' => 'comment-'.hash('xxh128', "{$fileId}-{$i}"),
                         'authorType' => $reply % 2 === 0 ? 'agent' : 'human',
-                        'authorKey' => $reply % 2 === 0 ? 'codex-cli' : 'rfa-ui',
+                        'authorKey' => $reply % 2 === 0 ? 'codex-cli' : CommentAuthor::UI_KEY,
                         'authorLabel' => $reply % 2 === 0 ? 'Codex' : null,
                         'body' => "Benchmark reply {$reply} on comment {$i}.",
                         'createdAt' => '2026-07-27T12:00:00+00:00',

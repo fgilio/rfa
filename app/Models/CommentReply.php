@@ -57,13 +57,11 @@ class CommentReply extends Model
      */
     public function scopeForProjectOrRepo(Builder $query, ?int $projectId, string $repoPath): Builder
     {
-        return $query->whereHas(
-            'comment',
-            function (Builder $commentQuery) use ($projectId, $repoPath): void {
-                $projectId
-                    ? $commentQuery->where('project_id', $projectId)
-                    : $commentQuery->whereNull('project_id')->where('repo_path', $repoPath);
-            },
+        return $query->whereIn(
+            'comment_id',
+            Comment::query()
+                ->forProjectOrRepo($projectId, $repoPath)
+                ->select('id'),
         );
     }
 

@@ -9,6 +9,8 @@ use InvalidArgumentException;
 
 final readonly class CommentAuthor
 {
+    public const UI_KEY = 'rfa-ui';
+
     private function __construct(
         public CommentAuthorType $type,
         public string $key,
@@ -17,7 +19,7 @@ final readonly class CommentAuthor
 
     public static function human(): self
     {
-        return new self(CommentAuthorType::Human, 'rfa-ui', null);
+        return self::make(CommentAuthorType::Human, self::UI_KEY);
     }
 
     public static function agent(string $key, ?string $label = null): self
