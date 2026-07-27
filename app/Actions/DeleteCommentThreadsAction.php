@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\CommentThreadDeletion;
-use App\DTOs\CommentThreadSnapshot;
 use App\Enums\CommentSurface;
 use App\Models\Comment;
 use Illuminate\Support\Facades\DB;
@@ -63,9 +62,7 @@ final readonly class DeleteCommentThreadsAction
                 return null;
             }
 
-            $storedCommentIds = collect($snapshots)->map(
-                fn (array $snapshot): string => CommentThreadSnapshot::fromArray($snapshot)->commentId(),
-            );
+            $storedCommentIds = collect($snapshots)->pluck('comment.id');
 
             Comment::query()
                 ->forProjectOrRepo($projectId, $repoPath)

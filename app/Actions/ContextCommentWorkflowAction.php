@@ -141,10 +141,6 @@ final readonly class ContextCommentWorkflowAction
         array $comments,
         string $commentId,
     ): ?CommentThreadDeletion {
-        if (! str_starts_with($commentId, 'c-')) {
-            return null;
-        }
-
         return $this->deleteCommentThreads->handle(
             $repoPath,
             $projectId,

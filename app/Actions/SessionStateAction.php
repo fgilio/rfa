@@ -80,8 +80,8 @@ final readonly class SessionStateAction
         );
     }
 
-    /** @return iterable<array<string, mixed>> */
-    private function loadComments(string $repoPath, ?int $projectId): iterable
+    /** @return list<array<string, mixed>> */
+    private function loadComments(string $repoPath, ?int $projectId): array
     {
         return Comment::query()
             ->forProjectOrRepo($projectId, $repoPath)
@@ -90,8 +90,7 @@ final readonly class SessionStateAction
             ->with('replies')
             ->orderBy('created_at')
             ->get()
-            ->map(fn (Comment $c) => $c->toArray())
-            ->all();
+            ->toArray();
     }
 
     /**

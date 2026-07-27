@@ -30,7 +30,7 @@ final readonly class LoadContextCommentsAction
             ->with('replies')
             ->orderBy('created_at')
             ->get()
-            ->map(fn (Comment $row): array => $row->toArray());
+            ->toArray();
 
         return $this->resolveAnchor->handle($repoPath, $rows);
     }
