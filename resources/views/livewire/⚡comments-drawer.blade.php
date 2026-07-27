@@ -164,6 +164,7 @@ class extends Component
                             $isSubmitted = ! empty($c['submittedAt']);
                             $isReplyFilterMatch = $c['isReplyFilterMatch'] ?? false;
                             $replyCount = count($c['replies']);
+                            $threadId = 'drawer-thread-'.$c['id'];
                         @endphp
                         <div
                             x-data="{ expanded: @js($isReplyFilterMatch) }"
@@ -175,8 +176,13 @@ class extends Component
                                 <button
                                     type="button"
                                     class="block w-full px-4 py-2.5 text-left focus-visible:bg-gh-surface/60 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gh-accent focus-visible:-outline-offset-1"
-                                    @if($isSubmitted)
+                                    @if($isSubmitted && $replyCount > 0)
                                         x-on:click="expanded = ! expanded"
+                                        x-bind:aria-expanded="expanded"
+                                        aria-controls="{{ $threadId }}"
+                                    @elseif($isSubmitted)
+                                        x-on:click="document.getElementById(@js($threadId))?.querySelector('[data-testid=reply-to-comment]')?.click()"
+                                        aria-label="Reply to comment"
                                     @else
                                         x-on:click="select(@js($c['id']), @js($c['file']))"
                                     @endif
@@ -219,14 +225,15 @@ class extends Component
                                     class="mx-4 mb-2 text-[10px] font-mono text-gh-muted hover:text-gh-accent"
                                     x-on:click="expanded = !expanded"
                                     x-bind:aria-expanded="expanded"
+                                    aria-controls="{{ $threadId }}"
                                 >
                                     {{ $replyCount }} {{ Str::plural('reply', $replyCount) }}
                                 </button>
-                                <div x-show="expanded" x-cloak class="cursor-default px-4 pb-2.5">
+                                <div id="{{ $threadId }}" x-show="expanded" x-cloak class="cursor-default px-4 pb-2.5">
                                     <x-comment-replies :comment="$c" />
                                 </div>
                             @else
-                                <div class="px-4 pb-2.5">
+                                <div id="{{ $threadId }}" class="px-4 pb-2.5">
                                     <x-comment-replies :comment="$c" />
                                 </div>
                             @endif

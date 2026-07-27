@@ -194,3 +194,29 @@ test('filtering expands a collapsed drawer thread when its reply matches', funct
     $panel->getByPlaceholder('Filter comments...')->fill('needle');
     $matchingReply->waitFor(['state' => 'visible']);
 });
+
+test('submitted comments without replies open their reply composer from the drawer body', function () {
+    $project = Project::query()->where('slug', $this->testProjectSlug)->firstOrFail();
+    $comment = Comment::factory()->for($project)->create([
+        'repo_path' => $project->path,
+        'file_path' => 'hello.php',
+        'body' => 'Submitted without replies',
+        'submitted_at' => now(),
+    ]);
+
+    $page = $this->visitAndLoad($this->projectUrl());
+    $panel = $page->page()->getByTestId('overlay-panel-comments-drawer');
+    $panel->waitFor(['state' => 'attached']);
+    $page->page()->getByLabel('All comments · ⌘J')->click();
+    $panel->waitFor(['state' => 'visible']);
+    $page->page()->evaluate(
+        'document.querySelector(\'[aria-label="Show submitted comments"]\').click()',
+    );
+
+    $row = $panel->getByTestId('drawer-comment-'.$comment->id);
+    $row->waitFor(['state' => 'visible']);
+    $row->getByLabel('Reply to comment')->click();
+
+    $row->getByPlaceholder('Write a reply', false)->waitFor(['state' => 'visible']);
+    $panel->waitFor(['state' => 'visible']);
+});
