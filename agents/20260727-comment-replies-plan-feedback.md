@@ -18,7 +18,7 @@ Solid plan, ready to implement. Verified against the code: `Comment::scopeForPro
 
 5. **Drawer filter over reply text.** Matching filters against reply body/author means `whereHas`/`orWhereHas` subqueries on `comment_replies`. Fine at RFA scale, but add the filter path to the performance/regression tests (the plan's benchmark bullet covers hydration, not filtering).
 
-6. **Undo toast concurrency.** Adding `delete-reply` to the `undo-available` contract: the current toast holds one pending undo. Deleting a reply then deleting its root (or another comment) drops the first undo. That matches existing semantics for consecutive comment deletes, so it's acceptable. State it explicitly in the plan/tests so it's a decision, not an accident.
+6. **Undo toast concurrency.** Adding `delete-reply` to the `undo-available` contract must preserve the existing LIFO stack. Deleting a reply and then its root (or another comment) keeps both entries, exposes the newest first, and refreshes the older entry's TTL when it becomes visible. Cover mixed reply/root deletion and consecutive comment deletions with the same stack regression tests.
 
 7. **Replies excluded from Markdown export.** Deliberate and correctly scoped, but it means agent-facing exports show a root comment with no trace that a conversation resolved/amended it. Fine for this phase. Flag in the drawer UI is enough. Just confirm the CLI phase reads threads via the Actions (the plan says so) rather than expecting export to carry them, since that expectation is easy to develop.
 
