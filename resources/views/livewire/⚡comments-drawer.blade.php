@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\LoadCommentsDrawerAction;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Lazy;
 use Livewire\Attributes\Locked;
@@ -22,11 +23,6 @@ class extends Component
 
     public string $filter = '';
 
-    public function toggle(): void
-    {
-        $this->open = ! $this->open;
-    }
-
     #[On('comment-updated')]
     #[On('reset-reviewed-files')]
     public function refresh(): void
@@ -37,46 +33,30 @@ class extends Component
         // skip the expensive query.
     }
 
-    /** @return \Illuminate\Database\Eloquent\Builder<\App\Models\Comment> */
-    private function baseQuery(): \Illuminate\Database\Eloquent\Builder
+    /** @return array{groupedComments: array<string, list<array<string, mixed>>>, totalCount: int} */
+    #[Computed]
+    public function drawerData(): array
     {
-        $query = \App\Models\Comment::query()->forProjectOrRepo($this->projectId, $this->repoPath);
-
-        if (! $this->showSubmitted) {
-            $query->whereNull('submitted_at');
-        }
-
-        return $query;
+        return app(LoadCommentsDrawerAction::class)->handle(
+            repoPath: $this->repoPath,
+            projectId: $this->projectId,
+            showSubmitted: $this->showSubmitted,
+            filter: $this->filter,
+            includeRows: $this->open,
+        );
     }
 
-    /** @return array<string, array<int, array<string, mixed>>> */
+    /** @return array<string, list<array<string, mixed>>> */
     #[Computed]
     public function groupedComments(): array
     {
-        if (! $this->open) {
-            return [];
-        }
-
-        $query = $this->baseQuery()->orderByDesc('created_at');
-
-        $filter = trim($this->filter);
-        if ($filter !== '') {
-            $query->where(function ($q) use ($filter) {
-                $q->where('file_path', 'like', '%'.$filter.'%')
-                    ->orWhere('body', 'like', '%'.$filter.'%');
-            });
-        }
-
-        return $query->get()
-            ->groupBy('file_path')
-            ->map(fn ($rows) => $rows->map->toArray()->all())
-            ->all();
+        return $this->drawerData['groupedComments'];
     }
 
     #[Computed]
     public function totalCount(): int
     {
-        return $this->baseQuery()->count();
+        return $this->drawerData['totalCount'];
     }
 }; ?>
 
@@ -109,7 +89,8 @@ class extends Component
         },
     }"
     x-init="$store.shortcuts.register('comments-drawer.toggle', () => toggle())"
-    @keydown.window="if (open && $event.key === 'Escape') { $event.preventDefault(); close(); return; }"
+    @keydown.escape.window="if (open) { $event.preventDefault(); close() }"
+    @comment-thread-updated.window="if (open) $wire.$refresh()"
     x-effect="if (open && !$store.overlays.is('comments-drawer')) close()"
     class="relative"
 >
@@ -179,28 +160,52 @@ class extends Component
                         <x-file-path :path="$filePath" />
                     </div>
                     @foreach($comments as $c)
+                        @php
+                            $isSubmitted = ! empty($c['submittedAt']);
+                            $isReplyFilterMatch = $c['isReplyFilterMatch'] ?? false;
+                            $replyCount = count($c['replies']);
+                            $threadId = 'drawer-thread-'.$c['id'];
+                        @endphp
                         <div
-                            class="group px-4 py-2.5 border-t border-gh-border/30 text-xs cursor-pointer hover:bg-gh-surface/40 focus-visible:bg-gh-surface/60 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gh-accent focus-visible:-outline-offset-1"
-                            role="button"
-                            tabindex="0"
-                            x-on:click="select(@js($c['id']), @js($c['file_path']))"
-                            x-on:keydown.enter.prevent="select(@js($c['id']), @js($c['file_path']))"
-                            x-on:keydown.space.prevent="select(@js($c['id']), @js($c['file_path']))"
+                            x-data="{ expanded: @js($isReplyFilterMatch) }"
+                            wire:key="drawer-comment-{{ $c['id'] }}-{{ $isReplyFilterMatch ? 'reply-match' : 'no-reply-match' }}"
+                            data-testid="drawer-comment-{{ $c['id'] }}"
+                            class="group border-t border-gh-border/30 text-xs hover:bg-gh-surface/40"
                         >
-                            <div class="flex items-center gap-2 text-[10px] font-mono text-gh-muted mb-1">
-                                @if(! empty($c['origin_ref']))
-                                    <span>{{ match($c['origin_ref']) { 'working' => 'WD', 'external' => 'EXT', default => Str::limit($c['origin_ref'], 7, '') } }}</span>
-                                @endif
-                                @if(! empty($c['start_line']))
-                                    <span aria-hidden="true">&middot;</span>
-                                    <span>L{{ $c['start_line'] }}@if(! empty($c['end_line']) && $c['end_line'] !== $c['start_line'])-L{{ $c['end_line'] }}@endif</span>
-                                @endif
-                                <div class="ml-auto flex items-center gap-1">
-                                    @if(! empty($c['is_draft']))
-                                        <span class="px-1.5 py-0.5 rounded bg-gh-draft/10 text-gh-draft text-[9px]">draft</span>
-                                    @elseif(! empty($c['submitted_at']))
-                                        <span class="px-1.5 py-0.5 rounded bg-gh-border/40 text-gh-muted text-[9px]">submitted</span>
+                            <div class="relative">
+                                <button
+                                    type="button"
+                                    class="block w-full px-4 py-2.5 text-left focus-visible:bg-gh-surface/60 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gh-accent focus-visible:-outline-offset-1"
+                                    @if($isSubmitted && $replyCount > 0)
+                                        x-on:click="expanded = ! expanded"
+                                        x-bind:aria-expanded="expanded"
+                                        aria-controls="{{ $threadId }}"
+                                    @elseif($isSubmitted)
+                                        x-on:click="document.getElementById(@js($threadId))?.querySelector('[data-testid=reply-to-comment]')?.click()"
+                                        aria-label="Reply to comment"
+                                    @else
+                                        x-on:click="select(@js($c['id']), @js($c['file']))"
                                     @endif
+                                >
+                                    <div class="flex items-center gap-2 text-[10px] font-mono text-gh-muted mb-1 pr-7">
+                                        @if(! empty($c['originRef']))
+                                            <span>{{ match($c['originRef']) { 'working' => 'WD', 'external' => 'EXT', default => Str::limit($c['originRef'], 7, '') } }}</span>
+                                        @endif
+                                        @if(! empty($c['startLine']))
+                                            <span aria-hidden="true">&middot;</span>
+                                            <span>L{{ $c['startLine'] }}@if(! empty($c['endLine']) && $c['endLine'] !== $c['startLine'])-L{{ $c['endLine'] }}@endif</span>
+                                        @endif
+                                        <div class="ml-auto flex items-center gap-1">
+                                            @if(! empty($c['isDraft']))
+                                                <span class="px-1.5 py-0.5 rounded bg-gh-draft/10 text-gh-draft text-[9px]">draft</span>
+                                            @elseif(! empty($c['submittedAt']))
+                                                <span class="px-1.5 py-0.5 rounded bg-gh-border/40 text-gh-muted text-[9px]">submitted</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="text-gh-text whitespace-pre-wrap">{{ $c['body'] }}</div>
+                                </button>
+                                <div class="absolute right-4 top-2">
                                     <flux:tooltip content="Copy comment">
                                         <flux:button
                                             icon="clipboard-document"
@@ -209,14 +214,29 @@ class extends Component
                                             size="xs"
                                             aria-label="Copy comment"
                                             x-on:click.stop="$dispatch('copy-to-clipboard', { text: @js($c['body']), toast: 'Copied' })"
-                                            x-on:keydown.enter.stop
-                                            x-on:keydown.space.stop
                                             class="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity hover:!text-gh-accent"
                                         />
                                     </flux:tooltip>
                                 </div>
                             </div>
-                            <div class="text-gh-text whitespace-pre-wrap">{{ $c['body'] }}</div>
+                            @if($replyCount > 0)
+                                <button
+                                    type="button"
+                                    class="mx-4 mb-2 text-[10px] font-mono text-gh-muted hover:text-gh-accent"
+                                    x-on:click="expanded = !expanded"
+                                    x-bind:aria-expanded="expanded"
+                                    aria-controls="{{ $threadId }}"
+                                >
+                                    {{ $replyCount }} {{ Str::plural('reply', $replyCount) }}
+                                </button>
+                                <div id="{{ $threadId }}" x-show="expanded" x-cloak class="cursor-default px-4 pb-2.5">
+                                    <x-comment-replies :comment="$c" />
+                                </div>
+                            @else
+                                <div id="{{ $threadId }}" class="px-4 pb-2.5">
+                                    <x-comment-replies :comment="$c" />
+                                </div>
+                            @endif
                         </div>
                     @endforeach
                 </div>

@@ -27,9 +27,10 @@ final readonly class LoadContextCommentsAction
             ->forProjectOrRepo($projectId, $repoPath)
             ->fromContext()
             ->unsubmitted()
+            ->with('replies')
             ->orderBy('created_at')
             ->get()
-            ->map(fn (Comment $row): array => $row->toArray());
+            ->toArray();
 
         return $this->resolveAnchor->handle($repoPath, $rows);
     }

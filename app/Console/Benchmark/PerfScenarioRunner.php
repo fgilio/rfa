@@ -6,10 +6,13 @@ namespace App\Console\Benchmark;
 
 use App\Actions\BackfillGlobalGitignoreAction;
 use App\Actions\GetFileListAction;
+use App\Actions\LoadCommentsDrawerAction;
 use App\Actions\LoadFileDiffAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
+use App\Models\Comment;
+use App\Models\CommentReply;
 use App\Models\Project;
 use App\Models\ReviewSession;
 use App\Support\DiffCacheKey;
@@ -30,6 +33,8 @@ final class PerfScenarioRunner
     /** @var array{repoPath: string, path: string, from: string, to: string}|null */
     private ?array $largeBladeRepository = null;
 
+    private ?int $drawerReplyFilterProjectId = null;
+
     public function __construct(
         private readonly Application $app,
     ) {}
@@ -47,6 +52,7 @@ final class PerfScenarioRunner
 
         try {
             foreach ($this->scenarios($only) as $name => $scenario) {
+                $this->prepareScenario($name);
                 $results[$name] = $this->measureScenario($scenario, $rounds, $warmupRounds);
             }
         } finally {
@@ -89,8 +95,11 @@ final class PerfScenarioRunner
                 $this->renderDiffFile(
                     $file,
                     DiffFixtureFactory::diffData(hunks: 2, linesPerHunk: 30, path: 'src/Commented.php'),
-                    DiffFixtureFactory::comments($file['id'], 10),
+                    DiffFixtureFactory::comments($file['id'], 10, repliesPerComment: 4),
                 );
+            },
+            'drawer-reply-filter' => function (): void {
+                $this->filterDrawerReplies();
             },
             'load-file-diff-blade-default-context' => function (): void {
                 $this->loadLargeBladeDiff(contextLines: 3);
@@ -323,6 +332,46 @@ final class PerfScenarioRunner
         });
 
         Livewire::test('pages::review-page', ['slug' => 'perf-review']);
+    }
+
+    private function filterDrawerReplies(): void
+    {
+        if ($this->drawerReplyFilterProjectId === null) {
+            throw new \LogicException('The drawer reply filter benchmark has not been prepared.');
+        }
+
+        app(LoadCommentsDrawerAction::class)->handle(
+            '/tmp/perf-drawer',
+            $this->drawerReplyFilterProjectId,
+            filter: 'codex-cli',
+        );
+    }
+
+    private function prepareScenario(string $name): void
+    {
+        if ($name !== 'drawer-reply-filter') {
+            return;
+        }
+
+        $this->resetState();
+
+        $project = Project::factory()->create([
+            'path' => '/tmp/perf-drawer',
+        ]);
+        $comments = Comment::factory()
+            ->count(25)
+            ->for($project)
+            ->create(['repo_path' => '/tmp/perf-drawer']);
+
+        $comments->each(
+            fn (Comment $comment) => CommentReply::factory()
+                ->count(4)
+                ->for($comment)
+                ->agent()
+                ->create(),
+        );
+
+        $this->drawerReplyFilterProjectId = $project->id;
     }
 
     private function loadLargeBladeDiff(int $contextLines): void

@@ -42,6 +42,30 @@ test('matching hash places the anchor with original lines', function () {
     expect($rows[0]['endLine'])->toBe(2);
 });
 
+test('preserves normalized replies while resolving the root anchor', function () {
+    File::put($this->repo.'/CLAUDE.md', "rule one\nrule two\n");
+
+    $rows = $this->action->handle($this->repo, [
+        rawCommentRow([
+            'replies' => [[
+                'id' => 'r-1',
+                'comment_id' => 'c-test',
+                'author_type' => 'agent',
+                'author_key' => 'claude-code',
+                'author_label' => 'Claude Code',
+                'body' => 'Reply',
+            ]],
+        ]),
+    ]);
+
+    expect($rows[0]['replies'][0])->toMatchArray([
+        'id' => 'r-1',
+        'commentId' => 'c-test',
+        'authorType' => 'agent',
+        'authorKey' => 'claude-code',
+    ]);
+});
+
 test('drifted hash with recoverable snippet shifts the anchor', function () {
     File::put($this->repo.'/CLAUDE.md', "preamble\nadded above\nrule one\nrule two\n");
 

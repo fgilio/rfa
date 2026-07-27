@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\CommentSurface;
 use Database\Factories\CommentFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Comment extends Model
 {
@@ -88,10 +90,30 @@ class Comment extends Model
         return $query->where('origin_ref', '!=', self::ORIGIN_CONTEXT);
     }
 
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeFromSurface(Builder $query, CommentSurface $surface): Builder
+    {
+        return match ($surface) {
+            CommentSurface::Review => $query->fromReview(),
+            CommentSurface::Context => $query->fromContext(),
+        };
+    }
+
     /** @return BelongsTo<Project, $this> */
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /** @return HasMany<CommentReply, $this> */
+    public function replies(): HasMany
+    {
+        return $this->hasMany(CommentReply::class)
+            ->orderBy('created_at')
+            ->orderBy('id');
     }
 
     protected function casts(): array

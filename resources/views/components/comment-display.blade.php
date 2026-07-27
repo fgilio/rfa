@@ -65,4 +65,5 @@
             @endif
         </flux:text>
     @endif
+    <x-comment-replies :comment="$comment" />
 </div>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Benchmark;
 
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Facade;
@@ -63,6 +64,7 @@ final class BenchmarkIsolation
         DB::purge('sqlite');
         $this->app['db']->setDefaultConnection('sqlite');
         DB::reconnect('sqlite');
+        Model::setConnectionResolver($this->app['db']);
 
         Artisan::call('migrate', ['--force' => true]);
 

@@ -22,6 +22,7 @@ use App\Actions\ToggleReviewedAction;
 use App\Actions\UnlinkExternalPathAction;
 use App\Actions\UpdateProjectSettingAction;
 use App\Concerns\InteractsWithRemoteLinks;
+use App\Concerns\ManagesCommentReplies;
 use App\Concerns\ReviewPage\ExportsReview;
 use App\Concerns\ReviewPage\ManagesReviewTrash;
 use App\Concerns\ReviewPage\ReviewsBranchDivergence;
@@ -50,6 +51,7 @@ use function Illuminate\Support\defer;
 new #[Layout('layouts.app')] class extends Component
 {
     use InteractsWithRemoteLinks;
+    use ManagesCommentReplies;
     use ExportsReview;
     use ManagesReviewTrash;
     use ReviewsBranchDivergence;
@@ -683,7 +685,12 @@ new #[Layout('layouts.app')] class extends Component
     public function deleteComment(string $commentId): void
     {
         $this->applyCommentMutation(
-            app(ReviewCommentWorkflowAction::class)->delete($this->comments, $commentId)
+            app(ReviewCommentWorkflowAction::class)->delete(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $this->comments,
+                $commentId,
+            )
         );
     }
 
@@ -733,7 +740,11 @@ new #[Layout('layouts.app')] class extends Component
     public function clearAllComments(): void
     {
         $this->applyCommentMutation(
-            app(ReviewCommentWorkflowAction::class)->clearAll($this->comments)
+            app(ReviewCommentWorkflowAction::class)->clearAll(
+                $this->repoPath,
+                $this->projectId ?: null,
+                $this->comments,
+            )
         );
     }
 
@@ -753,6 +764,7 @@ new #[Layout('layouts.app')] class extends Component
     {
         match ($type) {
             'delete', 'clear-all' => $this->restoreComments($payload),
+            'delete-reply' => $this->restoreCommentReply($payload),
             'discard' => $this->restoreDiscardedFile($payload),
             self::UNDO_TYPE_MARK_REVIEWED => $this->unmarkReviewed($payload['filePaths'] ?? []),
             self::UNDO_TYPE_SWITCH_BRANCH => $this->restoreReviewBranch(is_array($payload) ? $payload : []),

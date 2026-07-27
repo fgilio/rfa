@@ -4,6 +4,7 @@ use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
 use App\Enums\GitRef;
 use App\Models\Comment;
+use App\Models\CommentReply;
 use App\Models\ReviewedFile;
 use App\Models\ReviewSession;
 use App\Services\GitFileContentService;
@@ -72,6 +73,34 @@ test('restores comments and tracks orphaned paths', function () {
     expect($byFile['gone.php']['anchorStatus'])->toBe('unplaced');
     expect($result['orphanedPaths'])->toBe(['gone.php']);
     expect($result['globalComment'])->toBe('hello');
+});
+
+test('restores ordered replies with review comments', function () {
+    $repoPath = '/tmp/'.$this->faker->word();
+    $comment = Comment::create([
+        'id' => 'c-thread',
+        'repo_path' => $repoPath,
+        'origin_ref' => 'working',
+        'file_path' => 'f.php',
+        'side' => 'right',
+        'body' => 'Root',
+    ]);
+    CommentReply::factory()->for($comment)->agent()->create([
+        'id' => 'r-agent',
+        'body' => 'Agent reply',
+    ]);
+
+    $result = app(SessionStateAction::class)->handle(
+        $repoPath,
+        [['id' => 'file-thread', 'path' => 'f.php', 'isUntracked' => false]],
+    );
+
+    expect($result['comments'][0]['replies'][0])->toMatchArray([
+        'id' => 'r-agent',
+        'commentId' => 'c-thread',
+        'authorType' => 'agent',
+        'body' => 'Agent reply',
+    ]);
 });
 
 test('remaps fileId to current file list', function () {

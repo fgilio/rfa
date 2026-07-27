@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\Comment as CommentDTO;
+use App\DTOs\CommentReply;
 use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use App\Services\LineSnippetMatcherService;
@@ -105,6 +106,7 @@ final readonly class ResolveContextCommentAnchorAction
             isDraft: (bool) ($row['is_draft'] ?? $row['isDraft'] ?? false),
             submittedAt: $row['submitted_at'] ?? $row['submittedAt'] ?? null,
             anchorStatus: $anchorStatus->value,
+            replies: CommentReply::collect($row['replies'] ?? []),
         ))->toArray();
     }
 

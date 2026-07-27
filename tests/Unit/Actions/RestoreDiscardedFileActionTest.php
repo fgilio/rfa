@@ -2,6 +2,8 @@
 
 use App\Actions\DiscardFileChangesAction;
 use App\Actions\RestoreDiscardedFileAction;
+use App\Models\Comment;
+use App\Models\CommentReply;
 use App\Models\Project;
 use App\Models\TrashedFile;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -117,7 +119,84 @@ test('returns saved comments on restore', function () {
 
     $restored = $this->restoreAction->handle($trashed->id, $this->tmpDir, $this->project->id);
 
-    expect($restored)->toBe($comments);
+    expect($restored)->toBe([[
+        ...$comments[0],
+        'replies' => [],
+    ]]);
+});
+
+test('returns replies from versioned thread snapshots on restore', function () {
+    File::put($this->tmpDir.'/file.txt', "changed\n");
+    $snapshots = [[
+        'version' => 1,
+        'comment' => [
+            'id' => 'c-thread',
+            'body' => 'Root',
+            'fileId' => 'file-abc',
+        ],
+        'replies' => [[
+            'id' => 'r-thread',
+            'commentId' => 'c-thread',
+            'authorType' => 'agent',
+            'authorKey' => 'codex-cli',
+            'authorLabel' => 'Codex',
+            'body' => 'Reply',
+        ]],
+    ]];
+
+    $trashed = $this->discardAction->handle(
+        $this->tmpDir,
+        'file.txt',
+        'modified',
+        $this->project->id,
+        comments: $snapshots,
+    );
+
+    $restored = $this->restoreAction->handle($trashed->id, $this->tmpDir, $this->project->id);
+
+    expect($restored[0]['replies'][0])->toMatchArray([
+        'id' => 'r-thread',
+        'authorKey' => 'codex-cli',
+        'body' => 'Reply',
+    ]);
+});
+
+test('returns current database replies added while the file was discarded', function () {
+    File::put($this->tmpDir.'/file.txt', "changed\n");
+
+    $comment = Comment::factory()->for($this->project)->create([
+        'repo_path' => $this->tmpDir,
+        'file_path' => 'file.txt',
+        'body' => 'Root',
+    ]);
+    $existingReply = CommentReply::factory()->for($comment)->create([
+        'body' => 'Reply before discard',
+    ]);
+
+    $trashed = $this->discardAction->handle(
+        $this->tmpDir,
+        'file.txt',
+        'modified',
+        $this->project->id,
+        comments: [[
+            'version' => 1,
+            'comment' => [
+                'id' => $comment->id,
+                'body' => $comment->body,
+                'fileId' => 'file-abc',
+            ],
+            'replies' => [$existingReply->toArray()],
+        ]],
+    );
+
+    $newReply = CommentReply::factory()->for($comment)->create([
+        'body' => 'Reply while discarded',
+    ]);
+
+    $restored = $this->restoreAction->handle($trashed->id, $this->tmpDir, $this->project->id);
+
+    expect(collect($restored[0]['replies'])->pluck('id')->all())
+        ->toBe([$existingReply->id, $newReply->id]);
 });
 
 // -- storage cleanup --

@@ -11,6 +11,8 @@ use App\Actions\ResolveRangeToWorkingAction;
 use App\Actions\ScanReviewFilesAction;
 use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
+use App\Models\Comment;
+use App\Models\CommentReply;
 use App\Models\Project;
 use App\Models\TrashedFile;
 use App\Services\GitFileContentService;
@@ -450,10 +452,22 @@ test('clearAllComments dispatches comment-updated to affected files', function (
     // Set comments directly to avoid addComment also dispatching comment-updated
     // (Livewire's assertDispatched callback only checks the first matching event name)
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project']);
-    $component->set('comments', [
+    $comments = [
         ['id' => 'c-1', 'fileId' => 'abc123', 'file' => 'src/Foo.php', 'side' => 'right', 'startLine' => 1, 'endLine' => 1, 'body' => 'Comment 1', 'isDraft' => false],
         ['id' => 'c-2', 'fileId' => 'def456', 'file' => 'src/Bar.php', 'side' => 'right', 'startLine' => 2, 'endLine' => 2, 'body' => 'Comment 2', 'isDraft' => false],
-    ]);
+    ];
+    collect($comments)->each(fn (array $comment) => Comment::create([
+        'id' => $comment['id'],
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => 'working',
+        'file_path' => $comment['file'],
+        'side' => $comment['side'],
+        'start_line' => $comment['startLine'],
+        'end_line' => $comment['endLine'],
+        'body' => $comment['body'],
+    ]));
+    $component->set('comments', $comments);
     $component->call('clearAllComments');
 
     $component->assertDispatched('comment-updated', fn ($name, $params) => $params['fileId'] === 'abc123' && $params['comments'] === []);
@@ -547,8 +561,137 @@ test('deleteComment dispatches undo-available with deleted comment', function ()
 
     $component->assertDispatched('undo-available', fn ($name, $params) => $params['type'] === 'delete'
         && count($params['payload']) === 1
-        && $params['payload'][0]['id'] === $commentId
+        && $params['payload'][0]['comment']['id'] === $commentId
     );
+});
+
+test('reply events inject the trusted UI author and update only the matching thread', function () {
+    $root = Comment::create([
+        'id' => 'c-reply-root',
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => 'working',
+        'file_path' => 'src/Foo.php',
+        'side' => 'right',
+        'start_line' => 1,
+        'end_line' => 1,
+        'body' => 'Root',
+    ]);
+    $comments = [
+        [
+            'id' => $root->id,
+            'fileId' => 'abc123',
+            'file' => 'src/Foo.php',
+            'side' => 'right',
+            'startLine' => 1,
+            'endLine' => 1,
+            'body' => 'Root',
+            'replies' => [],
+        ],
+        [
+            'id' => 'c-view-only',
+            'fileId' => 'def456',
+            'file' => 'src/Bar.php',
+            'side' => 'right',
+            'body' => 'Untouched',
+            'replies' => [],
+        ],
+    ];
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->set('comments', $comments)
+        ->dispatch('add-comment-reply', commentId: $root->id, body: 'UI reply');
+
+    $reply = CommentReply::query()->sole();
+
+    expect($reply->author_type->value)->toBe('human')
+        ->and($reply->author_key)->toBe('rfa-ui')
+        ->and($component->get('comments.0.replies.0.body'))->toBe('UI reply')
+        ->and($component->get('comments.1.replies'))->toBe([])
+        ->and(\Livewire\store($component->instance())->get('skipRender'))->toBeTrue();
+
+    $component->assertDispatched('comment-thread-updated', fn ($name, $params) => $params['commentId'] === $root->id
+        && $params['fileId'] === 'abc123'
+        && count($params['replies']) === 1);
+});
+
+test('replies to submitted drawer roots persist while absent from page state', function () {
+    $root = Comment::create([
+        'id' => 'c-submitted-reply',
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => 'working',
+        'file_path' => 'src/Foo.php',
+        'side' => 'right',
+        'body' => 'Submitted root',
+        'submitted_at' => now(),
+    ]);
+
+    $component = Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->assertSet('comments', [])
+        ->dispatch('add-comment-reply', commentId: $root->id, body: 'After submit');
+
+    expect(CommentReply::query()->sole()->body)->toBe('After submit')
+        ->and($component->get('comments'))->toBe([]);
+
+    $component->assertDispatched('comment-thread-updated', fn ($name, $params) => $params['commentId'] === $root->id
+        && $params['fileId'] === null);
+});
+
+test('reply deletion can be undone through the page coordinator', function () {
+    $root = Comment::create([
+        'id' => 'c-reply-undo',
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => 'working',
+        'file_path' => 'src/Foo.php',
+        'side' => 'right',
+        'body' => 'Root',
+    ]);
+    $reply = CommentReply::factory()->for($root)->create(['id' => 'r-page-undo']);
+    $payload = App\DTOs\CommentReply::fromArray($reply->toArray())->toArray();
+
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->set('comments', [[
+            'id' => $root->id,
+            'fileId' => 'abc123',
+            'file' => 'src/Foo.php',
+            'side' => 'right',
+            'body' => 'Root',
+            'replies' => [$payload],
+        ]])
+        ->dispatch('delete-comment-reply', replyId: $reply->id)
+        ->assertDispatched('undo-available', type: 'delete-reply', message: 'Reply deleted')
+        ->call('undo', 'delete-reply', $payload);
+
+    expect(CommentReply::query()->find('r-page-undo'))->not->toBeNull();
+});
+
+test('reply undo fails softly when its root no longer exists', function () {
+    $root = Comment::create([
+        'id' => 'c-reply-undo-missing-root',
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => 'working',
+        'file_path' => 'src/Foo.php',
+        'side' => 'right',
+        'body' => 'Root',
+    ]);
+    $reply = CommentReply::factory()->for($root)->create(['id' => 'r-orphaned-undo']);
+    $payload = App\DTOs\CommentReply::fromArray($reply->toArray())->toArray();
+
+    $reply->delete();
+    $root->delete();
+
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->call('undo', 'delete-reply', $payload)
+        ->assertDispatched(
+            'toast-show',
+            fn (string $name, array $params): bool => ($params['dataset']['variant'] ?? null) === 'warning'
+                && ($params['slots']['text'] ?? null) === 'Reply could not be restored because its comment no longer exists.',
+        );
+
+    expect(CommentReply::query()->find('r-orphaned-undo'))->toBeNull();
 });
 
 // -- Discard file undo-available --

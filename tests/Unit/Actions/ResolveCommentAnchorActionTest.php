@@ -68,6 +68,34 @@ test('marks comment as placed when the stored hash matches the right side of the
     expect($result[0]['fileId'])->toBe('file-new');
 });
 
+test('preserves normalized replies while resolving review anchors', function () {
+    $result = $this->action->handle(
+        '/tmp/repo',
+        [[
+            'id' => 'c-thread',
+            'file_path' => 'f.php',
+            'side' => 'right',
+            'body' => 'Root',
+            'replies' => [[
+                'id' => 'r-1',
+                'comment_id' => 'c-thread',
+                'author_type' => 'human',
+                'author_key' => 'rfa-ui',
+                'body' => 'Reply',
+            ]],
+        ]],
+        [['id' => 'file-new', 'path' => 'f.php']],
+        DiffTarget::range('from-sha', 'to-sha'),
+    );
+
+    expect($result[0]['replies'][0])->toMatchArray([
+        'id' => 'r-1',
+        'commentId' => 'c-thread',
+        'authorType' => 'human',
+        'body' => 'Reply',
+    ]);
+});
+
 test('marks comment as placed when the stored hash matches the left side of the diff', function () {
     $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('from-sha', 'f.php'))->andReturn('old-match');
     $this->gitFileContent->shouldReceive('hashForSource')->with('/tmp/repo', gitSourceSpec('to-sha', 'f.php'))->andReturn('new');

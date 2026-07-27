@@ -35,6 +35,7 @@ test('toArray returns camelCase keys for internal use', function () {
         'isDraft' => false,
         'submittedAt' => null,
         'anchorStatus' => 'placed',
+        'replies' => [],
     ]);
 });
 
@@ -84,6 +85,15 @@ test('fromArray constructs from camelCase array', function () {
         ->and($comment->endLine)->toBe(15)
         ->and($comment->body)->toBe('test body');
 });
+
+test('fromArray rejects missing required fields', function (array $comment) {
+    Comment::fromArray($comment);
+})->with([
+    'id' => [['file' => 'src/app.php', 'side' => 'right', 'body' => 'Body']],
+    'file' => [['id' => 'c-1', 'side' => 'right', 'body' => 'Body']],
+    'side' => [['id' => 'c-1', 'file' => 'src/app.php', 'body' => 'Body']],
+    'body' => [['id' => 'c-1', 'file' => 'src/app.php', 'side' => 'right']],
+])->throws(InvalidArgumentException::class);
 
 test('side property is DiffSide enum', function () {
     $comment = new Comment($this->faker->uuid(), 'file-abc', 'f.php', DiffSide::Right, 1, 1, 'body');

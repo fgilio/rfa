@@ -156,6 +156,22 @@ test('benchmark command can run a targeted scenario', function () {
         ->and($report['results']['load-file-diff-blade-default-context']['median_ms'])->toBeGreaterThan(0);
 });
 
+test('benchmark model writes use the isolated database', function () {
+    Artisan::call('rfa:benchmark-perf', [
+        '--json' => true,
+        '--only' => ['drawer-reply-filter'],
+        '--samples' => 1,
+        '--warmup-samples' => 0,
+        '--rounds' => 1,
+        '--warmup-rounds' => 0,
+    ]);
+
+    $report = json_decode(Artisan::output(), true);
+
+    expect(array_keys($report['results']))->toBe(['drawer-reply-filter'])
+        ->and($report['results']['drawer-reply-filter']['median_ms'])->toBeGreaterThan(0);
+});
+
 test('benchmark compare fails retained memory regressions', function () {
     $snapshotPath = tempnam(sys_get_temp_dir(), 'rfa-perf-snapshot-');
 

@@ -3,6 +3,7 @@
 use App\Actions\ReviewCommentWorkflowAction;
 use App\DTOs\DiffTarget;
 use App\Models\Comment;
+use App\Models\CommentReply;
 use App\Services\GitFileContentService;
 use Faker\Factory as Faker;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -106,35 +107,43 @@ test('delete removes the comment and offers undo while skipping the parent rende
     $added = ($this->add)([])->comments;
     $commentId = $added[0]['id'];
 
-    $mutation = $this->action->delete($added, $commentId);
+    CommentReply::factory()->for(Comment::findOrFail($commentId))->create(['body' => 'Thread reply']);
+
+    $mutation = $this->action->delete($this->repoPath, null, $added, $commentId);
 
     expect($mutation)->not->toBeNull()
         ->and($mutation->comments)->toBeEmpty()
         ->and($mutation->affectedFileIds)->toBe(['file-abc'])
         ->and($mutation->undo['type'])->toBe('delete')
-        ->and($mutation->undo['payload'][0]['id'])->toBe($commentId)
+        ->and($mutation->undo['payload'][0]['comment']['id'])->toBe($commentId)
+        ->and($mutation->undo['payload'][0]['replies'][0]['body'])->toBe('Thread reply')
         ->and($mutation->undo['message'])->toBe('Comment deleted')
         ->and($mutation->checksDivergence)->toBeTrue()
         ->and($mutation->skipsRender)->toBeTrue();
 
     expect(Comment::find($commentId))->toBeNull();
+
+    $restored = $this->action->restore(
+        $this->repoPath,
+        null,
+        [],
+        $mutation->undo['payload'],
+    );
+
+    expect($restored->comments[0]['replies'][0]['body'])->toBe('Thread reply')
+        ->and(CommentReply::query()->where('comment_id', $commentId)->sole()->body)->toBe('Thread reply');
 });
 
 test('delete returns null on an invalid id', function () {
-    expect($this->action->delete([], 'not-a-comment-id'))->toBeNull();
+    expect($this->action->delete($this->repoPath, null, [], 'not-a-comment-id'))->toBeNull();
 });
 
-test('delete of a valid id absent from the pool offers no undo and refreshes no file', function () {
+test('delete of an id absent from the pool is a no-op', function () {
     $pool = [['id' => 'c-loaded', 'fileId' => 'file-abc', 'body' => 'kept']];
 
-    $mutation = $this->action->delete($pool, 'c-other');
+    $mutation = $this->action->delete($this->repoPath, null, $pool, 'c-other');
 
-    expect($mutation)->not->toBeNull()
-        ->and($mutation->comments)->toBe($pool)
-        ->and($mutation->affectedFileIds)->toBe([])
-        ->and($mutation->undo)->toBeNull()
-        ->and($mutation->checksDivergence)->toBeTrue()
-        ->and($mutation->skipsRender)->toBeTrue();
+    expect($mutation)->toBeNull();
 });
 
 // -- clearAll --
@@ -143,7 +152,7 @@ test('clearAll deletes every comment and offers undo while skipping the parent r
     $first = ($this->add)([], 'file-abc', 'one')->comments;
     $both = ($this->add)($first, 'file-def', 'two')->comments;
 
-    $mutation = $this->action->clearAll($both);
+    $mutation = $this->action->clearAll($this->repoPath, null, $both);
 
     expect($mutation)->not->toBeNull()
         ->and($mutation->comments)->toBeEmpty()
@@ -160,11 +169,11 @@ test('clearAll deletes every comment and offers undo while skipping the parent r
 test('clearAll uses a singular message for a single comment', function () {
     $comments = ($this->add)([])->comments;
 
-    expect($this->action->clearAll($comments)->undo['message'])->toBe('Cleared 1 comment');
+    expect($this->action->clearAll($this->repoPath, null, $comments)->undo['message'])->toBe('Cleared 1 comment');
 });
 
 test('clearAll returns null when there are no comments', function () {
-    expect($this->action->clearAll([]))->toBeNull();
+    expect($this->action->clearAll($this->repoPath, null, []))->toBeNull();
 });
 
 // -- restore --

@@ -4,20 +4,18 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\CommentThreadSnapshot;
 use App\DTOs\DiffTarget;
 use App\DTOs\ReviewCommentMutation;
-use App\Enums\DiffSide;
-use App\Enums\GitRef;
-use App\Models\Comment;
+use App\Enums\CommentSurface;
 
 /**
  * Comment write workflow for the review page.
  *
- * Wraps the single-purpose AddCommentAction / UpdateCommentAction /
- * DeleteCommentAction for single-comment writes, and persists the bulk
- * clear/restore paths directly, folding every result into a
- * ReviewCommentMutation the page applies uniformly. Sibling to
- * ContextCommentWorkflowAction, which does the same for context-file comments.
+ * Coordinates single-comment writes, atomic thread deletion, and thread
+ * restoration. Every result becomes one ReviewCommentMutation that
+ * the page applies uniformly. Sibling to ContextCommentWorkflowAction,
+ * which does the same for context-file comments.
  *
  * `handle()` adds a comment (the primary entry point); `update()`, `delete()`,
  * `clearAll()`, and `restore()` are the secondary operations. Each returns
@@ -29,7 +27,8 @@ final readonly class ReviewCommentWorkflowAction
     public function __construct(
         private AddCommentAction $addComment,
         private UpdateCommentAction $updateComment,
-        private DeleteCommentAction $deleteComment,
+        private DeleteCommentThreadsAction $deleteCommentThreads,
+        private RestoreCommentThreadsAction $restoreCommentThreads,
     ) {}
 
     /**
@@ -106,21 +105,30 @@ final readonly class ReviewCommentWorkflowAction
      *
      * @param  array<int, array<string, mixed>>  $comments  Current view-state comments.
      */
-    public function delete(array $comments, string $commentId): ?ReviewCommentMutation
-    {
+    public function delete(
+        string $repoPath,
+        ?int $projectId,
+        array $comments,
+        string $commentId,
+    ): ?ReviewCommentMutation {
         $deletedComment = collect($comments)->firstWhere('id', $commentId);
         $fileId = $deletedComment['fileId'] ?? null;
-
-        $result = $this->deleteComment->handle($comments, $commentId);
+        $result = $this->deleteCommentThreads->handle(
+            $repoPath,
+            $projectId,
+            $comments,
+            [$commentId],
+            CommentSurface::Review,
+        );
 
         if ($result === null) {
             return null;
         }
 
         return ReviewCommentMutation::deleted(
-            $result,
+            $result->remainingComments,
             is_string($fileId) ? $fileId : null,
-            $deletedComment,
+            $result->snapshots[0],
         );
     }
 
@@ -131,15 +139,32 @@ final readonly class ReviewCommentWorkflowAction
      *
      * @param  array<int, array<string, mixed>>  $comments  Current view-state comments.
      */
-    public function clearAll(array $comments): ?ReviewCommentMutation
-    {
+    public function clearAll(
+        string $repoPath,
+        ?int $projectId,
+        array $comments,
+    ): ?ReviewCommentMutation {
         if ($comments === []) {
             return null;
         }
 
-        Comment::whereIn('id', array_column($comments, 'id'))->delete();
+        $result = $this->deleteCommentThreads->handle(
+            $repoPath,
+            $projectId,
+            $comments,
+            collect($comments)->pluck('id')->all(),
+            CommentSurface::Review,
+        );
 
-        return ReviewCommentMutation::cleared([], $this->affectedFileIds($comments), $comments);
+        if ($result === null) {
+            return null;
+        }
+
+        return ReviewCommentMutation::cleared(
+            $result->remainingComments,
+            $this->affectedFileIds($comments),
+            $result->snapshots,
+        );
     }
 
     /**
@@ -154,34 +179,24 @@ final readonly class ReviewCommentWorkflowAction
     {
         $existingIds = collect($currentComments)->pluck('id')->all();
 
-        $newComments = collect($incomingComments)
-            ->reject(fn (array $comment): bool => in_array($comment['id'], $existingIds, true))
+        $newSnapshots = collect($incomingComments)
+            ->reject(fn (array $comment): bool => in_array(
+                CommentThreadSnapshot::fromArray($comment)->commentId(),
+                $existingIds,
+                true,
+            ))
             ->values()
             ->all();
 
-        if ($newComments === []) {
+        if ($newSnapshots === []) {
             return null;
         }
 
-        foreach ($newComments as $comment) {
-            Comment::updateOrCreate(
-                ['id' => $comment['id']],
-                [
-                    'project_id' => $projectId,
-                    'repo_path' => $repoPath,
-                    'origin_ref' => $comment['originRef'] ?? GitRef::Working->value,
-                    'file_path' => $comment['file'] ?? '',
-                    'side' => $comment['side'] ?? DiffSide::Right->value,
-                    'start_line' => $comment['startLine'] ?? null,
-                    'end_line' => $comment['endLine'] ?? null,
-                    'file_content_hash' => $comment['fileContentHash'] ?? null,
-                    'line_snippet' => $comment['lineSnippet'] ?? null,
-                    'body' => $comment['body'] ?? '',
-                    'is_draft' => (bool) ($comment['isDraft'] ?? false),
-                    'submitted_at' => null,
-                ],
-            );
-        }
+        $newComments = $this->restoreCommentThreads->handle(
+            $repoPath,
+            $projectId,
+            $newSnapshots,
+        );
 
         $merged = array_merge($currentComments, $newComments);
 

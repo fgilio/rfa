@@ -81,6 +81,20 @@ HTML;
         $this->ensureCommentedLinesVisible();
     }
 
+    /** @param list<array<string, mixed>> $replies */
+    public function updateCommentReplies(string $commentId, array $replies): void
+    {
+        $index = collect($this->fileComments)->search(
+            fn (array $comment): bool => ($comment['id'] ?? null) === $commentId,
+        );
+
+        if ($index === false) {
+            return;
+        }
+
+        $this->fileComments[$index]['replies'] = $replies;
+    }
+
     public function loadFileDiff(): void
     {
         if ($this->diffData !== null) {
@@ -401,6 +415,7 @@ HTML;
     :data-collapsed="collapsed ? 'true' : 'false'"
     @mouseup.window="endDrag()"
     @comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"
+    @comment-thread-updated.window="if ($event.detail.fileId === fileId) $wire.updateCommentReplies($event.detail.commentId, $event.detail.replies)"
     @collapse-all-files.window="autoExpandedForComment = false; collapsed = true"
     @expand-all-files.window="autoExpandedForComment = false; collapsed = false"
     @expand-file.window="if ($event.detail.id === fileId) { autoExpandedForComment = false; collapsed = false }"

@@ -30,6 +30,13 @@ test('exports markdown and clipboard text', function () {
         'startLine' => 2,
         'endLine' => 2,
         'body' => 'needs fix',
+        'replies' => [[
+            'id' => 'r-secret',
+            'commentId' => 'c-1',
+            'authorType' => 'agent',
+            'authorKey' => 'codex-cli',
+            'body' => 'reply must not export',
+        ]],
     ]];
 
     $action = app(ExportReviewAction::class);
@@ -43,6 +50,7 @@ test('exports markdown and clipboard text', function () {
     expect($md)->toContain('needs fix');
     expect($md)->toContain('overall feedback');
     expect($md)->toContain('hello.php');
+    expect($md)->not->toContain('reply must not export');
 });
 
 test('handles empty comments', function () {

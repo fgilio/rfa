@@ -5,6 +5,7 @@ use App\Actions\ExportContextFeedbackAction;
 use App\Models\Comment;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
@@ -75,6 +76,23 @@ test('skips draft comments from export and stamping', function () {
     expect(Comment::find($draft['id'])->submitted_at)->toBeNull();
     expect($result['submittedIds'])->toBe([$finalized['id']]);
     expect($result['md'])->not->toContain('draft body');
+});
+
+test('does not export replies or count them as submitted roots', function () {
+    $comment = $this->workflow->handle($this->repoA, null, $this->filesA, 'ctx-a', 'right', 1, 1, 'root body');
+    $comment['replies'] = [[
+        'id' => 'r-context',
+        'commentId' => $comment['id'],
+        'authorType' => 'agent',
+        'authorKey' => 'claude-code',
+        'body' => 'reply must not export',
+    ]];
+
+    $result = $this->action->handle($this->repoA, null, [$comment], '');
+
+    expect(File::get($result['md']))->toContain('root body')
+        ->not->toContain('reply must not export')
+        ->and($result['submittedIds'])->toBe([$comment['id']]);
 });
 
 test('excludes unplaced comments from export and stamping and reports them', function () {

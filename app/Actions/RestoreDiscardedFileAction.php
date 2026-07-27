@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\CommentReply as CommentReplyData;
+use App\DTOs\CommentThreadSnapshot;
+use App\Models\Comment;
 use App\Models\TrashedFile;
 use App\Support\PathGuard;
 use Illuminate\Support\Facades\File;
@@ -38,7 +41,41 @@ final readonly class RestoreDiscardedFileAction
             default => $this->writeContent($trashed, $fullPath, $content),
         };
 
-        $comments = $trashed->comments ?? [];
+        $rawComments = $trashed->getAttribute('comments');
+
+        /** @var list<array<string, mixed>> $storedComments */
+        $storedComments = is_array($rawComments) ? $rawComments : [];
+
+        $snapshots = collect($storedComments)
+            ->map(fn (array $comment): CommentThreadSnapshot => CommentThreadSnapshot::fromArray($comment));
+
+        $commentsById = Comment::query()
+            ->forProjectOrRepo($projectId, $repoPath)
+            ->whereKey($snapshots->map->commentId()->filter())
+            ->with('replies')
+            ->get()
+            ->keyBy('id');
+
+        $comments = $snapshots
+            ->map(function (CommentThreadSnapshot $snapshot) use ($commentsById): array {
+                $comment = $snapshot->toCommentArray();
+
+                /** @var Comment|null $currentComment */
+                $currentComment = $commentsById->get($snapshot->commentId());
+
+                if ($currentComment === null) {
+                    return $comment;
+                }
+
+                return [
+                    ...$comment,
+                    'replies' => collect(CommentReplyData::collect($currentComment->replies->toArray()))
+                        ->map(fn (CommentReplyData $reply): array => $reply->toArray())
+                        ->all(),
+                ];
+            })
+            ->values()
+            ->all();
 
         // Deleting the record also purges its blob (TrashedFile::deleting).
         $trashed->delete();

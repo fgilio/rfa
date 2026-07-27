@@ -246,10 +246,13 @@ test('delete removes the row and prunes the view-state list', function () {
     $a = $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 1, 1, 'a');
     $b = $this->action->handle($this->repo, null, $this->files, $fileId, 'right', 2, 2, 'b');
 
-    $remaining = $this->action->delete($this->repo, null, [$a, $b], $a['id']);
+    $result = $this->action->delete($this->repo, null, [$a, $b], $a['id']);
 
-    expect($remaining)->toHaveCount(1);
-    expect($remaining[0]['id'])->toBe($b['id']);
+    expect($result)->not->toBeNull()
+        ->and($result->remainingComments)->toHaveCount(1)
+        ->and($result->remainingComments[0]['id'])->toBe($b['id'])
+        ->and($result->snapshots)->toHaveCount(1)
+        ->and($result->snapshots[0]['comment']['id'])->toBe($a['id']);
     expect(Comment::find($a['id']))->toBeNull();
     expect(Comment::find($b['id']))->not->toBeNull();
 });

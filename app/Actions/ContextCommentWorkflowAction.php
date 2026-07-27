@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\CommentThreadDeletion;
 use App\Enums\AnchorStatus;
+use App\Enums\CommentSurface;
 use App\Enums\ContextCommentRejection;
 use App\Enums\DiffSide;
 use App\Exceptions\ContextCommentRejectedException;
@@ -21,13 +23,14 @@ use Illuminate\Support\Str;
  * row without collision. Designed as a sibling to the pending
  * `ReviewCommentWorkflow` extraction noted in this project's CLAUDE.md.
  *
- * `handle()` adds a new comment (the primary entry point); `update()` and
- * `delete()` are the secondary operations.
+ * `handle()` adds a new comment (the primary entry point). `update()`,
+ * `delete()`, and `clearAll()` are the secondary operations.
  */
 final readonly class ContextCommentWorkflowAction
 {
     public function __construct(
         private GitFileContentService $gitFileContentService,
+        private DeleteCommentThreadsAction $deleteCommentThreads,
     ) {}
 
     /**
@@ -130,28 +133,38 @@ final readonly class ContextCommentWorkflowAction
 
     /**
      * @param  array<int, array<string, mixed>>  $comments
-     * @return array<int, array<string, mixed>>|null Updated comments view, or null if invalid id.
+     * @return CommentThreadDeletion|null Updated comments and undo snapshots, or null if invalid.
      */
-    public function delete(string $repoPath, ?int $projectId, array $comments, string $commentId): ?array
-    {
-        if (! str_starts_with($commentId, 'c-')) {
-            return null;
-        }
+    public function delete(
+        string $repoPath,
+        ?int $projectId,
+        array $comments,
+        string $commentId,
+    ): ?CommentThreadDeletion {
+        return $this->deleteCommentThreads->handle(
+            $repoPath,
+            $projectId,
+            $comments,
+            [$commentId],
+            CommentSurface::Context,
+        );
+    }
 
-        $deleted = Comment::query()
-            ->forProjectOrRepo($projectId, $repoPath)
-            ->fromContext()
-            ->whereKey($commentId)
-            ->delete();
-
-        if ($deleted === 0) {
-            return null;
-        }
-
-        return collect($comments)
-            ->reject(fn (array $comment): bool => $comment['id'] === $commentId)
-            ->values()
-            ->all();
+    /**
+     * @param  list<array<string, mixed>>  $comments
+     */
+    public function clearAll(
+        string $repoPath,
+        ?int $projectId,
+        array $comments,
+    ): ?CommentThreadDeletion {
+        return $this->deleteCommentThreads->handle(
+            $repoPath,
+            $projectId,
+            $comments,
+            collect($comments)->pluck('id')->all(),
+            CommentSurface::Context,
+        );
     }
 
     /**
