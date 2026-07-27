@@ -149,3 +149,31 @@ test('returns null when no requested root belongs to the view and scope', functi
         CommentSurface::Review,
     ))->toBeNull();
 });
+
+test('deletes a scoped root that is absent from the current view state', function () {
+    $comment = Comment::factory()->for($this->project)->create([
+        'id' => 'c-database-only',
+        'repo_path' => '/tmp/thread-deletion',
+        'origin_ref' => 'working',
+    ]);
+    $reply = CommentReply::factory()->for($comment)->create([
+        'id' => 'r-database-only',
+    ]);
+
+    $result = $this->action->handle(
+        '/tmp/thread-deletion',
+        $this->project->id,
+        [],
+        [$comment->id],
+        CommentSurface::Review,
+    );
+
+    expect($result)->not->toBeNull()
+        ->and($result->remainingComments)->toBe([])
+        ->and($result->snapshots[0]['comment'])->toMatchArray([
+            'id' => $comment->id,
+            'fileId' => '',
+        ])
+        ->and(Comment::query()->find($comment->id))->toBeNull()
+        ->and(CommentReply::query()->find($reply->id))->toBeNull();
+});

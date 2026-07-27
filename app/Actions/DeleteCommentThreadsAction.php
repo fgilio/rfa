@@ -35,22 +35,32 @@ final readonly class DeleteCommentThreadsAction
             return null;
         }
 
-        $commentsToDelete = collect($comments)
-            ->whereIn('id', $commentIds)
-            ->values()
-            ->all();
-
-        if ($commentsToDelete === []) {
-            return null;
-        }
-
         return DB::transaction(function () use (
             $repoPath,
             $projectId,
             $comments,
-            $commentsToDelete,
+            $commentIds,
             $surface,
         ): ?CommentThreadDeletion {
+            $viewComments = collect($comments)->keyBy('id');
+            $commentsToDelete = Comment::query()
+                ->forProjectOrRepo($projectId, $repoPath)
+                ->fromSurface($surface)
+                ->whereKey($commentIds)
+                ->get(['id'])
+                ->map(function (Comment $comment) use ($viewComments): array {
+                    $viewComment = $viewComments->get($comment->id);
+
+                    return is_array($viewComment)
+                        ? $viewComment
+                        : ['id' => $comment->id];
+                })
+                ->all();
+
+            if ($commentsToDelete === []) {
+                return null;
+            }
+
             $snapshots = $this->createSnapshots->handle(
                 $repoPath,
                 $projectId,
