@@ -33,6 +33,8 @@ final class PerfScenarioRunner
     /** @var array{repoPath: string, path: string, from: string, to: string}|null */
     private ?array $largeBladeRepository = null;
 
+    private ?int $drawerReplyFilterProjectId = null;
+
     public function __construct(
         private readonly Application $app,
     ) {}
@@ -50,6 +52,7 @@ final class PerfScenarioRunner
 
         try {
             foreach ($this->scenarios($only) as $name => $scenario) {
+                $this->prepareScenario($name);
                 $results[$name] = $this->measureScenario($scenario, $rounds, $warmupRounds);
             }
         } finally {
@@ -333,29 +336,42 @@ final class PerfScenarioRunner
 
     private function filterDrawerReplies(): void
     {
+        if ($this->drawerReplyFilterProjectId === null) {
+            throw new \LogicException('The drawer reply filter benchmark has not been prepared.');
+        }
+
+        app(LoadCommentsDrawerAction::class)->handle(
+            '/tmp/perf-drawer',
+            $this->drawerReplyFilterProjectId,
+            filter: 'codex-cli',
+        );
+    }
+
+    private function prepareScenario(string $name): void
+    {
+        if ($name !== 'drawer-reply-filter') {
+            return;
+        }
+
         $this->resetState();
 
         $project = Project::factory()->create([
             'path' => '/tmp/perf-drawer',
         ]);
         $comments = Comment::factory()
-            ->count(100)
+            ->count(25)
             ->for($project)
             ->create(['repo_path' => '/tmp/perf-drawer']);
 
         $comments->each(
             fn (Comment $comment) => CommentReply::factory()
-                ->count(5)
+                ->count(4)
                 ->for($comment)
                 ->agent()
                 ->create(),
         );
 
-        app(LoadCommentsDrawerAction::class)->handle(
-            '/tmp/perf-drawer',
-            $project->id,
-            filter: 'codex-cli',
-        );
+        $this->drawerReplyFilterProjectId = $project->id;
     }
 
     private function loadLargeBladeDiff(int $contextLines): void

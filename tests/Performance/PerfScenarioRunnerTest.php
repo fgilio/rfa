@@ -1,6 +1,9 @@
 <?php
 
 use App\Console\Benchmark\PerfScenarioRunner;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 test('benchmark runner reports all representative scenarios', function () {
     $results = app(PerfScenarioRunner::class)->measureAll(rounds: 1, warmupRounds: 0);
@@ -39,4 +42,22 @@ test('benchmark runner preserves targeted scenario order', function () {
     );
 
     expect(array_keys($results))->toBe(['diff-large', 'diff-small']);
+});
+
+test('drawer reply filter fixtures are seeded once outside measured rounds', function () {
+    $replyInsertCount = 0;
+
+    DB::listen(function (QueryExecuted $query) use (&$replyInsertCount): void {
+        if (Str::contains(Str::lower($query->sql), 'insert into "comment_replies"')) {
+            $replyInsertCount++;
+        }
+    });
+
+    app(PerfScenarioRunner::class)->measureAll(
+        rounds: 2,
+        warmupRounds: 1,
+        only: ['drawer-reply-filter'],
+    );
+
+    expect($replyInsertCount)->toBe(100);
 });
