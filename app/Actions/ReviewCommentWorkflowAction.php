@@ -7,16 +7,15 @@ namespace App\Actions;
 use App\DTOs\CommentThreadSnapshot;
 use App\DTOs\DiffTarget;
 use App\DTOs\ReviewCommentMutation;
-use App\Models\Comment;
+use App\Enums\CommentSurface;
 
 /**
  * Comment write workflow for the review page.
  *
- * Wraps the single-purpose AddCommentAction / UpdateCommentAction /
- * DeleteCommentAction for single-comment writes, and persists the bulk
- * clear/restore paths directly, folding every result into a
- * ReviewCommentMutation the page applies uniformly. Sibling to
- * ContextCommentWorkflowAction, which does the same for context-file comments.
+ * Coordinates single-comment writes, atomic thread deletion, and thread
+ * restoration. Every result becomes one ReviewCommentMutation that
+ * the page applies uniformly. Sibling to ContextCommentWorkflowAction,
+ * which does the same for context-file comments.
  *
  * `handle()` adds a comment (the primary entry point); `update()`, `delete()`,
  * `clearAll()`, and `restore()` are the secondary operations. Each returns
@@ -28,8 +27,7 @@ final readonly class ReviewCommentWorkflowAction
     public function __construct(
         private AddCommentAction $addComment,
         private UpdateCommentAction $updateComment,
-        private DeleteCommentAction $deleteComment,
-        private CreateCommentThreadSnapshotsAction $createCommentThreadSnapshots,
+        private DeleteCommentThreadsAction $deleteCommentThreads,
         private RestoreCommentThreadsAction $restoreCommentThreads,
     ) {}
 
@@ -115,24 +113,22 @@ final readonly class ReviewCommentWorkflowAction
     ): ?ReviewCommentMutation {
         $deletedComment = collect($comments)->firstWhere('id', $commentId);
         $fileId = $deletedComment['fileId'] ?? null;
-        $snapshots = $deletedComment === null
-            ? []
-            : $this->createCommentThreadSnapshots->handle($repoPath, $projectId, [$deletedComment]);
-
-        if ($snapshots === []) {
-            return null;
-        }
-
-        $result = $this->deleteComment->handle($comments, $commentId);
+        $result = $this->deleteCommentThreads->handle(
+            $repoPath,
+            $projectId,
+            $comments,
+            [$commentId],
+            CommentSurface::Review,
+        );
 
         if ($result === null) {
             return null;
         }
 
         return ReviewCommentMutation::deleted(
-            $result,
+            $result->remainingComments,
             is_string($fileId) ? $fileId : null,
-            $snapshots[0],
+            $result->snapshots[0],
         );
     }
 
@@ -152,20 +148,23 @@ final readonly class ReviewCommentWorkflowAction
             return null;
         }
 
-        $snapshots = $this->createCommentThreadSnapshots->handle($repoPath, $projectId, $comments);
+        $result = $this->deleteCommentThreads->handle(
+            $repoPath,
+            $projectId,
+            $comments,
+            collect($comments)->pluck('id')->all(),
+            CommentSurface::Review,
+        );
 
-        if ($snapshots === []) {
+        if ($result === null) {
             return null;
         }
 
-        Comment::query()
-            ->forProjectOrRepo($projectId, $repoPath)
-            ->whereKey(collect($snapshots)->map(
-                fn (array $snapshot): string => CommentThreadSnapshot::fromArray($snapshot)->commentId(),
-            ))
-            ->delete();
-
-        return ReviewCommentMutation::cleared([], $this->affectedFileIds($comments), $snapshots);
+        return ReviewCommentMutation::cleared(
+            $result->remainingComments,
+            $this->affectedFileIds($comments),
+            $result->snapshots,
+        );
     }
 
     /**

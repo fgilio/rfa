@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\CommentSurface;
 use Database\Factories\CommentFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -87,6 +88,18 @@ class Comment extends Model
     public function scopeFromReview(Builder $query): Builder
     {
         return $query->where('origin_ref', '!=', self::ORIGIN_CONTEXT);
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeFromSurface(Builder $query, CommentSurface $surface): Builder
+    {
+        return match ($surface) {
+            CommentSurface::Review => $query->fromReview(),
+            CommentSurface::Context => $query->fromContext(),
+        };
     }
 
     /** @return BelongsTo<Project, $this> */

@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\DTOs\CommentReply as CommentReplyData;
 use App\DTOs\CommentThreadSnapshot;
+use App\Enums\CommentSurface;
 use App\Models\Comment;
 use Illuminate\Support\Carbon;
 
@@ -21,6 +22,7 @@ final readonly class CreateCommentThreadSnapshotsAction
         string $repoPath,
         ?int $projectId,
         array $comments,
+        ?CommentSurface $surface = null,
     ): array {
         $commentsById = collect($comments)->keyBy(
             fn (array $comment): string => (string) ($comment['id'] ?? ''),
@@ -30,10 +32,17 @@ final readonly class CreateCommentThreadSnapshotsAction
             return [];
         }
 
-        $storedComments = Comment::query()
+        $query = Comment::query()
             ->forProjectOrRepo($projectId, $repoPath)
             ->whereKey($commentsById->keys())
-            ->with('replies')
+            ->with('replies');
+
+        if ($surface !== null) {
+            $query->fromSurface($surface);
+        }
+
+        $storedComments = $query
+            ->lockForUpdate()
             ->get()
             ->keyBy('id');
 

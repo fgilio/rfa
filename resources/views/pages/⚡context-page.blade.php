@@ -1,9 +1,7 @@
 <?php
 
-use App\Actions\ClearContextCommentsAction;
 use App\Actions\CommentReplyWorkflowAction;
 use App\Actions\ContextCommentWorkflowAction;
-use App\Actions\CreateCommentThreadSnapshotsAction;
 use App\Actions\DiscoverAgentContextFilesAction;
 use App\Actions\ExportContextFeedbackAction;
 use App\Actions\LoadContextCommentsAction;
@@ -341,17 +339,6 @@ new #[Layout('layouts.app')] class extends Component
     {
         $deleted = collect($this->comments)->firstWhere('id', $commentId);
         $fileId = $deleted['fileId'] ?? null;
-        $snapshots = $deleted === null
-            ? []
-            : app(CreateCommentThreadSnapshotsAction::class)->handle(
-                $this->repoPath,
-                $this->projectId ?: null,
-                [$deleted],
-            );
-
-        if ($snapshots === []) {
-            return;
-        }
 
         $result = app(ContextCommentWorkflowAction::class)->delete(
             $this->repoPath,
@@ -363,14 +350,19 @@ new #[Layout('layouts.app')] class extends Component
             return;
         }
 
-        $this->comments = $result;
+        $this->comments = $result->remainingComments;
 
         if ($fileId) {
             $this->dispatchFileComments($fileId);
         }
         $this->dispatchSidebarSummary();
 
-        $this->dispatch('undo-available', type: 'delete', payload: $snapshots, message: 'Comment deleted');
+        $this->dispatch(
+            'undo-available',
+            type: 'delete',
+            payload: $result->snapshots,
+            message: 'Comment deleted',
+        );
 
         $this->skipRender();
     }
@@ -467,25 +459,17 @@ new #[Layout('layouts.app')] class extends Component
         }
 
         $deleted = $this->comments;
-        $snapshots = app(CreateCommentThreadSnapshotsAction::class)->handle(
+        $result = app(ContextCommentWorkflowAction::class)->clearAll(
             $this->repoPath,
             $this->projectId ?: null,
             $deleted,
         );
 
-        if ($snapshots === []) {
+        if ($result === null) {
             return;
         }
 
-        app(ClearContextCommentsAction::class)->handle(
-            $this->repoPath,
-            $this->projectId ?: null,
-            collect($snapshots)
-                ->map(fn (array $snapshot): string => CommentThreadSnapshot::fromArray($snapshot)->commentId())
-                ->all(),
-        );
-
-        $this->comments = [];
+        $this->comments = $result->remainingComments;
 
         collect($deleted)
             ->pluck('fileId')
@@ -494,7 +478,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->dispatchSidebarSummary();
 
         $count = count($deleted);
-        $this->dispatch('undo-available', type: 'clear-all', payload: $snapshots,
+        $this->dispatch('undo-available', type: 'clear-all', payload: $result->snapshots,
             message: "Cleared {$count} comment".($count === 1 ? '' : 's'));
 
         $this->skipRender();
