@@ -168,3 +168,26 @@ test('replies to a submitted thread in the drawer without closing it', function 
     $page->assertSee('Codex');
     $page->assertDontSee('Unrelated submitted thread');
 });
+
+test('filtering expands a collapsed drawer thread when its reply matches', function () {
+    $project = Project::query()->where('slug', $this->testProjectSlug)->firstOrFail();
+    $comment = Comment::factory()->for($project)->create([
+        'repo_path' => $project->path,
+        'file_path' => 'hello.php',
+        'body' => 'Root without the search term',
+    ]);
+    CommentReply::factory()->for($comment)->agent()->create([
+        'body' => 'Unique reply needle',
+    ]);
+
+    $page = $this->visitAndLoad($this->projectUrl());
+    $page->page()->getByLabel('All comments · ⌘J')->click();
+
+    $panel = $page->page()->getByTestId('overlay-panel-comments-drawer');
+    $row = $panel->getByTestId('drawer-comment-'.$comment->id);
+    $matchingReply = $row->getByText('Unique reply needle', true);
+
+    $matchingReply->waitFor(['state' => 'hidden']);
+    $panel->getByPlaceholder('Filter comments...')->fill('needle');
+    $matchingReply->waitFor(['state' => 'visible']);
+});

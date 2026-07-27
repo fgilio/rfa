@@ -162,11 +162,12 @@ class extends Component
                     @foreach($comments as $c)
                         @php
                             $isSubmitted = ! empty($c['submittedAt']);
+                            $isReplyFilterMatch = $c['isReplyFilterMatch'] ?? false;
                             $replyCount = count($c['replies']);
                         @endphp
                         <div
-                            x-data="{ expanded: @js($c['isReplyFilterMatch'] ?? false) }"
-                            wire:key="drawer-comment-{{ $c['id'] }}"
+                            x-data="{ expanded: @js($isReplyFilterMatch) }"
+                            wire:key="drawer-comment-{{ $c['id'] }}-{{ $isReplyFilterMatch ? 'reply-match' : 'no-reply-match' }}"
                             data-testid="drawer-comment-{{ $c['id'] }}"
                             class="group border-t border-gh-border/30 text-xs hover:bg-gh-surface/40"
                         >
