@@ -7,6 +7,7 @@ namespace App\Actions;
 use App\DTOs\Comment as CommentData;
 use App\Models\Comment;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 
 final readonly class LoadCommentsDrawerAction
 {
@@ -58,11 +59,16 @@ final readonly class LoadCommentsDrawerAction
             ->with('replies')
             ->orderByDesc('created_at')
             ->get()
-            ->map(fn (Comment $comment): array => [
-                ...CommentData::fromArray($comment->toArray())->toArray(),
-                'createdAt' => $comment->created_at?->toIso8601String(),
-                'updatedAt' => $comment->updated_at?->toIso8601String(),
-            ])
+            ->map(function (Comment $comment) use ($filter): array {
+                $data = CommentData::fromArray($comment->toArray())->toArray();
+
+                return [
+                    ...$data,
+                    'createdAt' => $comment->created_at?->toIso8601String(),
+                    'updatedAt' => $comment->updated_at?->toIso8601String(),
+                    'isReplyFilterMatch' => $this->repliesMatchFilter($data['replies'], $filter),
+                ];
+            })
             ->groupBy('file')
             ->map(fn ($comments): array => $comments->values()->all())
             ->all();
@@ -71,5 +77,26 @@ final readonly class LoadCommentsDrawerAction
             'groupedComments' => $groupedComments,
             'totalCount' => $totalCount,
         ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $replies
+     */
+    private function repliesMatchFilter(array $replies, string $filter): bool
+    {
+        if ($filter === '') {
+            return false;
+        }
+
+        return collect($replies)->contains(
+            fn (array $reply): bool => collect([
+                $reply['body'] ?? '',
+                $reply['authorKey'] ?? '',
+                $reply['authorLabel'] ?? '',
+            ])->contains(
+                fn (mixed $value): bool => is_string($value)
+                    && Str::contains($value, $filter, ignoreCase: true),
+            ),
+        );
     }
 }

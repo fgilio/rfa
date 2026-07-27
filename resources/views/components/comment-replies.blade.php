@@ -117,3 +117,7 @@
         Reply
     </flux:button>
 </div>
+
+@assets
+@localScript('js/comment-thread.js')
+@endassets

@@ -1,5 +1,3 @@
-// Alpine state for a comment thread. Emits browser events only; page-level
-// Livewire components own persistence and fan the canonical reply list out.
 (function (root, factory) {
     const api = factory();
 

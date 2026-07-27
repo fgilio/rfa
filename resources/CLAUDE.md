@@ -178,7 +178,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `deleteComment` | Yes | Dispatches comment-updated event to target child |
 | `clearAllComments` | Yes | Dispatches comment-updated + undo-available events |
 | `restoreComments` | Yes | Dispatches comment-updated events to affected files |
-| `addCommentReply` / `updateCommentReply` / `deleteCommentReply` / `restoreCommentReply` | Yes | Dispatches a targeted comment-thread-updated event; replies do not affect anchors, divergence, or root counts |
+| `addCommentReply` / `updateCommentReply` / `deleteCommentReply` / `restoreCommentReply` | Yes | Dispatches a targeted comment-thread-updated event. Replies do not affect anchors, divergence, or root counts |
 | `updatedGlobalComment` | Yes | No UI change needed server-side |
 | `toggleReviewed` | Yes | Always skips the parent render; refreshes the `reviewed-toggle`, `reviewed-counter`, and `file-list` islands, plus the visibility islands (`source-diff-list`, `file-count`, `file-list-header`, `status-strip-copy-paths`) in Hide-reviewed mode where the toggle drops the file from the visible set. |
 | `hideReviewedFiles` / `showAllFiles` | Yes | Skip the parent render; refresh `reviewed-toggle`, `reviewed-counter`, `file-list`, and the visibility islands as files drop in/out of the visible set. |

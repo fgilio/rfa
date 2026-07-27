@@ -20,8 +20,7 @@ test('round trips the versioned root and reply envelope', function () {
         ]],
     ]);
 
-    expect($snapshot->schemaVersion)->toBe(1)
-        ->and($snapshot->commentId())->toBe('c-1')
+    expect($snapshot->commentId())->toBe('c-1')
         ->and($snapshot->fileId())->toBe('f-1')
         ->and($snapshot->toArray()['replies'][0]['body'])->toBe('Reply')
         ->and($snapshot->toCommentArray()['replies'][0]['commentId'])->toBe('c-1');
@@ -38,3 +37,14 @@ test('accepts legacy raw comment payloads without replies', function () {
         ->and($snapshot->replies)->toBe([])
         ->and($snapshot->toArray()['version'])->toBe(1);
 });
+
+test('rejects unsupported snapshot versions', function () {
+    CommentThreadSnapshot::fromArray([
+        'version' => 2,
+        'comment' => [
+            'id' => 'c-1',
+            'file' => 'app/Foo.php',
+            'body' => 'Root',
+        ],
+    ]);
+})->throws(InvalidArgumentException::class, 'Unsupported comment thread snapshot version: 2.');

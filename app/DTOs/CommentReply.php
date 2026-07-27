@@ -7,6 +7,7 @@ namespace App\DTOs;
 use App\Enums\CommentAuthorType;
 use DateTimeInterface;
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 
 final readonly class CommentReply
 {
@@ -24,17 +25,25 @@ final readonly class CommentReply
     /** @param  array<string, mixed>  $data */
     public static function fromArray(array $data): self
     {
-        $authorType = $data['author_type'] ?? $data['authorType'] ?? CommentAuthorType::Human;
+        $authorType = self::requiredAuthorType($data);
+        $body = self::requiredString($data, 'body');
+        $author = CommentAuthor::make(
+            $authorType,
+            self::requiredString($data, 'authorKey', 'author_key'),
+            self::optionalString($data['author_label'] ?? $data['authorLabel'] ?? null, 'authorLabel'),
+        );
+
+        if (trim($body) === '') {
+            throw new InvalidArgumentException('The body field must not be blank.');
+        }
 
         return new self(
-            id: (string) ($data['id'] ?? ''),
-            commentId: (string) ($data['comment_id'] ?? $data['commentId'] ?? ''),
-            authorType: $authorType instanceof CommentAuthorType
-                ? $authorType
-                : CommentAuthorType::from((string) $authorType),
-            authorKey: (string) ($data['author_key'] ?? $data['authorKey'] ?? 'rfa-ui'),
-            authorLabel: self::stringOrNull($data['author_label'] ?? $data['authorLabel'] ?? null),
-            body: (string) ($data['body'] ?? ''),
+            id: self::requiredString($data, 'id'),
+            commentId: self::requiredString($data, 'commentId', 'comment_id'),
+            authorType: $author->type,
+            authorKey: $author->key,
+            authorLabel: $author->label,
+            body: $body,
             createdAt: self::dateOrNull($data['created_at'] ?? $data['createdAt'] ?? null),
             updatedAt: self::dateOrNull($data['updated_at'] ?? $data['updatedAt'] ?? null),
         );
@@ -82,16 +91,56 @@ final readonly class CommentReply
         ];
     }
 
-    public function wasEdited(): bool
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private static function requiredString(array $data, string $camelKey, ?string $snakeKey = null): string
     {
-        return $this->createdAt !== null
-            && $this->updatedAt !== null
-            && $this->createdAt !== $this->updatedAt;
+        $value = self::required($data, $camelKey, $snakeKey);
+
+        if (! is_string($value)) {
+            throw new InvalidArgumentException("The {$camelKey} field must be a string.");
+        }
+
+        return $value;
     }
 
-    private static function stringOrNull(mixed $value): ?string
+    /** @param  array<string, mixed>  $data */
+    private static function requiredAuthorType(array $data): CommentAuthorType
     {
-        return $value === null ? null : (string) $value;
+        $value = self::required($data, 'authorType', 'author_type');
+
+        if ($value instanceof CommentAuthorType) {
+            return $value;
+        }
+
+        if (! is_string($value)) {
+            throw new InvalidArgumentException('The authorType field must be a comment author type.');
+        }
+
+        return CommentAuthorType::tryFrom($value)
+            ?? throw new InvalidArgumentException("Unsupported comment author type: {$value}.");
+    }
+
+    private static function optionalString(mixed $value, string $field): ?string
+    {
+        if ($value !== null && ! is_string($value)) {
+            throw new InvalidArgumentException("The {$field} field must be a string.");
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private static function required(array $data, string $camelKey, ?string $snakeKey = null): mixed
+    {
+        return match (true) {
+            array_key_exists($camelKey, $data) => $data[$camelKey],
+            $snakeKey !== null && array_key_exists($snakeKey, $data) => $data[$snakeKey],
+            default => throw new InvalidArgumentException("The {$camelKey} field is required."),
+        };
     }
 
     private static function dateOrNull(mixed $value): ?string

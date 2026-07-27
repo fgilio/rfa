@@ -44,8 +44,12 @@ test('adds, edits, copies, and deletes an inline review reply', function () {
     $page->assertSee('Edited reply');
     $page->assertSee('(edited)');
 
+    $page->page()->evaluate(<<<'JS'
+        window.__copiedReply = null;
+        window.addEventListener('copy-to-clipboard', event => window.__copiedReply = event.detail.text, { once: true });
+    JS);
     $thread->getByLabel('Copy reply')->click();
-    $page->assertSee('Edited reply');
+    expect($page->page()->evaluate('window.__copiedReply'))->toBe('Edited reply');
 
     $thread->getByLabel('Delete reply')->click();
     $page->assertDontSee('Edited reply');
@@ -123,6 +127,12 @@ test('replies to a submitted thread in the drawer without closing it', function 
     CommentReply::factory()->for($comment)->agent()->create([
         'body' => 'Existing agent answer',
     ]);
+    Comment::factory()->for($project)->create([
+        'repo_path' => $project->path,
+        'file_path' => 'hello.php',
+        'body' => 'Unrelated submitted thread',
+        'submitted_at' => now(),
+    ]);
 
     $page = $this->visitAndLoad($this->projectUrl());
     $page->page()->getByLabel('All comments · ⌘J')->click();
@@ -132,13 +142,19 @@ test('replies to a submitted thread in the drawer without closing it', function 
         'document.querySelector(\'[aria-label="Show submitted comments"]\').click()',
     );
     $page->assertSee('Submitted thread');
-    $panel->getByText('Submitted thread', true)->click();
+    $submittedRow = $panel->getByTestId('drawer-comment-'.$comment->id);
+    $submittedRow->getByText('Submitted thread', true)->click();
     $page->assertSee('Codex');
-    expect($panel->getByLabel('Edit reply')->count())->toBe(0);
-    $panel->getByTestId('reply-to-comment')->click();
-    $drawerThread = $panel->getByTestId('comment-thread');
-    $drawerThread->getByPlaceholder('Write a reply', false)->fill('Human drawer reply');
-    $drawerThread->getByRole('button', ['name' => 'Save'])->click();
+    expect($submittedRow->getByLabel('Edit reply')->count())->toBe(0);
+    $submittedRow->getByTestId('reply-to-comment')->click();
+    $drawerThread = $submittedRow->getByTestId('comment-thread');
+    $drawerInput = $drawerThread->getByPlaceholder('Write a reply', false);
+    $drawerInput->fill('Human drawer reply');
+    $drawerInput->press('Enter');
+
+    expect($drawerInput->inputValue())->toBe("Human drawer reply\n");
+
+    $drawerInput->press('Meta+Enter');
 
     $panel->waitFor(['state' => 'visible']);
     $page->assertSee('Human drawer reply');
@@ -146,6 +162,9 @@ test('replies to a submitted thread in the drawer without closing it', function 
     $panel->getByPlaceholder('Filter comments...')->fill('codex-cli');
     $page->page()->waitForFunction(<<<'JS'
         document.querySelector('[data-testid="overlay-panel-comments-drawer"]')
-            ?.textContent?.includes('Submitted thread')
+            ?.textContent?.includes('Existing agent answer')
     JS);
+    $page->assertSee('Existing agent answer');
+    $page->assertSee('Codex');
+    $page->assertDontSee('Unrelated submitted thread');
 });

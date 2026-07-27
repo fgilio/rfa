@@ -51,11 +51,6 @@ final readonly class CommentAuthor
         ];
     }
 
-    public function owns(CommentReply $reply): bool
-    {
-        return $reply->authorType === $this->type && $reply->authorKey === $this->key;
-    }
-
     /** @return array{type: string, key: string, label: ?string} */
     public function toArray(): array
     {

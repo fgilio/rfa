@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use InvalidArgumentException;
+
 final readonly class CommentThreadSnapshot
 {
     public const SCHEMA_VERSION = 1;
@@ -15,12 +17,17 @@ final readonly class CommentThreadSnapshot
     public function __construct(
         public array $comment,
         public array $replies,
-        public int $schemaVersion = self::SCHEMA_VERSION,
     ) {}
 
     /** @param  array<string, mixed>  $data */
     public static function fromArray(array $data): self
     {
+        $schemaVersion = (int) ($data['version'] ?? $data['schemaVersion'] ?? self::SCHEMA_VERSION);
+
+        if ($schemaVersion !== self::SCHEMA_VERSION) {
+            throw new InvalidArgumentException("Unsupported comment thread snapshot version: {$schemaVersion}.");
+        }
+
         $comment = isset($data['comment']) && is_array($data['comment'])
             ? $data['comment']
             : $data;
@@ -31,7 +38,6 @@ final readonly class CommentThreadSnapshot
         return new self(
             comment: $comment,
             replies: CommentReply::collect(is_iterable($replies) ? $replies : []),
-            schemaVersion: (int) ($data['version'] ?? $data['schemaVersion'] ?? self::SCHEMA_VERSION),
         );
     }
 

@@ -29,7 +29,6 @@ class extends Component
     }
 
     #[On('comment-updated')]
-    #[On('comment-thread-updated')]
     #[On('reset-reviewed-files')]
     public function refresh(): void
     {
@@ -96,6 +95,7 @@ class extends Component
     }"
     x-init="$store.shortcuts.register('comments-drawer.toggle', () => toggle())"
     @keydown.window="if (open && $event.key === 'Escape') { $event.preventDefault(); close(); return; }"
+    @comment-thread-updated.window="if (open) $wire.$refresh()"
     x-effect="if (open && !$store.overlays.is('comments-drawer')) close()"
     class="relative"
 >
@@ -166,28 +166,36 @@ class extends Component
                     </div>
                     @foreach($comments as $c)
                         <div
-                            x-data="{ expanded: false }"
-                            class="group px-4 py-2.5 border-t border-gh-border/30 text-xs cursor-pointer hover:bg-gh-surface/40 focus-visible:bg-gh-surface/60 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gh-accent focus-visible:-outline-offset-1"
-                            role="button"
-                            tabindex="0"
-                            x-on:click="@js(! empty($c['submittedAt'])) ? expanded = !expanded : select(@js($c['id']), @js($c['file']))"
-                            x-on:keydown.enter.prevent="@js(! empty($c['submittedAt'])) ? expanded = !expanded : select(@js($c['id']), @js($c['file']))"
-                            x-on:keydown.space.prevent="@js(! empty($c['submittedAt'])) ? expanded = !expanded : select(@js($c['id']), @js($c['file']))"
+                            x-data="{ expanded: @js($c['isReplyFilterMatch'] ?? false) }"
+                            wire:key="drawer-comment-{{ $c['id'] }}"
+                            data-testid="drawer-comment-{{ $c['id'] }}"
+                            class="group border-t border-gh-border/30 text-xs hover:bg-gh-surface/40"
                         >
-                            <div class="flex items-center gap-2 text-[10px] font-mono text-gh-muted mb-1">
-                                @if(! empty($c['originRef']))
-                                    <span>{{ match($c['originRef']) { 'working' => 'WD', 'external' => 'EXT', default => Str::limit($c['originRef'], 7, '') } }}</span>
-                                @endif
-                                @if(! empty($c['startLine']))
-                                    <span aria-hidden="true">&middot;</span>
-                                    <span>L{{ $c['startLine'] }}@if(! empty($c['endLine']) && $c['endLine'] !== $c['startLine'])-L{{ $c['endLine'] }}@endif</span>
-                                @endif
-                                <div class="ml-auto flex items-center gap-1">
-                                    @if(! empty($c['isDraft']))
-                                        <span class="px-1.5 py-0.5 rounded bg-gh-draft/10 text-gh-draft text-[9px]">draft</span>
-                                    @elseif(! empty($c['submittedAt']))
-                                        <span class="px-1.5 py-0.5 rounded bg-gh-border/40 text-gh-muted text-[9px]">submitted</span>
-                                    @endif
+                            <div class="relative">
+                                <button
+                                    type="button"
+                                    class="block w-full px-4 py-2.5 text-left focus-visible:bg-gh-surface/60 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gh-accent focus-visible:-outline-offset-1"
+                                    x-on:click="@js(! empty($c['submittedAt'])) ? expanded = !expanded : select(@js($c['id']), @js($c['file']))"
+                                >
+                                    <div class="flex items-center gap-2 text-[10px] font-mono text-gh-muted mb-1 pr-7">
+                                        @if(! empty($c['originRef']))
+                                            <span>{{ match($c['originRef']) { 'working' => 'WD', 'external' => 'EXT', default => Str::limit($c['originRef'], 7, '') } }}</span>
+                                        @endif
+                                        @if(! empty($c['startLine']))
+                                            <span aria-hidden="true">&middot;</span>
+                                            <span>L{{ $c['startLine'] }}@if(! empty($c['endLine']) && $c['endLine'] !== $c['startLine'])-L{{ $c['endLine'] }}@endif</span>
+                                        @endif
+                                        <div class="ml-auto flex items-center gap-1">
+                                            @if(! empty($c['isDraft']))
+                                                <span class="px-1.5 py-0.5 rounded bg-gh-draft/10 text-gh-draft text-[9px]">draft</span>
+                                            @elseif(! empty($c['submittedAt']))
+                                                <span class="px-1.5 py-0.5 rounded bg-gh-border/40 text-gh-muted text-[9px]">submitted</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="text-gh-text whitespace-pre-wrap">{{ $c['body'] }}</div>
+                                </button>
+                                <div class="absolute right-4 top-2">
                                     <flux:tooltip content="Copy comment">
                                         <flux:button
                                             icon="clipboard-document"
@@ -196,29 +204,28 @@ class extends Component
                                             size="xs"
                                             aria-label="Copy comment"
                                             x-on:click.stop="$dispatch('copy-to-clipboard', { text: @js($c['body']), toast: 'Copied' })"
-                                            x-on:keydown.enter.stop
-                                            x-on:keydown.space.stop
                                             class="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity hover:!text-gh-accent"
                                         />
                                     </flux:tooltip>
                                 </div>
                             </div>
-                            <div class="text-gh-text whitespace-pre-wrap">{{ $c['body'] }}</div>
-                            <button
-                                type="button"
-                                class="mt-1.5 text-[10px] font-mono text-gh-muted hover:text-gh-accent"
-                                x-on:click.stop="expanded = !expanded"
-                                x-bind:aria-expanded="expanded"
-                            >
-                                @if(count($c['replies']) > 0)
+                            @if(count($c['replies']) > 0)
+                                <button
+                                    type="button"
+                                    class="mx-4 mb-2 text-[10px] font-mono text-gh-muted hover:text-gh-accent"
+                                    x-on:click="expanded = !expanded"
+                                    x-bind:aria-expanded="expanded"
+                                >
                                     {{ count($c['replies']) }} {{ Str::plural('reply', count($c['replies'])) }}
-                                @else
-                                    Reply
-                                @endif
-                            </button>
-                            <div x-show="expanded" x-cloak x-on:click.stop class="cursor-default">
-                                <x-comment-replies :comment="$c" />
-                            </div>
+                                </button>
+                                <div x-show="expanded" x-cloak class="cursor-default px-4 pb-2.5">
+                                    <x-comment-replies :comment="$c" />
+                                </div>
+                            @else
+                                <div class="px-4 pb-2.5">
+                                    <x-comment-replies :comment="$c" />
+                                </div>
+                            @endif
                         </div>
                     @endforeach
                 </div>

@@ -12,7 +12,7 @@ use Tests\TestCase;
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
 test('replies are ordered deterministically and cascade with their root comment', function () {
-    DB::statement('PRAGMA foreign_keys = ON');
+    expect(DB::selectOne('PRAGMA foreign_keys')->foreign_keys)->toBe(1);
 
     $project = Project::factory()->create(['path' => '/tmp/replies']);
     $comment = Comment::factory()->for($project)->create([
@@ -36,8 +36,7 @@ test('replies are ordered deterministically and cascade with their root comment'
 
     $comment->delete();
 
-    expect(CommentReply::query()->count())->toBe(0)
-        ->and(DB::selectOne('PRAGMA foreign_keys')->foreign_keys)->toBe(1);
+    expect(CommentReply::query()->count())->toBe(0);
 });
 
 test('reply author type is cast to its enum', function () {

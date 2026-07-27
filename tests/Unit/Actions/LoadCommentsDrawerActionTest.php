@@ -32,8 +32,19 @@ test('filters root threads by reply body and author identity', function (string 
 
     expect($result['totalCount'])->toBe(1)
         ->and($result['groupedComments']['app/Foo.php'][0]['id'])->toBe('c-drawer')
+        ->and($result['groupedComments']['app/Foo.php'][0]['isReplyFilterMatch'])->toBeTrue()
         ->and($result['groupedComments']['app/Foo.php'][0]['replies'])->toHaveCount(1);
 })->with(['needle', 'codex-cli', 'Codex']);
+
+test('does not expand replies when only the root matches the filter', function () {
+    $result = app(LoadCommentsDrawerAction::class)->handle(
+        '/tmp/drawer',
+        $this->project->id,
+        filter: 'Root body',
+    );
+
+    expect($result['groupedComments']['app/Foo.php'][0]['isReplyFilterMatch'])->toBeFalse();
+});
 
 test('keeps the pool count unfiltered and skips row loading while closed', function () {
     $result = app(LoadCommentsDrawerAction::class)->handle(

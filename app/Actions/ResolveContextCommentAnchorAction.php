@@ -106,9 +106,7 @@ final readonly class ResolveContextCommentAnchorAction
             isDraft: (bool) ($row['is_draft'] ?? $row['isDraft'] ?? false),
             submittedAt: $row['submitted_at'] ?? $row['submittedAt'] ?? null,
             anchorStatus: $anchorStatus->value,
-            replies: collect(CommentReply::collect($row['replies'] ?? []))
-                ->map(fn (CommentReply $reply): array => $reply->toArray())
-                ->all(),
+            replies: CommentReply::collect($row['replies'] ?? []),
         ))->toArray();
     }
 

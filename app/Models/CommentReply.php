@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\CommentAuthorType;
 use Database\Factories\CommentReplyFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -34,6 +35,36 @@ class CommentReply extends Model
     public function comment(): BelongsTo
     {
         return $this->belongsTo(Comment::class);
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeOwnedBy(
+        Builder $query,
+        CommentAuthorType $authorType,
+        string $authorKey,
+    ): Builder {
+        return $query
+            ->where('author_type', $authorType->value)
+            ->where('author_key', $authorKey);
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeForProjectOrRepo(Builder $query, ?int $projectId, string $repoPath): Builder
+    {
+        return $query->whereHas(
+            'comment',
+            function (Builder $commentQuery) use ($projectId, $repoPath): void {
+                $projectId
+                    ? $commentQuery->where('project_id', $projectId)
+                    : $commentQuery->whereNull('project_id')->where('repo_path', $repoPath);
+            },
+        );
     }
 
     protected function casts(): array

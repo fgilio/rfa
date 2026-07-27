@@ -27,7 +27,7 @@ beforeEach(function () {
 afterEach(fn () => Carbon::setTestNow());
 
 test('adds replies to submitted comments and returns the canonical thread', function () {
-    $mutation = $this->workflow->add(
+    $mutation = $this->workflow->handle(
         '/tmp/replies',
         $this->project->id,
         'c-root',
@@ -49,7 +49,7 @@ test('adds replies to submitted comments and returns the canonical thread', func
 test('accepts the same unbounded text bodies as root comments', function () {
     $body = str_repeat('conversation ', 19_999).'conversation';
 
-    $mutation = $this->workflow->add(
+    $mutation = $this->workflow->handle(
         '/tmp/replies',
         $this->project->id,
         'c-root',
@@ -69,7 +69,7 @@ test('cannot add to unknown or out-of-scope roots', function (string $commentId)
         ]);
     }
 
-    $this->workflow->add(
+    $this->workflow->handle(
         '/tmp/replies',
         $this->project->id,
         $commentId,
@@ -163,7 +163,7 @@ test('cannot mutate replies outside the selected project', function () {
 })->throws(ModelNotFoundException::class);
 
 test('rejects blank reply bodies', function () {
-    $this->workflow->add(
+    $this->workflow->handle(
         '/tmp/replies',
         $this->project->id,
         'c-root',

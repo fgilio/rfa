@@ -23,7 +23,9 @@ test('normalizes database reply rows to the public camel-case contract', functio
         'authorKey' => 'codex-cli',
         'authorLabel' => 'Codex',
         'body' => 'Done.',
-    ])->and($reply->wasEdited())->toBeTrue();
+        'createdAt' => '2026-07-27T10:00:00.000000Z',
+        'updatedAt' => '2026-07-27T10:01:00.000000Z',
+    ]);
 });
 
 test('human and agent authors have stable identities', function () {
@@ -43,4 +45,58 @@ test('rejects invalid author identities', function (string $key, ?string $label)
     'blank key' => ['   ', null],
     'long key' => [str_repeat('a', 101), null],
     'long label' => ['agent', str_repeat('a', 101)],
+])->throws(InvalidArgumentException::class);
+
+test('rejects replies missing required identity or content', function (array $reply) {
+    CommentReply::fromArray($reply);
+})->with([
+    'id' => [[
+        'commentId' => 'c-1',
+        'authorType' => 'human',
+        'authorKey' => 'rfa-ui',
+        'body' => 'Reply',
+    ]],
+    'comment id' => [[
+        'id' => 'r-1',
+        'authorType' => 'human',
+        'authorKey' => 'rfa-ui',
+        'body' => 'Reply',
+    ]],
+    'author type' => [[
+        'id' => 'r-1',
+        'commentId' => 'c-1',
+        'authorKey' => 'rfa-ui',
+        'body' => 'Reply',
+    ]],
+    'author key' => [[
+        'id' => 'r-1',
+        'commentId' => 'c-1',
+        'authorType' => 'human',
+        'body' => 'Reply',
+    ]],
+    'body' => [[
+        'id' => 'r-1',
+        'commentId' => 'c-1',
+        'authorType' => 'human',
+        'authorKey' => 'rfa-ui',
+    ]],
+])->throws(InvalidArgumentException::class);
+
+test('rejects invalid author types and blank bodies', function (array $reply) {
+    CommentReply::fromArray($reply);
+})->with([
+    'author type' => [[
+        'id' => 'r-1',
+        'commentId' => 'c-1',
+        'authorType' => 'robot',
+        'authorKey' => 'codex-cli',
+        'body' => 'Reply',
+    ]],
+    'blank body' => [[
+        'id' => 'r-1',
+        'commentId' => 'c-1',
+        'authorType' => 'agent',
+        'authorKey' => 'codex-cli',
+        'body' => '   ',
+    ]],
 ])->throws(InvalidArgumentException::class);

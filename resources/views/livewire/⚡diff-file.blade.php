@@ -398,7 +398,6 @@ HTML;
 
 @assets
 @localScript('js/diff-file.js')
-@localScript('js/comment-thread.js')
 @endassets
 
 {{-- Single file diff rendering --}}

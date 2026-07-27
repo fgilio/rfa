@@ -140,7 +140,7 @@ test('filter matches reply body and author without changing root count', functio
     }
 });
 
-test('refreshes its thread read model on comment-thread-updated', function () {
+test('refreshes its open thread read model on request', function () {
     $component = Livewire::test('comments-drawer', [
         'repoPath' => '/tmp/proj',
         'projectId' => $this->project->id,
@@ -148,7 +148,7 @@ test('refreshes its thread read model on comment-thread-updated', function () {
 
     CommentReply::factory()->for(Comment::findOrFail('c-open-a'))->create(['body' => 'New reply']);
 
-    $component->dispatch('comment-thread-updated', commentId: 'c-open-a', fileId: 'file-a', replies: [])
+    $component->call('refresh')
         ->assertSee('1 reply');
 });
 

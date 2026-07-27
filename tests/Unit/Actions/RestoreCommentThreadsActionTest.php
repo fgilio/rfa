@@ -87,28 +87,24 @@ test('rolls back every restored thread when any snapshot is out of scope', funct
         'repo_path' => '/tmp/foreign',
     ]);
 
-    try {
-        app(RestoreCommentThreadsAction::class)->handle(
-            '/tmp/atomic',
-            $project->id,
+    expect(fn () => app(RestoreCommentThreadsAction::class)->handle(
+        '/tmp/atomic',
+        $project->id,
+        [
             [
-                [
-                    'id' => 'c-first',
-                    'file' => 'first.php',
-                    'side' => 'right',
-                    'body' => 'Would restore first',
-                ],
-                [
-                    'id' => 'c-collision',
-                    'file' => 'collision.php',
-                    'side' => 'right',
-                    'body' => 'Wrong scope',
-                ],
+                'id' => 'c-first',
+                'file' => 'first.php',
+                'side' => 'right',
+                'body' => 'Would restore first',
             ],
-        );
-    } catch (ModelNotFoundException) {
-        // Expected: the second snapshot rejects the whole transaction.
-    }
+            [
+                'id' => 'c-collision',
+                'file' => 'collision.php',
+                'side' => 'right',
+                'body' => 'Wrong scope',
+            ],
+        ],
+    ))->toThrow(ModelNotFoundException::class);
 
     expect(Comment::query()->find('c-first'))->toBeNull();
 });

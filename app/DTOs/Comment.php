@@ -7,11 +7,12 @@ namespace App\DTOs;
 use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use App\Enums\GitRef;
+use InvalidArgumentException;
 
 class Comment
 {
     /**
-     * @param  list<array<string, mixed>>  $replies
+     * @param  list<CommentReply>  $replies
      */
     public function __construct(
         public readonly string $id,
@@ -48,7 +49,7 @@ class Comment
             'submittedAt' => $this->submittedAt,
             'anchorStatus' => $this->anchorStatus,
             'replies' => collect($this->replies)
-                ->map(fn (array $reply): array => CommentReply::fromArray($reply)->toArray())
+                ->map(fn (CommentReply $reply): array => $reply->toArray())
                 ->values()
                 ->all(),
         ];
@@ -58,28 +59,22 @@ class Comment
     public static function fromArray(array $data): self
     {
         $rawReplies = $data['replies'] ?? [];
-        $replies = is_iterable($rawReplies)
-            ? CommentReply::collect($rawReplies)
-            : [];
 
         return new self(
-            id: (string) ($data['id'] ?? ''),
+            id: self::requiredString($data, 'id'),
             fileId: (string) ($data['fileId'] ?? ''),
-            file: (string) ($data['file'] ?? $data['file_path'] ?? ''),
-            side: self::diffSide((string) ($data['side'] ?? DiffSide::Right->value)),
+            file: self::requiredString($data, 'file', 'file_path'),
+            side: DiffSide::from(self::requiredString($data, 'side')),
             startLine: self::intOrNull($data['startLine'] ?? $data['start_line'] ?? null),
             endLine: self::intOrNull($data['endLine'] ?? $data['end_line'] ?? null),
-            body: (string) ($data['body'] ?? ''),
+            body: self::requiredString($data, 'body'),
             originRef: (string) ($data['originRef'] ?? $data['origin_ref'] ?? GitRef::Working->value),
             fileContentHash: self::stringOrNull($data['fileContentHash'] ?? $data['file_content_hash'] ?? null),
             lineSnippet: self::stringOrNull($data['lineSnippet'] ?? $data['line_snippet'] ?? null),
             isDraft: (bool) ($data['isDraft'] ?? $data['is_draft'] ?? false),
             submittedAt: self::stringOrNull($data['submittedAt'] ?? $data['submitted_at'] ?? null),
             anchorStatus: $data['anchorStatus'] ?? AnchorStatus::Placed->value,
-            replies: collect($replies)
-                ->map(fn (CommentReply $reply): array => $reply->toArray())
-                ->values()
-                ->all(),
+            replies: is_iterable($rawReplies) ? CommentReply::collect($rawReplies) : [],
         );
     }
 
@@ -93,12 +88,21 @@ class Comment
         return $value === null ? null : (string) $value;
     }
 
-    private static function diffSide(string $side): DiffSide
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private static function requiredString(array $data, string $camelKey, ?string $snakeKey = null): string
     {
-        return DiffSide::tryFrom($side) ?? match ($side) {
-            'old' => DiffSide::Left,
-            'new' => DiffSide::Right,
-            default => DiffSide::Right,
+        $value = match (true) {
+            array_key_exists($camelKey, $data) => $data[$camelKey],
+            $snakeKey !== null && array_key_exists($snakeKey, $data) => $data[$snakeKey],
+            default => throw new InvalidArgumentException("The {$camelKey} field is required."),
         };
+
+        if (! is_string($value)) {
+            throw new InvalidArgumentException("The {$camelKey} field must be a string.");
+        }
+
+        return $value;
     }
 }

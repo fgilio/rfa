@@ -39,7 +39,7 @@ Persist enough identity for later CLI callers from day one:
 
 The UI must not accept these fields from browser event payloads. It always injects the trusted human identity. A future CLI will construct an agent identity and call the same Action.
 
-`CommentAuthor::human()` uses `author_type=human`, `author_key=rfa-ui`, and no stored label; the presentation layer renders that identity as `You`. The distinct key avoids duplicating `human` in two fields and identifies the concrete RFA UI caller.
+`CommentAuthor::human()` uses `author_type=human`, `author_key=rfa-ui`, and no stored label. The presentation layer renders that identity as `You`. The distinct key avoids duplicating `human` in two fields and identifies the concrete RFA UI caller.
 
 ### Replies are conversation, not review submission
 
@@ -51,15 +51,15 @@ Replies:
 - do not reopen or unsubmit their root comment
 - remain attached when the root comment is submitted
 
-This isolates the conversational primitive from the existing “export this directive to an agent” lifecycle. The CLI phase must read and write complete threads through the reply Actions/read Action; it must not expect Markdown exports to contain replies.
+This isolates the conversational primitive from the existing "export this directive to an agent" lifecycle. The CLI phase must read and write complete threads through the reply Actions/read Action. It must not expect Markdown exports to contain replies.
 
 ### Preserve existing count semantics
 
-Every existing “comment count” continues to count root comments/threads, not messages. The UI may show a separate `N replies` label on a thread.
+Every existing "comment count" continues to count root comments/threads, not messages. The UI may show a separate `N replies` label on a thread.
 
 ### SQLite cascades are a tested runtime contract
 
-RFA’s SQLite connection currently sets `foreign_key_constraints` from `DB_FOREIGN_KEYS`, defaulting to `true`. Root deletion may rely on `ON DELETE CASCADE` only if tests prove both:
+RFA's SQLite connection currently sets `foreign_key_constraints` from `DB_FOREIGN_KEYS`, defaulting to `true`. Root deletion may rely on `ON DELETE CASCADE` only if tests prove both:
 
 - the real test/application SQLite connection reports `PRAGMA foreign_keys = 1`
 - deleting a root through that connection actually removes its reply rows
@@ -77,12 +77,12 @@ This turns foreign-key enforcement into a regression-tested application contract
 | `author_type` | string | `human` or `agent` |
 | `author_key` | string | normalized, non-empty, max 100 |
 | `author_label` | nullable string | max 100 |
-| `body` | text | non-empty after trimming; no artificial max, matching root comments |
+| `body` | text | non-empty after trimming. No artificial max, matching root comments |
 | `created_at` / `updated_at` | timestamps | normal Laravel timestamps |
 
 Add a composite index on `comment_id, created_at`. Always order by `created_at, id` so ties are deterministic.
 
-Use an explicit string foreign key definition because `comments.id` is a string; `foreignId()` would create the wrong integer type.
+Use an explicit string foreign key definition because `comments.id` is a string. `foreignId()` would create the wrong integer type.
 
 ### Models and DTOs
 
@@ -151,7 +151,7 @@ Eager-load ordered replies everywhere roots enter a view:
 
 Then normalize them through `App\DTOs\CommentReply`. `ResolveCommentAnchorAction` and `ResolveContextCommentAnchorAction` must preserve the nested `replies` collection while resolving only the root anchor.
 
-Move the comments drawer’s growing read query behind `LoadCommentsDrawerAction` while adding reply support. It should:
+Move the comments drawer's growing read query behind `LoadCommentsDrawerAction` while adding reply support. It should:
 
 - eager-load replies in one additional query, never one query per root
 - match filters against file path, root body, reply body, and reply author label/key
@@ -162,7 +162,7 @@ Move the comments drawer’s growing read query behind `LoadCommentsDrawerAction
 
 Root deletion relies on the database cascade. Undo must restore the whole thread:
 
-- load the root and replies and build the undo snapshot before executing the root delete; the cascade runs immediately
+- load the root and replies and build the undo snapshot before executing the root delete because the cascade runs immediately
 - emit new snapshots as `{version: 1, comment: {...}, replies: [...]}` through `CommentThreadSnapshot`
 - accept legacy raw-comment snapshots with no `version` or `replies` key and normalize them to `replies=[]`
 - restore the root and its replies in one transaction
@@ -170,7 +170,7 @@ Root deletion relies on the database cascade. Undo must restore the whole thread
 - make clear-all restore every thread atomically
 - make context-page restore follow the same Action boundary instead of directly recreating only the root model
 
-The existing discard-file JSON snapshot must move through the same version-tolerant snapshot DTO. Old `trashed_files.comments` payloads remain restorable; new payloads preserve replies. Add regression coverage for both formats.
+The existing discard-file JSON snapshot must move through the same version-tolerant snapshot DTO. Old `trashed_files.comments` payloads remain restorable. New payloads preserve replies. Add regression coverage for both formats.
 
 ### Backend flow
 
@@ -190,7 +190,7 @@ UI reply action
                 └── comments drawer refreshes its read model
 ```
 
-The handler must still persist a reply when the root is submitted and absent from the page’s current `$comments`; in that case only the drawer needs refreshing.
+The handler must still persist a reply when the root is submitted and absent from the page's current `$comments`. In that case only the drawer needs refreshing.
 
 ## Livewire Event Contract
 
@@ -207,7 +207,7 @@ Add `delete-reply` to the central `undo-available` / page `undo()` contract.
 
 Do not put `authorType`, `authorKey`, or `authorLabel` in browser-originated events.
 
-The existing undo toast is a LIFO stack, not a single pending slot. Preserve that behavior: a reply delete followed by a root/comment delete keeps both entries, exposes the newest first, and refreshes the older entry’s TTL when it becomes visible. Add a regression test for this mixed sequence.
+The existing undo toast is a LIFO stack, not a single pending slot. Preserve that behavior: a reply delete followed by a root/comment delete keeps both entries, exposes the newest first, and refreshes the older entry's TTL when it becomes visible. Add a regression test for this mixed sequence.
 
 `DiffFile` gets a narrow `updateCommentReplies(commentId, replies)` method. The window listener checks `fileId` before calling it. This updates one child instead of resending/re-hydrating every diff file.
 
@@ -238,7 +238,7 @@ Behavior:
 - Reply opens an auto-sizing Flux textarea directly below the thread.
 - Focus moves into the textarea.
 - `⌘↵` submits through the existing focused `[data-comment-form]` shortcut contract.
-- Escape cancels the reply composer; replies do not create drafts.
+- Escape cancels the reply composer. Replies do not create drafts.
 - Empty/whitespace-only replies cannot submit.
 - After add/update, focus returns to the relevant reply/thread control.
 - Copy works for every reply.
@@ -319,7 +319,7 @@ Discard/restore file
 - add rejects blank body, unknown root, and cross-repository/project root
 - update/delete reject another author and out-of-scope IDs
 - update preserves identity and creation timestamp
-- update changes `updatedAt`, enabling the UI’s `edited` marker
+- update changes `updatedAt`, enabling the UI's `edited` marker
 - delete returns an undo snapshot
 - restore preserves ID, identity, body, and timestamps
 - root delete/clear captures every reply before the cascade executes
@@ -376,14 +376,14 @@ Discard/restore file
 Recommended delivery split:
 
 ```text
-PR 1 — backend foundation
+PR 1: backend foundation
 ├── migration, enum, models, DTOs, factories
 ├── scoped read and single-use-case reply Actions
 ├── CommentReplyWorkflowAction and mutation DTO
 ├── versioned/legacy-compatible snapshots
 └── model, Action, cascade, snapshot, lifecycle, and export-regression tests
 
-PR 2 — UI integration
+PR 2: UI integration
 ├── review/context loading and Livewire handlers
 ├── targeted DiffFile event bridge
 ├── pure reusable reply thread/composer

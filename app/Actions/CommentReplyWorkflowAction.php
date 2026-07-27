@@ -13,22 +13,12 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 final readonly class CommentReplyWorkflowAction
 {
     public function __construct(
-        private readonly LoadCommentThreadAction $loadCommentThread,
-        private readonly AddCommentReplyAction $addCommentReply,
-        private readonly UpdateCommentReplyAction $updateCommentReply,
-        private readonly DeleteCommentReplyAction $deleteCommentReply,
-        private readonly RestoreCommentReplyAction $restoreCommentReply,
+        private LoadCommentThreadAction $loadCommentThread,
+        private AddCommentReplyAction $addCommentReply,
+        private UpdateCommentReplyAction $updateCommentReply,
+        private DeleteCommentReplyAction $deleteCommentReply,
+        private RestoreCommentReplyAction $restoreCommentReply,
     ) {}
-
-    public function add(
-        string $repoPath,
-        ?int $projectId,
-        string $commentId,
-        CommentAuthor $author,
-        string $body,
-    ): CommentReplyMutation {
-        return $this->handle($repoPath, $projectId, $commentId, $author, $body);
-    }
 
     public function handle(
         string $repoPath,

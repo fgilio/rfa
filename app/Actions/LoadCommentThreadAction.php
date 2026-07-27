@@ -14,17 +14,11 @@ final readonly class LoadCommentThreadAction
         string $repoPath,
         ?int $projectId,
         string $commentId,
-        bool $includeSubmitted = true,
     ): ?array {
-        $query = Comment::query()
+        $comment = Comment::query()
             ->forProjectOrRepo($projectId, $repoPath)
-            ->with('replies');
-
-        if (! $includeSubmitted) {
-            $query->unsubmitted();
-        }
-
-        $comment = $query->find($commentId);
+            ->with('replies')
+            ->find($commentId);
 
         if ($comment === null) {
             return null;

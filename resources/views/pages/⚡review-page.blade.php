@@ -699,7 +699,7 @@ new #[Layout('layouts.app')] class extends Component
     public function addCommentReply(string $commentId, string $body): void
     {
         $this->applyCommentReplyMutation(
-            app(CommentReplyWorkflowAction::class)->add(
+            app(CommentReplyWorkflowAction::class)->handle(
                 $this->repoPath,
                 $this->projectId ?: null,
                 $commentId,
@@ -1284,7 +1284,6 @@ new #[Layout('layouts.app')] class extends Component
 
 @assets
 @localScript('js/diff-file.js')
-@localScript('js/comment-thread.js')
 @localScript('js/review-page.js')
 @endassets
 
