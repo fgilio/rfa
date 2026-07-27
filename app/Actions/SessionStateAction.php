@@ -87,6 +87,7 @@ final readonly class SessionStateAction
             ->forProjectOrRepo($projectId, $repoPath)
             ->fromReview()
             ->whereNull('submitted_at')
+            ->with('replies')
             ->orderBy('created_at')
             ->get()
             ->map(fn (Comment $c) => $c->toArray())

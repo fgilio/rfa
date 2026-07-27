@@ -35,6 +35,7 @@ test('toArray returns camelCase keys for internal use', function () {
         'isDraft' => false,
         'submittedAt' => null,
         'anchorStatus' => 'placed',
+        'replies' => [],
     ]);
 });
 

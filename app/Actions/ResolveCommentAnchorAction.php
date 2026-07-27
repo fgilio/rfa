@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\CommentReply;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
 use App\DTOs\FileSourceSpec;
@@ -144,6 +145,9 @@ final readonly class ResolveCommentAnchorAction
                 'isDraft' => (bool) ($row['is_draft'] ?? $row['isDraft'] ?? false),
                 'submittedAt' => $row['submitted_at'] ?? $row['submittedAt'] ?? null,
                 'anchorStatus' => $anchorStatus->value,
+                'replies' => collect(CommentReply::collect($row['replies'] ?? []))
+                    ->map(fn (CommentReply $reply): array => $reply->toArray())
+                    ->all(),
             ];
         }
 

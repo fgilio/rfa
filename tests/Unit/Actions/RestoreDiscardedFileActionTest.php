@@ -117,7 +117,46 @@ test('returns saved comments on restore', function () {
 
     $restored = $this->restoreAction->handle($trashed->id, $this->tmpDir, $this->project->id);
 
-    expect($restored)->toBe($comments);
+    expect($restored)->toBe([[
+        ...$comments[0],
+        'replies' => [],
+    ]]);
+});
+
+test('returns replies from versioned thread snapshots on restore', function () {
+    File::put($this->tmpDir.'/file.txt', "changed\n");
+    $snapshots = [[
+        'version' => 1,
+        'comment' => [
+            'id' => 'c-thread',
+            'body' => 'Root',
+            'fileId' => 'file-abc',
+        ],
+        'replies' => [[
+            'id' => 'r-thread',
+            'commentId' => 'c-thread',
+            'authorType' => 'agent',
+            'authorKey' => 'codex-cli',
+            'authorLabel' => 'Codex',
+            'body' => 'Reply',
+        ]],
+    ]];
+
+    $trashed = $this->discardAction->handle(
+        $this->tmpDir,
+        'file.txt',
+        'modified',
+        $this->project->id,
+        comments: $snapshots,
+    );
+
+    $restored = $this->restoreAction->handle($trashed->id, $this->tmpDir, $this->project->id);
+
+    expect($restored[0]['replies'][0])->toMatchArray([
+        'id' => 'r-thread',
+        'authorKey' => 'codex-cli',
+        'body' => 'Reply',
+    ]);
 });
 
 // -- storage cleanup --

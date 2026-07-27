@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Concerns\ReviewPage;
 
 use App\Actions\CleanExpiredTrashAction;
+use App\Actions\CreateCommentThreadSnapshotsAction;
 use App\Actions\DeleteTrashedFileAction;
 use App\Actions\DiscardFileChangesAction;
 use App\Actions\RestoreDiscardedFileAction;
@@ -49,6 +50,11 @@ trait ManagesReviewTrash
         }
 
         $fileComments = collect($this->comments)->where('fileId', $fileId)->values()->all();
+        $commentSnapshots = app(CreateCommentThreadSnapshotsAction::class)->handle(
+            $this->repoPath,
+            $this->projectId ?: null,
+            $fileComments,
+        );
 
         try {
             $trashRecord = app(DiscardFileChangesAction::class)->handle(
@@ -59,7 +65,7 @@ trait ManagesReviewTrash
                 oldPath: $file['oldPath'] ?? null,
                 isUntracked: $file['isUntracked'] ?? false,
                 isSymlink: $file['isSymlink'] ?? false,
-                comments: $fileComments,
+                comments: $commentSnapshots,
             );
         } catch (\Throwable $e) {
             $message = $e instanceof GitCommandException ? $e->stderr : $e->getMessage();

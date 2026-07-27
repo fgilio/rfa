@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\CommentThreadSnapshot;
 use App\Models\TrashedFile;
 use App\Support\PathGuard;
 use Illuminate\Support\Facades\File;
@@ -38,7 +39,15 @@ final readonly class RestoreDiscardedFileAction
             default => $this->writeContent($trashed, $fullPath, $content),
         };
 
-        $comments = $trashed->comments ?? [];
+        $rawComments = $trashed->getAttribute('comments');
+
+        /** @var list<array<string, mixed>> $storedComments */
+        $storedComments = is_array($rawComments) ? $rawComments : [];
+
+        $comments = collect($storedComments)
+            ->map(fn (array $comment): array => CommentThreadSnapshot::fromArray($comment)->toCommentArray())
+            ->values()
+            ->all();
 
         // Deleting the record also purges its blob (TrashedFile::deleting).
         $trashed->delete();

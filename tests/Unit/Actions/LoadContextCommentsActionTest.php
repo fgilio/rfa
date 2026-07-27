@@ -2,6 +2,7 @@
 
 use App\Actions\LoadContextCommentsAction;
 use App\Models\Comment;
+use App\Models\CommentReply;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -58,6 +59,34 @@ test('handle returns rows in created_at order, scoped to context-file origin and
 
     expect($rows)->toHaveCount(2);
     expect(array_column($rows, 'body'))->toBe(['first', 'second']);
+});
+
+test('eager loads ordered replies into the normalized thread shape', function () {
+    $absolute = ($this->writeContextFile)('CLAUDE.md', "rule one\nrule two\n");
+    $comment = Comment::factory()->context()->create([
+        'project_id' => null,
+        'repo_path' => $this->repo,
+        'file_content_hash' => hash_file('xxh128', $absolute),
+    ]);
+    CommentReply::factory()->for($comment)->create([
+        'id' => 'r-second',
+        'body' => 'Second',
+        'created_at' => '2026-07-27 10:01:00',
+    ]);
+    CommentReply::factory()->for($comment)->agent()->create([
+        'id' => 'r-first',
+        'body' => 'First',
+        'created_at' => '2026-07-27 10:00:00',
+    ]);
+
+    $rows = $this->action->handle($this->repo, null);
+
+    expect(array_column($rows[0]['replies'], 'id'))->toBe(['r-first', 'r-second'])
+        ->and($rows[0]['replies'][0])->toMatchArray([
+            'authorType' => 'agent',
+            'authorKey' => 'codex-cli',
+            'body' => 'First',
+        ]);
 });
 
 test('placed status when the stored hash still matches the file', function () {

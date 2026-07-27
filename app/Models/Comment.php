@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Comment extends Model
 {
@@ -92,6 +93,14 @@ class Comment extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /** @return HasMany<CommentReply, $this> */
+    public function replies(): HasMany
+    {
+        return $this->hasMany(CommentReply::class)
+            ->orderBy('created_at')
+            ->orderBy('id');
     }
 
     protected function casts(): array
