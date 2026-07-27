@@ -7,6 +7,8 @@ namespace App\Concerns;
 use App\Actions\CommentReplyWorkflowAction;
 use App\DTOs\CommentAuthor;
 use App\DTOs\CommentReplyMutation;
+use Flux\Flux;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Livewire\Attributes\On;
 
 /**
@@ -61,13 +63,23 @@ trait ManagesCommentReplies
     /** @param array<string, mixed> $reply */
     public function restoreCommentReply(array $reply): void
     {
-        $this->applyCommentReplyMutation(
-            app(CommentReplyWorkflowAction::class)->restore(
+        try {
+            $mutation = app(CommentReplyWorkflowAction::class)->restore(
                 $this->repoPath,
                 $this->projectId ?: null,
                 $reply,
-            ),
-        );
+            );
+        } catch (ModelNotFoundException) {
+            Flux::toast(
+                variant: 'warning',
+                text: 'Reply could not be restored because its comment no longer exists.',
+            );
+            $this->skipRender();
+
+            return;
+        }
+
+        $this->applyCommentReplyMutation($mutation);
     }
 
     private function applyCommentReplyMutation(CommentReplyMutation $mutation): void

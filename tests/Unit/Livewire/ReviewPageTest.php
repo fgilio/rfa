@@ -667,6 +667,33 @@ test('reply deletion can be undone through the page coordinator', function () {
     expect(CommentReply::query()->find('r-page-undo'))->not->toBeNull();
 });
 
+test('reply undo fails softly when its root no longer exists', function () {
+    $root = Comment::create([
+        'id' => 'c-reply-undo-missing-root',
+        'project_id' => $this->project->id,
+        'repo_path' => $this->project->path,
+        'origin_ref' => 'working',
+        'file_path' => 'src/Foo.php',
+        'side' => 'right',
+        'body' => 'Root',
+    ]);
+    $reply = CommentReply::factory()->for($root)->create(['id' => 'r-orphaned-undo']);
+    $payload = App\DTOs\CommentReply::fromArray($reply->toArray())->toArray();
+
+    $reply->delete();
+    $root->delete();
+
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->call('undo', 'delete-reply', $payload)
+        ->assertDispatched(
+            'toast-show',
+            fn (string $name, array $params): bool => ($params['dataset']['variant'] ?? null) === 'warning'
+                && ($params['slots']['text'] ?? null) === 'Reply could not be restored because its comment no longer exists.',
+        );
+
+    expect(CommentReply::query()->find('r-orphaned-undo'))->toBeNull();
+});
+
 // -- Discard file undo-available --
 
 test('discardFileChanges dispatches undo-available with file name', function () {
