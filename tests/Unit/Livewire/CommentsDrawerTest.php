@@ -61,7 +61,7 @@ test('shows only unsubmitted comments by default, grouped by file', function () 
     $component = Livewire::test('comments-drawer', [
         'repoPath' => '/tmp/proj',
         'projectId' => $this->project->id,
-    ])->call('toggle');
+    ])->set('open', true);
 
     $grouped = $component->get('groupedComments');
 
@@ -82,7 +82,7 @@ test('ignores comments that belong to a different repo', function () {
     $component = Livewire::test('comments-drawer', [
         'repoPath' => '/tmp/proj',
         'projectId' => $this->project->id,
-    ])->call('toggle');
+    ])->set('open', true);
 
     $ids = collect($component->get('groupedComments'))->flatten(1)->pluck('id')->all();
 
@@ -93,7 +93,7 @@ test('showSubmitted=true includes archived comments', function () {
     $component = Livewire::test('comments-drawer', [
         'repoPath' => '/tmp/proj',
         'projectId' => $this->project->id,
-    ])->call('toggle')->set('showSubmitted', true);
+    ])->set('open', true)->set('showSubmitted', true);
 
     $ids = collect($component->get('groupedComments'))->flatten(1)->pluck('id')->all();
 
@@ -105,7 +105,7 @@ test('filter matches on file_path substring', function () {
     $component = Livewire::test('comments-drawer', [
         'repoPath' => '/tmp/proj',
         'projectId' => $this->project->id,
-    ])->call('toggle')->set('filter', 'bar');
+    ])->set('open', true)->set('filter', 'bar');
 
     $ids = collect($component->get('groupedComments'))->flatten(1)->pluck('id')->all();
 
@@ -116,7 +116,7 @@ test('filter matches on body substring', function () {
     $component = Livewire::test('comments-drawer', [
         'repoPath' => '/tmp/proj',
         'projectId' => $this->project->id,
-    ])->call('toggle')->set('filter', 'open on bar');
+    ])->set('open', true)->set('filter', 'open on bar');
 
     $ids = collect($component->get('groupedComments'))->flatten(1)->pluck('id')->all();
 
@@ -133,7 +133,7 @@ test('filter matches reply body and author without changing root count', functio
         $component = Livewire::test('comments-drawer', [
             'repoPath' => '/tmp/proj',
             'projectId' => $this->project->id,
-        ])->call('toggle')->set('filter', $filter);
+        ])->set('open', true)->set('filter', $filter);
 
         expect(collect($component->get('groupedComments'))->flatten(1)->pluck('id')->all())->toBe(['c-open-a'])
             ->and($component->get('totalCount'))->toBe(2);
@@ -144,7 +144,7 @@ test('refreshes its open thread read model on request', function () {
     $component = Livewire::test('comments-drawer', [
         'repoPath' => '/tmp/proj',
         'projectId' => $this->project->id,
-    ])->call('toggle');
+    ])->set('open', true);
 
     CommentReply::factory()->for(Comment::findOrFail('c-open-a'))->create(['body' => 'New reply']);
 
@@ -173,26 +173,11 @@ test('filter does not affect totalCount (pool size, not filtered size)', functio
     expect($component->get('totalCount'))->toBe(2);
 });
 
-test('toggle() flips the open flag', function () {
-    $component = Livewire::test('comments-drawer', [
-        'repoPath' => '/tmp/proj',
-        'projectId' => $this->project->id,
-    ]);
-
-    expect($component->get('open'))->toBeFalse();
-
-    $component->call('toggle');
-    expect($component->get('open'))->toBeTrue();
-
-    $component->call('toggle');
-    expect($component->get('open'))->toBeFalse();
-});
-
 test('falls back to repo_path when no project_id is given', function () {
     $component = Livewire::test('comments-drawer', [
         'repoPath' => '/tmp/other',
         'projectId' => null,
-    ])->call('toggle');
+    ])->set('open', true);
 
     $ids = collect($component->get('groupedComments'))->flatten(1)->pluck('id')->all();
 

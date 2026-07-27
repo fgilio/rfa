@@ -85,6 +85,7 @@
             x-ref="replyInput"
             x-model="body"
             x-on:keydown.escape.stop="cancel()"
+            aria-label="Reply body"
             placeholder="Write a reply... ({{ \App\Support\Shortcuts::display('comment.save') }} to save, Esc to cancel)"
             rows="auto"
             resize="none"

@@ -1237,9 +1237,6 @@ new #[Layout('layouts.app')] class extends Component
     x-on:rfa-switch-review-to-head.window="$wire.switchReviewToHead()"
     x-on:rfa-dismiss-detached-banner.window="$wire.dismissDetachedBanner()"
     x-on:rfa-dismiss-missing-target.window="$wire.dismissMissingTarget()"
-    x-on:rfa-add-comment-reply.window="$wire.dispatch('add-comment-reply', $event.detail)"
-    x-on:rfa-update-comment-reply.window="$wire.dispatch('update-comment-reply', $event.detail)"
-    x-on:rfa-delete-comment-reply.window="$wire.dispatch('delete-comment-reply', $event.detail)"
     {{-- Filter/file/commit shortcuts are registered through the keymap store
          (see registerShortcuts() in review-page.js). Only the in-input Escape
          stays here, since the store suppresses shortcuts while focus is in an

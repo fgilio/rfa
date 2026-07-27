@@ -33,7 +33,7 @@ describe('commentThread', () => {
 
         thread.submit();
 
-        expect(dispatch).toHaveBeenCalledWith('rfa-add-comment-reply', {
+        expect(dispatch).toHaveBeenCalledWith('add-comment-reply', {
             commentId: 'c-1',
             body: 'Follow-up',
         });
@@ -49,7 +49,7 @@ describe('commentThread', () => {
 
         thread.submit();
 
-        expect(dispatch).toHaveBeenCalledWith('rfa-update-comment-reply', {
+        expect(dispatch).toHaveBeenCalledWith('update-comment-reply', {
             replyId: 'r-1',
             body: 'After',
         });
@@ -74,7 +74,23 @@ describe('commentThread', () => {
 
         thread.remove('r-1');
 
-        expect(dispatch).toHaveBeenCalledWith('rfa-delete-comment-reply', { replyId: 'r-1' });
+        expect(dispatch).toHaveBeenCalledWith('delete-comment-reply', { replyId: 'r-1' });
+    });
+
+    it('dispatches reply events globally through Livewire by default', () => {
+        const dispatch = vi.fn();
+        window.Livewire = { dispatch };
+        const thread = state(null);
+        thread.body = 'Follow-up';
+
+        thread.submit();
+
+        expect(dispatch).toHaveBeenCalledWith('add-comment-reply', {
+            commentId: 'c-1',
+            body: 'Follow-up',
+        });
+
+        delete window.Livewire;
     });
 
     it('installs immediately when Alpine exists', () => {

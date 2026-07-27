@@ -44,12 +44,12 @@
                 if (body === '') return;
 
                 if (this.editingReplyId !== null) {
-                    this.emit('rfa-update-comment-reply', {
+                    this.emit('update-comment-reply', {
                         replyId: this.editingReplyId,
                         body,
                     });
                 } else {
-                    this.emit('rfa-add-comment-reply', {
+                    this.emit('add-comment-reply', {
                         commentId: this.commentId,
                         body,
                     });
@@ -59,7 +59,7 @@
             },
 
             remove(replyId) {
-                this.emit('rfa-delete-comment-reply', { replyId });
+                this.emit('delete-comment-reply', { replyId });
             },
 
             focusInput() {
@@ -87,7 +87,7 @@
                     return;
                 }
 
-                this.$dispatch(name, detail);
+                window.Livewire.dispatch(name, detail);
             },
         };
     }

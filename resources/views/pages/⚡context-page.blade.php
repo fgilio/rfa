@@ -509,9 +509,6 @@ new #[Layout('layouts.app')] class extends Component
         },
     }"
     class="min-h-screen flex flex-col"
-    x-on:rfa-add-comment-reply.window="$wire.dispatch('add-comment-reply', $event.detail)"
-    x-on:rfa-update-comment-reply.window="$wire.dispatch('update-comment-reply', $event.detail)"
-    x-on:rfa-delete-comment-reply.window="$wire.dispatch('delete-comment-reply', $event.detail)"
 >
     <x-page-header>
         <div class="flex items-center gap-2 min-w-0">

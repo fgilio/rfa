@@ -23,11 +23,6 @@ class extends Component
 
     public string $filter = '';
 
-    public function toggle(): void
-    {
-        $this->open = ! $this->open;
-    }
-
     #[On('comment-updated')]
     #[On('reset-reviewed-files')]
     public function refresh(): void
@@ -94,7 +89,7 @@ class extends Component
         },
     }"
     x-init="$store.shortcuts.register('comments-drawer.toggle', () => toggle())"
-    @keydown.window="if (open && $event.key === 'Escape') { $event.preventDefault(); close(); return; }"
+    @keydown.escape.window="if (open) { $event.preventDefault(); close() }"
     @comment-thread-updated.window="if (open) $wire.$refresh()"
     x-effect="if (open && !$store.overlays.is('comments-drawer')) close()"
     class="relative"
@@ -165,6 +160,10 @@ class extends Component
                         <x-file-path :path="$filePath" />
                     </div>
                     @foreach($comments as $c)
+                        @php
+                            $isSubmitted = ! empty($c['submittedAt']);
+                            $replyCount = count($c['replies']);
+                        @endphp
                         <div
                             x-data="{ expanded: @js($c['isReplyFilterMatch'] ?? false) }"
                             wire:key="drawer-comment-{{ $c['id'] }}"
@@ -175,7 +174,11 @@ class extends Component
                                 <button
                                     type="button"
                                     class="block w-full px-4 py-2.5 text-left focus-visible:bg-gh-surface/60 focus-visible:outline focus-visible:outline-1 focus-visible:outline-gh-accent focus-visible:-outline-offset-1"
-                                    x-on:click="@js(! empty($c['submittedAt'])) ? expanded = !expanded : select(@js($c['id']), @js($c['file']))"
+                                    @if($isSubmitted)
+                                        x-on:click="expanded = ! expanded"
+                                    @else
+                                        x-on:click="select(@js($c['id']), @js($c['file']))"
+                                    @endif
                                 >
                                     <div class="flex items-center gap-2 text-[10px] font-mono text-gh-muted mb-1 pr-7">
                                         @if(! empty($c['originRef']))
@@ -209,14 +212,14 @@ class extends Component
                                     </flux:tooltip>
                                 </div>
                             </div>
-                            @if(count($c['replies']) > 0)
+                            @if($replyCount > 0)
                                 <button
                                     type="button"
                                     class="mx-4 mb-2 text-[10px] font-mono text-gh-muted hover:text-gh-accent"
                                     x-on:click="expanded = !expanded"
                                     x-bind:aria-expanded="expanded"
                                 >
-                                    {{ count($c['replies']) }} {{ Str::plural('reply', count($c['replies'])) }}
+                                    {{ $replyCount }} {{ Str::plural('reply', $replyCount) }}
                                 </button>
                                 <div x-show="expanded" x-cloak class="cursor-default px-4 pb-2.5">
                                     <x-comment-replies :comment="$c" />

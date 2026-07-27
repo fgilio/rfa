@@ -195,9 +195,9 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 |---|---|---|---|
 | `add-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{fileId, side, startLine, endLine, body}` |
 | `delete-comment` | DiffFile Alpine -> parent | ReviewPage `#[On]` | `{commentId}` |
-| `rfa-add-comment-reply` | comment-replies Alpine `$dispatch` (window) | ReviewPage/ContextPage root Alpine -> `add-comment-reply` | `{commentId, body}` |
-| `rfa-update-comment-reply` | comment-replies Alpine `$dispatch` (window) | ReviewPage/ContextPage root Alpine -> `update-comment-reply` | `{replyId, body}` |
-| `rfa-delete-comment-reply` | comment-replies Alpine `$dispatch` (window) | ReviewPage/ContextPage root Alpine -> `delete-comment-reply` | `{replyId}` |
+| `add-comment-reply` | comment-replies `Livewire.dispatch()` | ReviewPage/ContextPage `#[On]` | `{commentId, body}` |
+| `update-comment-reply` | comment-replies `Livewire.dispatch()` | ReviewPage/ContextPage `#[On]` | `{replyId, body}` |
+| `delete-comment-reply` | comment-replies `Livewire.dispatch()` | ReviewPage/ContextPage `#[On]` | `{replyId}` |
 | `comment-thread-updated` | ReviewPage/ContextPage PHP dispatch | targeted DiffFile Alpine + comments-drawer Livewire | `{commentId, fileId?, filePath, replies}` |
 | `toggle-reviewed` | Livewire event — unit tests only; runtime goes via the `rfa-toggle-reviewed` bridge below | ReviewPage `#[On]` -> `toggleReviewed` | `{filePath}` |
 | `rfa-toggle-reviewed` | DiffFile Alpine + sidebar / Recently-reviewed buttons `$dispatch` (bubbles to window) | ReviewPage root Alpine `@window` -> `$wire.toggleReviewed` | `{filePath}` |
@@ -228,9 +228,9 @@ fired from inside a Livewire island scopes the action to that island, so a
 reviewed control nested in an island could only refresh its own island. The
 controls instead `$dispatch` a bubbling window event that the page-root Alpine
 catches and forwards to `$wire`, letting the action run outside island scope and
-settle every affected island (see the skipRender table). Reply events use the
-same bridge so the props-only thread component also works inside the nested
-comments drawer without depending on a particular Livewire host.
+settle every affected island (see the skipRender table). Reply events dispatch
+globally through Livewire so the props-only thread component also works inside
+the nested comments drawer without depending on a particular Livewire host.
 
 ### Known Debt
 
