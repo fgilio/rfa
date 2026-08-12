@@ -564,7 +564,8 @@ new #[Layout('layouts.app')] class extends Component
                     rfa scans for agent context files across this repo —
                     <code class="font-mono">CLAUDE.md</code>, <code class="font-mono">AGENTS.md</code>,
                     and the rule files other agent tools keep in their own dot-directories.
-                    Drop one in the repo root or any subdirectory and re-scan.
+                    A <code class="font-mono">CLAUDE.md</code> or <code class="font-mono">AGENTS.md</code>
+                    is picked up anywhere in the tree — drop one in and re-scan.
                 </p>
             </x-empty-state>
         @else
