@@ -12,8 +12,6 @@ use Symfony\Component\Process\Process;
 
 class AgentContextFileScannerService
 {
-    private const BASENAMES = ['CLAUDE.md', 'AGENTS.md'];
-
     /**
      * Cap recursion depth when walking for untracked candidates, mirroring
      * ExternalFilesService::MAX_DEPTH. Without it a pathologically deep tree
@@ -27,7 +25,9 @@ class AgentContextFileScannerService
     ) {}
 
     /**
-     * Discover every CLAUDE.md / AGENTS.md inside $repoPath, ordered by path.
+     * Discover every agent-context file inside $repoPath, ordered by path —
+     * CLAUDE.md / AGENTS.md plus the per-tool rule directories enumerated in
+     * AgentContextFileKind (Cursor, Copilot, Windsurf, Cline, `.claude/`).
      *
      * Tracked entries come from `git ls-files`; untracked candidates are walked
      * from disk and filtered through `git check-ignore` in a single batch. Skip
@@ -77,13 +77,7 @@ class AgentContextFileScannerService
      */
     private function discoverTracked(string $repoPath, array $skipDirs): array
     {
-        $args = [
-            'ls-files', '-z',
-            ':(glob)**/CLAUDE.md',
-            ':(glob)**/AGENTS.md',
-            'CLAUDE.md',
-            'AGENTS.md',
-        ];
+        $args = ['ls-files', '-z', ...AgentContextFileKind::gitPathspecs()];
 
         $output = rescue(
             fn (): string => $this->git->run($repoPath, $args),
@@ -97,7 +91,7 @@ class AgentContextFileScannerService
 
         $relevantPaths = collect($this->splitNullDelimited($output))
             ->reject(fn (string $p): bool => $this->isSkipped($p, $skipDirs))
-            ->filter(fn (string $p): bool => AgentContextFileKind::fromBasename(basename($p)) !== null)
+            ->filter(fn (string $p): bool => AgentContextFileKind::fromPath($p) !== null)
             ->values()
             ->all();
 
@@ -117,7 +111,7 @@ class AgentContextFileScannerService
             $entries[$relPath] = new AgentContextFile(
                 path: $relPath,
                 absolutePath: $absolute,
-                kind: AgentContextFileKind::fromBasename(basename($relPath)),
+                kind: AgentContextFileKind::fromPath($relPath),
                 isTracked: true,
                 isSymlink: $isSymlink,
                 symlinkTarget: $symlinkTarget !== false ? $symlinkTarget : null,
@@ -131,7 +125,7 @@ class AgentContextFileScannerService
     }
 
     /**
-     * Walk the filesystem for CLAUDE.md / AGENTS.md outside the tracked set,
+     * Walk the filesystem for agent-context files outside the tracked set,
      * batch-filter via `git check-ignore --stdin`, return whatever survives.
      *
      * @param  array<int, string>  $skipDirs
@@ -157,7 +151,7 @@ class AgentContextFileScannerService
                 continue;
             }
 
-            $kind = AgentContextFileKind::fromBasename(basename($relPath));
+            $kind = AgentContextFileKind::fromPath($relPath);
             if ($kind === null) {
                 continue;
             }
@@ -231,7 +225,7 @@ class AgentContextFileScannerService
                     continue;
                 }
 
-                if (! in_array($entry, self::BASENAMES, true)) {
+                if (AgentContextFileKind::fromPath($relPath) === null) {
                     continue;
                 }
 

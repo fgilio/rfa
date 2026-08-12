@@ -8,7 +8,7 @@ use Livewire\Component;
 /**
  * Hierarchical sidebar for the Context page.
  *
- * Renders a folder tree of the project; each leaf is a CLAUDE.md / AGENTS.md
+ * Renders a folder tree of the project; each leaf is an agent-context file
  * found by DiscoverAgentContextFilesAction. Folders are tinted by coverage:
  * green when they contain a context file (directly or transitively), gray
  * when they're a candidate dir with no context file, hidden when they have

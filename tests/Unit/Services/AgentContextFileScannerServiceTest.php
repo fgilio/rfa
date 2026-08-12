@@ -91,6 +91,95 @@ test('basename impostors do not match', function () {
     expect(collect($files)->pluck('path')->all())->toBe(['CLAUDE.md']);
 });
 
+// -- other tools' rule files --
+
+test('discovers cursor, copilot, windsurf and cline rule files', function () {
+    File::makeDirectory($this->repo.'/.cursor/rules', 0755, true);
+    File::put($this->repo.'/.cursor/rules/php.mdc', "cursor rules\n");
+    File::makeDirectory($this->repo.'/.github/instructions', 0755, true);
+    File::put($this->repo.'/.github/copilot-instructions.md', "copilot\n");
+    File::put($this->repo.'/.github/instructions/tests.instructions.md', "copilot tests\n");
+    File::makeDirectory($this->repo.'/.windsurf/rules', 0755, true);
+    File::put($this->repo.'/.windsurf/rules/style.md', "windsurf\n");
+    File::put($this->repo.'/.clinerules', "cline\n");
+    $this->commitTestRepo($this->repo, 'init');
+
+    $byPath = collect(ctxScan($this->repo, $this->scanner))->keyBy('path');
+
+    expect($byPath->keys()->all())->toBe([
+        '.clinerules',
+        '.cursor/rules/php.mdc',
+        '.github/copilot-instructions.md',
+        '.github/instructions/tests.instructions.md',
+        '.windsurf/rules/style.md',
+    ]);
+    expect($byPath['.cursor/rules/php.mdc']->kind)->toBe(AgentContextFileKind::Cursor);
+    expect($byPath['.github/copilot-instructions.md']->kind)->toBe(AgentContextFileKind::Copilot);
+    expect($byPath['.github/instructions/tests.instructions.md']->kind)->toBe(AgentContextFileKind::Copilot);
+    expect($byPath['.windsurf/rules/style.md']->kind)->toBe(AgentContextFileKind::Windsurf);
+    expect($byPath['.clinerules']->kind)->toBe(AgentContextFileKind::Cline);
+});
+
+test('discovers instruction-bearing files under .claude but not settings or plans', function () {
+    File::makeDirectory($this->repo.'/.claude/agents', 0755, true);
+    File::put($this->repo.'/.claude/agents/reviewer.md', "agent\n");
+    File::makeDirectory($this->repo.'/.claude/commands', 0755, true);
+    File::put($this->repo.'/.claude/commands/ship.md', "command\n");
+    File::makeDirectory($this->repo.'/.claude/skills/release', 0755, true);
+    File::put($this->repo.'/.claude/skills/release/SKILL.md', "skill\n");
+    File::put($this->repo.'/.claude/skills/release/reference.md', "supporting doc\n");
+    File::makeDirectory($this->repo.'/.claude/plans', 0755, true);
+    File::put($this->repo.'/.claude/plans/some-plan.md', "plan\n");
+    File::put($this->repo.'/.claude/settings.json', "{}\n");
+    $this->commitTestRepo($this->repo, 'init');
+
+    $files = ctxScan($this->repo, $this->scanner);
+
+    expect(collect($files)->pluck('path')->all())->toBe([
+        '.claude/agents/reviewer.md',
+        '.claude/commands/ship.md',
+        '.claude/skills/release/SKILL.md',
+    ]);
+    expect($files[0]->kind)->toBe(AgentContextFileKind::Claude);
+});
+
+test('discovers rule files nested inside a monorepo package', function () {
+    File::makeDirectory($this->repo.'/packages/web/.cursor/rules', 0755, true);
+    File::put($this->repo.'/packages/web/.cursor/rules/vue.mdc', "nested\n");
+    $this->commitTestRepo($this->repo, 'init');
+
+    $files = ctxScan($this->repo, $this->scanner);
+
+    expect(collect($files)->pluck('path')->all())->toBe(['packages/web/.cursor/rules/vue.mdc']);
+    expect($files[0]->kind)->toBe(AgentContextFileKind::Cursor);
+});
+
+test('surfaces untracked rule files from other tools', function () {
+    File::put($this->repo.'/CLAUDE.md', "tracked\n");
+    $this->commitTestRepo($this->repo, 'init');
+
+    File::makeDirectory($this->repo.'/.cursor/rules', 0755, true);
+    File::put($this->repo.'/.cursor/rules/php.mdc', "untracked\n");
+
+    $byPath = collect(ctxScan($this->repo, $this->scanner))->keyBy('path');
+
+    expect($byPath->keys()->all())->toBe(['.cursor/rules/php.mdc', 'CLAUDE.md']);
+    expect($byPath['.cursor/rules/php.mdc']->isTracked)->toBeFalse();
+});
+
+test('non-rule files inside a matched dot directory are ignored', function () {
+    File::makeDirectory($this->repo.'/.cursor/rules', 0755, true);
+    File::put($this->repo.'/.cursor/rules/php.mdc', "rules\n");
+    File::put($this->repo.'/.cursor/rules/schema.json', "{}\n");
+    File::makeDirectory($this->repo.'/.cursor/extensions', 0755, true);
+    File::put($this->repo.'/.cursor/extensions/notes.md', "not rules\n");
+    $this->commitTestRepo($this->repo, 'init');
+
+    $files = ctxScan($this->repo, $this->scanner);
+
+    expect(collect($files)->pluck('path')->all())->toBe(['.cursor/rules/php.mdc']);
+});
+
 test('symlinked pairs are deduplicated via realpath', function () {
     File::put($this->repo.'/CLAUDE.md', "shared\n");
     symlink($this->repo.'/CLAUDE.md', $this->repo.'/AGENTS.md');

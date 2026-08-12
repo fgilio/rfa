@@ -39,7 +39,7 @@
             style="padding-left: {{ $padLeft + 18 }}px; padding-right: 6px;"
             data-testid="context-tree-file-{{ $file['id'] }}"
         >
-            <span class="font-mono font-medium text-[10px] shrink-0 {{ $kind->badgeColorClass() }}">{{ $kind->badgeLabel() }}</span>
+            <span class="font-mono font-medium text-[10px] shrink-0 {{ $kind->badgeColorClass() }}" title="{{ $kind->label() }}">{{ $kind->badgeLabel() }}</span>
             <span class="font-mono truncate text-gh-text flex-1 min-w-0">{{ $file['basename'] }}</span>
             @if(! $file['isTracked'])
                 <span class="font-mono text-[10px] text-gh-muted/70 shrink-0">untracked</span>

@@ -26,8 +26,10 @@ use Livewire\Component;
 use function Illuminate\Support\defer;
 
 /**
- * Context page: inventory + line-level review of every CLAUDE.md / AGENTS.md
- * in the current repo. Sibling to ⚡review-page; intentionally does not share
+ * Context page: inventory + line-level review of every agent-instruction file
+ * in the current repo — CLAUDE.md / AGENTS.md plus the per-tool rule files
+ * listed in AgentContextFileKind (Cursor, Copilot, Windsurf, Cline,
+ * `.claude/`). Sibling to ⚡review-page; intentionally does not share
  * state, comment writes, or sidebar primitives with it (review-page has known
  * debt around comment writes — see CLAUDE.md).
  *
