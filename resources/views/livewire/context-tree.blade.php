@@ -135,7 +135,7 @@ new class extends Component
 
     @if(empty($contextFiles))
         <div class="text-xs text-gh-muted px-1 py-4 text-center">
-            No CLAUDE.md or AGENTS.md found in this repo.
+            No agent instruction files found in this repo.
         </div>
     @else
         <div class="text-xs">

@@ -1,6 +1,10 @@
 <?php
 
 use App\Enums\AgentContextFileKind;
+use Illuminate\Support\Facades\File;
+use Tests\TestCase;
+
+uses(TestCase::class);
 
 test('classifies known agent-context paths', function (string $path, AgentContextFileKind $expected) {
     expect(AgentContextFileKind::fromPath($path))->toBe($expected);
@@ -42,4 +46,44 @@ test('badge labels and colors are unique per kind', function () {
 
     expect(collect($kinds)->map(fn ($kind) => $kind->badgeLabel())->unique())->toHaveCount(count($kinds));
     expect(collect($kinds)->map(fn ($kind) => $kind->badgeColorClass())->unique())->toHaveCount(count($kinds));
+});
+
+test('every kind has a theme token defined in both palettes', function () {
+    foreach (AgentContextFileKind::cases() as $kind) {
+        // text-gh-kind-cursor -> kind-cursor, the config/theme.php key backing it.
+        $token = str_replace('text-gh-', '', $kind->badgeColorClass());
+
+        expect(config('theme.colors.light'))->toHaveKey($token);
+        expect(config('theme.colors.dark'))->toHaveKey($token);
+    }
+});
+
+test('git pathspecs cover every classified path', function () {
+    $repo = $this->createTempDirectory('rfa_ctxspec_');
+    $this->initTestRepo($repo);
+
+    $paths = [
+        'CLAUDE.md', 'app/Domains/CLAUDE.md', 'AGENTS.md',
+        '.claude/agents/reviewer.md', '.claude/commands/ship.md', '.claude/rules/php.md',
+        '.claude/skills/release/SKILL.md', '.cursorrules', '.cursor/rules/php.mdc',
+        'packages/web/.cursor/rules/vue.mdc', '.github/copilot-instructions.md',
+        '.github/instructions/tests.instructions.md', '.windsurfrules',
+        '.windsurf/rules/style.md', '.clinerules/style.md',
+    ];
+
+    foreach ($paths as $path) {
+        File::ensureDirectoryExists($repo.'/'.dirname($path));
+        File::put($repo.'/'.$path, "x\n");
+    }
+    $this->commitTestRepo($repo, 'init');
+
+    $process = new Symfony\Component\Process\Process(
+        ['git', 'ls-files', '-z', ...AgentContextFileKind::gitPathspecs()],
+        $repo,
+    );
+    $process->mustRun();
+
+    $matched = array_filter(explode("\0", $process->getOutput()));
+
+    expect(array_values(array_diff($paths, $matched)))->toBe([]);
 });

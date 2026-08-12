@@ -89,20 +89,21 @@ class AgentContextFileScannerService
             return [];
         }
 
-        $relevantPaths = collect($this->splitNullDelimited($output))
+        /** @var array<string, AgentContextFileKind> $kindsByPath */
+        $kindsByPath = collect($this->splitNullDelimited($output))
             ->reject(fn (string $p): bool => $this->isSkipped($p, $skipDirs))
-            ->filter(fn (string $p): bool => AgentContextFileKind::fromPath($p) !== null)
-            ->values()
+            ->mapWithKeys(fn (string $p): array => [$p => AgentContextFileKind::fromPath($p)])
+            ->filter(fn (?AgentContextFileKind $kind): bool => $kind !== null)
             ->all();
 
-        if ($relevantPaths === []) {
+        if ($kindsByPath === []) {
             return [];
         }
 
-        $datesByPath = $this->resolveGitDates($repoPath, $relevantPaths);
+        $datesByPath = $this->resolveGitDates($repoPath, array_keys($kindsByPath));
 
         $entries = [];
-        foreach ($relevantPaths as $relPath) {
+        foreach ($kindsByPath as $relPath => $kind) {
             $absolute = $repoPath.'/'.$relPath;
             $isSymlink = is_link($absolute);
             $symlinkTarget = $isSymlink ? readlink($absolute) : null;
@@ -111,7 +112,7 @@ class AgentContextFileScannerService
             $entries[$relPath] = new AgentContextFile(
                 path: $relPath,
                 absolutePath: $absolute,
-                kind: AgentContextFileKind::fromPath($relPath),
+                kind: $kind,
                 isTracked: true,
                 isSymlink: $isSymlink,
                 symlinkTarget: $symlinkTarget !== false ? $symlinkTarget : null,
@@ -143,16 +144,11 @@ class AgentContextFileScannerService
             return [];
         }
 
-        $ignored = $this->batchCheckIgnore($repoPath, $candidates);
+        $ignored = $this->batchCheckIgnore($repoPath, array_keys($candidates));
 
         $entries = [];
-        foreach ($candidates as $relPath) {
+        foreach ($candidates as $relPath => $kind) {
             if (isset($ignored[$relPath])) {
-                continue;
-            }
-
-            $kind = AgentContextFileKind::fromPath($relPath);
-            if ($kind === null) {
                 continue;
             }
 
@@ -180,7 +176,7 @@ class AgentContextFileScannerService
     /**
      * @param  array<int, string>  $skipDirs
      * @param  array<string, int>  $trackedSet  Flipped paths for O(1) skip lookup.
-     * @param  array<int, string>  $candidates  Mutated in place.
+     * @param  array<string, AgentContextFileKind>  $candidates  Mutated in place.
      */
     private function walkForCandidates(string $repoPath, string $relDir, array $skipDirs, array $trackedSet, array &$candidates, int $depth = 0): void
     {
@@ -225,15 +221,16 @@ class AgentContextFileScannerService
                     continue;
                 }
 
-                if (AgentContextFileKind::fromPath($relPath) === null) {
-                    continue;
-                }
-
                 if (isset($trackedSet[$relPath])) {
                     continue;
                 }
 
-                $candidates[] = $relPath;
+                $kind = AgentContextFileKind::fromPath($relPath);
+                if ($kind === null) {
+                    continue;
+                }
+
+                $candidates[$relPath] = $kind;
             }
         } finally {
             closedir($handle);

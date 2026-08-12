@@ -562,9 +562,10 @@ new #[Layout('layouts.app')] class extends Component
             <x-empty-state icon="document-magnifying-glass">
                 <x-slot:heading>No context files found</x-slot:heading>
                 <p class="text-sm text-gh-muted leading-relaxed">
-                    rfa scans for <code class="font-mono">CLAUDE.md</code> and
-                    <code class="font-mono">AGENTS.md</code> across this repo. Drop one in
-                    the repo root or any subdirectory and re-scan.
+                    rfa scans for agent instruction files across this repo —
+                    <code class="font-mono">CLAUDE.md</code>, <code class="font-mono">AGENTS.md</code>,
+                    and the rule files Cursor, Copilot, Windsurf and Cline keep in their
+                    own directories. Drop one in the repo root or any subdirectory and re-scan.
                 </p>
             </x-empty-state>
         @else
