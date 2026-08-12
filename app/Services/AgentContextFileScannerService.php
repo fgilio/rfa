@@ -25,9 +25,8 @@ class AgentContextFileScannerService
     ) {}
 
     /**
-     * Discover every agent-context file inside $repoPath, ordered by path —
-     * CLAUDE.md / AGENTS.md plus the per-tool rule directories enumerated in
-     * AgentContextFileKind (Cursor, Copilot, Windsurf, Cline, `.claude/`).
+     * Discover every agent context file inside $repoPath, ordered by path.
+     * See AgentContextFileKind for the conventions recognised.
      *
      * Tracked entries come from `git ls-files`; untracked candidates are walked
      * from disk and filtered through `git check-ignore` in a single batch. Skip
@@ -93,7 +92,7 @@ class AgentContextFileScannerService
         $kindsByPath = collect($this->splitNullDelimited($output))
             ->reject(fn (string $p): bool => $this->isSkipped($p, $skipDirs))
             ->mapWithKeys(fn (string $p): array => [$p => AgentContextFileKind::fromPath($p)])
-            ->filter(fn (?AgentContextFileKind $kind): bool => $kind !== null)
+            ->whereNotNull()
             ->all();
 
         if ($kindsByPath === []) {
@@ -271,9 +270,9 @@ class AgentContextFileScannerService
 
     /**
      * Resolve created/last-edited dates for every tracked path in a single
-     * git log call. Drops `--follow` (which only accepts one pathspec) so we
-     * miss pre-rename history — acceptable trade for CLAUDE.md / AGENTS.md
-     * which rarely move, in exchange for one shell-out instead of N.
+     * git log call. Drops `--follow` (which only accepts one pathspec) in
+     * exchange for one shell-out instead of N: a rule file that was renamed
+     * shows dates from its current path only.
      *
      * @param  array<int, string>  $relPaths
      * @return array<string, array{0: ?CarbonImmutable, 1: ?CarbonImmutable}>

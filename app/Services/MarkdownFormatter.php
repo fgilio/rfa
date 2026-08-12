@@ -24,7 +24,7 @@ class MarkdownFormatter
         $md = "{$title}\n\n";
 
         if ($isContextFile) {
-            $md .= 'Improve the CLAUDE.md / AGENTS.md files below based on the comments. '
+            $md .= 'Improve the agent context files below based on the comments. '
                 .'Treat each comment as a directive: tighten, clarify, remove stale rules, '
                 .'or restructure as the comment instructs. Preserve unmentioned content unless '
                 ."a comment makes it redundant.\n\n";

@@ -28,7 +28,7 @@ return [
 
     /*
     | Path prefixes (from repo root) the AgentContextFileScanner skips when
-    | walking the working tree for untracked CLAUDE.md / AGENTS.md candidates.
+    | walking the working tree for untracked agent context file candidates.
     | The defaults mirror the build artifact locations the Context page design
     | doc calls out (the 5 stale copies under nativephp/electron/dist).
     */

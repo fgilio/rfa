@@ -1,7 +1,9 @@
 <?php
 
 use App\Enums\AgentContextFileKind;
+use App\Services\GitProcessService;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -48,15 +50,15 @@ test('badge labels and colors are unique per kind', function () {
     expect(collect($kinds)->map(fn ($kind) => $kind->badgeColorClass())->unique())->toHaveCount(count($kinds));
 });
 
-test('every kind has a theme token defined in both palettes', function () {
-    foreach (AgentContextFileKind::cases() as $kind) {
-        // text-gh-kind-cursor -> kind-cursor, the config/theme.php key backing it.
-        $token = str_replace('text-gh-', '', $kind->badgeColorClass());
+test('every kind has a theme token in both palettes and a CSS variable', function (AgentContextFileKind $kind) {
+    $token = Str::after($kind->badgeColorClass(), 'text-gh-');
 
-        expect(config('theme.colors.light'))->toHaveKey($token);
-        expect(config('theme.colors.dark'))->toHaveKey($token);
-    }
-});
+    expect(config('theme.colors.light'))->toHaveKey($token)
+        ->and(config('theme.colors.dark'))->toHaveKey($token)
+        // Without the @theme entry Tailwind never emits the utility and the
+        // badge silently falls back to inherited color.
+        ->and(File::get(resource_path('css/app.css')))->toContain("--color-gh-{$token}:");
+})->with(AgentContextFileKind::cases());
 
 test('git pathspecs cover every classified path', function () {
     $repo = $this->createTempDirectory('rfa_ctxspec_');
@@ -77,13 +79,10 @@ test('git pathspecs cover every classified path', function () {
     }
     $this->commitTestRepo($repo, 'init');
 
-    $process = new Symfony\Component\Process\Process(
-        ['git', 'ls-files', '-z', ...AgentContextFileKind::gitPathspecs()],
-        $repo,
-    );
-    $process->mustRun();
+    $output = app(GitProcessService::class)
+        ->run($repo, ['ls-files', '-z', ...AgentContextFileKind::gitPathspecs()]);
 
-    $matched = array_filter(explode("\0", $process->getOutput()));
+    $matched = array_filter(explode("\0", $output));
 
-    expect(array_values(array_diff($paths, $matched)))->toBe([]);
+    expect(array_diff($paths, $matched))->toBeEmpty();
 });

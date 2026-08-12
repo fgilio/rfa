@@ -159,7 +159,7 @@ test('context-file kind swaps intro, outro and clipboard prose', function () {
 
     $md = File::get($result['md']);
     expect($md)->toContain('# Agent Context Feedback');
-    expect($md)->toContain('Improve the CLAUDE.md');
+    expect($md)->toContain('Improve the agent context files');
     expect($md)->toContain('## `CLAUDE.md`');
     expect($md)->toContain('tighten this');
 

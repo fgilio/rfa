@@ -26,10 +26,9 @@ use Livewire\Component;
 use function Illuminate\Support\defer;
 
 /**
- * Context page: inventory + line-level review of every agent-instruction file
- * in the current repo — CLAUDE.md / AGENTS.md plus the per-tool rule files
- * listed in AgentContextFileKind (Cursor, Copilot, Windsurf, Cline,
- * `.claude/`). Sibling to ⚡review-page; intentionally does not share
+ * Context page: inventory + line-level review of every agent context file in
+ * the current repo — see AgentContextFileKind for the conventions recognised.
+ * Sibling to ⚡review-page; intentionally does not share
  * state, comment writes, or sidebar primitives with it (review-page has known
  * debt around comment writes — see CLAUDE.md).
  *
@@ -560,12 +559,12 @@ new #[Layout('layouts.app')] class extends Component
 
         @if(empty($contextFiles))
             <x-empty-state icon="document-magnifying-glass">
-                <x-slot:heading>No context files found</x-slot:heading>
+                <x-slot:heading>No agent context found</x-slot:heading>
                 <p class="text-sm text-gh-muted leading-relaxed">
-                    rfa scans for agent instruction files across this repo —
+                    rfa scans for agent context files across this repo —
                     <code class="font-mono">CLAUDE.md</code>, <code class="font-mono">AGENTS.md</code>,
-                    and the rule files Cursor, Copilot, Windsurf and Cline keep in their
-                    own directories. Drop one in the repo root or any subdirectory and re-scan.
+                    and the rule files other agent tools keep in their own dot-directories.
+                    Drop one in the repo root or any subdirectory and re-scan.
                 </p>
             </x-empty-state>
         @else

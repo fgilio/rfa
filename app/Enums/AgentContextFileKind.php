@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace App\Enums;
 
 /**
- * The agent-instruction conventions the Context page knows how to surface.
+ * The agent context file conventions the Context page knows how to surface.
  *
  * CLAUDE.md / AGENTS.md are matched by basename anywhere in the tree; every
  * other tool keeps arbitrarily-named rule files inside a well-known dot
- * directory, so matching is path-based. `RULES` is the single source of truth
- * for both classification and the git pathspecs used to shortlist candidates.
+ * directory, so matching is path-based.
  */
 enum AgentContextFileKind: string
 {
@@ -29,8 +28,7 @@ enum AgentContextFileKind: string
      * - both — that exact filename anywhere below that directory.
      *
      * Order matters only in that filename-only rules come first: a CLAUDE.md
-     * inside `.cursor/rules/` is still a CLAUDE.md. Both `fromPath()` and
-     * `gitPathspecs()` are derived from this table, so a new tool is one row.
+     * inside `.cursor/rules/` is still a CLAUDE.md.
      *
      * @var array<int, array{0: self, 1: ?string, 2: ?string}>
      */
@@ -87,13 +85,13 @@ enum AgentContextFileKind: string
     {
         $haystack = '/'.$relPath;
 
-        // `.mdc` is Cursor's (and Windsurf's) rule-file extension.
-        $isMarkdown = str_ends_with($relPath, '.md') || str_ends_with($relPath, '.mdc');
+        // `.mdc` is Cursor's rule-file extension.
+        $hasRuleExtension = str_ends_with($relPath, '.md') || str_ends_with($relPath, '.mdc');
 
-        // Every rule needs either a markdown extension or a dot-prefixed path
-        // segment, so ordinary source files bail before the rule scan. This is
-        // the hot path: fromPath() runs for every entry of the working-tree walk.
-        if (! $isMarkdown && ! str_contains($haystack, '/.')) {
+        // Bail on ordinary source files before the rule scan: every rule needs
+        // a rule extension or a dot-prefixed segment. Hot path — fromPath()
+        // runs for every entry of the working-tree walk.
+        if (! $hasRuleExtension && ! str_contains($haystack, '/.')) {
             return null;
         }
 
@@ -104,7 +102,7 @@ enum AgentContextFileKind: string
                 continue;
             }
 
-            if ($filename === null && ! $isMarkdown) {
+            if ($filename === null && ! $hasRuleExtension) {
                 continue;
             }
 
@@ -118,10 +116,17 @@ enum AgentContextFileKind: string
         return null;
     }
 
-    /** Human-readable name, used as the badge tooltip in the context tree. */
+    /** Human-readable name of the convention this file belongs to. */
     public function label(): string
     {
-        return $this->name;
+        return match ($this) {
+            self::Claude => 'Claude Code',
+            self::Agents => 'AGENTS.md',
+            self::Cursor => 'Cursor',
+            self::Copilot => 'GitHub Copilot',
+            self::Windsurf => 'Windsurf',
+            self::Cline => 'Cline',
+        };
     }
 
     /** Single-letter sigil rendered in the context-tree sidebar. */
