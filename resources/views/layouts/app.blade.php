@@ -56,6 +56,7 @@
 
         :root {
             --header-h: 56px;
+            --feedback-bar-h: 128px;
             @foreach($lightColors as $key => $value)
             --gh-{{ $key }}: {{ $value }};
             @endforeach

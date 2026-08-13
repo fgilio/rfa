@@ -8,17 +8,9 @@ use App\DTOs\AgentContextFile;
 use App\Enums\AgentContextFileKind;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\File;
-use Symfony\Component\Process\Process;
 
 class AgentContextFileScannerService
 {
-    /**
-     * Cap recursion depth when walking for untracked candidates, mirroring
-     * ExternalFilesService::MAX_DEPTH. Without it a pathologically deep tree
-     * could exhaust the PHP recursion stack on the synchronous Context-page scan.
-     */
-    private const MAX_SCAN_DEPTH = 8;
-
     public function __construct(
         private readonly GitProcessService $git,
         private readonly GitDiffService $gitDiffService,
@@ -28,10 +20,9 @@ class AgentContextFileScannerService
      * Discover every agent context file inside $repoPath, ordered by path.
      * See AgentContextFileKind for the conventions recognised.
      *
-     * Tracked entries come from `git ls-files`; untracked candidates are walked
-     * from disk and filtered through `git check-ignore` in a single batch. Skip
-     * dirs come from config('rfa.context_scan_skip_dirs') and may be augmented
-     * via $extraSkipDirs (used by tests).
+     * Tracked and untracked entries come from `git ls-files`. Untracked entries
+     * use Git's standard excludes, and configured skip directories are excluded
+     * from discovery. Additional skip directories may be supplied per scan.
      *
      * @param  array<int, string>  $extraSkipDirs
      * @return array<int, AgentContextFile>
@@ -44,7 +35,7 @@ class AgentContextFileScannerService
         )));
 
         $tracked = $this->discoverTracked($repoPath, $skipDirs);
-        $untracked = $this->discoverUntracked($repoPath, $skipDirs, array_keys($tracked));
+        $untracked = $this->discoverUntracked($repoPath, $skipDirs);
 
         // Symlink dedupe is keyed by `realpath()` of the absolute path. We
         // resolve both symlinked AND non-symlink entries so the keys agree on
@@ -55,7 +46,7 @@ class AgentContextFileScannerService
         // entry: prefer the non-symlink, then the shorter path. That way the
         // tree shows the actual file rather than its mirror.
         $byRealpath = [];
-        foreach ([...array_values($tracked), ...$untracked] as $file) {
+        foreach ([...$tracked, ...$untracked] as $file) {
             $key = realpath($file->absolutePath) ?: $file->absolutePath;
             $existing = $byRealpath[$key] ?? null;
 
@@ -72,7 +63,7 @@ class AgentContextFileScannerService
 
     /**
      * @param  array<int, string>  $skipDirs
-     * @return array<string, AgentContextFile> keyed by repo-relative path
+     * @return array<int, AgentContextFile>
      */
     private function discoverTracked(string $repoPath, array $skipDirs): array
     {
@@ -108,7 +99,7 @@ class AgentContextFileScannerService
             $symlinkTarget = $isSymlink ? readlink($absolute) : null;
             [$createdAt, $lastEditedAt] = $datesByPath[$relPath] ?? [null, null];
 
-            $entries[$relPath] = new AgentContextFile(
+            $entries[] = new AgentContextFile(
                 path: $relPath,
                 absolutePath: $absolute,
                 kind: $kind,
@@ -125,32 +116,37 @@ class AgentContextFileScannerService
     }
 
     /**
-     * Walk the filesystem for agent-context files outside the tracked set,
-     * batch-filter via `git check-ignore --stdin`, return whatever survives.
+     * Discover untracked agent-context files while letting Git exclude ignored
+     * directories before it traverses them.
      *
      * @param  array<int, string>  $skipDirs
-     * @param  array<int, string>  $trackedPaths
      * @return array<int, AgentContextFile>
      */
-    private function discoverUntracked(string $repoPath, array $skipDirs, array $trackedPaths): array
+    private function discoverUntracked(string $repoPath, array $skipDirs): array
     {
-        $candidates = [];
-        $trackedSet = array_flip($trackedPaths);
+        $output = rescue(
+            fn (): string => $this->git->run($repoPath, [
+                'ls-files', '--others', '--exclude-standard', '-z',
+                '--', ...AgentContextFileKind::gitPathspecs(),
+                ...$this->gitExclusionPathspecs($skipDirs),
+            ]),
+            rescue: null,
+            report: false,
+        );
 
-        $this->walkForCandidates($repoPath, '', $skipDirs, $trackedSet, $candidates);
-
-        if ($candidates === []) {
+        if ($output === null) {
             return [];
         }
 
-        $ignored = $this->batchCheckIgnore($repoPath, array_keys($candidates));
+        /** @var array<string, AgentContextFileKind> $kindsByPath */
+        $kindsByPath = collect($this->splitNullDelimited($output))
+            ->reject(fn (string $path): bool => $this->isSkipped($path, $skipDirs))
+            ->mapWithKeys(fn (string $path): array => [$path => AgentContextFileKind::fromPath($path)])
+            ->whereNotNull()
+            ->all();
 
         $entries = [];
-        foreach ($candidates as $relPath => $kind) {
-            if (isset($ignored[$relPath])) {
-                continue;
-            }
-
+        foreach ($kindsByPath as $relPath => $kind) {
             $absolute = $repoPath.'/'.$relPath;
             $isSymlink = is_link($absolute);
             $symlinkTarget = $isSymlink ? readlink($absolute) : null;
@@ -170,102 +166,6 @@ class AgentContextFileScannerService
         }
 
         return $entries;
-    }
-
-    /**
-     * @param  array<int, string>  $skipDirs
-     * @param  array<string, int>  $trackedSet  Flipped paths for O(1) skip lookup.
-     * @param  array<string, AgentContextFileKind>  $candidates  Mutated in place.
-     */
-    private function walkForCandidates(string $repoPath, string $relDir, array $skipDirs, array $trackedSet, array &$candidates, int $depth = 0): void
-    {
-        if ($depth > self::MAX_SCAN_DEPTH) {
-            return;
-        }
-
-        $absoluteDir = $relDir === '' ? $repoPath : $repoPath.'/'.$relDir;
-
-        if (! File::isDirectory($absoluteDir)) {
-            return;
-        }
-
-        // is_link before is_dir avoids descending into symlinked dirs (which
-        // can loop or escape the repo). We still match symlinked files below.
-        if ($relDir !== '' && is_link($absoluteDir)) {
-            return;
-        }
-
-        $handle = @opendir($absoluteDir);
-        if ($handle === false) {
-            return;
-        }
-
-        try {
-            while (($entry = readdir($handle)) !== false) {
-                if ($entry === '.' || $entry === '..') {
-                    continue;
-                }
-
-                $relPath = $relDir === '' ? $entry : $relDir.'/'.$entry;
-
-                if ($this->isSkipped($relPath, $skipDirs)) {
-                    continue;
-                }
-
-                $absolutePath = $absoluteDir.'/'.$entry;
-
-                if (is_dir($absolutePath) && ! is_link($absolutePath)) {
-                    $this->walkForCandidates($repoPath, $relPath, $skipDirs, $trackedSet, $candidates, $depth + 1);
-
-                    continue;
-                }
-
-                if (isset($trackedSet[$relPath])) {
-                    continue;
-                }
-
-                $kind = AgentContextFileKind::fromPath($relPath);
-                if ($kind === null) {
-                    continue;
-                }
-
-                $candidates[$relPath] = $kind;
-            }
-        } finally {
-            closedir($handle);
-        }
-    }
-
-    /**
-     * One shell-out for the whole list. Returns a set of repo-relative paths
-     * that ARE ignored (so callers can skip them).
-     *
-     * @param  array<int, string>  $candidates
-     * @return array<string, true>
-     */
-    private function batchCheckIgnore(string $repoPath, array $candidates): array
-    {
-        $process = new Process([
-            'git', '-c', 'core.quotepath=false', '-C', $repoPath,
-            'check-ignore', '--stdin', '-z',
-        ]);
-        $process->setTimeout(30);
-        $process->setInput(implode("\0", $candidates));
-        $process->run();
-
-        // git check-ignore exits 0 when at least one path is ignored, 1 when
-        // none are, 128 on hard failure. Treat 0 and 1 as success.
-        $exit = $process->getExitCode();
-        if ($exit !== 0 && $exit !== 1) {
-            return [];
-        }
-
-        $ignored = [];
-        foreach ($this->splitNullDelimited($process->getOutput()) as $path) {
-            $ignored[$path] = true;
-        }
-
-        return $ignored;
     }
 
     /**
@@ -379,6 +279,19 @@ class AgentContextFileScannerService
         }
 
         return false;
+    }
+
+    /**
+     * @param  array<int, string>  $skipDirs
+     * @return array<int, string>
+     */
+    private function gitExclusionPathspecs(array $skipDirs): array
+    {
+        return collect($skipDirs)
+            ->filter(fn (string $directory): bool => $directory !== '')
+            ->map(fn (string $directory): string => ':(top,exclude,literal)'.$directory)
+            ->values()
+            ->all();
     }
 
     /** @return array<int, string> */

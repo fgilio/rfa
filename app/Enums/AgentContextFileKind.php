@@ -90,9 +90,7 @@ enum AgentContextFileKind: string
         // `.mdc` is Cursor's rule-file extension.
         $hasRuleExtension = str_ends_with($relPath, '.md') || str_ends_with($relPath, '.mdc');
 
-        // Bail on ordinary source files before the rule scan: every rule needs
-        // a rule extension or a dot-prefixed segment. Hot path — fromPath()
-        // runs for every entry of the working-tree walk.
+        // Every rule needs a rule extension or a dot-prefixed segment.
         if (! $hasRuleExtension && ! str_contains($haystack, '/.')) {
             return null;
         }

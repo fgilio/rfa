@@ -187,3 +187,55 @@ test('sidebar width set on review page persists on context page', function () {
     $contextWidth = $page->page()->evaluate("document.querySelector('aside').offsetWidth");
     expect(abs($contextWidth - $reviewWidth))->toBeLessThan(5);
 });
+
+test('sidebar stays above a growing fixed feedback bar', function (string $suffix) {
+    $page = $this->visitAndLoad($this->projectUrl().$suffix);
+
+    $page->page()->evaluate(<<<'JS'
+        (() => {
+            const overflowFixture = document.createElement('div');
+            overflowFixture.style.height = '2000px';
+            document.querySelector('aside').append(overflowFixture);
+        })()
+    JS);
+
+    $page->page()->waitForFunction(
+        "document.querySelector('aside').scrollHeight > document.querySelector('aside').clientHeight"
+    );
+
+    $initialFeedbackBarHeight = $page->page()->evaluate(
+        "document.querySelector('[data-testid=feedback-submit-bar]').offsetHeight"
+    );
+
+    $page->page()->evaluate(<<<'JS'
+        (() => {
+            const textarea = document.querySelector('[data-testid=feedback-submit-bar] textarea');
+
+            textarea.value = Array.from({ length: 12 }, (_, index) => `Feedback line ${index + 1}`).join('\n');
+            textarea.dispatchEvent(new InputEvent('input', { bubbles: true }));
+        })()
+    JS);
+
+    $page->page()->waitForFunction(
+        "document.querySelector('[data-testid=feedback-submit-bar]').offsetHeight > initialHeight",
+        ['initialHeight' => $initialFeedbackBarHeight],
+    );
+
+    $page->page()->waitForFunction(
+        "document.querySelector('aside').getBoundingClientRect().bottom <= document.querySelector('[data-testid=feedback-submit-bar]').getBoundingClientRect().top"
+    );
+
+    $positions = $page->page()->evaluate(<<<'JS'
+        (() => {
+            const sidebar = document.querySelector('aside');
+            const feedbackBar = document.querySelector('[data-testid="feedback-submit-bar"]');
+
+            return {
+                sidebarBottom: sidebar.getBoundingClientRect().bottom,
+                feedbackTop: feedbackBar.getBoundingClientRect().top,
+            };
+        })()
+    JS);
+
+    expect($positions['sidebarBottom'])->toBeLessThanOrEqual($positions['feedbackTop']);
+})->with('shell pages');

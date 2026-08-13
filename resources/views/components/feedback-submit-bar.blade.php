@@ -27,7 +27,26 @@
     pages.
 --}}
 
-<div class="fixed bottom-0 left-0 right-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-t border-gh-border">
+<div
+    data-feedback-submit-bar
+    data-testid="feedback-submit-bar"
+    class="fixed bottom-0 left-0 right-0 z-50 bg-gh-bg/80 backdrop-blur-sm border-t border-gh-border"
+    x-data="{
+        feedbackBarObserver: null,
+        updateFeedbackBarHeight() {
+            document.documentElement.style.setProperty('--feedback-bar-h', $el.offsetHeight + 'px');
+        },
+        init() {
+            this.updateFeedbackBarHeight();
+            this.feedbackBarObserver = new ResizeObserver(() => this.updateFeedbackBarHeight());
+            this.feedbackBarObserver.observe($el);
+        },
+        destroy() {
+            this.feedbackBarObserver?.disconnect();
+        },
+    }"
+    @input="$nextTick(() => updateFeedbackBarHeight())"
+>
     @if($submitted)
         <div class="px-5 py-3.5 flex items-center justify-between gap-4">
             <div class="flex items-center gap-3 min-w-0">
