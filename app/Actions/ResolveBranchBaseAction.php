@@ -81,7 +81,6 @@ final readonly class ResolveBranchBaseAction
         } catch (GitCommandException $e) {
             Log::warning('git.commit_range.list_failed', [
                 'reason' => 'commit_range_list_failed',
-                'repo' => $repoPath,
                 'from' => $from,
                 'to' => $to,
                 'exit_code' => $e->exitCode,

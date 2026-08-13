@@ -8,7 +8,7 @@
  * the mechanically checkable rules: debug-free production code, static dotted
  * event names, payload-free info events, stable `reason` codes, `rfa.`-namespaced
  * context keys, the approved `rfa.outcome` vocabulary, banned absolute-path keys,
- * and the privacy ban on raw exception text in payloads.
+ * repository roots in warning payloads, and raw exception text in payloads.
  *
  * Semantic rules — logging ownership, context richness, and deeper privacy
  * judgment — still belong in review because they require call-chain and domain
@@ -354,6 +354,25 @@ test('warning and error logs include a stable reason payload', function () {
         $payload = $arguments[1] ?? '';
 
         if (! preg_match('/[\'"]reason[\'"]\s*=>/', $payload)) {
+            $violations[] = "{$call['path']}:{$call['line']} {$call['source']}";
+        }
+    }
+
+    expect($violations)->toBeEmpty();
+});
+
+test('warning and error logs do not expose repository root paths', function () {
+    $violations = [];
+
+    foreach (loggingConventionCalls() as $call) {
+        if (! in_array($call['level'], ['warning', 'error', 'critical'], true)) {
+            continue;
+        }
+
+        $arguments = loggingConventionArguments($call['source']);
+        $payload = $arguments[1] ?? '';
+
+        if (preg_match('/=>\s*\$repoPath\b/', $payload)) {
             $violations[] = "{$call['path']}:{$call['line']} {$call['source']}";
         }
     }

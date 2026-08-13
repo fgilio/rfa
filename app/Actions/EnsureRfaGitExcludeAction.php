@@ -51,7 +51,6 @@ final readonly class EnsureRfaGitExcludeAction
         } catch (\Throwable $e) {
             Log::warning('git.exclude.append_failed', [
                 'reason' => 'exclude_append_failed',
-                'repo' => $repoPath,
                 'error_class' => $e::class,
             ]);
         }
@@ -75,7 +74,6 @@ final readonly class EnsureRfaGitExcludeAction
         } catch (\Throwable $e) {
             Log::warning('git.exclude.resolve_failed', [
                 'reason' => 'exclude_path_resolve_failed',
-                'repo' => $repoPath,
                 'error_class' => $e::class,
             ]);
 

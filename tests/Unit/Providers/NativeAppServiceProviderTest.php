@@ -4,7 +4,12 @@ use App\Console\Benchmark\BenchmarkIsolation;
 use App\Providers\NativeAppServiceProvider;
 use App\Support\Shortcuts;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Native\Desktop\Events\AutoUpdater\UpdateNotAvailable;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -22,6 +27,62 @@ beforeEach(function () {
     ])->each(function (string $property) use ($provider): void {
         $provider->getProperty($property)->setValue(false);
     });
+});
+
+function updateNotAvailableListener(): Closure
+{
+    Event::forget(UpdateNotAvailable::class);
+
+    $provider = new ReflectionClass(NativeAppServiceProvider::class);
+    $registerNativeEventListeners = $provider->getMethod('registerNativeEventListeners');
+    $registerNativeEventListeners->invoke(new NativeAppServiceProvider);
+
+    return collect(Event::getFacadeRoot()->getListeners(UpdateNotAvailable::class))->sole();
+}
+
+function updateNotAvailableEvent(): UpdateNotAvailable
+{
+    return new UpdateNotAvailable(
+        version: '1.2.3',
+        files: [],
+        releaseDate: '2026-08-13',
+    );
+}
+
+test('no-update listener emits a canonical terminal event', function () {
+    Http::fake();
+    Log::spy();
+
+    $listener = updateNotAvailableListener();
+    $event = updateNotAvailableEvent();
+
+    $listener(UpdateNotAvailable::class, [$event]);
+
+    Log::shouldHaveReceived('info')->once()->with('updater.current');
+    expect(Cache::get('native-update-state'))->toMatchArray(['status' => 'up-to-date'])
+        ->and(Context::get('rfa.update_version'))->toBe('1.2.3')
+        ->and(Context::get('rfa.outcome'))->toBe('completed')
+        ->and(Context::get('rfa.duration_ms'))->toBeInt();
+});
+
+test('no-update listener emits an error outcome when handling fails', function () {
+    Log::spy();
+    Cache::shouldReceive('put')
+        ->once()
+        ->andThrow(new RuntimeException('Cache write failed.'));
+
+    $listener = updateNotAvailableListener();
+    $event = updateNotAvailableEvent();
+
+    expect(fn () => $listener(UpdateNotAvailable::class, [$event]))
+        ->toThrow(RuntimeException::class, 'Cache write failed.');
+
+    Log::shouldHaveReceived('info')->once()->with('updater.current');
+    expect(Context::get('rfa.update_version'))->toBe('1.2.3')
+        ->and(Context::get('rfa.outcome'))->toBe('error')
+        ->and(Context::get('rfa.reason'))->toBe('update_not_available_handling_failed')
+        ->and(Context::get('rfa.error_class'))->toBe(RuntimeException::class)
+        ->and(Context::get('rfa.duration_ms'))->toBeInt();
 });
 
 test('dev compiled view cleanup does not clear persisted updater state', function () {

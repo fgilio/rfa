@@ -25,7 +25,6 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.excludes_file.resolve_failed', [
                 'reason' => 'global_excludes_file_resolve_failed',
-                'repo' => $repoPath,
                 'exit_code' => $e->exitCode,
             ]);
 
@@ -195,7 +194,6 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.file_content.read_failed', [
                 'reason' => 'file_content_read_failed',
-                'repo' => $repoPath,
                 'ref' => $ref,
                 'path' => $path,
                 'exit_code' => $e->exitCode,
@@ -218,7 +216,6 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.ref.resolve_failed', [
                 'reason' => 'git_ref_resolve_failed',
-                'repo' => $repoPath,
                 'ref' => $ref,
                 'exit_code' => $e->exitCode,
             ]);
@@ -246,7 +243,6 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.commit_parents.read_failed', [
                 'reason' => 'commit_parents_read_failed',
-                'repo' => $repoPath,
                 'hash' => $hash,
                 'exit_code' => $e->exitCode,
             ]);
@@ -270,7 +266,6 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.root_commit.check_failed', [
                 'reason' => 'root_commit_check_failed',
-                'repo' => $repoPath,
                 'ref' => $ref,
                 'exit_code' => $e->exitCode,
             ]);
@@ -315,7 +310,6 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.child_commit.read_failed', [
                 'reason' => 'child_commit_read_failed',
-                'repo' => $repoPath,
                 'hash' => $hash,
                 'exit_code' => $e->exitCode,
             ]);
@@ -389,7 +383,6 @@ class GitMetadataService
         } catch (GitCommandException $e) {
             Log::warning('git.commit_log.read_failed', [
                 'reason' => 'commit_log_read_failed',
-                'repo' => $repoPath,
                 'exit_code' => $e->exitCode,
             ]);
 
