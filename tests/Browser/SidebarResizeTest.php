@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Support\Facades\File;
 use Pest\Browser\Api\PendingAwaitablePage;
 
 beforeEach(function () {
@@ -189,18 +188,41 @@ test('sidebar width set on review page persists on context page', function () {
     expect(abs($contextWidth - $reviewWidth))->toBeLessThan(5);
 });
 
-test('sidebar content clears the fixed feedback bar when fully scrolled', function (string $suffix) {
-    collect(range(1, 20))->each(function (int $index): void {
-        $directory = $this->testRepoPath."/context-{$index}";
+test('sidebar stays above a growing fixed feedback bar', function (string $suffix) {
+    $page = $this->visitAndLoad($this->projectUrl().$suffix);
 
-        File::ensureDirectoryExists($directory);
-        File::put($directory.'/CLAUDE.md', "# Context {$index}\n");
-    });
-
-    $page = $this->visit($this->projectUrl().$suffix);
+    $page->page()->evaluate(<<<'JS'
+        (() => {
+            const overflowFixture = document.createElement('div');
+            overflowFixture.style.height = '2000px';
+            document.querySelector('aside').append(overflowFixture);
+        })()
+    JS);
 
     $page->page()->waitForFunction(
         "document.querySelector('aside').scrollHeight > document.querySelector('aside').clientHeight"
+    );
+
+    $initialFeedbackBarHeight = $page->page()->evaluate(
+        "document.querySelector('[data-testid=feedback-submit-bar]').offsetHeight"
+    );
+
+    $page->page()->evaluate(<<<'JS'
+        (() => {
+            const textarea = document.querySelector('[data-testid=feedback-submit-bar] textarea');
+
+            textarea.value = Array.from({ length: 12 }, (_, index) => `Feedback line ${index + 1}`).join('\n');
+            textarea.dispatchEvent(new InputEvent('input', { bubbles: true }));
+        })()
+    JS);
+
+    $page->page()->waitForFunction(
+        "document.querySelector('[data-testid=feedback-submit-bar]').offsetHeight > initialHeight",
+        ['initialHeight' => $initialFeedbackBarHeight],
+    );
+
+    $page->page()->waitForFunction(
+        "document.querySelector('aside').getBoundingClientRect().bottom <= document.querySelector('[data-testid=feedback-submit-bar]').getBoundingClientRect().top"
     );
 
     $positions = $page->page()->evaluate(<<<'JS'
@@ -208,14 +230,12 @@ test('sidebar content clears the fixed feedback bar when fully scrolled', functi
             const sidebar = document.querySelector('aside');
             const feedbackBar = document.querySelector('[data-testid="feedback-submit-bar"]');
 
-            sidebar.scrollTop = sidebar.scrollHeight;
-
             return {
-                contentBottom: sidebar.firstElementChild.getBoundingClientRect().bottom,
+                sidebarBottom: sidebar.getBoundingClientRect().bottom,
                 feedbackTop: feedbackBar.getBoundingClientRect().top,
             };
         })()
     JS);
 
-    expect($positions['contentBottom'])->toBeLessThanOrEqual($positions['feedbackTop']);
+    expect($positions['sidebarBottom'])->toBeLessThanOrEqual($positions['feedbackTop']);
 })->with('shell pages');

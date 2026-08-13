@@ -547,7 +547,7 @@ new #[Layout('layouts.app')] class extends Component
         </div>
     </x-page-header>
 
-    <x-resizable-sidebar-shell class="flex-1" footer-clearance-class="pb-32">
+    <x-resizable-sidebar-shell class="flex-1">
         <x-slot:sidebar>
             <div class="p-4">
                 <livewire:context-tree

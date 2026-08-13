@@ -1,9 +1,8 @@
-@props(['footerClearanceClass' => ''])
-
 {{-- Width persists across pages via Alpine.store('settings').sidebarWidth. --}}
 
 <div
     {{ $attributes->merge(['class' => 'flex']) }}
+    :style="{ '--sidebar-w': $store.settings.sidebarWidth + 'px' }"
     x-data="{
         resizing: false,
         startResize($event) {
@@ -37,6 +36,7 @@
                 aside.style.left = '';
                 aside.style.zIndex = '';
                 aside.style.willChange = '';
+                aside.style.width = 'var(--sidebar-w, 288px)';
                 main.style.marginLeft = '';
                 this.resizing = false;
                 document.body.classList.remove('cursor-col-resize', 'select-none');
@@ -57,8 +57,8 @@
     }"
 >
     <aside
-        class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-bg hidden lg:block {{ $footerClearanceClass }}"
-        :style="{ width: $store.settings.sidebarWidth + 'px' }"
+        class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-bg hidden lg:block"
+        style="width: var(--sidebar-w, 288px); height: calc(100vh - var(--header-h) - var(--feedback-bar-h));"
         x-ref="sidebar"
     >
         {{ $sidebar }}
@@ -71,7 +71,7 @@
         aria-label="Resize sidebar"
         title="Drag to resize · double-click to reset"
         class="group/resize hidden lg:flex sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-0 cursor-col-resize items-center justify-center z-10 shrink-0"
-        style="padding: 0 6px; margin: 0 -6px;"
+        style="height: calc(100vh - var(--header-h) - var(--feedback-bar-h)); padding: 0 6px; margin: 0 -6px;"
         @mousedown="startResize($event)"
         @dblclick="$store.settings.sidebarWidth = 288"
     >
@@ -84,9 +84,9 @@
     </div>
 
     <main
-        class="flex-1 min-w-0 {{ $footerClearanceClass }}"
+        class="flex-1 min-w-0"
         :class="resizing && 'pointer-events-none'"
-        style="contain: inline-size layout style"
+        style="contain: inline-size layout style; padding-bottom: var(--feedback-bar-h)"
     >
         {{ $slot }}
     </main>
