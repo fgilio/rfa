@@ -12,6 +12,7 @@ final class GrammarMap
     private const FILENAME_MAP = [
         '.babelrc' => Grammar::Json,
         '.bashrc' => Grammar::Shellscript,
+        '.clinerules' => Grammar::Markdown,
         '.cursorrules' => Grammar::Markdown,
         '.gitmodules' => Grammar::Ini,
         '.htaccess' => Grammar::Apache,
@@ -19,6 +20,7 @@ final class GrammarMap
         '.prettierrc' => Grammar::Json,
         '.shiftrc' => Grammar::Ini,
         '.watchmanconfig' => Grammar::Json,
+        '.windsurfrules' => Grammar::Markdown,
         'dockerfile' => Grammar::Docker,
         'dockerfile.gs-build' => Grammar::Docker,
         'ios-fonts.template' => Grammar::Xml,

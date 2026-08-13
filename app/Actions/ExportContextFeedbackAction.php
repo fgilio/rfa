@@ -14,7 +14,7 @@ use App\Services\CommentExporter;
  * Export context-file comments to .rfa/ as a Claude-ready prompt and stamp
  * each row as submitted. Sibling to ExportReviewAction, but uses the
  * "context-file" exporter kind so the resulting markdown carries the
- * "improve this CLAUDE.md" intro instead of the code-review intro.
+ * "improve the agent context files" intro instead of the code-review intro.
  */
 final readonly class ExportContextFeedbackAction
 {

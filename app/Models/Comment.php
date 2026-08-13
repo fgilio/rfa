@@ -68,7 +68,7 @@ class Comment extends Model
 
     /**
      * Scope a query to comments that originate on the Context page (the
-     * CLAUDE.md / AGENTS.md inventory).
+     * agent context file inventory).
      *
      * @param  Builder<self>  $query
      * @return Builder<self>

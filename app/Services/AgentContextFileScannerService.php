@@ -12,8 +12,6 @@ use Symfony\Component\Process\Process;
 
 class AgentContextFileScannerService
 {
-    private const BASENAMES = ['CLAUDE.md', 'AGENTS.md'];
-
     /**
      * Cap recursion depth when walking for untracked candidates, mirroring
      * ExternalFilesService::MAX_DEPTH. Without it a pathologically deep tree
@@ -27,7 +25,8 @@ class AgentContextFileScannerService
     ) {}
 
     /**
-     * Discover every CLAUDE.md / AGENTS.md inside $repoPath, ordered by path.
+     * Discover every agent context file inside $repoPath, ordered by path.
+     * See AgentContextFileKind for the conventions recognised.
      *
      * Tracked entries come from `git ls-files`; untracked candidates are walked
      * from disk and filtered through `git check-ignore` in a single batch. Skip
@@ -77,13 +76,7 @@ class AgentContextFileScannerService
      */
     private function discoverTracked(string $repoPath, array $skipDirs): array
     {
-        $args = [
-            'ls-files', '-z',
-            ':(glob)**/CLAUDE.md',
-            ':(glob)**/AGENTS.md',
-            'CLAUDE.md',
-            'AGENTS.md',
-        ];
+        $args = ['ls-files', '-z', ...AgentContextFileKind::gitPathspecs()];
 
         $output = rescue(
             fn (): string => $this->git->run($repoPath, $args),
@@ -95,20 +88,21 @@ class AgentContextFileScannerService
             return [];
         }
 
-        $relevantPaths = collect($this->splitNullDelimited($output))
+        /** @var array<string, AgentContextFileKind> $kindsByPath */
+        $kindsByPath = collect($this->splitNullDelimited($output))
             ->reject(fn (string $p): bool => $this->isSkipped($p, $skipDirs))
-            ->filter(fn (string $p): bool => AgentContextFileKind::fromBasename(basename($p)) !== null)
-            ->values()
+            ->mapWithKeys(fn (string $p): array => [$p => AgentContextFileKind::fromPath($p)])
+            ->whereNotNull()
             ->all();
 
-        if ($relevantPaths === []) {
+        if ($kindsByPath === []) {
             return [];
         }
 
-        $datesByPath = $this->resolveGitDates($repoPath, $relevantPaths);
+        $datesByPath = $this->resolveGitDates($repoPath, array_keys($kindsByPath));
 
         $entries = [];
-        foreach ($relevantPaths as $relPath) {
+        foreach ($kindsByPath as $relPath => $kind) {
             $absolute = $repoPath.'/'.$relPath;
             $isSymlink = is_link($absolute);
             $symlinkTarget = $isSymlink ? readlink($absolute) : null;
@@ -117,7 +111,7 @@ class AgentContextFileScannerService
             $entries[$relPath] = new AgentContextFile(
                 path: $relPath,
                 absolutePath: $absolute,
-                kind: AgentContextFileKind::fromBasename(basename($relPath)),
+                kind: $kind,
                 isTracked: true,
                 isSymlink: $isSymlink,
                 symlinkTarget: $symlinkTarget !== false ? $symlinkTarget : null,
@@ -131,7 +125,7 @@ class AgentContextFileScannerService
     }
 
     /**
-     * Walk the filesystem for CLAUDE.md / AGENTS.md outside the tracked set,
+     * Walk the filesystem for agent-context files outside the tracked set,
      * batch-filter via `git check-ignore --stdin`, return whatever survives.
      *
      * @param  array<int, string>  $skipDirs
@@ -149,16 +143,11 @@ class AgentContextFileScannerService
             return [];
         }
 
-        $ignored = $this->batchCheckIgnore($repoPath, $candidates);
+        $ignored = $this->batchCheckIgnore($repoPath, array_keys($candidates));
 
         $entries = [];
-        foreach ($candidates as $relPath) {
+        foreach ($candidates as $relPath => $kind) {
             if (isset($ignored[$relPath])) {
-                continue;
-            }
-
-            $kind = AgentContextFileKind::fromBasename(basename($relPath));
-            if ($kind === null) {
                 continue;
             }
 
@@ -186,7 +175,7 @@ class AgentContextFileScannerService
     /**
      * @param  array<int, string>  $skipDirs
      * @param  array<string, int>  $trackedSet  Flipped paths for O(1) skip lookup.
-     * @param  array<int, string>  $candidates  Mutated in place.
+     * @param  array<string, AgentContextFileKind>  $candidates  Mutated in place.
      */
     private function walkForCandidates(string $repoPath, string $relDir, array $skipDirs, array $trackedSet, array &$candidates, int $depth = 0): void
     {
@@ -231,15 +220,16 @@ class AgentContextFileScannerService
                     continue;
                 }
 
-                if (! in_array($entry, self::BASENAMES, true)) {
-                    continue;
-                }
-
                 if (isset($trackedSet[$relPath])) {
                     continue;
                 }
 
-                $candidates[] = $relPath;
+                $kind = AgentContextFileKind::fromPath($relPath);
+                if ($kind === null) {
+                    continue;
+                }
+
+                $candidates[$relPath] = $kind;
             }
         } finally {
             closedir($handle);
@@ -280,9 +270,9 @@ class AgentContextFileScannerService
 
     /**
      * Resolve created/last-edited dates for every tracked path in a single
-     * git log call. Drops `--follow` (which only accepts one pathspec) so we
-     * miss pre-rename history — acceptable trade for CLAUDE.md / AGENTS.md
-     * which rarely move, in exchange for one shell-out instead of N.
+     * git log call. Drops `--follow` (which only accepts one pathspec) in
+     * exchange for one shell-out instead of N: a rule file that was renamed
+     * shows dates from its current path only.
      *
      * @param  array<int, string>  $relPaths
      * @return array<string, array{0: ?CarbonImmutable, 1: ?CarbonImmutable}>

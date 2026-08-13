@@ -22,6 +22,10 @@
     --color-gh-attention: rgb(var(--gh-attention));
     --color-gh-kind-claude: rgb(var(--gh-kind-claude));
     --color-gh-kind-agents: rgb(var(--gh-kind-agents));
+    --color-gh-kind-cursor: rgb(var(--gh-kind-cursor));
+    --color-gh-kind-copilot: rgb(var(--gh-kind-copilot));
+    --color-gh-kind-windsurf: rgb(var(--gh-kind-windsurf));
+    --color-gh-kind-cline: rgb(var(--gh-kind-cline));
     --color-gh-add-bg: var(--gh-add-bg);
     --color-gh-add-line: var(--gh-add-line);
     --color-gh-del-bg: var(--gh-del-bg);

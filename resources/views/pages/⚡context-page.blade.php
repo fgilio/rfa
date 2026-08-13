@@ -26,8 +26,9 @@ use Livewire\Component;
 use function Illuminate\Support\defer;
 
 /**
- * Context page: inventory + line-level review of every CLAUDE.md / AGENTS.md
- * in the current repo. Sibling to ⚡review-page; intentionally does not share
+ * Context page: inventory + line-level review of every agent context file in
+ * the current repo — see AgentContextFileKind for the conventions recognised.
+ * Sibling to ⚡review-page; intentionally does not share
  * state, comment writes, or sidebar primitives with it (review-page has known
  * debt around comment writes — see CLAUDE.md).
  *
@@ -558,11 +559,13 @@ new #[Layout('layouts.app')] class extends Component
 
         @if(empty($contextFiles))
             <x-empty-state icon="document-magnifying-glass">
-                <x-slot:heading>No context files found</x-slot:heading>
+                <x-slot:heading>No agent context found</x-slot:heading>
                 <p class="text-sm text-gh-muted leading-relaxed">
-                    rfa scans for <code class="font-mono">CLAUDE.md</code> and
-                    <code class="font-mono">AGENTS.md</code> across this repo. Drop one in
-                    the repo root or any subdirectory and re-scan.
+                    rfa scans for agent context files across this repo —
+                    <code class="font-mono">CLAUDE.md</code>, <code class="font-mono">AGENTS.md</code>,
+                    and the rule files other agent tools keep in their own dot-directories.
+                    A <code class="font-mono">CLAUDE.md</code> or <code class="font-mono">AGENTS.md</code>
+                    is picked up anywhere in the tree — drop one in and re-scan.
                 </p>
             </x-empty-state>
         @else

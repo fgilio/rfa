@@ -37,10 +37,11 @@
             @click="scrollToContextFile('{{ $file['id'] }}')"
             class="w-full text-left flex items-center gap-2 py-1 rounded hover:bg-gh-border/30 transition-colors"
             style="padding-left: {{ $padLeft + 18 }}px; padding-right: 6px;"
+            aria-label="{{ $kind->label() }} · {{ $file['path'] }}"
             data-testid="context-tree-file-{{ $file['id'] }}"
         >
-            <span class="font-mono font-medium text-[10px] shrink-0 {{ $kind->badgeColorClass() }}">{{ $kind->badgeLabel() }}</span>
-            <span class="font-mono truncate text-gh-text flex-1 min-w-0">{{ $file['basename'] }}</span>
+            <span class="font-mono font-medium text-[10px] shrink-0 {{ $kind->badgeColorClass() }}" title="{{ $kind->label() }}">{{ $kind->badgeLabel() }}</span>
+            <span class="font-mono truncate text-gh-text flex-1 min-w-0" title="{{ $file['path'] }}">{{ $file['basename'] }}</span>
             @if(! $file['isTracked'])
                 <span class="font-mono text-[10px] text-gh-muted/70 shrink-0">untracked</span>
             @endif

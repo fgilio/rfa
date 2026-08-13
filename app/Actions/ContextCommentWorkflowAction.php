@@ -15,7 +15,7 @@ use App\Services\GitFileContentService;
 use Illuminate\Support\Str;
 
 /**
- * Comment workflow for the Context page (CLAUDE.md / AGENTS.md inventory).
+ * Comment workflow for the Context page (agent context file inventory).
  *
  * Lives parallel to review-page's inline comment writes. Uses the deterministic
  * sentinel `origin_ref = Comment::ORIGIN_CONTEXT` so context-
