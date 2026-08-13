@@ -2,6 +2,8 @@
 
 use App\Enums\AgentContextFileKind;
 use App\Services\AgentContextFileScannerService;
+use App\Services\GitDiffService;
+use App\Services\GitProcessService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -67,6 +69,35 @@ test('surfaces untracked but not gitignored files with isTracked=false', functio
     expect($byPath['AGENTS.md']->isTracked)->toBeFalse();
 });
 
+test('asks Git for untracked context files with standard excludes', function () {
+    File::put($this->repo.'/AGENTS.md', "untracked\n");
+
+    $git = Mockery::mock(GitProcessService::class);
+    $git->shouldReceive('run')
+        ->once()
+        ->with($this->repo, ['ls-files', '-z', ...AgentContextFileKind::gitPathspecs()])
+        ->andReturn('');
+    $git->shouldReceive('run')
+        ->once()
+        ->with($this->repo, [
+            'ls-files', '--others', '--exclude-standard', '-z',
+            '--', ...AgentContextFileKind::gitPathspecs(),
+        ])
+        ->andReturn("AGENTS.md\0");
+
+    $gitDiff = Mockery::mock(GitDiffService::class);
+    $gitDiff->shouldReceive('countLinesInFile')
+        ->once()
+        ->with($this->repo.'/AGENTS.md')
+        ->andReturn(1);
+
+    $files = (new AgentContextFileScannerService($git, $gitDiff))->scan($this->repo);
+
+    expect($files)->toHaveCount(1)
+        ->and($files[0]->path)->toBe('AGENTS.md')
+        ->and($files[0]->isTracked)->toBeFalse();
+});
+
 test('hides gitignored files', function () {
     File::put($this->repo.'/CLAUDE.md', "tracked\n");
     File::put($this->repo.'/.gitignore', "secrets/\n");
@@ -74,6 +105,20 @@ test('hides gitignored files', function () {
 
     File::makeDirectory($this->repo.'/secrets');
     File::put($this->repo.'/secrets/CLAUDE.md', "secret\n");
+
+    $files = ctxScan($this->repo, $this->scanner);
+
+    expect(collect($files)->pluck('path')->all())->toBe(['CLAUDE.md']);
+});
+
+test('does not surface context files from ignored worktrees', function () {
+    File::put($this->repo.'/CLAUDE.md', "tracked\n");
+    File::put($this->repo.'/.gitignore', ".worktrees/\n");
+    $this->commitTestRepo($this->repo, 'init');
+
+    File::makeDirectory($this->repo.'/.worktrees/feature/vendor/package', 0755, true);
+    File::put($this->repo.'/.worktrees/feature/AGENTS.md', "worktree rules\n");
+    File::put($this->repo.'/.worktrees/feature/vendor/package/CLAUDE.md', "vendor rules\n");
 
     $files = ctxScan($this->repo, $this->scanner);
 
