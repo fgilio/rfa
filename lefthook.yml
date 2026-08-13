@@ -11,19 +11,41 @@ pre-commit:
       run: ./vendor/bin/pint --test
     agents-symlinks:
       run: |
-        status=0
-        for claude in $(find . -name CLAUDE.md -not -path './.git/*' -not -path '*/vendor/*' -not -path '*/nativephp/*' -not -path '*/node_modules/*'); do
-          dir=$(dirname "$claude")
-          agents="$dir/AGENTS.md"
-          if [ ! -L "$agents" ]; then
-            echo "Missing AGENTS.md symlink for $claude"
-            status=1
-          elif [ "$(readlink "$agents")" != "CLAUDE.md" ]; then
-            echo "AGENTS.md in $dir is not a symlink to CLAUDE.md"
-            status=1
+        # Validates the index, not the working tree, so the tree being
+        # committed is what gets checked: a partially staged pair fails
+        # here even when the working tree looks complete. Untracked
+        # trees (vendor, nativephp, node_modules) never appear in the
+        # index, so no path exclusions are needed. Iteration splits on
+        # newlines only, so paths with spaces survive.
+        nl=$(printf '\nx'); IFS=${nl%x}
+        failed=0
+
+        # Every CLAUDE.md needs a sibling AGENTS.md symlink pointing exactly to CLAUDE.md.
+        for claude in $(git ls-files -- 'CLAUDE.md' '*/CLAUDE.md'); do
+          agents="${claude%CLAUDE.md}AGENTS.md"
+          if ! git ls-files --error-unmatch -- "$agents" >/dev/null 2>&1; then
+            echo "Missing staged AGENTS.md symlink for $claude"
+            failed=1
           fi
         done
-        exit $status
+
+        # AGENTS.md exists only as that sibling symlink: no orphans or dangling links.
+        for agents in $(git ls-files -- 'AGENTS.md' '*/AGENTS.md'); do
+          if ! git ls-files --error-unmatch -- "${agents%AGENTS.md}CLAUDE.md" >/dev/null 2>&1; then
+            echo "$agents has no sibling CLAUDE.md (AGENTS.md exists only as a symlink to one)"
+            failed=1
+          fi
+          mode=$(git ls-files -s -- "$agents" | cut -d' ' -f1)
+          if [ "$mode" != "120000" ]; then
+            echo "$agents must be a symlink (staged as mode $mode)"
+            failed=1
+          elif [ "$(git show ":$agents")" != "CLAUDE.md" ]; then
+            echo "$agents is not a symlink to CLAUDE.md"
+            failed=1
+          fi
+        done
+
+        exit $failed
 
 pre-push:
   commands:
