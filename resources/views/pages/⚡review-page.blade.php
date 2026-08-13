@@ -1536,7 +1536,7 @@ new #[Layout('layouts.app')] class extends Component
         <x-commit-context-bar :commit-info="$commitInfo" :project-slug="$projectSlug" />
     @endif
 
-    <x-resizable-sidebar-shell main-class="pb-24">
+    <x-resizable-sidebar-shell footer-clearance-class="pb-24">
         <x-slot:sidebar>
             <div class="p-4">
                 @if(! $this->isCommitMode() && count($reviewPairs) > 0)

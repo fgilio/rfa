@@ -1,4 +1,4 @@
-@props(['mainClass' => ''])
+@props(['footerClearanceClass' => ''])
 
 {{-- Width persists across pages via Alpine.store('settings').sidebarWidth. --}}
 
@@ -57,7 +57,7 @@
     }"
 >
     <aside
-        class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-bg hidden lg:block"
+        class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-bg hidden lg:block {{ $footerClearanceClass }}"
         :style="{ width: $store.settings.sidebarWidth + 'px' }"
         x-ref="sidebar"
     >
@@ -84,7 +84,7 @@
     </div>
 
     <main
-        class="flex-1 min-w-0 {{ $mainClass }}"
+        class="flex-1 min-w-0 {{ $footerClearanceClass }}"
         :class="resizing && 'pointer-events-none'"
         style="contain: inline-size layout style"
     >

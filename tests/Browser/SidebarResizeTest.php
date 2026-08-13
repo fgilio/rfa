@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\File;
 use Pest\Browser\Api\PendingAwaitablePage;
 
 beforeEach(function () {
@@ -187,3 +188,34 @@ test('sidebar width set on review page persists on context page', function () {
     $contextWidth = $page->page()->evaluate("document.querySelector('aside').offsetWidth");
     expect(abs($contextWidth - $reviewWidth))->toBeLessThan(5);
 });
+
+test('sidebar content clears the fixed feedback bar when fully scrolled', function (string $suffix) {
+    collect(range(1, 20))->each(function (int $index): void {
+        $directory = $this->testRepoPath."/context-{$index}";
+
+        File::ensureDirectoryExists($directory);
+        File::put($directory.'/CLAUDE.md', "# Context {$index}\n");
+    });
+
+    $page = $this->visit($this->projectUrl().$suffix);
+
+    $page->page()->waitForFunction(
+        "document.querySelector('aside').scrollHeight > document.querySelector('aside').clientHeight"
+    );
+
+    $positions = $page->page()->evaluate(<<<'JS'
+        (() => {
+            const sidebar = document.querySelector('aside');
+            const feedbackBar = document.querySelector('[data-testid="feedback-submit-bar"]');
+
+            sidebar.scrollTop = sidebar.scrollHeight;
+
+            return {
+                contentBottom: sidebar.firstElementChild.getBoundingClientRect().bottom,
+                feedbackTop: feedbackBar.getBoundingClientRect().top,
+            };
+        })()
+    JS);
+
+    expect($positions['contentBottom'])->toBeLessThanOrEqual($positions['feedbackTop']);
+})->with('shell pages');
