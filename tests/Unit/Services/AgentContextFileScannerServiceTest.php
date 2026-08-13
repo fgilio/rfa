@@ -69,8 +69,9 @@ test('surfaces untracked but not gitignored files with isTracked=false', functio
     expect($byPath['AGENTS.md']->isTracked)->toBeFalse();
 });
 
-test('asks Git for untracked context files with standard excludes', function () {
+test('asks Git for untracked context files with standard and configured excludes', function () {
     File::put($this->repo.'/AGENTS.md', "untracked\n");
+    config()->set('rfa.context_scan_skip_dirs', ['vendor', 'node_modules']);
 
     $git = Mockery::mock(GitProcessService::class);
     $git->shouldReceive('run')
@@ -82,6 +83,8 @@ test('asks Git for untracked context files with standard excludes', function () 
         ->with($this->repo, [
             'ls-files', '--others', '--exclude-standard', '-z',
             '--', ...AgentContextFileKind::gitPathspecs(),
+            ':(top,exclude,literal)vendor',
+            ':(top,exclude,literal)node_modules',
         ])
         ->andReturn("AGENTS.md\0");
 

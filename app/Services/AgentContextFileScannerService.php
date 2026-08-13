@@ -20,10 +20,9 @@ class AgentContextFileScannerService
      * Discover every agent context file inside $repoPath, ordered by path.
      * See AgentContextFileKind for the conventions recognised.
      *
-     * Tracked entries come from `git ls-files`; untracked candidates are walked
-     * from disk and filtered through `git check-ignore` in a single batch. Skip
-     * dirs come from config('rfa.context_scan_skip_dirs') and may be augmented
-     * via $extraSkipDirs (used by tests).
+     * Tracked and untracked entries come from `git ls-files`. Untracked entries
+     * use Git's standard excludes, and configured skip directories are excluded
+     * from discovery. Additional skip directories may be supplied per scan.
      *
      * @param  array<int, string>  $extraSkipDirs
      * @return array<int, AgentContextFile>
@@ -47,7 +46,7 @@ class AgentContextFileScannerService
         // entry: prefer the non-symlink, then the shorter path. That way the
         // tree shows the actual file rather than its mirror.
         $byRealpath = [];
-        foreach ([...array_values($tracked), ...$untracked] as $file) {
+        foreach ([...$tracked, ...$untracked] as $file) {
             $key = realpath($file->absolutePath) ?: $file->absolutePath;
             $existing = $byRealpath[$key] ?? null;
 
@@ -64,7 +63,7 @@ class AgentContextFileScannerService
 
     /**
      * @param  array<int, string>  $skipDirs
-     * @return array<string, AgentContextFile> keyed by repo-relative path
+     * @return array<int, AgentContextFile>
      */
     private function discoverTracked(string $repoPath, array $skipDirs): array
     {
@@ -100,7 +99,7 @@ class AgentContextFileScannerService
             $symlinkTarget = $isSymlink ? readlink($absolute) : null;
             [$createdAt, $lastEditedAt] = $datesByPath[$relPath] ?? [null, null];
 
-            $entries[$relPath] = new AgentContextFile(
+            $entries[] = new AgentContextFile(
                 path: $relPath,
                 absolutePath: $absolute,
                 kind: $kind,
@@ -129,6 +128,7 @@ class AgentContextFileScannerService
             fn (): string => $this->git->run($repoPath, [
                 'ls-files', '--others', '--exclude-standard', '-z',
                 '--', ...AgentContextFileKind::gitPathspecs(),
+                ...$this->gitExclusionPathspecs($skipDirs),
             ]),
             rescue: null,
             report: false,
@@ -138,15 +138,15 @@ class AgentContextFileScannerService
             return [];
         }
 
-        /** @var array<string, AgentContextFileKind> $candidates */
-        $candidates = collect($this->splitNullDelimited($output))
+        /** @var array<string, AgentContextFileKind> $kindsByPath */
+        $kindsByPath = collect($this->splitNullDelimited($output))
             ->reject(fn (string $path): bool => $this->isSkipped($path, $skipDirs))
             ->mapWithKeys(fn (string $path): array => [$path => AgentContextFileKind::fromPath($path)])
             ->whereNotNull()
             ->all();
 
         $entries = [];
-        foreach ($candidates as $relPath => $kind) {
+        foreach ($kindsByPath as $relPath => $kind) {
             $absolute = $repoPath.'/'.$relPath;
             $isSymlink = is_link($absolute);
             $symlinkTarget = $isSymlink ? readlink($absolute) : null;
@@ -279,6 +279,19 @@ class AgentContextFileScannerService
         }
 
         return false;
+    }
+
+    /**
+     * @param  array<int, string>  $skipDirs
+     * @return array<int, string>
+     */
+    private function gitExclusionPathspecs(array $skipDirs): array
+    {
+        return collect($skipDirs)
+            ->filter(fn (string $directory): bool => $directory !== '')
+            ->map(fn (string $directory): string => ':(top,exclude,literal)'.$directory)
+            ->values()
+            ->all();
     }
 
     /** @return array<int, string> */
