@@ -27,7 +27,6 @@ final readonly class GetProjectStatusAction
         } catch (GitCommandException $e) {
             Log::warning('project.status.failed', [
                 'reason' => 'project_status_failed',
-                'repo' => $repoPath,
                 'exit_code' => $e->exitCode,
                 'stderr_summary' => LogSanitizer::summary($e->stderr),
             ]);

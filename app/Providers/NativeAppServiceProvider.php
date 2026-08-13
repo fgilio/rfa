@@ -132,12 +132,30 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             Cache::put('native-update-state', $state, now()->addMinutes(30));
         });
 
-        Event::listen(UpdateNotAvailable::class, function () {
-            Cache::put('native-update-state', ['status' => 'up-to-date'], now()->addSeconds(10));
-            Notification::new()
-                ->title('No Updates')
-                ->message('You are running the latest version.')
-                ->show();
+        Event::listen(UpdateNotAvailable::class, function (UpdateNotAvailable $event) {
+            Context::flush();
+
+            $startedAt = microtime(true);
+            $outcome = 'completed';
+
+            try {
+                Cache::put('native-update-state', ['status' => 'up-to-date'], now()->addSeconds(10));
+                Notification::new()
+                    ->title('No Updates')
+                    ->message('You are running the latest version.')
+                    ->show();
+            } catch (Throwable $e) {
+                $outcome = 'error';
+                Context::add('rfa.error_class', $e::class);
+                Context::add('rfa.reason', 'update_not_available_handling_failed');
+
+                throw $e;
+            } finally {
+                Context::add('rfa.update_version', $event->version);
+                Context::add('rfa.outcome', $outcome);
+                Context::add('rfa.duration_ms', $this->elapsedMs($startedAt));
+                Log::info('updater.current');
+            }
         });
 
         Event::listen(UpdateDownloaded::class, function (UpdateDownloaded $event) {

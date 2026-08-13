@@ -289,7 +289,7 @@ Disallowed active channels:
 
 ## CI Checklist
 
-C1–C7 and C9 live in `tests/Arch/LoggingConventionsTest.php` (file scanners, no app context). C8 lives in `tests/Feature/LogChannelPostureTest.php` (needs resolved config). All are enforced today — keep them passing, and extend them rather than loosening when a new pattern appears.
+C1–C7 and C9–C10 live in `tests/Arch/LoggingConventionsTest.php` (file scanners, no app context). C8 lives in `tests/Feature/LogChannelPostureTest.php` (needs resolved config). All are enforced today — keep them passing, and extend them rather than loosening when a new pattern appears.
 
 C1. No `Log::debug()` in `app/` or `resources/views`.
 
@@ -308,6 +308,8 @@ C7. No static `Context` key is a banned absolute-path key.
 C8. Remote logging channels are not part of the default channel or recursively resolved default stack.
 
 C9. No `Log::warning()` / `error()` / `critical()` payload and no `Context` field passes a raw exception message, stack trace, or stderr as a value. Wrapped forms like `LogSanitizer::summary($e->stderr)` are allowed.
+
+C10. No `Log::warning()` / `error()` / `critical()` payload passes the absolute repository root variable `$repoPath`. Use owner `Context`, relative paths, hashes, counts, or stable reason codes instead.
 
 ## Agent Review Checklist
 
