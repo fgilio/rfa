@@ -13,7 +13,7 @@ final class MarkdownPath
 
     public static function isMarkdown(string $path): bool
     {
-        return in_array(basename($path), self::FILENAMES, true)
-            || in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), self::EXTENSIONS, true);
+        return in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), self::EXTENSIONS, true)
+            || in_array(basename($path), self::FILENAMES, true);
     }
 }

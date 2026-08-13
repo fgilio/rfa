@@ -40,9 +40,7 @@
             aria-label="{{ $kind->label() }} · {{ $file['path'] }}"
             data-testid="context-tree-file-{{ $file['id'] }}"
         >
-            <flux:tooltip content="{{ $kind->label() }}">
-                <span class="font-mono font-medium text-[10px] shrink-0 {{ $kind->badgeColorClass() }}">{{ $kind->badgeLabel() }}</span>
-            </flux:tooltip>
+            <span class="font-mono font-medium text-[10px] shrink-0 {{ $kind->badgeColorClass() }}" title="{{ $kind->label() }}">{{ $kind->badgeLabel() }}</span>
             <span class="font-mono truncate text-gh-text flex-1 min-w-0" title="{{ $file['path'] }}">{{ $file['basename'] }}</span>
             @if(! $file['isTracked'])
                 <span class="font-mono text-[10px] text-gh-muted/70 shrink-0">untracked</span>

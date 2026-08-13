@@ -21,13 +21,13 @@ enum AgentContextFileKind: string
     case Cline = 'CLINE';
 
     /**
-     * Every convention we recognise, as `[kind, directory, filename]`:
+     * Every convention we recognise, as `[kind, directory, basename]`.
      *
-     * - filename only — matched by basename anywhere in the tree.
-     * - directory only — any markdown file below that directory.
-     * - both — that exact filename anywhere below that directory.
+     * `basename` is an fnmatch pattern, or null for "any markdown file".
+     * `directory` is the dot-directory the file must live below, or null to
+     * match by basename anywhere in the tree.
      *
-     * Order matters only in that filename-only rules come first: a CLAUDE.md
+     * Order matters only in that directory-less rules come first: a CLAUDE.md
      * inside `.cursor/rules/` is still a CLAUDE.md.
      *
      * @var array<int, array{0: self, 1: ?string, 2: ?string}>
@@ -47,7 +47,9 @@ enum AgentContextFileKind: string
         [self::Cursor, '.cursor/rules', null],
         [self::Windsurf, '.windsurf/rules', null],
         [self::Cline, '.clinerules', null],
-        [self::Copilot, '.github/instructions', null],
+        // Copilot only applies the `.instructions.md` files here; a README.md
+        // alongside them is documentation, not context.
+        [self::Copilot, '.github/instructions', '*.instructions.md'],
         [self::Copilot, '.github', 'copilot-instructions.md'],
     ];
 
@@ -67,11 +69,11 @@ enum AgentContextFileKind: string
     {
         return collect(self::RULES)
             ->map(function (array $rule): string {
-                [, $directory, $filename] = $rule;
+                [, $directory, $basename] = $rule;
 
                 $pattern = $directory === null
-                    ? (string) $filename
-                    : $directory.'/**'.($filename === null ? '' : '/'.$filename);
+                    ? (string) $basename
+                    : $directory.'/**'.($basename === null ? '' : '/'.$basename);
 
                 return ':(glob)**/'.$pattern;
             })
@@ -97,12 +99,12 @@ enum AgentContextFileKind: string
 
         $basename = basename($relPath);
 
-        foreach (self::RULES as [$kind, $directory, $filename]) {
-            if ($filename !== null && $basename !== $filename) {
-                continue;
-            }
+        foreach (self::RULES as [$kind, $directory, $pattern]) {
+            $matchesBasename = $pattern === null
+                ? $hasRuleExtension
+                : fnmatch($pattern, $basename);
 
-            if ($filename === null && ! $hasRuleExtension) {
+            if (! $matchesBasename) {
                 continue;
             }
 
