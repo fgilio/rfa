@@ -170,13 +170,20 @@
         .diff-md-table { display: grid; align-items: start; width: 100%; }
         .diff-md-td {
             min-width: 0;
-            padding: 0 0.6rem;
+            /* In `ch`, and printed from the constant the aligner budgets its
+               tracks with, so the stylesheet and that budget cannot drift. */
+            padding: 0 {{ \App\Services\MarkdownTableAlignerService::CELL_PADDING_CH }}ch;
             white-space: normal;
-            overflow-wrap: anywhere;
+            /* break-word, not anywhere: both break an over-long word the same way,
+               but `anywhere` also drops the intrinsic min-content width to a single
+               character, which lets a column collapse to a vertical letter stack. */
+            overflow-wrap: break-word;
             word-break: normal;
-            border-left: 1px solid rgb(var(--gh-border) / 0.6);
+            /* Inset shadow, not a border: a border would eat a pixel of the track
+               that the aligner's ch budget does not know about — see CELL_PADDING_CH. */
+            box-shadow: inset 1px 0 0 rgb(var(--gh-border) / 0.6);
         }
-        .diff-md-td:first-child { padding-left: 0; border-left: 0; }
+        .diff-md-td:first-child { padding-left: 0; box-shadow: none; }
         .diff-md-th { font-weight: 600; color: rgb(var(--gh-text)); }
         .diff-md-sep { height: 0; border-bottom: 1px solid rgb(var(--gh-border)); margin: 0.15rem 0; }
         /* A changed separator shows its raw `:---`/`---:` markers, muted so they

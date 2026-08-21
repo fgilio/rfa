@@ -24,6 +24,44 @@ class MarkdownTableAlignerService
     private const COLUMN_WEIGHT_MIN = 3;
 
     /**
+     * Horizontal padding a cell adds per side, in characters. The layout reads
+     * this straight out of the stylesheet — `.diff-md-td` in the app layout is
+     * declared `padding: 0 {CELL_PADDING_CH}ch` — so the CSS and the track
+     * budget below can never drift apart.
+     */
+    public const CELL_PADDING_CH = 1;
+
+    /**
+     * Padding a cell adds on top of its text, in characters. Folded into the
+     * track so the `fr` ratios describe the full cell box: without it the shared
+     * max-width is short by the padding of every column, and the whole table
+     * renders squeezed — short labels like `Estado` wrapping to `Esta`/`do`. The
+     * first column drops its left padding, so its track is budgeted one
+     * character wide; that errs toward air, never toward a mid-word break. The
+     * column rule is drawn as an inset shadow rather than a border precisely so
+     * it costs no layout width and stays out of this budget.
+     */
+    private const COLUMN_PADDING = self::CELL_PADDING_CH * 2;
+
+    /**
+     * A spare character per column, in characters. The `fr` division resolves to
+     * fractional pixels, so a track budgeted to the exact width of its text can
+     * come up a fraction short and wrap the last glyph onto its own line. One
+     * character of headroom absorbs that, and reads as air between columns.
+     */
+    private const COLUMN_SLACK = 1;
+
+    /**
+     * Smallest track a column may shrink to when the table is wider than the
+     * available space, in characters. `fr` alone shrinks every column by the
+     * same ratio, so a narrow label column gets crushed to a few characters to
+     * buy width for a prose column that has plenty. A column narrower than this
+     * is never shrunk at all; wider ones stop here. Roughly two status words
+     * (`completed`, `Valentina`) — enough that a label column stays readable.
+     */
+    private const COLUMN_MIN_TRACK = 14;
+
+    /**
      * Annotate contiguous markdown table rows with the structured cell data and
      * shared column template the diff view needs to lay each row out as a real
      * CSS grid. The source content is left untouched; only `table` metadata is
@@ -117,11 +155,16 @@ class MarkdownTableAlignerService
             return $group;
         }
 
-        $weights = $this->columnWeights($parsed, $maxCols);
-        $template = collect($weights)
-            ->map(fn (int $weight) => "minmax(0,{$weight}fr)")
+        $tracks = collect($this->columnWeights($parsed, $maxCols))
+            ->map(fn (int $weight) => $weight + self::COLUMN_PADDING + self::COLUMN_SLACK);
+        $template = $tracks
+            ->map(fn (int $track) => sprintf(
+                'minmax(%s,%dfr)',
+                $this->columnFloor($track, $maxCols),
+                $track,
+            ))
             ->implode(' ');
-        $maxWidth = array_sum($weights);
+        $maxWidth = $tracks->sum();
 
         $result = [];
         foreach ($group as $offset => $line) {
@@ -170,8 +213,29 @@ class MarkdownTableAlignerService
     }
 
     /**
+     * The smallest a column may get, as the `minmax()` minimum for its track.
+     *
+     * A `ch` floor alone is unbounded in aggregate: enough columns and the
+     * floors sum past the pane, and the grid — `width: 100%` with no scroll
+     * container — paints over the split view's other half. Pairing it with an
+     * equal share of the pane bounds the sum at exactly 100% no matter how many
+     * columns there are or how narrow the pane gets, and costs nothing while
+     * there is room, where the `ch` value is the smaller of the two. Shrinking
+     * rather than scrolling is what the rest of the diff does — `.diff-cell-content`
+     * wraps, it never scrolls sideways.
+     */
+    private function columnFloor(int $track, int $columns): string
+    {
+        // Truncated, not rounded: rounding up would let the shares total over
+        // 100% and reintroduce the overflow this exists to prevent.
+        $share = floor(100 / $columns * 10000) / 10000;
+
+        return sprintf('min(%dch,%s%%)', min($track, self::COLUMN_MIN_TRACK), rtrim(rtrim(number_format($share, 4, '.', ''), '0'), '.'));
+    }
+
+    /**
      * Column weight is the widest cell in that column, capped so a prose column
-     * can't starve its neighbours. Used as the `fr` ratio for the grid track.
+     * can't starve its neighbours. Padding is added on top to form the track.
      *
      * @param  array<int, array{indent: string, cells: string[], isSeparator: bool}>  $parsed
      * @return int[]
