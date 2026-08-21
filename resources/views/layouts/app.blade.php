@@ -168,14 +168,23 @@
            source) so blade whitespace collapses and prose wraps on word bounds. */
         .diff-cell-table { white-space: normal; }
         .diff-md-table { display: grid; align-items: start; width: 100%; }
+        /* Padding is in `ch` because the shared max-width the aligner computes is
+           in `ch` too: it budgets COLUMN_PADDING (2ch) per column, so the two must
+           stay in step or every column renders narrower than its content and even
+           short labels wrap mid-word. */
         .diff-md-td {
             min-width: 0;
-            padding: 0 0.6rem;
+            padding: 0 1ch;
             white-space: normal;
-            overflow-wrap: anywhere;
+            /* break-word, not anywhere: both break an over-long word the same way,
+               but `anywhere` also drops the intrinsic min-content width to a single
+               character, which lets a column collapse to a vertical letter stack. */
+            overflow-wrap: break-word;
             word-break: normal;
             border-left: 1px solid rgb(var(--gh-border) / 0.6);
         }
+        /* The first cell forgoes its left padding so the table starts flush with
+           the rest of the diff; the 1ch that frees pays for the column borders. */
         .diff-md-td:first-child { padding-left: 0; border-left: 0; }
         .diff-md-th { font-weight: 600; color: rgb(var(--gh-text)); }
         .diff-md-sep { height: 0; border-bottom: 1px solid rgb(var(--gh-border)); margin: 0.15rem 0; }

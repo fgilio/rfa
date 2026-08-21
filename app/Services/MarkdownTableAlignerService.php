@@ -24,6 +24,24 @@ class MarkdownTableAlignerService
     private const COLUMN_WEIGHT_MIN = 3;
 
     /**
+     * Horizontal padding a cell adds on top of its text, in characters. Mirrors
+     * the `1ch` per side on `.diff-md-td`. Folded into the track so the `fr`
+     * ratios describe the full cell box: without it the shared max-width is
+     * short by the padding of every column, and the whole table renders squeezed
+     * — short labels like `Estado` wrapping to `Esta`/`do`.
+     */
+    private const COLUMN_PADDING = 2;
+
+    /**
+     * Smallest track a column may shrink to when the table is wider than the
+     * available space, in characters. `fr` alone shrinks every column by the
+     * same ratio, so a narrow label column gets crushed to a few characters to
+     * buy width for a prose column that has plenty. A column narrower than this
+     * is never shrunk at all; wider ones stop here.
+     */
+    private const COLUMN_MIN_TRACK = 14;
+
+    /**
      * Annotate contiguous markdown table rows with the structured cell data and
      * shared column template the diff view needs to lay each row out as a real
      * CSS grid. The source content is left untouched; only `table` metadata is
@@ -117,11 +135,12 @@ class MarkdownTableAlignerService
             return $group;
         }
 
-        $weights = $this->columnWeights($parsed, $maxCols);
-        $template = collect($weights)
-            ->map(fn (int $weight) => "minmax(0,{$weight}fr)")
+        $tracks = collect($this->columnWeights($parsed, $maxCols))
+            ->map(fn (int $weight) => $weight + self::COLUMN_PADDING);
+        $template = $tracks
+            ->map(fn (int $track) => sprintf('minmax(%dch,%dfr)', min($track, self::COLUMN_MIN_TRACK), $track))
             ->implode(' ');
-        $maxWidth = array_sum($weights);
+        $maxWidth = $tracks->sum();
 
         $result = [];
         foreach ($group as $offset => $line) {
@@ -171,7 +190,7 @@ class MarkdownTableAlignerService
 
     /**
      * Column weight is the widest cell in that column, capped so a prose column
-     * can't starve its neighbours. Used as the `fr` ratio for the grid track.
+     * can't starve its neighbours. Padding is added on top to form the track.
      *
      * @param  array<int, array{indent: string, cells: string[], isSeparator: bool}>  $parsed
      * @return int[]

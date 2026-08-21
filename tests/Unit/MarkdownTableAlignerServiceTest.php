@@ -51,7 +51,7 @@ test('attaches grid cell metadata to each table row', function () {
     ]);
     // Every row in the group shares the same column template, so they align.
     expect($lines[0]->table['template'])->toBe($lines[2]->table['template'])
-        ->and($lines[0]->table['template'])->toContain('minmax(0,')
+        ->and($lines[0]->table['template'])->toContain('minmax(')
         ->and($lines[0]->table['maxWidth'])->toBeInt();
 
     // The separator row collapses to a header rule, not cells.
@@ -123,7 +123,7 @@ test('a changed separator does not inflate its column widths', function () {
 
     // The long dash runs in the separator must not set the column weights —
     // those still come from the (short) body/header cells.
-    expect($lines[0]->table['template'])->toBe('minmax(0,3fr) minmax(0,3fr)');
+    expect($lines[0]->table['template'])->toBe('minmax(5ch,5fr) minmax(5ch,5fr)');
 });
 
 test('leaves source content untouched', function () {
@@ -204,7 +204,9 @@ test('caps a prose column so it does not starve its neighbours', function () {
     $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
 
     // 'composer.lock' (13) keeps its width; the long prose column is capped at 60.
-    expect($lines[0]->table['template'])->toBe('minmax(0,13fr) minmax(0,60fr)');
+    // Both tracks carry the 2ch cell padding on top of their text width, and
+    // both floors stop at the 14ch shrink limit.
+    expect($lines[0]->table['template'])->toBe('minmax(14ch,15fr) minmax(14ch,62fr)');
 });
 
 test('marks every header row before the separator', function () {
@@ -301,4 +303,38 @@ test('preserves highlighting and heading metadata already on the line', function
     expect($line->highlightedContent)->toBe('<span>| a | b |</span>')
         ->and($line->headingAncestors)->toBe([5])
         ->and($line->table['cells'])->toBe(['a', 'b']);
+});
+
+test('budgets cell padding into the track and the shared max width', function () {
+    $hunks = [
+        new Hunk('', 1, 3, 1, 3, [
+            new DiffLine(LineType::Context, '| Evaluador | Estado |', 1, 1),
+            new DiffLine(LineType::Context, '| --- | --- |', 2, 2),
+            new DiffLine(LineType::Context, '| Juan Pablo Locatelli | completed |', 3, 3),
+        ]),
+    ];
+
+    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
+
+    // Text widths are 20 and 9; each track adds the 2ch of cell padding, and the
+    // max width is the sum — so the table is never squeezed below its content.
+    expect($lines[0]->table['template'])->toBe('minmax(14ch,22fr) minmax(11ch,11fr)')
+        ->and($lines[0]->table['maxWidth'])->toBe(33);
+});
+
+test('floors a narrow column so it cannot be crushed by a prose neighbour', function () {
+    $prose = str_repeat('word ', 60);
+    $hunks = [
+        new Hunk('', 1, 3, 1, 3, [
+            new DiffLine(LineType::Context, '| Estado | Notes |', 1, 1),
+            new DiffLine(LineType::Context, '| --- | --- |', 2, 2),
+            new DiffLine(LineType::Context, "| completed | {$prose} |", 3, 3),
+        ]),
+    ];
+
+    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
+
+    // 'completed' (9) + padding is under the floor, so its track never shrinks:
+    // when space runs short the prose column gives way, not the label column.
+    expect($lines[0]->table['template'])->toBe('minmax(11ch,11fr) minmax(14ch,62fr)');
 });
