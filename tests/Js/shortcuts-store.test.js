@@ -5,6 +5,7 @@ const { createStore } = shortcutsStore;
 
 const catalog = {
     'project-picker.toggle': { combo: '⌘K', label: 'Switch repository', allowInEditable: true },
+    'sidebar.toggle': { combo: '⌃⌥⇧⌘S', label: 'Toggle sidebar', allowInEditable: true, ignoreAutoRepeat: true },
     'review.collapse-all': { combo: 'C', display: '⇧C', label: 'Collapse all files' },
     'review.next-file': { combo: 'j', label: 'Next file' },
 };
@@ -16,22 +17,42 @@ function setup() {
 }
 
 describe('register', () => {
-    it('delegates to keymap with the catalog combo and allowInEditable flag', () => {
+    it('delegates to keymap with the catalog combo and behaviour flags', () => {
         const { keymap, store } = setup();
         const handler = vi.fn();
 
         store.register('project-picker.toggle', handler);
 
-        expect(keymap.register).toHaveBeenCalledWith('⌘K', handler, { allowInEditable: true });
+        expect(keymap.register).toHaveBeenCalledWith('⌘K', handler, {
+            allowInEditable: true,
+            ignoreAutoRepeat: false,
+        });
     });
 
-    it('defaults allowInEditable to false when the catalog omits it', () => {
+    it('defaults the behaviour flags to false when the catalog omits them', () => {
         const { keymap, store } = setup();
         const handler = vi.fn();
 
         store.register('review.next-file', handler);
 
-        expect(keymap.register).toHaveBeenCalledWith('j', handler, { allowInEditable: false });
+        expect(keymap.register).toHaveBeenCalledWith('j', handler, {
+            allowInEditable: false,
+            ignoreAutoRepeat: false,
+        });
+    });
+
+    it('passes ignoreAutoRepeat through so a toggle ignores a held chord', () => {
+        // The flag lives in config/shortcuts.php, not at the call site, so a
+        // shortcut can't register with repeat semantics its catalog entry denies.
+        const { keymap, store } = setup();
+        const handler = vi.fn();
+
+        store.register('sidebar.toggle', handler);
+
+        expect(keymap.register).toHaveBeenCalledWith('⌃⌥⇧⌘S', handler, {
+            allowInEditable: true,
+            ignoreAutoRepeat: true,
+        });
     });
 
     it('warns and skips an unknown id instead of registering a dead combo', () => {

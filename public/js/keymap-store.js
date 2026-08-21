@@ -31,11 +31,41 @@
     }
 
     /**
-     * @param {string} combo       e.g. '⌘K', '⌘↵', or a bare key like 'j' / '⇧C' / '?'
-     * @param {KeyboardEvent|{key: string, metaKey?: boolean, ctrlKey?: boolean, shiftKey?: boolean, altKey?: boolean}} e
+     * Base-key match for a combo that carries ⌃ or ⌥.
+     *
+     * Holding Option rewrites `event.key` through the macOS keyboard layout
+     * (⌥S arrives as 'ß'), and Hammerspoon's hyper pass-through synthesises
+     * exactly that kind of event. `event.code` names the physical key and no
+     * modifier can change it, so it is the reliable fallback for letters.
+     *
+     * @param {string} key  lower-cased base key from the combo
+     * @param {KeyboardEvent|{key?: string, code?: string}} e
+     * @returns {boolean}
+     */
+    function baseKeyMatches(key, e) {
+        if (typeof e.key === 'string' && e.key.toLowerCase() === key) return true;
+
+        return /^[a-z]$/.test(key) && e.code === `Key${key.toUpperCase()}`;
+    }
+
+    /**
+     * @param {string} combo       e.g. '⌘K', '⌘↵', '⌃⌥⇧⌘S', or a bare key like 'j' / '⇧C' / '?'
+     * @param {KeyboardEvent|{key: string, code?: string, metaKey?: boolean, ctrlKey?: boolean, shiftKey?: boolean, altKey?: boolean}} e
      * @returns {boolean}
      */
     function matches(combo, e) {
+        // Combos that name ⌃ or ⌥ (the hyper-style ones) match every modifier
+        // flag literally: Ctrl is part of the combo, so the ⌘→Ctrl aliasing the
+        // cross-platform dev build relies on below would make them ambiguous.
+        if (combo.includes('⌃') || combo.includes('⌥')) {
+            if (e.ctrlKey !== combo.includes('⌃')) return false;
+            if (e.altKey !== combo.includes('⌥')) return false;
+            if (!!e.metaKey !== combo.includes('⌘')) return false;
+            if (!!e.shiftKey !== combo.includes('⇧')) return false;
+
+            return baseKeyMatches(comboKey(combo.replace(/[⌃⌥⌘⇧]/g, '')).toLowerCase(), e);
+        }
+
         if (e.altKey) return false;
         const hasCmd = e.metaKey || e.ctrlKey;
 
@@ -73,9 +103,10 @@
              * @param {Function} handler   receives the KeyboardEvent
              * @param {object} [opts]
              * @param {boolean} [opts.allowInEditable=false]  fire even while focused in an input/textarea
+             * @param {boolean} [opts.ignoreAutoRepeat=false]  fire only on the first keydown of a held key
              */
-            register(combo, handler, { allowInEditable = false } = {}) {
-                this.bindings.set(combo, { handler, allowInEditable });
+            register(combo, handler, { allowInEditable = false, ignoreAutoRepeat = false } = {}) {
+                this.bindings.set(combo, { handler, allowInEditable, ignoreAutoRepeat });
             },
             unregister(combo) {
                 this.bindings.delete(combo);
@@ -88,9 +119,20 @@
         });
 
         root.addEventListener('keydown', (e) => {
-            for (const [combo, { handler, allowInEditable }] of store.bindings) {
+            for (const [combo, { handler, allowInEditable, ignoreAutoRepeat }] of store.bindings) {
                 if (!matches(combo, e)) continue;
                 if (!allowInEditable && isEditable(e.target)) continue;
+                // A held key streams keydowns. Repeat is what makes the
+                // navigation shortcuts feel right (hold `j` to walk the file
+                // list), so it stays on by default — but a toggle would flip
+                // once per repeat and settle on whichever parity the release
+                // lands in. Those opt out and still swallow the chord, so the
+                // held keystrokes never reach the page underneath.
+                if (ignoreAutoRepeat && e.repeat) {
+                    e.preventDefault();
+
+                    return;
+                }
                 e.preventDefault();
                 handler(e);
                 return;

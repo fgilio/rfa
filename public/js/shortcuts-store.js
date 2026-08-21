@@ -6,7 +6,8 @@
 //   $store.shortcuts.register('project-picker.toggle', () => toggle())
 //
 // `register`/`unregister` delegate to `$store.keymap`, pulling the combo and
-// the `allowInEditable` flag from the catalog. That keeps the keyboard wiring
+// the behaviour flags (`allowInEditable`, `ignoreAutoRepeat`) from the catalog.
+// That keeps the keyboard wiring
 // and the discoverable cheat sheet reading from a single source, so a combo
 // can't drift between where it fires and where it's documented.
 (function (root, factory) {
@@ -35,7 +36,10 @@
                     console.warn(`[shortcuts] unknown id "${id}", not registered`);
                     return;
                 }
-                keymap().register(entry.combo, handler, { allowInEditable: !!entry.allowInEditable });
+                keymap().register(entry.combo, handler, {
+                    allowInEditable: !!entry.allowInEditable,
+                    ignoreAutoRepeat: !!entry.ignoreAutoRepeat,
+                });
             },
             unregister(id) {
                 const entry = this.map[id];

@@ -39,6 +39,23 @@ describe('matches', () => {
         ['? matches its shifted character', '?', { key: '?', shiftKey: true }, true],
         ['/ matches a bare slash', '/', { key: '/' }, true],
         ['[ rejects when alt is held', '[', { key: '[', altKey: true }, false],
+        // Hyper combos (⌃ and/or ⌥ named): every modifier flag is matched
+        // literally, and the base key falls back to event.code because Option
+        // rewrites event.key through the keyboard layout.
+        ['⌃⌥⇧⌘S matches the full hyper chord', '⌃⌥⇧⌘S', { key: 's', ctrlKey: true, altKey: true, shiftKey: true, metaKey: true }, true],
+        ['⌃⌥⇧⌘S matches the option-mangled key via code', '⌃⌥⇧⌘S', { key: 'ß', code: 'KeyS', ctrlKey: true, altKey: true, shiftKey: true, metaKey: true }, true],
+        ['⌃⌥⇧⌘S matches the shifted key spelling', '⌃⌥⇧⌘S', { key: 'S', ctrlKey: true, altKey: true, shiftKey: true, metaKey: true }, true],
+        ['⌃⌥⇧⌘S is order-independent', '⇧⌘⌃⌥S', { key: 's', ctrlKey: true, altKey: true, shiftKey: true, metaKey: true }, true],
+        ['⌃⌥⇧⌘S rejects a missing ctrl', '⌃⌥⇧⌘S', { key: 's', altKey: true, shiftKey: true, metaKey: true }, false],
+        ['⌃⌥⇧⌘S rejects a missing alt', '⌃⌥⇧⌘S', { key: 's', ctrlKey: true, shiftKey: true, metaKey: true }, false],
+        ['⌃⌥⇧⌘S rejects a missing shift', '⌃⌥⇧⌘S', { key: 's', ctrlKey: true, altKey: true, metaKey: true }, false],
+        ['⌃⌥⇧⌘S rejects a missing cmd', '⌃⌥⇧⌘S', { key: 's', ctrlKey: true, altKey: true, shiftKey: true }, false],
+        ['⌃⌥⇧⌘S rejects a bare s', '⌃⌥⇧⌘S', { key: 's' }, false],
+        ['⌃⌥⇧⌘S rejects the wrong base key', '⌃⌥⇧⌘S', { key: 'd', code: 'KeyD', ctrlKey: true, altKey: true, shiftKey: true, metaKey: true }, false],
+        // The ⌘→Ctrl aliasing is deliberately absent here: Ctrl is part of the
+        // chord, so ctrl-without-cmd must not stand in for cmd.
+        ['⌃⌥⇧⌘S rejects ctrl standing in for cmd', '⌃⌥⇧⌘S', { key: 's', ctrlKey: true, altKey: true, shiftKey: true, metaKey: false }, false],
+        ['⌘S is not matched by the hyper chord', '⌘S', { key: 's', ctrlKey: true, altKey: true, shiftKey: true, metaKey: true }, false],
     ])('%s', (_label, combo, props, expected) => {
         expect(matches(combo, event(props))).toBe(expected);
     });
@@ -216,5 +233,73 @@ describe('dispatch', () => {
 
         expect(handler).not.toHaveBeenCalled();
         expect(registeredStore.bindings.size).toBe(0);
+    });
+
+    it('repeats the handler for a held key by default', () => {
+        // Hold `j` to walk the file list — the navigation shortcuts depend on
+        // auto-repeat, so it must stay on unless a binding opts out.
+        setup();
+        const handler = vi.fn();
+        registeredStore.register('j', handler);
+
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true }));
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', repeat: true, bubbles: true, cancelable: true }));
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', repeat: true, bubbles: true, cancelable: true }));
+
+        expect(handler).toHaveBeenCalledTimes(3);
+    });
+
+    it('collapses a held key to one call when ignoreAutoRepeat is set', () => {
+        // A toggle flipped once per repeat would flicker and settle on whichever
+        // parity the key release lands in.
+        setup();
+        const handler = vi.fn();
+        registeredStore.register('⌃⌥⇧⌘S', handler, { ignoreAutoRepeat: true });
+
+        const press = (repeat) =>
+            new KeyboardEvent('keydown', {
+                key: 's',
+                ctrlKey: true,
+                altKey: true,
+                shiftKey: true,
+                metaKey: true,
+                repeat,
+                bubbles: true,
+                cancelable: true,
+            });
+
+        window.dispatchEvent(press(false));
+        const held = press(true);
+        window.dispatchEvent(held);
+        window.dispatchEvent(press(true));
+
+        expect(handler).toHaveBeenCalledTimes(1);
+        // The repeats are still swallowed, so the held chord never reaches the
+        // page underneath.
+        expect(held.defaultPrevented).toBe(true);
+    });
+
+    it('fires again on the next fresh keydown after a held run', () => {
+        setup();
+        const handler = vi.fn();
+        registeredStore.register('⌃⌥⇧⌘S', handler, { ignoreAutoRepeat: true });
+
+        const press = (repeat) =>
+            new KeyboardEvent('keydown', {
+                key: 's',
+                ctrlKey: true,
+                altKey: true,
+                shiftKey: true,
+                metaKey: true,
+                repeat,
+                bubbles: true,
+                cancelable: true,
+            });
+
+        window.dispatchEvent(press(false));
+        window.dispatchEvent(press(true));
+        window.dispatchEvent(press(false));
+
+        expect(handler).toHaveBeenCalledTimes(2);
     });
 });
