@@ -17,7 +17,10 @@ use App\Events\ZoomShortcutPressed;
 |   1. The Alpine `$store.shortcuts` (public/js/shortcuts-store.js). Call
 |      sites register handlers by `id`, never by a literal combo, e.g.
 |      `$store.shortcuts.register('project-picker.toggle', () => toggle())`.
-|      The combo string and `allowInEditable` flag come from here.
+|      The combo string and the behaviour flags come from here: set
+|      `allowInEditable` to keep firing while the caret is in an input, and
+|      `ignoreAutoRepeat` to collapse a held chord to its first keydown (what
+|      a toggle wants; navigation shortcuts want the repeats).
 |   2. The cheat-sheet modal (`<x-shortcuts-help>`), opened with `?`, renders
 |      this catalog grouped by `group`.
 |   3. The native menu (NativeAppServiceProvider) reads `accelerator` for the
@@ -28,6 +31,10 @@ use App\Events\ZoomShortcutPressed;
 | Combo notation (mac-only):
 |   - `⌘`/`⇧` glyphs = Cmd / Shift modifiers (keymap-store also treats ⌘ as
 |     Ctrl so the browser dev build keeps working off-mac).
+|   - `⌃`/`⌥` glyphs = Control / Option. A combo naming either one is matched
+|     literally, flag for flag, with no ⌘→Ctrl aliasing — that is what makes
+|     hyper (`⌃⌥⇧⌘`) expressible. Glyphs are written in Apple's order
+|     (Control, Option, Shift, Command); matching is order-independent.
 |   - `↵` = Enter/Return.
 |   - A bare character ('j', '/', '[') matches that exact `event.key`. Its
 |     shifted form is written as the produced character: '⇧C' for Shift+C,
@@ -136,6 +143,22 @@ return [
         ],
 
         // -- View / App --
+        'sidebar.toggle' => [
+            // Hyper+S, the same chord Franco's Hammerspoon config maps to
+            // "toggle sidebar" in every other app. RFA isn't in that config's
+            // app list, so the chord arrives here through its pass-through.
+            'combo' => '⌃⌥⇧⌘S',
+            'label' => 'Toggle sidebar',
+            'group' => 'View',
+            // A chrome command with no text-input meaning: it has to work while
+            // the caret sits in the file filter or a comment textarea.
+            'allowInEditable' => true,
+            // A toggle, so only the first keydown of a held chord counts.
+            // Without this the sidebar flips once per auto-repeat and settles
+            // on whichever parity the key release happens to land in.
+            'ignoreAutoRepeat' => true,
+            'wired' => 'keymap',
+        ],
         'app.refresh' => [
             'combo' => '⌘R',
             'label' => 'Refresh',

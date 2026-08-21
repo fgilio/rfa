@@ -109,6 +109,7 @@ test('the ids the app wires against are present in the catalog', function () {
         'review.filter', 'review.next-file', 'review.prev-file',
         'review.collapse-all', 'review.expand-all', 'review.prev-commit', 'review.next-commit',
         'comment.save', 'review.undo',
+        'sidebar.toggle',
         'app.refresh', 'app.hard-reload', 'app.add-repo', 'app.context-files', 'app.review-code',
         'help.shortcuts',
     ];

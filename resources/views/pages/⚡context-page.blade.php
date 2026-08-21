@@ -531,6 +531,7 @@ new #[Layout('layouts.app')] class extends Component
             </span>
         </div>
         <div class="flex items-center gap-2">
+            <x-sidebar-toggle-button />
             <flux:tooltip content="Re-scan repo">
                 <flux:button
                     variant="ghost"

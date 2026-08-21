@@ -209,6 +209,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
 | `rfa-dismiss-detached-banner` | divergence marker popover button `$dispatch` (window) | ReviewPage root Alpine `@window` -> `$wire.dismissDetachedBanner` | none |
 | `rfa-dismiss-missing-target` | missing-target bar button `$dispatch` (window; the bar lives in the `divergence-missing-bar` island) | ReviewPage root Alpine `@window` -> `$wire.dismissMissingTarget` | none |
 | `rfa-comment-selection` | ReviewPage Alpine `$dispatch` (window), fired by the `review.comment-selection` shortcut (`c`); resolves the selection's owning file id from its `[data-file-id]` ancestor | DiffFile Alpine `@window` -> `if ($event.detail.fileId === fileId) commentOnSelection()` | `{fileId}` |
+| `rfa-toggle-sidebar` | layout script, on the `native:App\Events\ToggleSidebarRequested` broadcast (main-process "Toggle Sidebar" View-menu click) — a main→renderer bridge, not the island bridge the other `rfa-*` events are | `resizable-sidebar-shell` root Alpine `@window` -> `$store.settings.toggleSidebar()` | none |
 | `comment-updated` | ReviewPage PHP dispatch | DiffFile Alpine `@window` | `{fileId, comments}` |
 | `copy-to-clipboard` | DiffFile Alpine/PHP, ReviewPage PHP, comment-display, comments-drawer, branch-explorer | layout `<body>` Alpine `@window` | `{text, toast?}` (if `toast` string is set, a success toast with that text shows on success) |
 | `file-reviewed-changed` | DiffFile Alpine `$dispatch`, sidebar reviewed button | DiffFile Alpine `@window` (targeted by `id`) | `{id, reviewed}` |

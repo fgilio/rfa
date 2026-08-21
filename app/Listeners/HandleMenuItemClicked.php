@@ -9,6 +9,7 @@ use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveProjectByIdAction;
 use App\Actions\ScanDirectoryDialogAction;
 use App\Events\ShowShortcutsRequested;
+use App\Events\ToggleSidebarRequested;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
@@ -49,6 +50,7 @@ final readonly class HandleMenuItemClicked
                 'show-context' => $this->navigateToActiveProject('context-page', 'menu.show_context.completed'),
                 'review-code' => $this->navigateToActiveProject('review-page', 'menu.review_code.completed'),
                 'show-shortcuts' => $this->handleShowShortcuts(),
+                'toggle-sidebar' => $this->handleToggleSidebar(),
                 default => 'skipped',
             };
         } catch (Throwable $e) {
@@ -97,6 +99,13 @@ final readonly class HandleMenuItemClicked
     private function handleShowShortcuts(): string
     {
         ShowShortcutsRequested::dispatch();
+
+        return 'completed';
+    }
+
+    private function handleToggleSidebar(): string
+    {
+        ToggleSidebarRequested::dispatch();
 
         return 'completed';
     }

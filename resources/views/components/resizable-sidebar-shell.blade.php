@@ -1,10 +1,20 @@
-{{-- Width persists across pages via Alpine.store('settings').sidebarWidth. --}}
+{{-- Width and collapsed state persist across pages via Alpine.store('settings')
+     (sidebarWidth / sidebarCollapsed).
+
+     This shell owns the sidebar, so it also owns the visibility shortcut
+     (hyper+S) and the bridge for the native "Toggle Sidebar" View-menu item,
+     which crosses main→renderer as a window event the layout re-dispatches.
+     Both, and the header button, mutate the store through toggleSidebar(). --}}
 
 <div
     {{ $attributes->merge(['class' => 'flex']) }}
     :style="{ '--sidebar-w': $store.settings.sidebarWidth + 'px' }"
+    @rfa-toggle-sidebar.window="$store.settings.toggleSidebar()"
     x-data="{
         resizing: false,
+        init() {
+            $store.shortcuts.register('sidebar.toggle', () => $store.settings.toggleSidebar());
+        },
         startResize($event) {
             this.resizing = true;
             const startX = $event.clientX;
@@ -56,10 +66,26 @@
         }
     }"
 >
+    {{-- Visibility is the store's business alone. The old `hidden lg:block`
+         gating fought the toggle: the window floor is 800px and `lg` starts at
+         1024, so between the two the button swapped its icon and wrote state
+         while the sidebar stayed hidden and unreachable. RFA is a single
+         desktop window — breakpoints are not a concern here (see CLAUDE.md).
+
+         x-show, not a class swap: it only overrides `display`, so the resize
+         handler's inline width writes stay on an element that is merely
+         hidden, never re-created. --}}
     <aside
-        class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-bg hidden lg:block"
+        class="shrink-0 sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] overflow-y-auto border-r border-gh-border bg-gh-bg"
         style="width: var(--sidebar-w, 288px); height: calc(100vh - var(--header-h) - var(--feedback-bar-h));"
         x-ref="sidebar"
+        x-show="!$store.settings.sidebarCollapsed"
+        {{-- Not x-cloak: that would hide the sidebar until Alpine boots on
+             every load, and expanded is the default, so the common case would
+             flash a full-width diff and then reflow. The boot class only fires
+             for the state that actually needs suppressing. --}}
+        data-sidebar-collapsible
+        data-testid="sidebar"
     >
         {{ $sidebar }}
     </aside>
@@ -70,8 +96,12 @@
         aria-orientation="vertical"
         aria-label="Resize sidebar"
         title="Drag to resize · double-click to reset"
-        class="group/resize hidden lg:flex sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-0 cursor-col-resize items-center justify-center z-10 shrink-0"
+        class="group/resize flex sticky top-[var(--header-h)] h-[calc(100vh-var(--header-h))] w-0 cursor-col-resize items-center justify-center z-10 shrink-0"
         style="height: calc(100vh - var(--header-h) - var(--feedback-bar-h)); padding: 0 6px; margin: 0 -6px;"
+        {{-- Nothing to resize while the sidebar is hidden, and its ±6px
+             hit area would otherwise sit over the first diff column. --}}
+        x-show="!$store.settings.sidebarCollapsed"
+        data-sidebar-collapsible
         @mousedown="startResize($event)"
         @dblclick="$store.settings.sidebarWidth = 288"
     >

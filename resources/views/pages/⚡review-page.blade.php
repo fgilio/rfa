@@ -1372,6 +1372,8 @@ new #[Layout('layouts.app')] class extends Component
                 <livewire:comments-drawer :repo-path="$repoPath" :project-id="$projectId ?: null" />
             </div>
             <div class="flex items-center gap-2 text-xs">
+                <x-sidebar-toggle-button />
+
                 {{-- Hide reviewed toggle. Separate from the counter island so
                      each reviewed-state fragment has one DOM target. --}}
                 @island(name: 'reviewed-toggle', always: true)

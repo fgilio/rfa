@@ -190,6 +190,28 @@ test('the View submenu declares the keyboard-shortcuts menu item', function () {
         ->toContain("->id('show-shortcuts')");
 });
 
+test('the View submenu declares the sidebar toggle menu item with no accelerator', function () {
+    // No hotkey either: hyper+S is a renderer keymap binding, so an Electron
+    // accelerator here would swallow the keystroke before the page sees it.
+    // The item is a click-only affordance that broadcasts ToggleSidebarRequested.
+    $source = (string) file_get_contents((new ReflectionClass(NativeAppServiceProvider::class))->getFileName());
+
+    $start = strpos($source, "Menu::label('Toggle Sidebar')");
+
+    expect($start)->not->toBeFalse();
+
+    // Slice out this item's own builder chain — everything up to the next
+    // Menu:: call — so a ->hotkey() anywhere in it is caught, whether it lands
+    // before or after ->id(). Asserting on the whole file would let one slip in.
+    $chain = substr($source, (int) $start, (int) strpos($source, 'Menu::', (int) $start + 1) - (int) $start);
+
+    expect($chain)
+        ->toContain("->id('toggle-sidebar')")
+        ->not->toContain('hotkey');
+
+    expect(Shortcuts::accelerator('sidebar.toggle'))->toBeNull();
+});
+
 // -- Inbox parser --
 
 test('two-line inbox with context mode routes to context-page', function () {

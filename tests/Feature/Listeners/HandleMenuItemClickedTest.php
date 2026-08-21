@@ -5,6 +5,7 @@ use App\Actions\ResolveProjectByIdAction;
 use App\Actions\ScanDirectoryDialogAction;
 use App\DTOs\ScanDirectoryResult;
 use App\Events\ShowShortcutsRequested;
+use App\Events\ToggleSidebarRequested;
 use App\Listeners\HandleMenuItemClicked;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -149,6 +150,18 @@ test('show-shortcuts broadcasts the cheat-sheet open request without navigating'
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'show-shortcuts']));
 
     Event::assertDispatched(ShowShortcutsRequested::class);
+    expect($this->capturedUrl)->toBeNull();
+});
+
+test('toggle-sidebar broadcasts the sidebar toggle without navigating', function () {
+    Event::fake([ToggleSidebarRequested::class]);
+
+    bindResolveProjectByIdAction(null);
+    bindOpenRepositoryDialogAction(null);
+
+    app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'toggle-sidebar']));
+
+    Event::assertDispatched(ToggleSidebarRequested::class);
     expect($this->capturedUrl)->toBeNull();
 });
 

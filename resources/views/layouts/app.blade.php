@@ -241,6 +241,12 @@
         /* Alpine doesn't ship the x-cloak rule itself. */
         [x-cloak] { display: none !important; }
 
+        /* Pre-paint state for a persisted collapsed sidebar; settings-store.js
+           sets the class in <head> and drops it on alpine:initialized. No
+           !important, so once the class is gone x-show is the only authority
+           and an expanded sidebar is never suppressed. */
+        .rfa-boot-sidebar-collapsed [data-sidebar-collapsible] { display: none; }
+
         /* Fix checkbox visibility in dark mode */
         .dark [data-flux-checkbox-indicator] {
             border-color: rgb(var(--gh-border));
@@ -365,6 +371,13 @@
                  modal as the `?` shortcut, crossing the main→renderer bridge. --}}
             window.Livewire.on('native:App\\Events\\ShowShortcutsRequested', () => {
                 window.Flux?.modal('keyboard-shortcuts').show();
+            });
+
+            {{-- The native "Toggle Sidebar" menu item lands on the same store
+                 mutation as hyper+S; resizable-sidebar-shell owns the listener,
+                 so pages without a sidebar simply have nobody listening. --}}
+            window.Livewire.on('native:App\\Events\\ToggleSidebarRequested', () => {
+                window.dispatchEvent(new CustomEvent('rfa-toggle-sidebar'));
             });
         });
     </script>
