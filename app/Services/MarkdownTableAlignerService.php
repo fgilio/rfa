@@ -158,7 +158,11 @@ class MarkdownTableAlignerService
         $tracks = collect($this->columnWeights($parsed, $maxCols))
             ->map(fn (int $weight) => $weight + self::COLUMN_PADDING + self::COLUMN_SLACK);
         $template = $tracks
-            ->map(fn (int $track) => sprintf('minmax(%dch,%dfr)', min($track, self::COLUMN_MIN_TRACK), $track))
+            ->map(fn (int $track) => sprintf(
+                'minmax(%s,%dfr)',
+                $this->columnFloor($track, $maxCols),
+                $track,
+            ))
             ->implode(' ');
         $maxWidth = $tracks->sum();
 
@@ -206,6 +210,27 @@ class MarkdownTableAlignerService
             'template' => $template,
             'maxWidth' => $maxWidth,
         ];
+    }
+
+    /**
+     * The smallest a column may get, as the `minmax()` minimum for its track.
+     *
+     * A `ch` floor alone is unbounded in aggregate: enough columns and the
+     * floors sum past the pane, and the grid — `width: 100%` with no scroll
+     * container — paints over the split view's other half. Pairing it with an
+     * equal share of the pane bounds the sum at exactly 100% no matter how many
+     * columns there are or how narrow the pane gets, and costs nothing while
+     * there is room, where the `ch` value is the smaller of the two. Shrinking
+     * rather than scrolling is what the rest of the diff does — `.diff-cell-content`
+     * wraps, it never scrolls sideways.
+     */
+    private function columnFloor(int $track, int $columns): string
+    {
+        // Truncated, not rounded: rounding up would let the shares total over
+        // 100% and reintroduce the overflow this exists to prevent.
+        $share = floor(100 / $columns * 10000) / 10000;
+
+        return sprintf('min(%dch,%s%%)', min($track, self::COLUMN_MIN_TRACK), rtrim(rtrim(number_format($share, 4, '.', ''), '0'), '.'));
     }
 
     /**

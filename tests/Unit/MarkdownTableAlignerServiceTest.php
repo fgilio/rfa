@@ -123,7 +123,7 @@ test('a changed separator does not inflate its column widths', function () {
 
     // The long dash runs in the separator must not set the column weights —
     // those still come from the (short) body/header cells.
-    expect($lines[0]->table['template'])->toBe('minmax(6ch,6fr) minmax(6ch,6fr)');
+    expect($lines[0]->table['template'])->toBe('minmax(min(6ch,50%),6fr) minmax(min(6ch,50%),6fr)');
 });
 
 test('leaves source content untouched', function () {
@@ -208,7 +208,7 @@ test('caps a prose column so it does not starve its neighbours', function () {
     // and both floors stop at the 14ch shrink limit — so when the table is wider
     // than the space it has, the prose column gives way instead of every column
     // shrinking in step and crushing the narrow one.
-    expect($lines[0]->table['template'])->toBe('minmax(14ch,16fr) minmax(14ch,63fr)');
+    expect($lines[0]->table['template'])->toBe('minmax(min(14ch,50%),16fr) minmax(min(14ch,50%),63fr)');
 });
 
 test('marks every header row before the separator', function () {
@@ -321,6 +321,28 @@ test('budgets cell padding into the track and the shared max width', function ()
     // Text widths are 20 and 9; each track adds the 2ch of cell padding plus 1ch
     // of slack, and the max width is the sum — so the table is never squeezed
     // below its content.
-    expect($lines[0]->table['template'])->toBe('minmax(14ch,23fr) minmax(12ch,12fr)')
+    expect($lines[0]->table['template'])->toBe('minmax(min(14ch,50%),23fr) minmax(min(12ch,50%),12fr)')
         ->and($lines[0]->table['maxWidth'])->toBe(35);
+});
+
+test('bounds the column floors so a wide table cannot overflow its pane', function () {
+    $row = '|'.str_repeat(' a |', 7);
+    $hunks = [
+        new Hunk('', 1, 3, 1, 3, [
+            new DiffLine(LineType::Context, $row, 1, 1),
+            new DiffLine(LineType::Context, '|'.str_repeat(' --- |', 7), 2, 2),
+            new DiffLine(LineType::Context, $row, 3, 3),
+        ]),
+    ];
+
+    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
+
+    // Seven 6ch floors would demand 42ch of a pane that may not have it, and the
+    // grid has no scroll container to absorb the excess. Each floor is also held
+    // to a seventh of the pane, so the shares total 100% at worst.
+    $floors = [];
+    preg_match_all('/min\((\d+)ch,([\d.]+)%\)/', $lines[0]->table['template'], $floors);
+
+    expect($floors[1])->toBe(array_fill(0, 7, '6'))
+        ->and(array_sum(array_map('floatval', $floors[2])))->toBeLessThanOrEqual(100.0);
 });
