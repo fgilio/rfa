@@ -168,23 +168,19 @@
            source) so blade whitespace collapses and prose wraps on word bounds. */
         .diff-cell-table { white-space: normal; }
         .diff-md-table { display: grid; align-items: start; width: 100%; }
-        /* Padding is in `ch` because the shared max-width the aligner computes is
-           in `ch` too: it budgets COLUMN_PADDING (2ch) per column, so the two must
-           stay in step or every column renders narrower than its content and even
-           short labels wrap mid-word. */
         .diff-md-td {
             min-width: 0;
-            padding: 0 1ch;
+            /* In `ch`, and printed from the constant the aligner budgets its
+               tracks with, so the stylesheet and that budget cannot drift. */
+            padding: 0 {{ \App\Services\MarkdownTableAlignerService::CELL_PADDING_CH }}ch;
             white-space: normal;
             /* break-word, not anywhere: both break an over-long word the same way,
                but `anywhere` also drops the intrinsic min-content width to a single
                character, which lets a column collapse to a vertical letter stack. */
             overflow-wrap: break-word;
             word-break: normal;
-            /* The column rule is an inset shadow, not a border: a border eats a
-               pixel of the track that the aligner's ch budget doesn't know about,
-               which was enough to wrap the last letter of every tight column
-               (`complete`/`d`). A shadow paints in the same place for free. */
+            /* Inset shadow, not a border: a border would eat a pixel of the track
+               that the aligner's ch budget does not know about — see CELL_PADDING_CH. */
             box-shadow: inset 1px 0 0 rgb(var(--gh-border) / 0.6);
         }
         .diff-md-td:first-child { padding-left: 0; box-shadow: none; }

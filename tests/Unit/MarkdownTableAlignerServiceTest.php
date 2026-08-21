@@ -205,7 +205,9 @@ test('caps a prose column so it does not starve its neighbours', function () {
 
     // 'composer.lock' (13) keeps its width; the long prose column is capped at 60.
     // Both tracks carry the cell padding and slack on top of their text width,
-    // and both floors stop at the 14ch shrink limit.
+    // and both floors stop at the 14ch shrink limit — so when the table is wider
+    // than the space it has, the prose column gives way instead of every column
+    // shrinking in step and crushing the narrow one.
     expect($lines[0]->table['template'])->toBe('minmax(14ch,16fr) minmax(14ch,63fr)');
 });
 
@@ -321,21 +323,4 @@ test('budgets cell padding into the track and the shared max width', function ()
     // below its content.
     expect($lines[0]->table['template'])->toBe('minmax(14ch,23fr) minmax(12ch,12fr)')
         ->and($lines[0]->table['maxWidth'])->toBe(35);
-});
-
-test('floors a narrow column so it cannot be crushed by a prose neighbour', function () {
-    $prose = str_repeat('word ', 60);
-    $hunks = [
-        new Hunk('', 1, 3, 1, 3, [
-            new DiffLine(LineType::Context, '| Estado | Notes |', 1, 1),
-            new DiffLine(LineType::Context, '| --- | --- |', 2, 2),
-            new DiffLine(LineType::Context, "| completed | {$prose} |", 3, 3),
-        ]),
-    ];
-
-    $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
-
-    // 'completed' (9) + padding is under the floor, so its track never shrinks:
-    // when space runs short the prose column gives way, not the label column.
-    expect($lines[0]->table['template'])->toBe('minmax(12ch,12fr) minmax(14ch,63fr)');
 });

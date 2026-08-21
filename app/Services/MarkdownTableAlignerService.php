@@ -24,15 +24,24 @@ class MarkdownTableAlignerService
     private const COLUMN_WEIGHT_MIN = 3;
 
     /**
-     * Horizontal padding a cell adds on top of its text, in characters. Mirrors
-     * the `1ch` per side on `.diff-md-td`. Folded into the track so the `fr`
-     * ratios describe the full cell box: without it the shared max-width is
-     * short by the padding of every column, and the whole table renders squeezed
-     * — short labels like `Estado` wrapping to `Esta`/`do`. The column rule is
-     * drawn as an inset shadow rather than a border precisely so it costs no
-     * layout width and stays out of this budget.
+     * Horizontal padding a cell adds per side, in characters. The layout reads
+     * this straight out of the stylesheet — `.diff-md-td` in the app layout is
+     * declared `padding: 0 {CELL_PADDING_CH}ch` — so the CSS and the track
+     * budget below can never drift apart.
      */
-    private const COLUMN_PADDING = 2;
+    public const CELL_PADDING_CH = 1;
+
+    /**
+     * Padding a cell adds on top of its text, in characters. Folded into the
+     * track so the `fr` ratios describe the full cell box: without it the shared
+     * max-width is short by the padding of every column, and the whole table
+     * renders squeezed — short labels like `Estado` wrapping to `Esta`/`do`. The
+     * first column drops its left padding, so its track is budgeted one
+     * character wide; that errs toward air, never toward a mid-word break. The
+     * column rule is drawn as an inset shadow rather than a border precisely so
+     * it costs no layout width and stays out of this budget.
+     */
+    private const COLUMN_PADDING = self::CELL_PADDING_CH * 2;
 
     /**
      * A spare character per column, in characters. The `fr` division resolves to
@@ -47,7 +56,8 @@ class MarkdownTableAlignerService
      * available space, in characters. `fr` alone shrinks every column by the
      * same ratio, so a narrow label column gets crushed to a few characters to
      * buy width for a prose column that has plenty. A column narrower than this
-     * is never shrunk at all; wider ones stop here.
+     * is never shrunk at all; wider ones stop here. Roughly two status words
+     * (`completed`, `Valentina`) — enough that a label column stays readable.
      */
     private const COLUMN_MIN_TRACK = 14;
 
