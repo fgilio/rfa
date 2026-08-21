@@ -62,6 +62,12 @@
     </flux:dropdown>
 </div>
 
-@once
-    @localScript('js/copy-paths-button.js')
-@endonce
+{{-- @assets, not @once: this button first appears through a Livewire update on
+     any page that starts with no files (a clean repo, then a refresh). Blade's
+     @once is per-render, so it would emit a plain <script> inside that update
+     payload — which the browser never executes, leaving x-data unresolved and
+     throwing "copyPathsButton is not defined". Livewire hoists @assets into the
+     head and injects them for components delivered by an update. --}}
+@assets
+@localScript('js/copy-paths-button.js')
+@endassets

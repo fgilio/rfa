@@ -109,8 +109,8 @@
     }
 
     function autoInstall(root) {
-        if (root.__copyPathsButtonAttached) return;
-        root.__copyPathsButtonAttached = true;
+        // No one-shot guard: an Alpine factory must re-register so a cache-busted
+        // script replaces a stale factory after an app update (public/js/CLAUDE.md).
         const init = () => root.Alpine.data('copyPathsButton', copyPathsButton);
         root.Alpine ? init() : root.document.addEventListener('alpine:init', init);
     }
