@@ -28,9 +28,19 @@ class MarkdownTableAlignerService
      * the `1ch` per side on `.diff-md-td`. Folded into the track so the `fr`
      * ratios describe the full cell box: without it the shared max-width is
      * short by the padding of every column, and the whole table renders squeezed
-     * — short labels like `Estado` wrapping to `Esta`/`do`.
+     * — short labels like `Estado` wrapping to `Esta`/`do`. The column rule is
+     * drawn as an inset shadow rather than a border precisely so it costs no
+     * layout width and stays out of this budget.
      */
     private const COLUMN_PADDING = 2;
+
+    /**
+     * A spare character per column, in characters. The `fr` division resolves to
+     * fractional pixels, so a track budgeted to the exact width of its text can
+     * come up a fraction short and wrap the last glyph onto its own line. One
+     * character of headroom absorbs that, and reads as air between columns.
+     */
+    private const COLUMN_SLACK = 1;
 
     /**
      * Smallest track a column may shrink to when the table is wider than the
@@ -136,7 +146,7 @@ class MarkdownTableAlignerService
         }
 
         $tracks = collect($this->columnWeights($parsed, $maxCols))
-            ->map(fn (int $weight) => $weight + self::COLUMN_PADDING);
+            ->map(fn (int $weight) => $weight + self::COLUMN_PADDING + self::COLUMN_SLACK);
         $template = $tracks
             ->map(fn (int $track) => sprintf('minmax(%dch,%dfr)', min($track, self::COLUMN_MIN_TRACK), $track))
             ->implode(' ');

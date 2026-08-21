@@ -123,7 +123,7 @@ test('a changed separator does not inflate its column widths', function () {
 
     // The long dash runs in the separator must not set the column weights —
     // those still come from the (short) body/header cells.
-    expect($lines[0]->table['template'])->toBe('minmax(5ch,5fr) minmax(5ch,5fr)');
+    expect($lines[0]->table['template'])->toBe('minmax(6ch,6fr) minmax(6ch,6fr)');
 });
 
 test('leaves source content untouched', function () {
@@ -204,9 +204,9 @@ test('caps a prose column so it does not starve its neighbours', function () {
     $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
 
     // 'composer.lock' (13) keeps its width; the long prose column is capped at 60.
-    // Both tracks carry the 2ch cell padding on top of their text width, and
-    // both floors stop at the 14ch shrink limit.
-    expect($lines[0]->table['template'])->toBe('minmax(14ch,15fr) minmax(14ch,62fr)');
+    // Both tracks carry the cell padding and slack on top of their text width,
+    // and both floors stop at the 14ch shrink limit.
+    expect($lines[0]->table['template'])->toBe('minmax(14ch,16fr) minmax(14ch,63fr)');
 });
 
 test('marks every header row before the separator', function () {
@@ -316,10 +316,11 @@ test('budgets cell padding into the track and the shared max width', function ()
 
     $lines = $this->aligner->alignTables($hunks, 'readme.md')[0]->lines;
 
-    // Text widths are 20 and 9; each track adds the 2ch of cell padding, and the
-    // max width is the sum — so the table is never squeezed below its content.
-    expect($lines[0]->table['template'])->toBe('minmax(14ch,22fr) minmax(11ch,11fr)')
-        ->and($lines[0]->table['maxWidth'])->toBe(33);
+    // Text widths are 20 and 9; each track adds the 2ch of cell padding plus 1ch
+    // of slack, and the max width is the sum — so the table is never squeezed
+    // below its content.
+    expect($lines[0]->table['template'])->toBe('minmax(14ch,23fr) minmax(12ch,12fr)')
+        ->and($lines[0]->table['maxWidth'])->toBe(35);
 });
 
 test('floors a narrow column so it cannot be crushed by a prose neighbour', function () {
@@ -336,5 +337,5 @@ test('floors a narrow column so it cannot be crushed by a prose neighbour', func
 
     // 'completed' (9) + padding is under the floor, so its track never shrinks:
     // when space runs short the prose column gives way, not the label column.
-    expect($lines[0]->table['template'])->toBe('minmax(11ch,11fr) minmax(14ch,62fr)');
+    expect($lines[0]->table['template'])->toBe('minmax(12ch,12fr) minmax(14ch,63fr)');
 });

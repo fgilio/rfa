@@ -181,11 +181,13 @@
                character, which lets a column collapse to a vertical letter stack. */
             overflow-wrap: break-word;
             word-break: normal;
-            border-left: 1px solid rgb(var(--gh-border) / 0.6);
+            /* The column rule is an inset shadow, not a border: a border eats a
+               pixel of the track that the aligner's ch budget doesn't know about,
+               which was enough to wrap the last letter of every tight column
+               (`complete`/`d`). A shadow paints in the same place for free. */
+            box-shadow: inset 1px 0 0 rgb(var(--gh-border) / 0.6);
         }
-        /* The first cell forgoes its left padding so the table starts flush with
-           the rest of the diff; the 1ch that frees pays for the column borders. */
-        .diff-md-td:first-child { padding-left: 0; border-left: 0; }
+        .diff-md-td:first-child { padding-left: 0; box-shadow: none; }
         .diff-md-th { font-weight: 600; color: rgb(var(--gh-text)); }
         .diff-md-sep { height: 0; border-bottom: 1px solid rgb(var(--gh-border)); margin: 0.15rem 0; }
         /* A changed separator shows its raw `:---`/`---:` markers, muted so they
