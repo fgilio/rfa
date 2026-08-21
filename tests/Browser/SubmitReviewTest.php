@@ -18,6 +18,12 @@ test('submit button enables after adding a comment', function () {
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Review comment');
     $page->press('Save');
 
+    // assertButtonEnabled reads isEnabled() synchronously, with no retry, while
+    // press() returns as soon as the click is dispatched. Wait for the saved
+    // comment — proof the Livewire round-trip landed and re-rendered the header
+    // — before asking whether the button flipped.
+    $page->page()->getByText('Review comment')->first()->waitFor();
+
     $page->assertButtonEnabled('Submit review');
 });
 
@@ -27,6 +33,9 @@ test('submitting shows success state with review submitted', function () {
     $page->page()->getByTestId('diff-line-number')->first()->click();
     $page->page()->getByPlaceholder('Write a comment', false)->fill('Looks good');
     $page->press('Save');
+
+    // Same race as above: wait for the save to land before reading the button.
+    $page->page()->getByText('Looks good')->first()->waitFor();
 
     $page->assertButtonEnabled('Submit review');
     $page->page()->getByRole('button', ['name' => 'Submit review'])->click();
