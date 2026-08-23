@@ -829,11 +829,32 @@ describe('snapshot loading', () => {
         delete window.Alpine;
     });
 
+    function deferred() {
+        let resolve;
+        const promise = new Promise((resolvePromise) => {
+            resolve = resolvePromise;
+        });
+
+        return { promise, resolve };
+    }
+
+    function installOverlayStore() {
+        let owner = null;
+        const overlays = {
+            open: vi.fn((name) => { owner = name; }),
+            is: vi.fn((name) => owner === name),
+            close: vi.fn(() => { owner = null; }),
+        };
+        global.Alpine = window.Alpine = { store: () => overlays };
+
+        return { overlays, setOwner: (name) => { owner = name; } };
+    }
+
     it('openPanel refreshes the snapshot even when commit rows are already loaded', async () => {
         const branches = { local: [{ name: 'main', isCurrent: true }], remote: [] };
         const a = createBranchExplorer({
             currentBranch: 'main',
-            activeCommitHash: null,
+            activeCommitHash: 'fresh',
             activeDiffFrom: 'HEAD',
             projectSlug: 'p',
             branches,
@@ -853,19 +874,135 @@ describe('snapshot loading', () => {
             branchBase: null,
             loadSnapshot,
         };
+        const scrollIntoView = vi.fn();
         a.$refs = {
             searchInput: { focus: vi.fn() },
-            commitList: { querySelector: vi.fn() },
+            commitList: { querySelector: vi.fn(() => ({ scrollIntoView })) },
         };
         a.$nextTick = vi.fn(async () => {});
-        global.Alpine = window.Alpine = {
-            store: () => ({ open: vi.fn(), is: vi.fn(() => true), close: vi.fn() }),
-        };
+        installOverlayStore();
 
         await a.openPanel();
 
         expect(loadSnapshot).toHaveBeenCalledWith('main', 0);
         expect(a.$wire.commits).toEqual([{ hash: 'fresh' }]);
+        expect(a.$nextTick).toHaveBeenCalledOnce();
+        expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+        expect(a.$refs.searchInput.focus).toHaveBeenCalledOnce();
+    });
+
+    it('keeps a refreshed snapshot but skips focus and scroll after the panel closes', async () => {
+        const branches = { local: [{ name: 'main', isCurrent: true }], remote: [] };
+        const refreshedBranches = { local: [...branches.local, { name: 'feature', isCurrent: false }], remote: [] };
+        const refresh = deferred();
+        const a = createBranchExplorer({
+            currentBranch: 'main',
+            activeCommitHash: 'fresh',
+            activeDiffFrom: 'HEAD',
+            projectSlug: 'p',
+            branches,
+        });
+        const scrollIntoView = vi.fn();
+        a.$wire = {
+            commits: [{ hash: 'stale' }],
+            branches,
+            snapshotBranch: 'main',
+            branchBase: null,
+            loadSnapshot: vi.fn(async () => {
+                await refresh.promise;
+                a.$wire.branches = refreshedBranches;
+                a.$wire.commits = [{ hash: 'fresh' }];
+            }),
+        };
+        a.$refs = {
+            searchInput: { focus: vi.fn() },
+            commitList: { querySelector: vi.fn(() => ({ scrollIntoView })) },
+        };
+        a.$nextTick = vi.fn(async () => {});
+        installOverlayStore();
+
+        const opening = a.openPanel();
+        a.closePanel();
+        refresh.resolve();
+        await opening;
+
+        expect(a.allBranches).toBe(refreshedBranches);
+        expect(a.$nextTick).not.toHaveBeenCalled();
+        expect(scrollIntoView).not.toHaveBeenCalled();
+        expect(a.$refs.searchInput.focus).not.toHaveBeenCalled();
+    });
+
+    it('does not steal focus back after another overlay opens during refresh', async () => {
+        const branches = { local: [{ name: 'main', isCurrent: true }], remote: [] };
+        const refresh = deferred();
+        const a = createBranchExplorer({
+            currentBranch: 'main',
+            activeCommitHash: 'fresh',
+            activeDiffFrom: 'HEAD',
+            projectSlug: 'p',
+            branches,
+        });
+        const scrollIntoView = vi.fn();
+        a.$wire = {
+            commits: [{ hash: 'stale' }],
+            branches,
+            snapshotBranch: 'main',
+            branchBase: null,
+            loadSnapshot: vi.fn(async () => {
+                await refresh.promise;
+                a.$wire.commits = [{ hash: 'fresh' }];
+            }),
+        };
+        a.$refs = {
+            searchInput: { focus: vi.fn() },
+            commitList: { querySelector: vi.fn(() => ({ scrollIntoView })) },
+        };
+        a.$nextTick = vi.fn(async () => {});
+        const { setOwner } = installOverlayStore();
+
+        const opening = a.openPanel();
+        setOwner('comments-drawer');
+        refresh.resolve();
+        await opening;
+
+        expect(a.$nextTick).not.toHaveBeenCalled();
+        expect(scrollIntoView).not.toHaveBeenCalled();
+        expect(a.$refs.searchInput.focus).not.toHaveBeenCalled();
+    });
+
+    it('does not scroll or focus when overlay ownership changes during rendering', async () => {
+        const branches = { local: [{ name: 'main', isCurrent: true }], remote: [] };
+        const rendering = deferred();
+        const a = createBranchExplorer({
+            currentBranch: 'main',
+            activeCommitHash: 'fresh',
+            activeDiffFrom: 'HEAD',
+            projectSlug: 'p',
+            branches,
+        });
+        const scrollIntoView = vi.fn();
+        a.$wire = {
+            commits: [{ hash: 'fresh' }],
+            branches,
+            snapshotBranch: 'main',
+            branchBase: null,
+            loadSnapshot: vi.fn(),
+        };
+        a.$refs = {
+            searchInput: { focus: vi.fn() },
+            commitList: { querySelector: vi.fn(() => ({ scrollIntoView })) },
+        };
+        a.$nextTick = vi.fn(() => rendering.promise);
+        const { setOwner } = installOverlayStore();
+
+        const opening = a.openPanel();
+        await vi.waitFor(() => expect(a.$nextTick).toHaveBeenCalledOnce());
+        setOwner('comments-drawer');
+        rendering.resolve();
+        await opening;
+
+        expect(scrollIntoView).not.toHaveBeenCalled();
+        expect(a.$refs.searchInput.focus).not.toHaveBeenCalled();
     });
 
     it('loadMoreCommits updates branch state from the current load-more response', async () => {

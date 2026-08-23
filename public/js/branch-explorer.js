@@ -122,6 +122,7 @@
             lastSelectionIndex: -1,
             lastSelectionAnchorIsWT: false,
             _loadId: 0, // Stale-response guard: incremented before each async load, checked after
+            _openGeneration: 0,
 
             get isWorkingTreeActive() {
                 return this.activeCommitHash === null && this.selectedBranch === this.currentBranch;
@@ -278,6 +279,7 @@
             },
 
             async openPanel() {
+                const generation = ++this._openGeneration;
                 this.open = true;
                 this.search = '';
                 this.selectedIndex = 0;
@@ -286,19 +288,29 @@
                 this._clearSelectionError();
                 Alpine.store('overlays').open('branch-explorer');
 
-                await this.refreshSnapshot(this.selectedBranch || this.currentBranch, { force: true });
+                const refreshed = await this.refreshSnapshot(this.selectedBranch || this.currentBranch, { force: true });
+                if (!refreshed || !this._ownsOverlay(generation)) return;
 
                 const currentIdx = this.allFiltered.findIndex(b => b.name === this.selectedBranch);
                 if (currentIdx >= 0) this.selectedIndex = currentIdx;
                 this._rehydrateSelectionFromActiveView();
                 await this.$nextTick();
+                if (!this._ownsOverlay(generation)) return;
+
                 this._scrollActiveCommitIntoView();
                 this.$refs.searchInput?.focus();
             },
 
             closePanel() {
+                this._openGeneration++;
                 this.open = false;
                 if (Alpine.store('overlays').is('branch-explorer')) Alpine.store('overlays').close();
+            },
+
+            _ownsOverlay(generation) {
+                return this._openGeneration === generation
+                    && this.open
+                    && Alpine.store('overlays').is('branch-explorer');
             },
 
             async refreshSnapshot(branchName, { clear = false, force = false, minimumCommitCount = 0 } = {}) {
