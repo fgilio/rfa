@@ -143,8 +143,12 @@ test('a reshaped block in one file blocks the patches to the other files', funct
 });
 
 test('an unreadable target blocks the run rather than half-patching', function () {
-    $root = stubDistRoot(fn (string $root) => chmod($root.'/server/php.js', 0000));
+    // Snapshot while the tree is still readable: the comparison below is about
+    // what the run wrote, so it must not also record the unreadable target.
+    $root = stubDistRoot();
     $before = distSnapshot($root);
+
+    chmod($root.'/server/php.js', 0000);
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
