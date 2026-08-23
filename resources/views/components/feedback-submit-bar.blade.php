@@ -1,6 +1,5 @@
 @props([
-    'submitted' => false,
-    'exportResult' => null,
+    'receipt' => null,
     'submittedHeading' => 'Review submitted',
     'submitLabel' => 'Submit review',
     'submitAction' => 'submitReview',
@@ -14,13 +13,15 @@
 ])
 
 {{--
-    Fixed bottom bar shared by review-page and context-page. Two states:
+    Fixed bottom bar shared by review-page and context-page. Which of its two
+    states it renders is the submission receipt, not a separate flag:
 
-    - $submitted is true after the page hands the export off and shows a
+    - A non-null $receipt is the page's export ({path, clipboard}) and shows a
       "submitted, here is the file" confirmation with a Copy again and a
       "start over" button.
-    - Otherwise renders the global-comment textarea, comment / draft
-      counts, a clear-all affordance, and the primary submit button.
+    - A null $receipt is the editing state: the global-comment textarea,
+      comment / draft counts, a clear-all affordance, and the primary submit
+      button.
 
     The page provides the wording differences (review vs feedback, etc.)
     and the Livewire method names; the rest is identical between
@@ -47,7 +48,8 @@
     }"
     @input="$nextTick(() => updateFeedbackBarHeight())"
 >
-    @if($submitted)
+    @if($receipt !== null)
+        @php($exportResult = $receipt['clipboard'])
         <div class="px-5 py-3.5 flex items-center justify-between gap-4">
             <div class="flex items-center gap-3 min-w-0">
                 <flux:icon icon="check-circle" variant="outline" class="!size-4 text-gh-green shrink-0" />

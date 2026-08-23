@@ -82,15 +82,15 @@ new #[Layout('layouts.app')] class extends Component
 
     public bool $hasRemote = false;
 
-    public ?string $exportResult = null;
-
-    public bool $submitted = false;
-
     /**
-     * Basename of the review file the "Review submitted" bar currently points
-     * at. Lets a delete of that same review reset the bar (see deleteReviewPair).
+     * The last submitted review, or null while the user is still editing.
+     * `path` is the exported .rfa/ file, `clipboard` the prompt copied for it.
+     * Both the "Review submitted" bar and the basename a delete matches against
+     * are derived from this, so they cannot drift apart.
+     *
+     * @var array{path: string, clipboard: string}|null
      */
-    public ?string $submittedReviewBasename = null;
+    public ?array $submissionReceipt = null;
 
     public ?string $gitError = null;
 
@@ -1072,7 +1072,7 @@ new #[Layout('layouts.app')] class extends Component
 
         // The "Review submitted" bar points at this file — deleting it leaves
         // the bar referencing a file that no longer exists, so drop back to the editor.
-        if ($basename === $this->submittedReviewBasename) {
+        if ($basename === $this->submittedReviewBasename()) {
             $this->resetSubmittedState();
         }
 
@@ -1091,7 +1091,7 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->reviewPairs = [];
 
-        if (in_array($this->submittedReviewBasename, $basenames, true)) {
+        if (in_array($this->submittedReviewBasename(), $basenames, true)) {
             $this->resetSubmittedState();
         }
 
@@ -1874,8 +1874,7 @@ new #[Layout('layouts.app')] class extends Component
     @include('livewire.undo-toast')
 
     <x-feedback-submit-bar
-        :submitted="$submitted"
-        :export-result="$exportResult"
+        :receipt="$submissionReceipt"
         secondary-label="Export snapshot"
         secondary-action="exportSnapshot"
         secondary-icon="arrow-down-tray"

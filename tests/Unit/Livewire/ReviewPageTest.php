@@ -359,7 +359,10 @@ test('submitReview refreshes file list and populates reviewPairs', function () {
         ->call('submitReview');
 
     expect($component->get('reviewPairs'))->toHaveCount(1);
-    expect($component->get('submitted'))->toBeTrue();
+    expect($component->get('submissionReceipt'))->toBe([
+        'path' => '/tmp/review.md',
+        'clipboard' => 'review exported',
+    ]);
 });
 
 test('deleting the submitted review resets the submit bar', function () {
@@ -387,14 +390,14 @@ test('deleting the submitted review resets the submit bar', function () {
         ->dispatch('add-comment', fileId: 'abc123', side: 'right', startLine: 1, endLine: 1, body: 'Test comment')
         ->call('submitReview');
 
-    expect($component->get('submitted'))->toBeTrue();
-    expect($component->get('submittedReviewBasename'))->toBe($basename);
+    expect($component->get('submissionReceipt'))->toBe([
+        'path' => ".rfa/{$basename}.md",
+        'clipboard' => 'review exported',
+    ]);
 
     $component->call('deleteReviewPair', $basename);
 
-    expect($component->get('submitted'))->toBeFalse();
-    expect($component->get('exportResult'))->toBeNull();
-    expect($component->get('submittedReviewBasename'))->toBeNull();
+    expect($component->get('submissionReceipt'))->toBeNull();
 });
 
 test('deleting a different review leaves the submit bar untouched', function () {
@@ -423,19 +426,22 @@ test('deleting a different review leaves the submit bar untouched', function () 
         ->call('submitReview')
         ->call('deleteReviewPair', '20251010_090000_comments_zzzz9999');
 
-    expect($component->get('submitted'))->toBeTrue();
-    expect($component->get('submittedReviewBasename'))->toBe($basename);
+    expect($component->get('submissionReceipt'))->toBe([
+        'path' => ".rfa/{$basename}.md",
+        'clipboard' => 'review exported',
+    ]);
 });
 
 test('startNewReview returns the submit bar to the input state', function () {
     $component = Livewire::test('pages::review-page', ['slug' => 'test-project']);
-    $component->set('submitted', true);
-    $component->set('exportResult', 'address my comments on these changes in @.rfa/foo.md');
+    $component->set('submissionReceipt', [
+        'path' => '.rfa/20260227_173000_comments_abcd1234.md',
+        'clipboard' => 'address my comments on these changes in @.rfa/foo.md',
+    ]);
 
     $component->call('startNewReview');
 
-    expect($component->get('submitted'))->toBeFalse();
-    expect($component->get('exportResult'))->toBeNull();
+    expect($component->get('submissionReceipt'))->toBeNull();
 });
 
 // -- Clear all comments --

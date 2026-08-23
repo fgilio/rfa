@@ -61,9 +61,14 @@ new #[Layout('layouts.app')] class extends Component
 
     public string $globalComment = '';
 
-    public bool $submitted = false;
-
-    public ?string $exportResult = null;
+    /**
+     * The last exported feedback round, or null while the user is still
+     * editing. Same shape as the review page's receipt: `path` is the exported
+     * .rfa/ file and `clipboard` the prompt copied for it.
+     *
+     * @var array{path: string, clipboard: string}|null
+     */
+    public ?array $submissionReceipt = null;
 
     #[Locked]
     public string $diffFrom = 'HEAD';
@@ -440,8 +445,7 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->dispatch('copy-to-clipboard', text: $result['clipboard'], toast: 'Feedback copied');
 
-        $this->exportResult = $result['clipboard'];
-        $this->submitted = true;
+        $this->submissionReceipt = ['path' => $result['md'], 'clipboard' => $result['clipboard']];
 
         // Surface any comment whose anchor drifted past recovery instead of
         // silently dropping it from the export.
@@ -457,8 +461,7 @@ new #[Layout('layouts.app')] class extends Component
 
     public function startNewFeedback(): void
     {
-        $this->submitted = false;
-        $this->exportResult = null;
+        $this->submissionReceipt = null;
         $this->globalComment = '';
         $this->reloadComments();
     }
@@ -587,8 +590,7 @@ new #[Layout('layouts.app')] class extends Component
     @include('livewire.undo-toast')
 
     <x-feedback-submit-bar
-        :submitted="$submitted"
-        :export-result="$exportResult"
+        :receipt="$submissionReceipt"
         submitted-heading="Feedback exported"
         submit-label="Submit feedback"
         submit-action="submitFeedback"

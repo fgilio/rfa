@@ -15,12 +15,11 @@ use Flux\Flux;
  * Submitting formats the non-draft comments into a review, copies it to the
  * clipboard, and drops the submitted comments from the pool (drafts and
  * unplaceable comments stay). Snapshot export and copy-visible-paths are
- * read-only side exports. startNewReview clears the submitted state so the
- * editor returns.
+ * read-only side exports. startNewReview clears the receipt so the editor
+ * returns.
  *
  * Component state read/written: $comments, $globalComment, $files,
- * $reviewedFiles, $repoPath, $projectName, $exportResult, $submitted,
- * $submittedReviewBasename. Calls
+ * $reviewedFiles, $repoPath, $projectName, $submissionReceipt. Calls
  * into the coordinator (saveSession, buildDiffTarget, scanReviewFiles,
  * dispatchFileComments, the reviewState computed) and the render pipeline
  * (skipRender, dispatch). submitReview renders (it swaps the submit bar);
@@ -37,13 +36,11 @@ trait ExportsReview
 
         $result = app(ExportReviewAction::class)->handle($this->repoPath, $finalizedComments, $this->globalComment, $this->files, $target);
 
-        $this->exportResult = $result['clipboard'];
-        $this->submittedReviewBasename = ReviewFilePair::extractBasename($result['md']);
-        $this->submitted = true;
+        $this->submissionReceipt = ['path' => $result['md'], 'clipboard' => $result['clipboard']];
 
         $this->scanReviewFiles();
 
-        Flux::toast(variant: 'success', heading: 'Review submitted', text: $this->exportResult);
+        Flux::toast(variant: 'success', heading: 'Review submitted', text: $result['clipboard']);
         $this->dispatch('copy-to-clipboard', text: $result['clipboard']);
 
         // Never drop a comment silently: if the anchor resolver couldn't place some
@@ -141,8 +138,17 @@ trait ExportsReview
      */
     private function resetSubmittedState(): void
     {
-        $this->submitted = false;
-        $this->exportResult = null;
-        $this->submittedReviewBasename = null;
+        $this->submissionReceipt = null;
+    }
+
+    /**
+     * Basename of the review file the "Review submitted" bar points at, derived
+     * from the receipt so it can never disagree with what the bar is showing.
+     */
+    private function submittedReviewBasename(): ?string
+    {
+        return $this->submissionReceipt === null
+            ? null
+            : ReviewFilePair::extractBasename($this->submissionReceipt['path']);
     }
 }
