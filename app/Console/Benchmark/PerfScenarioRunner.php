@@ -9,6 +9,7 @@ use App\Actions\GetFileListAction;
 use App\Actions\LoadCommentsDrawerAction;
 use App\Actions\LoadFileDiffAction;
 use App\Actions\ResolveProjectAction;
+use App\Actions\ResolveReviewConfigAction;
 use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
 use App\Models\Comment;
@@ -245,7 +246,11 @@ final class PerfScenarioRunner
             }
         });
 
-        $cacheKey = DiffCacheKey::for($project->id, $file['id']);
+        $cacheKey = DiffCacheKey::for(
+            $project->id,
+            $file['id'],
+            $this->app->make(ResolveReviewConfigAction::class)->handle()->movedLineFingerprint(),
+        );
         Cache::put($cacheKey, $diffData, 3600);
 
         // Mount-only renders the loading skeleton; `loadFileDiff` triggers the actual diff-grid + syntax-highlight work.

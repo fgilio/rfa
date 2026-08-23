@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\ResolveReviewConfigAction;
 use App\DTOs\FileSourceSpec;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Mockery\Matcher\Closure;
@@ -28,6 +29,12 @@ function absoluteSourceSpec(string $absolutePath): Closure
     return Mockery::on(fn ($source): bool => $source instanceof FileSourceSpec
         && $source->type === FileSourceSpec::TYPE_ABSOLUTE
         && $source->absolutePath === $absolutePath);
+}
+
+/** The effective moved-line fingerprint every diff cache key is built from. */
+function reviewFingerprint(): string
+{
+    return app(ResolveReviewConfigAction::class)->handle()->movedLineFingerprint();
 }
 
 uses(TestCase::class, LazilyRefreshDatabase::class, Browsable::class, CreatesTestRepo::class)

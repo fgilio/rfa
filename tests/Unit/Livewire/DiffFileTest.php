@@ -19,7 +19,7 @@ beforeEach(function () {
     $this->diffData = DiffFixtureFactory::diffData(path: 'src/Test.php');
 
     // Prime cache so component doesn't try to load from git
-    $cacheKey = DiffCacheKey::for(0, $this->file['id']);
+    $cacheKey = DiffCacheKey::for(0, $this->file['id'], reviewFingerprint());
     Cache::put($cacheKey, $this->diffData, 3600);
 
     // Mock LoadFileDiffAction so it never touches git
@@ -454,7 +454,7 @@ test('expandGap settles the action when the diff is no longer cached', function 
     // render that showed the expander and this click. expandGap hits its first
     // guard, but must still dispatch so the client clears the optimistic spinner
     // (and the paired runtime-diagnostics start mark isn't left orphaned).
-    Cache::forget(DiffCacheKey::for(0, $this->file['id']));
+    Cache::forget(DiffCacheKey::for(0, $this->file['id'], reviewFingerprint()));
 
     Livewire::test('diff-file', [
         'file' => $this->file,

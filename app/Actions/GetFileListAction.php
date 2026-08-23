@@ -10,6 +10,7 @@ use App\DTOs\ReviewChangeset;
 use App\Models\Project;
 use App\Services\ExternalFilesService;
 use App\Services\GitDiffService;
+use App\Services\ReviewConfigService;
 use App\Support\DiffCacheKey;
 use App\Support\FilePathSorter;
 
@@ -18,6 +19,7 @@ final readonly class GetFileListAction
     public function __construct(
         private GitDiffService $gitDiffService,
         private ExternalFilesService $externalFilesService,
+        private ReviewConfigService $reviewConfigService,
     ) {}
 
     /**
@@ -37,8 +39,10 @@ final readonly class GetFileListAction
 
         if ($clearCache && ! $target->isImmutable()) {
             $projectKey = $projectId ?? $repoPath;
-            collect($files)->each(function (array $file) use ($projectKey, $target): void {
-                DiffCacheKey::forget($projectKey, $file['id'], $target->contextKey());
+            $reviewFingerprint = $this->reviewConfigService->resolve()->movedLineFingerprint();
+
+            collect($files)->each(function (array $file) use ($projectKey, $reviewFingerprint, $target): void {
+                DiffCacheKey::forget($projectKey, $file['id'], $reviewFingerprint, $target->contextKey());
             });
         }
 

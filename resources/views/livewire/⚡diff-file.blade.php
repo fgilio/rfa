@@ -4,7 +4,9 @@ use App\Actions\ExpandDiffGapAction;
 use App\Actions\GetFileCopyContentAction;
 use App\Actions\LoadFileDiffAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
+use App\Actions\ResolveReviewConfigAction;
 use App\DTOs\DiffTarget;
+use App\DTOs\ReviewConfig;
 use App\Enums\DiffSide;
 use App\Enums\GitRef;
 use App\Support\DiffCacheKey;
@@ -53,6 +55,8 @@ new class extends Component {
     private bool $contextExpanded = false;
 
     private ?DiffTarget $cachedTarget = null;
+
+    private ?ReviewConfig $cachedReviewConfig = null;
 
     public function placeholder(): string
     {
@@ -242,7 +246,11 @@ HTML;
             $this->diffData['syntaxStyles'] = ($this->diffData['syntaxStyles'] ?? '').$fullDiff['syntaxStyles'];
         }
 
-        Cache::put($this->diffCacheKey(), $this->diffData, now()->addHours($this->buildDiffTarget()->cacheTtlHours()));
+        Cache::put(
+            $this->diffCacheKey(),
+            $this->diffData,
+            now()->addHours($this->buildDiffTarget()->cacheTtlHours($this->reviewConfig()->cacheTtlHours)),
+        );
 
         $durationMs = $this->durationSince($startedAt);
 
@@ -382,11 +390,21 @@ HTML;
         return $this->cachedTarget ??= DiffTarget::fromRefs($this->diffFrom, $this->diffTo);
     }
 
+    private function reviewConfig(): ReviewConfig
+    {
+        return $this->cachedReviewConfig ??= app(ResolveReviewConfigAction::class)->handle();
+    }
+
     private function diffCacheKey(string $variant = ''): string
     {
         $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
 
-        return DiffCacheKey::for($projectKey, $this->file['id'], $this->buildDiffTarget()->contextKey().$variant);
+        return DiffCacheKey::for(
+            $projectKey,
+            $this->file['id'],
+            $this->reviewConfig()->movedLineFingerprint(),
+            $this->buildDiffTarget()->contextKey().$variant,
+        );
     }
 
     public function render(): \Illuminate\Contracts\View\View

@@ -16,6 +16,18 @@ final readonly class ReviewConfig
     ) {}
 
     /**
+     * Cache-identity fingerprint for the moved-line settings. Git colorizes
+     * moves and the parser bakes those markers into the stored diff, so a
+     * cached diff is only valid for the settings that produced it. The mode
+     * only matters while detection is on, so a disabled run collapses to a
+     * single bucket.
+     */
+    public function movedLineFingerprint(): string
+    {
+        return $this->movedLineDetection ? 'm1-'.$this->movedLineMode : 'm0';
+    }
+
+    /**
      * @return array{
      *     diffMaxBytes: int,
      *     sourceMaxBytes: int,

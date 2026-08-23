@@ -7,6 +7,7 @@ namespace App\Actions;
 use App\DTOs\DiffTarget;
 use App\Enums\DiffSide;
 use App\Enums\LineType;
+use App\Services\ReviewConfigService;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 
@@ -14,6 +15,7 @@ final readonly class BuildDiffContextAction
 {
     public function __construct(
         private LoadFileDiffAction $loadFileDiffAction,
+        private ReviewConfigService $reviewConfigService,
     ) {}
 
     /**
@@ -33,6 +35,7 @@ final readonly class BuildDiffContextAction
         $loaded = [];
         $filesById = collect($files)->keyBy('id');
         $contextKey = ($target ?? DiffTarget::workingDirectory())->contextKey();
+        $reviewFingerprint = $this->reviewConfigService->resolve()->movedLineFingerprint();
 
         foreach ($comments as $comment) {
             if ($comment['startLine'] === null) {
@@ -47,7 +50,7 @@ final readonly class BuildDiffContextAction
             $fileId = $file['id'];
 
             if (! array_key_exists($fileId, $loaded)) {
-                $cached = Cache::get(DiffCacheKey::for($repoPath, $fileId, $contextKey));
+                $cached = Cache::get(DiffCacheKey::for($repoPath, $fileId, $reviewFingerprint, $contextKey));
                 $loaded[$fileId] = DiffCacheKey::isCurrentShape($cached)
                     ? $cached
                     : $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false, oldPath: $file['oldPath'] ?? null, target: $target);
