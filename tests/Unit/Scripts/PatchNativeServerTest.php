@@ -1,96 +1,19 @@
 <?php
 
-require_once dirname(__DIR__, 3).'/scripts/patch-native-server.php';
+require_once dirname(__DIR__, 3).'/scripts/patch-nativephp.php';
+require_once dirname(__DIR__, 2).'/Helpers/native-php-dist-fixtures.php';
 
-// -- Fixture: stock NativePHP server bootstrap (unpatched optimize block) --
+// -- Shape changes --
 
-function stockServer(): string
-{
-    return <<<'JS'
-mkdirpSync(join(storagePath, 'framework', 'sessions'));
-mkdirpSync(join(storagePath, 'framework', 'views'));
-mkdirpSync(join(storagePath, 'framework', 'testing'));
-function retrievePhpIniSettings() {
-    return __awaiter(this, void 0, void 0, function* () {
-        let command = ['artisan', 'native:php-ini'];
-        if (runningSecureBuild()) {
-            command.unshift(join(appPath, 'build', '__nativephp_app_bundle'));
-        }
-        return yield promisify(execFile)(state.php, command, phpOptions);
-    });
-}
-function retrieveNativePHPConfig() {
-    return __awaiter(this, void 0, void 0, function* () {
-        let command = ['artisan', 'native:config'];
-        if (runningSecureBuild()) {
-            command.unshift(join(appPath, 'build', '__nativephp_app_bundle'));
-        }
-        return yield promisify(execFile)(state.php, command, phpOptions);
-    });
-}
-        if (env.NIGHTWATCH_INGEST_URI && phpNightWatchPort) {
-            console.log('Starting Nightwatch server...');
-        }
-        if (shouldOptimize(store)) {
-            console.log('Caching view and routes...');
-            let result = callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings);
-            if (result.status !== 0) {
-                console.error('Failed to cache view and routes:', result.stderr.toString());
-            }
-            else {
-                store.set('optimized_version', app.getVersion());
-            }
-        }
-        if (shouldMigrateDatabase(store)) {
-            console.log('Migrating database...');
-        }
-JS;
-}
-
-function tempServer(?string $content = null): string
-{
-    $dir = sys_get_temp_dir().'/rfa_test_server_'.getmypid().'_'.uniqid('', true);
-    mkdir($dir, 0755, true);
-    $path = $dir.'/php.js';
-
-    if ($content !== null) {
-        file_put_contents($path, $content);
-    }
-
-    return $path;
-}
-
-afterEach(function () {
-    foreach (glob(sys_get_temp_dir().'/rfa_test_server_'.getmypid().'_*', GLOB_ONLYDIR) as $dir) {
-        array_map('unlink', glob($dir.'/*'));
-        rmdir($dir);
-    }
+test('reports a shape change when the optimize block is missing', function () {
+    expect(rfaPatchServerOptimize('const something = "no optimize block here";'))->toBeNull();
 });
 
-// -- Missing file --
-
-test('returns not_found when server file does not exist', function () {
-    $path = tempServer(); // dir exists but file does not
-
-    expect(patchNativeServerOptimize($path))->toBe('not_found');
-});
-
-// -- Block not found --
-
-test('returns block_not_found when the optimize block is missing', function () {
-    $path = tempServer('const something = "no optimize block here";');
-
-    expect(patchNativeServerOptimize($path))->toBe('block_not_found');
-
-    // File should be unchanged
-    expect(file_get_contents($path))->toBe('const something = "no optimize block here";');
-});
-
-test('returns block_not_found when only some edits can apply (partial patch)', function () {
+test('reports a shape change when only some edits can apply (partial patch)', function () {
     // A file where the optimize block exists but the opcache anchors do not —
     // e.g. a NativePHP bump reshaped the mkdir / pre-flight blocks. The optimize
-    // edit alone must NOT be reported as already_patched, or the opcache warm-up
-    // would silently vanish. The file must also be left untouched.
+    // edit alone must NOT count as a hit, or the opcache warm-up would silently
+    // vanish; refusing here is what keeps the patch set from writing anything.
     $optimizeOnly = <<<'JS'
         if (shouldOptimize(store)) {
             console.log('Caching view and routes...');
@@ -103,20 +26,13 @@ test('returns block_not_found when only some edits can apply (partial patch)', f
             }
         }
 JS;
-    $path = tempServer($optimizeOnly);
-
-    expect(patchNativeServerOptimize($path))->toBe('block_not_found');
-    expect(file_get_contents($path))->toBe($optimizeOnly);
+    expect(rfaPatchServerOptimize($optimizeOnly))->toBeNull();
 });
 
 // -- Fresh patch --
 
-test('patches the optimize block and returns patched', function () {
-    $path = tempServer(stockServer());
-
-    expect(patchNativeServerOptimize($path))->toBe('patched');
-
-    $content = file_get_contents($path);
+test('patches the optimize block', function () {
+    $content = rfaPatchServerOptimize(stockServer());
 
     expect($content)
         ->toContain('[rfa patch]')
@@ -137,10 +53,7 @@ test('patches the optimize block and returns patched', function () {
 });
 
 test('warms the pre-flight artisan calls with a persistent opcache file cache', function () {
-    $path = tempServer(stockServer());
-
-    patchNativeServerOptimize($path);
-    $content = file_get_contents($path);
+    $content = rfaPatchServerOptimize(stockServer());
 
     expect($content)
         // Cache directory created at module load, before any PHP call runs.
@@ -164,18 +77,11 @@ test('fails loudly when the opcache cache-dir mkdir anchor is reshaped, despite 
         "mkdirpSync(join(storagePath, 'framework', 'cache'));",
         stockServer(),
     );
-    $path = tempServer($reshaped);
-
-    expect(patchNativeServerOptimize($path))->toBe('block_not_found');
-    // block_not_found must not leave a half-applied file on disk.
-    expect(file_get_contents($path))->toBe($reshaped);
+    expect(rfaPatchServerOptimize($reshaped))->toBeNull();
 });
 
 test('the cache step only runs behind the version gate after patching', function () {
-    $path = tempServer(stockServer());
-
-    patchNativeServerOptimize($path);
-    $content = file_get_contents($path);
+    $content = rfaPatchServerOptimize(stockServer());
 
     // The stock build ran `optimize` unconditionally on every launch. After
     // patching the only `optimize` call lives inside `if (rfaNeedsFullOptimize)`,
@@ -285,9 +191,7 @@ JS;
 // output (real opcache edits) with the optimize block reverted to old config:cache.
 function oldPatchedServer(): string
 {
-    $path = tempServer(stockServer());
-    patchNativeServerOptimize($path);
-    $current = file_get_contents($path);
+    $current = rfaPatchServerOptimize(stockServer());
 
     // Guard: if the current patch reshaped, this revert would silently no-op and
     // the "old" fixture would actually be the new shape. Assert it really swaps.
@@ -308,11 +212,7 @@ test('a file patched by the previous revision is NOT mistaken for already_patche
 });
 
 test('upgrades a previously-patched file to the skip-entirely shape', function () {
-    $path = tempServer(oldPatchedServer());
-
-    expect(patchNativeServerOptimize($path))->toBe('patched');
-
-    $content = file_get_contents($path);
+    $content = rfaPatchServerOptimize(oldPatchedServer());
 
     expect($content)
         // The old config:cache warm-launch branch is gone…
@@ -323,48 +223,27 @@ test('upgrades a previously-patched file to the skip-entirely shape', function (
         ->toContain('if (rfaNeedsFullOptimize) {');
 
     // The upgrade is byte-identical to a fresh stock → current patch.
-    $fresh = tempServer(stockServer());
-    patchNativeServerOptimize($fresh);
-    expect($content)->toBe(file_get_contents($fresh));
+    expect($content)->toBe(rfaPatchServerOptimize(stockServer()));
 });
 
 test('upgrading a previously-patched file is idempotent', function () {
-    $path = tempServer(oldPatchedServer());
+    $upgraded = rfaPatchServerOptimize(oldPatchedServer());
 
-    patchNativeServerOptimize($path);
-
-    expect(patchNativeServerOptimize($path))->toBe('already_patched');
+    expect(rfaPatchServerOptimize($upgraded))->toBe($upgraded);
 });
 
 // -- Idempotency --
 
-test('returns already_patched on second run', function () {
-    $path = tempServer(stockServer());
+test('a second run leaves an already-patched file untouched', function () {
+    $patched = rfaPatchServerOptimize(stockServer());
 
-    patchNativeServerOptimize($path);
-
-    expect(patchNativeServerOptimize($path))->toBe('already_patched');
-});
-
-test('does not duplicate the patch on repeated runs', function () {
-    $path = tempServer(stockServer());
-
-    patchNativeServerOptimize($path);
-    $contentAfterFirst = file_get_contents($path);
-
-    patchNativeServerOptimize($path);
-    $contentAfterSecond = file_get_contents($path);
-
-    expect($contentAfterSecond)->toBe($contentAfterFirst);
+    expect(rfaPatchServerOptimize($patched))->toBe($patched);
 });
 
 // -- Content integrity --
 
 test('preserves the surrounding server code', function () {
-    $path = tempServer(stockServer());
-
-    patchNativeServerOptimize($path);
-    $content = file_get_contents($path);
+    $content = rfaPatchServerOptimize(stockServer());
 
     expect($content)
         ->toContain("console.log('Starting Nightwatch server...')")
@@ -375,58 +254,12 @@ test('preserves the surrounding server code', function () {
 
 // -- Pre-flight cache (dist/index.js) --
 
-function stockIndex(): string
-{
-    return <<<'JS'
-import electronUpdater from 'electron-updater';
-class App {
-    loadConfig() {
-        return __awaiter(this, void 0, void 0, function* () {
-            let config = {};
-            try {
-                const result = yield retrieveNativePHPConfig();
-                config = JSON.parse(result.stdout);
-            }
-            catch (error) {
-                console.error(error);
-            }
-            return config;
-        });
-    }
-    loadPhpIni() {
-        return __awaiter(this, void 0, void 0, function* () {
-            let config = {};
-            try {
-                const result = yield retrievePhpIniSettings();
-                config = JSON.parse(result.stdout);
-            }
-            catch (error) {
-                console.error(error);
-            }
-            return config;
-        });
-    }
-}
-JS;
-}
-
-test('pre-flight: returns not_found when index file does not exist', function () {
-    expect(patchNativePreflightCache(tempServer()))->toBe('not_found');
-});
-
-test('pre-flight: returns block_not_found when the load methods are missing', function () {
-    $path = tempServer('const x = 1;');
-
-    expect(patchNativePreflightCache($path))->toBe('block_not_found');
-    expect(file_get_contents($path))->toBe('const x = 1;');
+test('pre-flight: reports a shape change when the load methods are missing', function () {
+    expect(rfaPatchPreflightCache('const x = 1;'))->toBeNull();
 });
 
 test('pre-flight: caches native:config and native:php-ini per app version, fail-open', function () {
-    $path = tempServer(stockIndex());
-
-    expect(patchNativePreflightCache($path))->toBe('patched');
-
-    $content = file_get_contents($path);
+    $content = rfaPatchPreflightCache(stockIndex());
 
     expect($content)
         ->toContain('import Store from "electron-store"; // [rfa preflight cache]')
@@ -445,7 +278,7 @@ test('pre-flight: caches native:config and native:php-ini per app version, fail-
     expect(substr_count($content, 'import Store from "electron-store"; // [rfa preflight cache]'))->toBe(1);
 });
 
-test('pre-flight: returns block_not_found when only one method can be patched (partial)', function () {
+test('pre-flight: reports a shape change when only one method can be patched (partial)', function () {
     // Only loadConfig present — loadPhpIni reshaped by a NativePHP bump. Must not
     // report success with the pre-flight cache half-applied.
     $configOnly = <<<'JS'
@@ -464,20 +297,13 @@ import electronUpdater from 'electron-updater';
         });
     }
 JS;
-    $path = tempServer($configOnly);
-
-    expect(patchNativePreflightCache($path))->toBe('block_not_found');
-    expect(file_get_contents($path))->toBe($configOnly);
+    expect(rfaPatchPreflightCache($configOnly))->toBeNull();
 });
 
 test('pre-flight: is idempotent', function () {
-    $path = tempServer(stockIndex());
+    $first = rfaPatchPreflightCache(stockIndex());
 
-    patchNativePreflightCache($path);
-    $first = file_get_contents($path);
-
-    expect(patchNativePreflightCache($path))->toBe('already_patched');
-    expect(file_get_contents($path))->toBe($first);
+    expect(rfaPatchPreflightCache($first))->toBe($first);
 });
 
 test('the vendored NativePHP main bootstrap carries the pre-flight cache', function () {
@@ -491,47 +317,12 @@ test('the vendored NativePHP main bootstrap carries the pre-flight cache', funct
 
 // -- Splash window (dist/index.js) --
 
-function stockIndexForSplash(): string
-{
-    return <<<'JS'
-import { app, session, powerMonitor } from "electron";
-import electronUpdater from 'electron-updater';
-const { autoUpdater } = electronUpdater;
-class NativePHP {
-    registerListeners(app) {
-        app.on("browser-window-created", (_, window) => {
-            optimizer.watchWindowShortcuts(window);
-        });
-    }
-    bootstrapApp(app) {
-        return __awaiter(this, void 0, void 0, function* () {
-            yield app.whenReady();
-            const config = yield this.loadConfig();
-            yield this.startPhpApp();
-            yield notifyLaravel("booted");
-        });
-    }
-}
-JS;
-}
-
-test('splash: returns not_found when index file does not exist', function () {
-    expect(patchNativeSplashWindow(tempServer()))->toBe('not_found');
-});
-
-test('splash: returns block_not_found when the bootstrap anchors are missing', function () {
-    $path = tempServer('const x = 1;');
-
-    expect(patchNativeSplashWindow($path))->toBe('block_not_found');
-    expect(file_get_contents($path))->toBe('const x = 1;');
+test('splash: reports a shape change when the bootstrap anchors are missing', function () {
+    expect(rfaPatchSplashWindow('const x = 1;'))->toBeNull();
 });
 
 test('splash: opens an early window before PHP boots, hands off, and is fail-open', function () {
-    $path = tempServer(stockIndexForSplash());
-
-    expect(patchNativeSplashWindow($path))->toBe('patched');
-
-    $content = file_get_contents($path);
+    $content = rfaPatchSplashWindow(stockIndexForSplash());
 
     expect($content)
         // BrowserWindow + nativeTheme are pulled into the electron import so the
@@ -558,11 +349,7 @@ test('splash: opens an early window before PHP boots, hands off, and is fail-ope
 });
 
 test('splash: follows the OS light/dark appearance (matches RFA, which follows the system)', function () {
-    $path = tempServer(stockIndexForSplash());
-
-    patchNativeSplashWindow($path);
-
-    expect(file_get_contents($path))
+    expect(rfaPatchSplashWindow(stockIndexForSplash()))
         // nativeTheme is imported so the native window fill can be tinted.
         ->toContain('powerMonitor, BrowserWindow, nativeTheme')
         // The native window backgroundColor tracks the OS appearance (no flash):
@@ -584,9 +371,7 @@ test('splash: follows the OS light/dark appearance (matches RFA, which follows t
 // stock, then reverse the three theme edits back to the dark-only shape.
 function oldThemedSplashServer(): string
 {
-    $path = tempServer(stockIndexForSplash());
-    patchNativeSplashWindow($path);
-    $themed = file_get_contents($path);
+    $themed = rfaPatchSplashWindow(stockIndexForSplash());
 
     $newHtmlBlock = <<<'JS'
 // [rfa splash] Self-contained splash markup — inline styles only, no external
@@ -639,11 +424,7 @@ test('splash: a dark-only patched file is NOT mistaken for fully patched (would 
 });
 
 test('splash: upgrades a previously dark-only splash to the OS-following themed shape', function () {
-    $path = tempServer(oldThemedSplashServer());
-
-    expect(patchNativeSplashWindow($path))->toBe('patched');
-
-    $content = file_get_contents($path);
+    $content = rfaPatchSplashWindow(oldThemedSplashServer());
 
     expect($content)
         ->toContain('powerMonitor, BrowserWindow, nativeTheme')
@@ -652,35 +433,23 @@ test('splash: upgrades a previously dark-only splash to the OS-following themed 
         ->not->toContain('#0d1117');
 
     // The upgrade is byte-identical to a fresh stock → themed patch.
-    $fresh = tempServer(stockIndexForSplash());
-    patchNativeSplashWindow($fresh);
-    expect($content)->toBe(file_get_contents($fresh));
+    expect($content)->toBe(rfaPatchSplashWindow(stockIndexForSplash()));
 });
 
 test('splash: upgrading a previously dark-only splash is idempotent', function () {
-    $path = tempServer(oldThemedSplashServer());
+    $upgraded = rfaPatchSplashWindow(oldThemedSplashServer());
 
-    patchNativeSplashWindow($path);
-
-    expect(patchNativeSplashWindow($path))->toBe('already_patched');
+    expect(rfaPatchSplashWindow($upgraded))->toBe($upgraded);
 });
 
 test('splash: preserves the existing browser-window-created listener', function () {
-    $path = tempServer(stockIndexForSplash());
-
-    patchNativeSplashWindow($path);
-
     // The patch adds its own handoff listener without clobbering NativePHP's.
-    expect(file_get_contents($path))
+    expect(rfaPatchSplashWindow(stockIndexForSplash()))
         ->toContain('optimizer.watchWindowShortcuts(window)');
 });
 
 test('splash: cleans up its window-created listener and closes on a torn-down window', function () {
-    $path = tempServer(stockIndexForSplash());
-
-    patchNativeSplashWindow($path);
-
-    expect(file_get_contents($path))
+    expect(rfaPatchSplashWindow(stockIndexForSplash()))
         // The handoff listener is retained on the instance so it can be removed…
         ->toContain('this.rfaSplashListener = rfaOnCreated')
         // …and rfaCloseSplash removes it on the timeout path (no main window ever
@@ -693,24 +462,17 @@ test('splash: cleans up its window-created listener and closes on a torn-down wi
 });
 
 test('splash: is idempotent', function () {
-    $path = tempServer(stockIndexForSplash());
+    $first = rfaPatchSplashWindow(stockIndexForSplash());
 
-    patchNativeSplashWindow($path);
-    $first = file_get_contents($path);
-
-    expect(patchNativeSplashWindow($path))->toBe('already_patched');
-    expect(file_get_contents($path))->toBe($first);
+    expect(rfaPatchSplashWindow($first))->toBe($first);
 });
 
-test('splash: returns block_not_found when only the import anchor is present (partial)', function () {
+test('splash: reports a shape change when only the import anchor is present (partial)', function () {
     // A NativePHP bump that reshaped the class but left the electron import. The
-    // import edit alone must not report success with the splash half-applied, and
-    // the file must be left untouched.
+    // import edit alone must not count as a hit with the splash half-applied.
     $importOnly = 'import { app, session, powerMonitor } from "electron";';
-    $path = tempServer($importOnly);
 
-    expect(patchNativeSplashWindow($path))->toBe('block_not_found');
-    expect(file_get_contents($path))->toBe($importOnly);
+    expect(rfaPatchSplashWindow($importOnly))->toBeNull();
 });
 
 test('the vendored NativePHP main bootstrap carries the splash window', function () {
