@@ -14,24 +14,21 @@ beforeEach(function () {
     $this->tmpDir = $this->createTempDirectory('rfa_ignore_test_');
 });
 
-test('always excludes lock files without rfaignore', function () {
-    $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
+test('always excludes lock files, with or without an rfaignore', function () {
+    $rules = $this->service->rules($this->tmpDir);
 
-    expect($pathspecs)->toContain(':(glob,exclude)**/package-lock.json');
-    expect($pathspecs)->toContain(':(glob,exclude)**/pnpm-lock.yaml');
-    expect($pathspecs)->toContain(':(glob,exclude)**/yarn.lock');
-    expect($pathspecs)->toContain(':(glob,exclude)**/bun.lock');
-    expect($pathspecs)->toContain(':(glob,exclude)**/composer.lock');
-    expect($pathspecs)->toHaveCount(5);
+    foreach (IgnoreService::ALWAYS_EXCLUDE as $lockfile) {
+        expect($this->service->isPathExcluded($lockfile, $rules))->toBeTrue();
+        expect($this->service->isPathExcluded("packages/app/{$lockfile}", $rules))->toBeTrue();
+    }
 });
 
-test('returns only defaults when no rfaignore exists', function () {
-    $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
+test('a negation cannot re-include a lock file', function () {
+    File::put($this->tmpDir.'/.rfaignore', "!composer.lock\n");
 
-    expect($pathspecs)->toHaveCount(5);
-    foreach ($pathspecs as $ps) {
-        expect($ps)->toStartWith(':(glob,exclude)**/');
-    }
+    $rules = $this->service->rules($this->tmpDir);
+
+    expect($this->service->isPathExcluded('composer.lock', $rules))->toBeTrue();
 });
 
 test('reads custom patterns from rfaignore', function () {
@@ -43,46 +40,44 @@ test('reads custom patterns from rfaignore', function () {
 
     File::put($this->tmpDir.'/.rfaignore', implode("\n", $patterns));
 
-    $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
+    $rules = $this->service->rules($this->tmpDir);
 
-    expect($pathspecs)->toHaveCount(5 + $count);
+    expect($rules)->toHaveCount($count);
     foreach ($patterns as $pattern) {
-        expect($pathspecs)->toContain(":(glob,exclude)**/{$pattern}");
+        expect($this->service->isPathExcluded($pattern, $rules))->toBeTrue();
+        expect($this->service->isPathExcluded("src/{$pattern}", $rules))->toBeTrue();
     }
 });
 
 test('ignores comments and blank lines in rfaignore', function () {
     $validPattern = $this->faker->word().'.log';
-    $content = "# This is a comment\n\n{$validPattern}\n   \n# Another comment\n";
 
-    File::put($this->tmpDir.'/.rfaignore', $content);
+    File::put($this->tmpDir.'/.rfaignore', "# This is a comment\n\n{$validPattern}\n   \n# Another comment\n");
 
-    $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
+    $rules = $this->service->rules($this->tmpDir);
 
-    expect($pathspecs)->toHaveCount(6); // 5 defaults + 1 valid
-    expect($pathspecs)->toContain(":(glob,exclude)**/{$validPattern}");
+    expect($rules)->toHaveCount(1);
+    expect($this->service->isPathExcluded($validPattern, $rules))->toBeTrue();
 });
 
 test('handles glob patterns in rfaignore', function () {
     $ext = $this->faker->fileExtension();
-    $globPattern = "*.{$ext}";
 
-    File::put($this->tmpDir.'/.rfaignore', $globPattern);
+    File::put($this->tmpDir.'/.rfaignore', "*.{$ext}");
 
-    $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
+    $rules = $this->service->rules($this->tmpDir);
 
-    expect($pathspecs)->toContain(":(exclude){$globPattern}");
+    expect($this->service->isPathExcluded("report.{$ext}", $rules))->toBeTrue();
 });
 
-test('getExcludePathspecs skips negation lines', function () {
-    File::put($this->tmpDir.'/.rfaignore', "*.log\n!keep.log\n");
+test('a negation line re-includes rather than excluding the literal name', function () {
+    File::put($this->tmpDir.'/.rfaignore', "build/\n!notes.txt\n");
 
-    $pathspecs = $this->service->getExcludePathspecs($this->tmpDir);
+    $rules = $this->service->rules($this->tmpDir);
 
-    expect($pathspecs)->toContain(':(exclude)*.log');
-    // The negation must NOT become a literal exclude for a file named "!keep.log".
-    expect($pathspecs)->not->toContain(':(glob,exclude)**/!keep.log');
-    expect($pathspecs)->not->toContain(':(exclude)!keep.log');
+    expect($this->service->isPathExcluded('build/out.js', $rules))->toBeTrue()
+        ->and($this->service->isPathExcluded('notes.txt', $rules))->toBeFalse()
+        ->and($this->service->isPathExcluded('!notes.txt', $rules))->toBeFalse();
 });
 
 // -- isPathExcluded tests (operate on compiled rules) --

@@ -7,11 +7,15 @@ namespace App\Services;
 use Illuminate\Support\Facades\File;
 
 /**
- * Filters files out of the changed-files list using `.rfaignore` — a
- * gitignore-flavoured file RFA reads itself (git's own ignore handling never
- * sees it). Tracked changes are pre-filtered by git via {@see self::getExcludePathspecs()};
- * untracked files are filtered in PHP via {@see self::isPathExcluded()}, which
- * is where the gitignore semantics below live.
+ * Filters files out of the changed-files list using `.rfaignore` (a
+ * gitignore-flavoured file RFA reads itself, since git's own ignore handling
+ * never sees it).
+ *
+ * {@see self::isPathExcluded()} is the only evaluator. Tracked and untracked
+ * files run through it alike, so a file's visibility never turns on whether git
+ * happens to track it. Git pathspecs are deliberately not used for this: a
+ * pathspec can express an exclude but not a `!` re-include, which is exactly
+ * where the two would disagree.
  *
  * Supported `.rfaignore` syntax (a practical subset of gitignore):
  * - `# comment` and blank lines are skipped.
@@ -21,13 +25,13 @@ use Illuminate\Support\Facades\File;
  * - a bare `name` matches at any depth (basename match).
  * - `*` matches within a path segment, `?` a single char, `**` across segments.
  *
- * Note: `!` re-inclusion is honoured for untracked files (the PHP path). Tracked
- * files are filtered by git pathspecs, which can express the exclude but not the
- * re-include, so a `!` rule does not resurrect a tracked file an exclude hid.
+ * A rename is judged on the path the user sees (the new one), so moving a file
+ * out of an ignored directory reveals it and moving one in hides it.
  */
 class IgnoreService
 {
-    private const ALWAYS_EXCLUDE = [
+    /** Lockfiles RFA hides from every review, ahead of and immune to `.rfaignore`. */
+    public const ALWAYS_EXCLUDE = [
         'package-lock.json',
         'pnpm-lock.yaml',
         'yarn.lock',
@@ -35,14 +39,25 @@ class IgnoreService
         'composer.lock',
     ];
 
+    /** @var array<int, array{regex: string, negated: bool}>|null */
+    private ?array $lockfileRules = null;
+
     /**
      * Whether a repo-relative path is excluded, applying the rules in order with
      * last-match-wins so `!` negations can re-include.
+     *
+     * Lockfiles are checked first and are not re-includable: they carry no
+     * review value at any size, and leaving them negatable would make the one
+     * rule set RFA guarantees depend on user input.
      *
      * @param  array<int, array{regex: string, negated: bool}>  $rules  Output of {@see self::rules()}.
      */
     public function isPathExcluded(string $path, array $rules): bool
     {
+        if ($this->matchesAny($path, $this->lockfileRules())) {
+            return true;
+        }
+
         $excluded = false;
 
         foreach ($rules as $rule) {
@@ -55,8 +70,9 @@ class IgnoreService
     }
 
     /**
-     * Parse the effective ignore rules for a repo (always-excluded lockfiles plus
-     * `.rfaignore`), in order, each precompiled to a matcher regex.
+     * The repo's `.rfaignore` rules in order, each precompiled to a matcher
+     * regex. Lockfiles are not included: {@see self::isPathExcluded()} applies
+     * them ahead of these.
      *
      * @return array<int, array{regex: string, negated: bool}>
      */
@@ -81,50 +97,35 @@ class IgnoreService
     }
 
     /**
-     * Git pathspecs that exclude the same files for tracked-change commands.
-     * Negation (`!`) lines are skipped — a pathspec can exclude but not re-include,
-     * and emitting one would wrongly exclude a file literally named like the rule.
-     *
-     * @return array<int, string>
-     */
-    public function getExcludePathspecs(string $repoPath): array
-    {
-        return collect($this->rawPatterns($repoPath))
-            ->reject(fn (string $pattern): bool => str_starts_with($pattern, '!'))
-            ->map(function (string $pattern): string {
-                $needsGlob = ! str_contains($pattern, '/') && ! str_contains($pattern, '*');
-
-                return $needsGlob
-                    ? ":(glob,exclude)**/{$pattern}"
-                    : ":(exclude){$pattern}";
-            })
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Raw ignore lines: the always-excluded lockfiles followed by the user's
-     * `.rfaignore`, with comments and blanks stripped.
+     * The user's `.rfaignore` lines, with comments and blanks stripped.
      *
      * @return array<int, string>
      */
     private function rawPatterns(string $repoPath): array
     {
-        $patterns = self::ALWAYS_EXCLUDE;
-
         $ignoreFile = $repoPath.'/.rfaignore';
-        if (File::exists($ignoreFile)) {
-            $patterns = array_merge(
-                $patterns,
-                collect(explode("\n", File::get($ignoreFile)))
-                    ->map(fn (string $line): string => trim($line))
-                    ->reject(fn (string $line): bool => $line === '' || str_starts_with($line, '#'))
-                    ->values()
-                    ->all()
-            );
+
+        if (! File::exists($ignoreFile)) {
+            return [];
         }
 
-        return $patterns;
+        return collect(explode("\n", File::get($ignoreFile)))
+            ->map(fn (string $line): string => trim($line))
+            ->reject(fn (string $line): bool => $line === '' || str_starts_with($line, '#'))
+            ->values()
+            ->all();
+    }
+
+    /** @return array<int, array{regex: string, negated: bool}> */
+    private function lockfileRules(): array
+    {
+        return $this->lockfileRules ??= $this->compile(self::ALWAYS_EXCLUDE);
+    }
+
+    /** @param array<int, array{regex: string, negated: bool}> $rules */
+    private function matchesAny(string $path, array $rules): bool
+    {
+        return collect($rules)->contains(fn (array $rule): bool => preg_match($rule['regex'], $path) === 1);
     }
 
     /**
