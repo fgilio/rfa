@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\CleanExpiredTrashAction;
+use App\Enums\DiscardOperation;
 use App\Models\Project;
 use App\Models\TrashedFile;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -26,7 +27,7 @@ test('removes expired entries and their storage files', function () {
     $expired = TrashedFile::create([
         'project_id' => $this->project->id,
         'file_path' => 'old.txt',
-        'file_status' => 'modified',
+        'operation' => DiscardOperation::ModificationReverted,
         'expires_at' => now()->subMinutes(5),
     ]);
     Storage::put("trash/{$expired->id}", 'old content');
@@ -41,14 +42,14 @@ test('returns active entries only', function () {
     TrashedFile::create([
         'project_id' => $this->project->id,
         'file_path' => 'active.txt',
-        'file_status' => 'modified',
+        'operation' => DiscardOperation::ModificationReverted,
         'expires_at' => now()->addMinutes(10),
     ]);
 
     TrashedFile::create([
         'project_id' => $this->project->id,
         'file_path' => 'expired.txt',
-        'file_status' => 'added',
+        'operation' => DiscardOperation::AddedFileRemoved,
         'expires_at' => now()->subMinute(),
     ]);
 
@@ -69,7 +70,7 @@ test('does not touch entries from other projects', function () {
     $otherExpired = TrashedFile::create([
         'project_id' => $otherProject->id,
         'file_path' => 'other.txt',
-        'file_status' => 'modified',
+        'operation' => DiscardOperation::ModificationReverted,
         'expires_at' => now()->subMinutes(5),
     ]);
 
@@ -83,7 +84,7 @@ test('returns empty array when no active entries', function () {
     TrashedFile::create([
         'project_id' => $this->project->id,
         'file_path' => 'expired.txt',
-        'file_status' => 'modified',
+        'operation' => DiscardOperation::ModificationReverted,
         'expires_at' => now()->subMinute(),
     ]);
 

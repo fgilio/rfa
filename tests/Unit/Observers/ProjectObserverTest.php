@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\ResolveStartupRouteAction;
+use App\Enums\DiscardOperation;
 use App\Models\Project;
 use App\Models\TrashedFile;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -39,7 +40,7 @@ test('deleting a project purges its trashed-file content blobs', function () {
     $trashed = TrashedFile::create([
         'project_id' => $project->id,
         'file_path' => 'a.txt',
-        'file_status' => 'modified',
+        'operation' => DiscardOperation::ModificationReverted,
         'expires_at' => now()->addMinutes(30),
     ]);
     Storage::put($trashed->blobPath(), 'discarded content');

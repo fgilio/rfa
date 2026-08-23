@@ -87,6 +87,21 @@ test('restores untracked added file', function () {
     expect(File::get($this->tmpDir.'/new.txt'))->toBe("brand new\n");
 });
 
+test('restores tracked added file', function () {
+    File::put($this->tmpDir.'/staged.txt', "staged content\n");
+    $this->runTestRepoCommand($this->tmpDir, 'git add staged.txt');
+
+    $trashed = $this->discardAction->handle(
+        $this->tmpDir, 'staged.txt', 'added', $this->project->id, isUntracked: false
+    );
+
+    expect(File::exists($this->tmpDir.'/staged.txt'))->toBeFalse();
+
+    $this->restoreAction->handle($trashed->id, $this->tmpDir, $this->project->id);
+
+    expect(File::get($this->tmpDir.'/staged.txt'))->toBe("staged content\n");
+});
+
 // -- renamed files --
 
 test('restores renamed file', function () {

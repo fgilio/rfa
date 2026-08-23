@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\DiscardOperation;
 use App\Models\Project;
 use App\Models\TrashedFile;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -23,13 +24,20 @@ class TrashedFileFactory extends Factory
         return [
             'project_id' => Project::factory(),
             'file_path' => 'src/'.fake()->unique()->slug(2).'.php',
-            'file_status' => 'modified',
+            'operation' => DiscardOperation::ModificationReverted,
             'old_path' => null,
-            'is_untracked' => false,
             'is_symlink' => false,
             'comments' => null,
             'expires_at' => now()->addMinutes(30),
         ];
+    }
+
+    public function renamed(string $oldPath = 'src/OldName.php'): static
+    {
+        return $this->state(fn () => [
+            'operation' => DiscardOperation::RenameReverted,
+            'old_path' => $oldPath,
+        ]);
     }
 
     public function expired(): static

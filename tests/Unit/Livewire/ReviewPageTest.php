@@ -11,6 +11,7 @@ use App\Actions\ResolveRangeToWorkingAction;
 use App\Actions\ScanReviewFilesAction;
 use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
+use App\Enums\DiscardOperation;
 use App\Models\Comment;
 use App\Models\CommentReply;
 use App\Models\Project;
@@ -700,7 +701,7 @@ test('discardFileChanges dispatches undo-available with file name', function () 
     $trashRecord = TrashedFile::create([
         'project_id' => $this->project->id,
         'file_path' => 'src/Foo.php',
-        'file_status' => 'modified',
+        'operation' => DiscardOperation::ModificationReverted,
         'expires_at' => now()->addMinutes(30),
     ]);
 
@@ -735,7 +736,7 @@ test('discardFileChanges includes comment count in undo message', function () {
     $trashRecord = TrashedFile::create([
         'project_id' => $this->project->id,
         'file_path' => 'src/Foo.php',
-        'file_status' => 'modified',
+        'operation' => DiscardOperation::ModificationReverted,
         'expires_at' => now()->addMinutes(30),
     ]);
 
