@@ -10,7 +10,6 @@ use App\Exceptions\GitCommandException;
 use App\Services\GitProcessService;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Exception\ExceptionInterface as ProcessException;
-use Throwable;
 
 final readonly class ResolveBranchBaseAction
 {
@@ -99,7 +98,7 @@ final readonly class ResolveBranchBaseAction
         string $baseBranch,
         ?string $baseSha,
         string $stage,
-        Throwable $exception,
+        GitCommandException|ProcessException $exception,
     ): BranchBaseResult {
         Log::warning('git.branch_base.resolve_failed', [
             'reason' => 'branch_base_resolve_failed',
