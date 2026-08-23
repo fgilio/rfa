@@ -9,6 +9,8 @@ use App\Enums\BranchBaseUnavailableReason;
 use App\Exceptions\GitCommandException;
 use App\Services\GitProcessService;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\Process\Exception\ExceptionInterface as ProcessException;
+use Throwable;
 
 final readonly class ResolveBranchBaseAction
 {
@@ -37,7 +39,7 @@ final readonly class ResolveBranchBaseAction
 
         try {
             $baseSha = $this->resolveBaseRef($repoPath, $base);
-        } catch (GitCommandException $exception) {
+        } catch (GitCommandException|ProcessException $exception) {
             return $this->commandUnavailable($base, null, 'resolve_ref', $exception);
         }
 
@@ -47,8 +49,8 @@ final readonly class ResolveBranchBaseAction
 
         try {
             $mergeBase = trim($this->gitProcessService->run($repoPath, ['merge-base', $baseSha, 'HEAD']));
-        } catch (GitCommandException $exception) {
-            if ($exception->exitCode === 1) {
+        } catch (GitCommandException|ProcessException $exception) {
+            if ($exception instanceof GitCommandException && $exception->exitCode === 1) {
                 return BranchBaseResult::unavailable($base, null, BranchBaseUnavailableReason::UnrelatedHistory);
             }
 
@@ -61,7 +63,7 @@ final readonly class ResolveBranchBaseAction
 
         try {
             $hashes = $this->commitsBetween($repoPath, $mergeBase, 'HEAD');
-        } catch (GitCommandException $exception) {
+        } catch (GitCommandException|ProcessException $exception) {
             return $this->commandUnavailable($base, $mergeBase, 'list_commits', $exception);
         }
 
@@ -97,13 +99,13 @@ final readonly class ResolveBranchBaseAction
         string $baseBranch,
         ?string $baseSha,
         string $stage,
-        GitCommandException $exception,
+        Throwable $exception,
     ): BranchBaseResult {
         Log::warning('git.branch_base.resolve_failed', [
             'reason' => 'branch_base_resolve_failed',
             'base_branch' => $baseBranch,
             'stage' => $stage,
-            'exit_code' => $exception->exitCode,
+            'exit_code' => $exception instanceof GitCommandException ? $exception->exitCode : 1,
         ]);
 
         return BranchBaseResult::unavailable(

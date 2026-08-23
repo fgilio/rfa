@@ -6,6 +6,9 @@ use App\Enums\BranchBaseUnavailableReason;
 use App\Exceptions\GitCommandException;
 use App\Services\GitProcessService;
 use Illuminate\Support\Facades\File;
+use Symfony\Component\Process\Exception\ProcessStartFailedException;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -125,6 +128,34 @@ test('returns Unavailable when listing the resolved range fails', function () {
         ->and($result->unavailableReason)->toBe(BranchBaseUnavailableReason::CommandFailed)
         ->and($result->baseSha)->toBe('merge-base')
         ->and($result->hashesInRange)->toBeEmpty();
+});
+
+test('returns Unavailable when merge-base times out', function () {
+    $process = new Process(['git', 'merge-base']);
+    $process->setTimeout(30);
+    $git = Mockery::mock(GitProcessService::class);
+    $git->shouldReceive('run')->once()->andReturn("base-sha\n");
+    $git->shouldReceive('run')->once()->andThrow(
+        new ProcessTimedOutException($process, ProcessTimedOutException::TYPE_GENERAL),
+    );
+
+    $result = (new ResolveBranchBaseAction($git))->handle('/tmp/repo', 'main', 'feature');
+
+    expect($result->state)->toBe(BranchBaseState::Unavailable)
+        ->and($result->unavailableReason)->toBe(BranchBaseUnavailableReason::CommandFailed);
+});
+
+test('returns Unavailable when merge-base cannot start', function () {
+    $git = Mockery::mock(GitProcessService::class);
+    $git->shouldReceive('run')->once()->andReturn("base-sha\n");
+    $git->shouldReceive('run')->once()->andThrow(
+        new ProcessStartFailedException(new Process(['git', 'merge-base']), 'unable to start'),
+    );
+
+    $result = (new ResolveBranchBaseAction($git))->handle('/tmp/repo', 'main', 'feature');
+
+    expect($result->state)->toBe(BranchBaseState::Unavailable)
+        ->and($result->unavailableReason)->toBe(BranchBaseUnavailableReason::CommandFailed);
 });
 
 test('treats detached HEAD (null currentBranch) as not on base branch', function () {
