@@ -35,13 +35,14 @@ class FileDiff
         );
     }
 
-    /** @return array<string, mixed> */
-    public static function emptyArray(
-        string $path,
-        string $status,
-        bool $tooLarge,
-        ?string $skipReason = null,
-    ): array {
+    /**
+     * The payload shape for a file whose diff carries no hunks. LoadedDiff
+     * wraps it for every non-Loaded outcome.
+     *
+     * @return array<string, mixed>
+     */
+    public static function emptyArray(string $path, string $status): array
+    {
         return [
             'path' => $path,
             'status' => $status,
@@ -52,18 +53,6 @@ class FileDiff
             'isBinary' => false,
             'isSymlink' => false,
             'symlinkTarget' => null,
-            'tooLarge' => $tooLarge,
-            'skipReason' => $skipReason,
-            // Cache-shape markers: skip results (too-large/empty/no-parse) must
-            // carry the same keys DiffCacheKey::isCurrentShape() asserts, or they
-            // fail validation on every read and re-spawn git forever. Callers add
-            // syntaxStyles/headingsAnnotated; the rest live here.
-            'tableAligned' => true,
-            'newFileLineCount' => null,
-            'gridLayout' => true,
-            'lineTypesAreEnum' => true,
-            'renameAware' => true,
-            'syntaxHighlighter' => 'none',
         ];
     }
 

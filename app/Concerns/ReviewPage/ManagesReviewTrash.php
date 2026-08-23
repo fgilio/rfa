@@ -8,6 +8,7 @@ use App\Actions\CleanExpiredTrashAction;
 use App\Actions\CreateCommentThreadSnapshotsAction;
 use App\Actions\DeleteTrashedFileAction;
 use App\Actions\DiscardFileChangesAction;
+use App\Actions\ResolveReviewConfigAction;
 use App\Actions\RestoreDiscardedFileAction;
 use App\Exceptions\GitCommandException;
 use App\Support\DiffCacheKey;
@@ -82,7 +83,12 @@ trait ManagesReviewTrash
 
         // Invalidate every diff-cache variant for this file (base + :full-context).
         $projectKey = $this->projectId > 0 ? $this->projectId : $this->repoPath;
-        DiffCacheKey::forget($projectKey, $fileId, $this->buildDiffTarget()->contextKey());
+        DiffCacheKey::forget(
+            $projectKey,
+            $fileId,
+            app(ResolveReviewConfigAction::class)->handle()->cacheFingerprint(),
+            $this->buildDiffTarget()->contextKey(),
+        );
 
         unset($this->reviewedFiles[$file['path']]);
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\DeleteTrashedFileAction;
+use App\Enums\DiscardOperation;
 use App\Models\Project;
 use App\Models\TrashedFile;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -26,7 +27,7 @@ test('deletes trash entry and storage file', function () {
     $trashed = TrashedFile::create([
         'project_id' => $this->project->id,
         'file_path' => 'file.txt',
-        'file_status' => 'modified',
+        'operation' => DiscardOperation::ModificationReverted,
         'expires_at' => now()->addMinutes(30),
     ]);
     Storage::put("trash/{$trashed->id}", 'content');
@@ -55,7 +56,7 @@ test('rejects entry from another project', function () {
     $trashed = TrashedFile::create([
         'project_id' => $otherProject->id,
         'file_path' => 'file.txt',
-        'file_status' => 'modified',
+        'operation' => DiscardOperation::ModificationReverted,
         'expires_at' => now()->addMinutes(30),
     ]);
     Storage::put("trash/{$trashed->id}", 'content');
@@ -72,7 +73,7 @@ test('handles entry without storage file', function () {
     $trashed = TrashedFile::create([
         'project_id' => $this->project->id,
         'file_path' => 'deleted-file.txt',
-        'file_status' => 'deleted',
+        'operation' => DiscardOperation::DeletionReverted,
         'expires_at' => now()->addMinutes(30),
     ]);
 

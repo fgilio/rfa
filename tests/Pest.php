@@ -1,6 +1,7 @@
 <?php
 
 use App\DTOs\FileSourceSpec;
+use App\Services\ReviewConfigService;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Mockery\Matcher\Closure;
 use Pest\Browser\Browsable;
@@ -28,6 +29,16 @@ function absoluteSourceSpec(string $absolutePath): Closure
     return Mockery::on(fn ($source): bool => $source instanceof FileSourceSpec
         && $source->type === FileSourceSpec::TYPE_ABSOLUTE
         && $source->absolutePath === $absolutePath);
+}
+
+/**
+ * The effective review fingerprint every diff cache key is built from. Resolved
+ * from a fresh service so a test's config changes are never masked by the
+ * memoization on the container's singleton.
+ */
+function reviewFingerprint(): string
+{
+    return (new ReviewConfigService)->resolve()->cacheFingerprint();
 }
 
 uses(TestCase::class, LazilyRefreshDatabase::class, Browsable::class, CreatesTestRepo::class)

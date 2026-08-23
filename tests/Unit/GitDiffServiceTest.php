@@ -178,6 +178,69 @@ test('getFileList excludes rfaignore patterns', function () {
     expect($paths)->not->toContain('debug.log');
 });
 
+test('a negation re-includes a tracked file the same way it does an untracked one', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::makeDirectory($this->tmpDir.'/logs');
+    File::put($this->tmpDir.'/logs/tracked.log', "before\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/.rfaignore', "*.log\n!logs/tracked.log\n!logs/untracked.log\n");
+    File::put($this->tmpDir.'/logs/tracked.log', "after\n");
+    File::put($this->tmpDir.'/logs/untracked.log', "new\n");
+    File::put($this->tmpDir.'/logs/hidden.log', "hidden\n");
+
+    $paths = collect($this->service->getFileList($this->tmpDir))->pluck('path')->all();
+
+    expect($paths)->toContain('logs/tracked.log')
+        ->and($paths)->toContain('logs/untracked.log')
+        ->and($paths)->not->toContain('logs/hidden.log');
+});
+
+test('a tracked lock file stays excluded even when rfaignore re-includes it', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/composer.lock', "{}\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/.rfaignore', "!composer.lock\n");
+    File::put($this->tmpDir.'/composer.lock', "{\"changed\": true}\n");
+
+    $paths = collect($this->service->getFileList($this->tmpDir))->pluck('path')->all();
+
+    expect($paths)->not->toContain('composer.lock');
+});
+
+test('a rename out of an ignored directory stays visible as a rename', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::makeDirectory($this->tmpDir.'/vendored');
+    File::put($this->tmpDir.'/vendored/lib.js', str_repeat("const answer = 42;\n", 20));
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/.rfaignore', "vendored/\n");
+    $this->runTestRepoCommand($this->tmpDir, 'git mv vendored/lib.js lib.js');
+
+    $entry = collect($this->service->getFileList($this->tmpDir))->firstWhere('path', 'lib.js');
+
+    expect($entry)->not->toBeNull()
+        ->and($entry->status)->toBe('renamed')
+        ->and($entry->oldPath)->toBe('vendored/lib.js');
+});
+
+test('the working-directory fingerprint covers exactly the files getFileList shows', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/keep.txt', "before\n");
+    File::put($this->tmpDir.'/build.log', "before\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/.rfaignore', "*.log\n");
+    File::put($this->tmpDir.'/keep.txt', "after\n");
+    File::put($this->tmpDir.'/build.log', "after\n");
+
+    $status = $this->service->getWorkingDirectoryStatus($this->tmpDir);
+    $listed = $this->service->getFileList($this->tmpDir);
+
+    expect($status['count'])->toBe(count($listed));
+});
+
 test('getFileList excludes untracked files matching globalGitignorePath', function () {
     $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/tracked.txt', "ok\n");

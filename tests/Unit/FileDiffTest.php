@@ -4,7 +4,6 @@ use App\DTOs\DiffLine;
 use App\DTOs\FileDiff;
 use App\DTOs\Hunk;
 use App\Enums\LineType;
-use App\Support\DiffCacheKey;
 use Faker\Factory as Faker;
 
 beforeEach(function () {
@@ -67,10 +66,8 @@ test('withHunks returns new instance with replaced hunks', function () {
         ->and($updated->additions)->toBe(1);
 });
 
-test('emptyArray returns tooLarge array structure', function () {
-    $result = FileDiff::emptyArray('big.php', 'modified', tooLarge: true);
-
-    expect($result)->toBe([
+test('emptyArray returns the no-hunks payload shape', function () {
+    expect(FileDiff::emptyArray('big.php', 'modified'))->toBe([
         'path' => 'big.php',
         'status' => 'modified',
         'oldPath' => null,
@@ -80,38 +77,9 @@ test('emptyArray returns tooLarge array structure', function () {
         'isBinary' => false,
         'isSymlink' => false,
         'symlinkTarget' => null,
-        'tooLarge' => true,
-        'skipReason' => null,
-        'tableAligned' => true,
-        'newFileLineCount' => null,
-        'gridLayout' => true,
-        'lineTypesAreEnum' => true,
-        'renameAware' => true,
-        'syntaxHighlighter' => 'none',
     ]);
 });
 
-test('emptyArray skip result carries the current cache shape so it is cacheable', function () {
-    // Skip results (too-large / empty / no-parse) get merged with the two keys
-    // their caller adds; the combined array must satisfy isCurrentShape() or it
-    // fails validation on every read and re-spawns git forever.
-    $skipResult = FileDiff::emptyArray('big.php', 'modified', tooLarge: true, skipReason: 'too-large')
-        + ['syntaxStyles' => '', 'headingsAnnotated' => true];
-
-    expect(DiffCacheKey::isCurrentShape($skipResult))->toBeTrue();
-});
-
-test('emptyArray returns non-tooLarge array structure', function () {
-    $result = FileDiff::emptyArray('empty.php', 'added', tooLarge: false);
-
-    expect($result['tooLarge'])->toBeFalse()
-        ->and($result['skipReason'])->toBeNull()
-        ->and($result['status'])->toBe('added');
-});
-
-test('emptyArray preserves skipped reason', function () {
-    $result = FileDiff::emptyArray('big.php', 'modified', tooLarge: true, skipReason: 'too-large');
-
-    expect($result['tooLarge'])->toBeTrue()
-        ->and($result['skipReason'])->toBe('too-large');
+test('emptyArray carries the given status', function () {
+    expect(FileDiff::emptyArray('empty.php', 'added')['status'])->toBe('added');
 });

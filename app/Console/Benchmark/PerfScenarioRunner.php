@@ -9,8 +9,10 @@ use App\Actions\GetFileListAction;
 use App\Actions\LoadCommentsDrawerAction;
 use App\Actions\LoadFileDiffAction;
 use App\Actions\ResolveProjectAction;
+use App\Actions\ResolveReviewConfigAction;
 use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
+use App\DTOs\LoadedDiff;
 use App\Models\Comment;
 use App\Models\CommentReply;
 use App\Models\Project;
@@ -230,7 +232,6 @@ final class PerfScenarioRunner
             /** @param  array<string, mixed>  $diffData */
             public function __construct(private readonly array $diffData) {}
 
-            /** @return array<string, mixed> */
             public function handle(
                 string $repoPath,
                 string $path,
@@ -240,12 +241,16 @@ final class PerfScenarioRunner
                 ?DiffTarget $target = null,
                 ?string $oldPath = null,
                 ?string $externalAbsolutePath = null,
-            ): array {
-                return $this->diffData;
+            ): LoadedDiff {
+                return LoadedDiff::tryFrom($this->diffData) ?? LoadedDiff::empty($path);
             }
         });
 
-        $cacheKey = DiffCacheKey::for($project->id, $file['id']);
+        $cacheKey = DiffCacheKey::for(
+            $project->id,
+            $file['id'],
+            $this->app->make(ResolveReviewConfigAction::class)->handle()->cacheFingerprint(),
+        );
         Cache::put($cacheKey, $diffData, 3600);
 
         // Mount-only renders the loading skeleton; `loadFileDiff` triggers the actual diff-grid + syntax-highlight work.

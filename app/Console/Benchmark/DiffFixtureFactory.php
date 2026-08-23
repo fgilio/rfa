@@ -6,8 +6,11 @@ namespace App\Console\Benchmark;
 
 use App\DTOs\CommentAuthor;
 use App\DTOs\FileListEntry;
+use App\DTOs\LoadedDiff;
+use App\Enums\DiffLoadOutcome;
 use App\Enums\DiffSide;
 use App\Enums\LineType;
+use RuntimeException;
 
 /**
  * @phpstan-type FileEntryData array{
@@ -45,8 +48,10 @@ use App\Enums\LineType;
  *     additions: int,
  *     deletions: int,
  *     isBinary: bool,
- *     tooLarge: bool,
+ *     cacheVersion: int,
+ *     outcome: string,
  *     syntaxStyles: string,
+ *     newFileLineCount: ?int,
  *     syntaxHighlighter: string
  * }
  * @phpstan-type CommentData array{
@@ -206,19 +211,33 @@ final class DiffFixtureFactory
             $currentNewLine += 20;
         }
 
+        // Both halves of the shape are derived, never re-listed: the file keys
+        // come from FileDiff and the envelope keys from LoadedDiff, so a new key
+        // or a VERSION bump reaches the fixture automatically instead of leaving
+        // it to read back as a silent cache miss.
         return [
-            'path' => $path,
+            ...LoadedDiff::empty($path)->toArray(),
             'status' => 'modified',
-            'oldPath' => null,
             'hunks' => $hunkData,
             'additions' => $totalAdditions,
             'deletions' => $totalDeletions,
-            'isBinary' => false,
-            'tooLarge' => false,
+            'outcome' => DiffLoadOutcome::Loaded->value,
             'syntaxStyles' => '.hl-variable{color:#e36209;}.dark .hl-variable{color:#ffab70;}.hl-comment{color:#6a737d;}.dark .hl-comment{color:#6a737d;}',
             'syntaxHighlighter' => 'fixture',
-            'lineTypesAreEnum' => true,
         ];
+    }
+
+    /**
+     * The same fixture as {@see self::diffData()}, already wrapped. Fakes that
+     * stand in for LoadFileDiffAction need the DTO, not the stored array.
+     */
+    public static function loadedDiff(
+        int $hunks = 1,
+        int $linesPerHunk = 10,
+        string $path = 'src/Example.php',
+    ): LoadedDiff {
+        return LoadedDiff::tryFrom(self::diffData($hunks, $linesPerHunk, $path))
+            ?? throw new RuntimeException('The diff fixture no longer matches the LoadedDiff envelope.');
     }
 
     /** @return list<CommentData> */

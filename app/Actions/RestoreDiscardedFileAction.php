@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\DTOs\CommentReply as CommentReplyData;
 use App\DTOs\CommentThreadSnapshot;
+use App\Enums\DiscardOperation;
 use App\Models\Comment;
 use App\Models\TrashedFile;
 use App\Support\PathGuard;
@@ -35,10 +36,12 @@ final readonly class RestoreDiscardedFileAction
             ? Storage::get($trashed->blobPath())
             : null;
 
-        match ($trashed->file_status) {
-            'deleted' => File::delete($fullPath),
-            'renamed' => $this->restoreRenamed($trashed, $repoPath, $fullPath, $content),
-            default => $this->writeContent($trashed, $fullPath, $content),
+        match ($trashed->operation) {
+            DiscardOperation::DeletionReverted => File::delete($fullPath),
+            DiscardOperation::RenameReverted => $this->restoreRenamed($trashed, $repoPath, $fullPath, $content),
+            DiscardOperation::UntrackedFileDeleted,
+            DiscardOperation::AddedFileRemoved,
+            DiscardOperation::ModificationReverted => $this->writeContent($trashed, $fullPath, $content),
         };
 
         $rawComments = $trashed->getAttribute('comments');

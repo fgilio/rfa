@@ -61,11 +61,9 @@ test('toDiffArgs emits single-arg diff for range-to-working', function () {
         ->and(DiffTarget::range('from', 'to')->toDiffArgs())->toBe(['diff', 'from', 'to']);
 });
 
-test('cacheTtlHours caps immutable targets and passes the configured TTL through for working-tree targets', function () {
+test('cacheTtlHours caps immutable targets and passes the effective TTL through for working-tree targets', function () {
     expect(DiffTarget::range('from', 'to')->cacheTtlHours(24))->toBe(720)
-        // Immutable targets short-circuit, so the arg is optional for callers
-        // (e.g. SFCs) that can't supply the coerced TTL.
-        ->and(DiffTarget::range('from', 'to')->cacheTtlHours())->toBe(720)
+        ->and(DiffTarget::range('from', 'to')->cacheTtlHours(12))->toBe(720)
         ->and(DiffTarget::workingDirectory()->cacheTtlHours(24))->toBe(24)
         ->and(DiffTarget::rangeToWorking('abc123')->cacheTtlHours(12))->toBe(12);
 });
@@ -80,15 +78,15 @@ test('contextKey disambiguates working-tree targets by their from ref', function
 });
 
 test('DiffCacheKey produces distinct keys for HEAD→WT vs commit→WT', function () {
-    $keyHead = DiffCacheKey::for('repo', 'file-1', DiffTarget::workingDirectory()->contextKey());
-    $keyCommit = DiffCacheKey::for('repo', 'file-1', DiffTarget::rangeToWorking('abc123')->contextKey());
+    $keyHead = DiffCacheKey::for('repo', 'file-1', 'm0', DiffTarget::workingDirectory()->contextKey());
+    $keyCommit = DiffCacheKey::for('repo', 'file-1', 'm0', DiffTarget::rangeToWorking('abc123')->contextKey());
 
     expect($keyHead)->not->toBe($keyCommit);
 });
 
 test('DiffCacheKey default matches workingDirectory contextKey', function () {
-    $defaultKey = DiffCacheKey::for('repo', 'file-1');
-    $explicitKey = DiffCacheKey::for('repo', 'file-1', DiffTarget::workingDirectory()->contextKey());
+    $defaultKey = DiffCacheKey::for('repo', 'file-1', 'm0');
+    $explicitKey = DiffCacheKey::for('repo', 'file-1', 'm0', DiffTarget::workingDirectory()->contextKey());
 
     expect($defaultKey)->toBe($explicitKey);
 });

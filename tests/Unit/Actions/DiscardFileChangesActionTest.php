@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\DiscardFileChangesAction;
+use App\Enums\DiscardOperation;
 use App\Models\Project;
 use App\Models\TrashedFile;
 use Carbon\Carbon;
@@ -39,7 +40,7 @@ test('discards modified file and creates trash record', function () {
 
     expect($trashed)->toBeInstanceOf(TrashedFile::class)
         ->and($trashed->file_path)->toBe('file.txt')
-        ->and($trashed->file_status)->toBe('modified')
+        ->and($trashed->operation)->toBe(DiscardOperation::ModificationReverted)
         ->and($trashed->project_id)->toBe($this->project->id)
         ->and($trashed->expires_at)->toBeInstanceOf(Carbon::class);
 
@@ -58,7 +59,7 @@ test('discards deleted file', function () {
 
     $trashed = $this->action->handle($this->tmpDir, 'file.txt', 'deleted', $this->project->id);
 
-    expect($trashed->file_status)->toBe('deleted');
+    expect($trashed->operation)->toBe(DiscardOperation::DeletionReverted);
 
     // File should be restored from HEAD
     expect(File::exists($this->tmpDir.'/file.txt'))->toBeTrue();
@@ -77,8 +78,7 @@ test('discards untracked added file', function () {
         $this->tmpDir, 'new.txt', 'added', $this->project->id, isUntracked: true
     );
 
-    expect($trashed->file_status)->toBe('added')
-        ->and($trashed->is_untracked)->toBeTrue();
+    expect($trashed->operation)->toBe(DiscardOperation::UntrackedFileDeleted);
 
     // File should be removed
     expect(File::exists($this->tmpDir.'/new.txt'))->toBeFalse();
@@ -97,7 +97,7 @@ test('discards tracked added file', function () {
         $this->tmpDir, 'staged.txt', 'added', $this->project->id, isUntracked: false
     );
 
-    expect($trashed->file_status)->toBe('added');
+    expect($trashed->operation)->toBe(DiscardOperation::AddedFileRemoved);
     expect(File::exists($this->tmpDir.'/staged.txt'))->toBeFalse();
     expect(Storage::get("trash/{$trashed->id}"))->toBe("staged content\n");
 });
@@ -111,7 +111,7 @@ test('discards renamed file', function () {
         $this->tmpDir, 'renamed.txt', 'renamed', $this->project->id, oldPath: 'file.txt'
     );
 
-    expect($trashed->file_status)->toBe('renamed')
+    expect($trashed->operation)->toBe(DiscardOperation::RenameReverted)
         ->and($trashed->old_path)->toBe('file.txt');
 
     // Old path restored, new path gone
@@ -127,7 +127,7 @@ test('discards binary file', function () {
 
     $trashed = $this->action->handle($this->tmpDir, 'file.txt', 'binary', $this->project->id);
 
-    expect($trashed->file_status)->toBe('binary');
+    expect($trashed->operation)->toBe(DiscardOperation::ModificationReverted);
     expect(File::get($this->tmpDir.'/file.txt'))->toBe("original\n");
     expect(Storage::get("trash/{$trashed->id}"))->toBe($binaryContent);
 });

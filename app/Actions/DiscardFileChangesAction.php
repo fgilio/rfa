@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Enums\DiscardOperation;
 use App\Models\TrashedFile;
 use App\Services\GitProcessService;
 use App\Support\PathGuard;
@@ -35,13 +36,14 @@ final readonly class DiscardFileChangesAction
             PathGuard::assertRelative($oldPath);
         }
 
+        $operation = DiscardOperation::forChangedFile($status, $isUntracked);
+
         // Save content to trash before running git commands
         $trashRecord = TrashedFile::create([
             'project_id' => $projectId,
             'file_path' => $path,
-            'file_status' => $status,
-            'old_path' => $oldPath,
-            'is_untracked' => $isUntracked,
+            'operation' => $operation,
+            'old_path' => $operation->usesOldPath() ? $oldPath : null,
             'is_symlink' => $isSymlink,
             'comments' => ! empty($comments) ? $comments : null,
             'expires_at' => now()->addMinutes(30),
@@ -62,7 +64,7 @@ final readonly class DiscardFileChangesAction
 
         // Run the discard operation
         try {
-            $this->executeDiscard($repoPath, $path, $status, $oldPath, $isUntracked, $fullPath);
+            $this->executeDiscard($repoPath, $path, $operation, $oldPath, $fullPath);
         } catch (\Throwable $e) {
             // Roll back: deleting the record also purges its blob (TrashedFile::deleting).
             $trashRecord->delete();
@@ -75,16 +77,16 @@ final readonly class DiscardFileChangesAction
     private function executeDiscard(
         string $repoPath,
         string $path,
-        string $status,
+        DiscardOperation $operation,
         ?string $oldPath,
-        bool $isUntracked,
         string $fullPath,
     ): void {
-        match (true) {
-            $status === 'added' && $isUntracked => File::delete($fullPath),
-            $status === 'added' => $this->git->run($repoPath, ['rm', '-f', '--', $path]),
-            $status === 'renamed' => $this->git->run($repoPath, ['restore', '--source=HEAD', '--staged', '--worktree', '--', $oldPath, $path]),
-            default => $this->git->run($repoPath, ['restore', '--source=HEAD', '--staged', '--worktree', '--', $path]),
+        match ($operation) {
+            DiscardOperation::UntrackedFileDeleted => File::delete($fullPath),
+            DiscardOperation::AddedFileRemoved => $this->git->run($repoPath, ['rm', '-f', '--', $path]),
+            DiscardOperation::RenameReverted => $this->git->run($repoPath, ['restore', '--source=HEAD', '--staged', '--worktree', '--', (string) $oldPath, $path]),
+            DiscardOperation::DeletionReverted,
+            DiscardOperation::ModificationReverted => $this->git->run($repoPath, ['restore', '--source=HEAD', '--staged', '--worktree', '--', $path]),
         };
     }
 }

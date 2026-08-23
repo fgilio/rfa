@@ -3,7 +3,7 @@
      $wire.copyContent(), $dispatch('open-remote-menu' | 'discard-file' | 'copy-to-clipboard') --}}
 @props([
     'file',
-    'diffData' => null,
+    'outcome' => null,
     'hasRemote' => false,
     'diffTo' => null,
     'repoPath' => '',
@@ -13,7 +13,7 @@
 @php
     $showContentCopy = ! ($file['isBinary'] ?? false)
         && ! ($file['isSymlink'] ?? false)
-        && ! ($diffData['tooLarge'] ?? false);
+        && $outcome !== \App\Enums\DiffLoadOutcome::TooLarge;
     $isAdded = ($file['status'] ?? '') === 'added' || ($file['isUntracked'] ?? false);
     $isDeleted = ($file['status'] ?? '') === 'deleted';
 @endphp

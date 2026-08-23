@@ -90,17 +90,12 @@ final readonly class DiffTarget
     /**
      * Cache lifetime in hours for this target's diffs. An immutable target
      * caches for IMMUTABLE_TTL_HOURS since its diff never changes; a
-     * working-directory target uses the given TTL, falling back to the
-     * configured value when a caller (e.g. an SFC, which may not depend on
-     * ReviewConfigService) cannot supply the coerced one.
+     * working-directory target uses the effective TTL the caller resolved from
+     * ReviewConfig, so the stored entry and the pipeline that built it agree.
      */
-    public function cacheTtlHours(?int $workingDirectoryTtlHours = null): int
+    public function cacheTtlHours(int $workingDirectoryTtlHours): int
     {
-        if ($this->isImmutable()) {
-            return self::IMMUTABLE_TTL_HOURS;
-        }
-
-        return $workingDirectoryTtlHours ?? (int) config('rfa.cache_ttl_hours', 24);
+        return $this->isImmutable() ? self::IMMUTABLE_TTL_HOURS : $workingDirectoryTtlHours;
     }
 
     /** @return array{from: string, to: ?string} */

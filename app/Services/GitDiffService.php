@@ -38,19 +38,22 @@ class GitDiffService
     public function getFileList(string $repoPath, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
     {
         $target ??= DiffTarget::workingDirectory();
-        $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
         $ignoreRules = $this->ignoreService->rules($repoPath);
 
         // Get status (M/A/D/R) for tracked changes
         $nameStatus = $this->git->run($repoPath, [
             ...$this->diffArgs($target, ['--name-status']),
-            '--', '.', ...$excludes,
+            '--', '.',
         ]);
 
-        // Get +/- line counts for tracked changes
+        // Get +/- line counts for tracked changes. Lockfiles are excluded via
+        // pathspec so git never diffs them: `--numstat` computes real line
+        // counts, which is expensive for exactly the huge generated files the
+        // evaluator drops a moment later. Only the non-negatable lockfile set
+        // goes here, so this cannot disagree with isPathExcluded().
         $numstat = $this->git->run($repoPath, [
             ...$this->diffArgs($target, ['--numstat']),
-            '--', '.', ...$excludes,
+            '--', '.', ...$this->ignoreService->alwaysExcludePathspecs(),
         ]);
 
         // Parse name-status into [path => [status, oldPath]]
@@ -104,6 +107,7 @@ class GitDiffService
         }
 
         $entries = collect($statusMap)
+            ->reject(fn (array $entry, string $path): bool => $this->ignoreService->isPathExcluded($path, $ignoreRules))
             ->map(function (array $entry, string $path) use ($statMap, $target, $repoPath): FileListEntry {
                 [$status, $oldPath] = $entry;
 
@@ -231,12 +235,11 @@ class GitDiffService
      */
     public function getWorkingDirectoryStatus(string $repoPath, ?string $globalGitignorePath = null): array
     {
-        $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
         $ignoreRules = $this->ignoreService->rules($repoPath);
 
         $nameStatus = $this->git->run($repoPath, [
             ...$this->diffArgs(DiffTarget::workingDirectory(), ['--name-status']),
-            '--', '.', ...$excludes,
+            '--', '.',
         ]);
 
         $lsFilesArgs = ['ls-files', '--others', '--exclude-standard'];
@@ -253,18 +256,13 @@ class GitDiffService
             ),
         ]);
 
-        $lines = array_filter($lines, function (string $line) use ($ignoreRules) {
-            if (! str_starts_with($line, "?\t")) {
-                return true;
-            }
-
-            return ! $this->ignoreService->isPathExcluded(substr($line, 2), $ignoreRules);
-        });
-
-        $lines = array_map(
-            fn (string $line): string => $this->withWorkingTreeFileFingerprint($repoPath, $line),
-            $lines,
-        );
+        // The fingerprint must cover exactly the files getFileList() shows, so
+        // tracked and untracked lines run through the same evaluator here.
+        $lines = collect($lines)
+            ->reject(fn (string $line): bool => $this->ignoreService->isPathExcluded($this->statusLinePath($line) ?? '', $ignoreRules))
+            ->map(fn (string $line): string => $this->withWorkingTreeFileFingerprint($repoPath, $line))
+            ->values()
+            ->all();
 
         sort($lines);
 
@@ -295,7 +293,12 @@ class GitDiffService
 
     private function withWorkingTreeFileFingerprint(string $repoPath, string $line): string
     {
-        $path = $this->statusLineWorkingTreePath($line);
+        // A deleted file has no on-disk content left to fingerprint.
+        if (str_starts_with($line, "D\t")) {
+            return $line;
+        }
+
+        $path = $this->statusLinePath($line);
 
         if ($path === null) {
             return $line;
@@ -306,20 +309,19 @@ class GitDiffService
         return $fingerprint === '' ? $line : "{$line}\t{$fingerprint}";
     }
 
-    private function statusLineWorkingTreePath(string $line): ?string
+    /** The path a status line is about: the destination for a rename or copy, the file itself otherwise. */
+    private function statusLinePath(string $line): ?string
     {
         $parts = preg_split('/\t/', $line);
         $status = $parts[0] ?? '';
 
-        if ($status === '' || $status === 'D') {
+        if ($status === '') {
             return null;
         }
 
-        if (str_starts_with($status, 'R') || str_starts_with($status, 'C')) {
-            return $parts[2] ?? null;
-        }
-
-        return $parts[1] ?? null;
+        return str_starts_with($status, 'R') || str_starts_with($status, 'C')
+            ? ($parts[2] ?? null)
+            : ($parts[1] ?? null);
     }
 
     public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, ?int $contextLines = null, ?DiffTarget $target = null, ?string $oldPath = null, bool $detectMovedLines = true): ?string
@@ -341,11 +343,13 @@ class GitDiffService
             return '';
         }
 
+        if ($this->ignoreService->isPathExcluded($path, $this->ignoreService->rules($repoPath))) {
+            return '';
+        }
+
         if ($isUntracked && $target->isWorkingDirectory()) {
             return $this->buildUntrackedDiff($repoPath, $path, $maxBytes);
         }
-
-        $excludes = $this->ignoreService->getExcludePathspecs($repoPath);
 
         // Rename-detection only fires when both sides of the rename are within
         // the pathspec; pass the old path alongside so git can pair them.
@@ -353,7 +357,7 @@ class GitDiffService
 
         $raw = $this->git->run($repoPath, [
             ...$this->diffArgs($target, ["--unified={$contextLines}", '--text'], detectMovedLines: $detectMovedLines, reviewConfig: $reviewConfig),
-            '--', $path, ...$renamePaths, ...$excludes,
+            '--', $path, ...$renamePaths,
         ]);
 
         // The size cap protects the parser and renderer from oversized diffs,
