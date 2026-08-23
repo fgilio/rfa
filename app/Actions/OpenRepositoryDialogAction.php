@@ -7,6 +7,7 @@ namespace App\Actions;
 use App\Exceptions\NotAGitRepositoryException;
 use App\Models\Project;
 use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\Log;
 use Native\Desktop\Dialog;
 use Native\Desktop\Facades\Alert;
 use Throwable;
@@ -46,6 +47,13 @@ final readonly class OpenRepositoryDialogAction
             // "not a git repository".
             Context::add('rfa.reason', 'project_registration_failed');
             Context::add('rfa.error_class', $e::class);
+
+            // The picked path stays out of the payload: a dialog result is an
+            // absolute path with no project to relativize it against.
+            Log::warning('project.registration.failed', [
+                'reason' => 'project_registration_failed',
+                'error_class' => $e::class,
+            ]);
 
             Alert::new()
                 ->type('warning')
