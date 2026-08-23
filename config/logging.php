@@ -2,7 +2,6 @@
 
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
-use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
 
 return [
@@ -45,20 +44,23 @@ return [
     | Log Channels
     |--------------------------------------------------------------------------
     |
-    | Here you may configure the log channels for your application. Laravel
-    | utilizes the Monolog PHP logging library, which includes a variety
-    | of powerful log handlers and formatters that you're free to use.
+    | Every channel below writes to the machine RFA runs on: a rotating file,
+    | the process stderr, or nothing at all. EnforceLocalLogChannelsAction drops
+    | the off-box channels Laravel merges back in.
     |
-    | Available drivers: "single", "daily", "slack", "syslog",
-    |                    "errorlog", "monolog", "custom", "stack"
+    | Available drivers: "single", "daily", "monolog", "custom", "stack"
     |
     */
 
     'channels' => [
 
+        // A packaged build runs on the env file NativePHP rewrites at build time
+        // (ManagesEnvFile::cleanEnvFile), which pins LOG_CHANNEL=stack,
+        // LOG_STACK=daily, LOG_DAILY_DAYS=3 and LOG_LEVEL=warning. The stack
+        // default matches it so a dev run rotates the same way.
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            'channels' => explode(',', (string) env('LOG_STACK', 'daily')),
             'ignore_exceptions' => false,
         ],
 
@@ -77,27 +79,8 @@ return [
             'replace_placeholders' => true,
         ],
 
-        'slack' => [
-            'driver' => 'slack',
-            'url' => env('LOG_SLACK_WEBHOOK_URL'),
-            'username' => env('LOG_SLACK_USERNAME', 'Laravel Log'),
-            'emoji' => env('LOG_SLACK_EMOJI', ':boom:'),
-            'level' => env('LOG_LEVEL', 'critical'),
-            'replace_placeholders' => true,
-        ],
-
-        'papertrail' => [
-            'driver' => 'monolog',
-            'level' => env('LOG_LEVEL', 'debug'),
-            'handler' => env('LOG_PAPERTRAIL_HANDLER', SyslogUdpHandler::class),
-            'handler_with' => [
-                'host' => env('PAPERTRAIL_URL'),
-                'port' => env('PAPERTRAIL_PORT'),
-                'connectionString' => 'tls://'.env('PAPERTRAIL_URL').':'.env('PAPERTRAIL_PORT'),
-            ],
-            'processors' => [PsrLogMessageProcessor::class],
-        ],
-
+        // Development and CLI runs that stream their logs into the terminal
+        // instead of a file, including `php artisan native:run`.
         'stderr' => [
             'driver' => 'monolog',
             'level' => env('LOG_LEVEL', 'debug'),
@@ -109,19 +92,6 @@ return [
             'processors' => [PsrLogMessageProcessor::class],
         ],
 
-        'syslog' => [
-            'driver' => 'syslog',
-            'level' => env('LOG_LEVEL', 'debug'),
-            'facility' => env('LOG_SYSLOG_FACILITY', LOG_USER),
-            'replace_placeholders' => true,
-        ],
-
-        'errorlog' => [
-            'driver' => 'errorlog',
-            'level' => env('LOG_LEVEL', 'debug'),
-            'replace_placeholders' => true,
-        ],
-
         'null' => [
             'driver' => 'monolog',
             'handler' => NullHandler::class,
@@ -131,17 +101,16 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
-        // Boost browser-log channel pinned to the project's storage so the
-        // renderer (which writes through NativePHP's relocated storage_path)
-        // and Boost's MCP `browser-logs` tool (which runs CLI artisan and
-        // reads the project's path) share one file. base_path() is unchanged
-        // by NativePHP. Pre-defining this overrides Boost's auto-registration
+        // Pinned to the project's storage so the renderer, which writes
+        // through NativePHP's relocated storage_path, and a reader in the
+        // checkout land in one directory. base_path() is unchanged by
+        // NativePHP. Pre-defining this overrides Boost's auto-registration
         // (BoostServiceProvider::registerBrowserLogger).
         'browser' => [
-            'driver' => 'single',
+            'driver' => 'daily',
             'path' => base_path('storage/logs/browser.log'),
             'level' => env('LOG_LEVEL', 'debug'),
-            'days' => 14,
+            'days' => env('LOG_BROWSER_DAYS', 14),
         ],
 
     ],

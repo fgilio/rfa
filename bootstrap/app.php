@@ -1,7 +1,9 @@
 <?php
 
+use App\Actions\EnforceLocalLogChannelsAction;
 use App\Actions\RehydrateNativeRuntimeConfigAction;
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Foundation\Bootstrap\RegisterProviders;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -27,6 +29,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
 // the config is cached (a packaged build). See RehydrateNativeRuntimeConfigAction.
 $app->beforeBootstrapping(RegisterProviders::class, function (): void {
     (new RehydrateNativeRuntimeConfigAction)->handle();
+});
+
+$app->afterBootstrapping(LoadConfiguration::class, function (): void {
+    (new EnforceLocalLogChannelsAction)->handle();
 });
 
 return $app;

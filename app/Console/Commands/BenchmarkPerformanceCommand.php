@@ -5,17 +5,36 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Console\Benchmark\BenchmarkIsolation;
+use App\Console\Benchmark\BenchmarkOptions;
+use App\Console\Benchmark\MetricThreshold;
+use App\Console\Benchmark\PerfBenchmarkReport;
 use App\Console\Benchmark\PerfBenchmarkStatistics;
 use App\Console\Benchmark\PerfScenarioRunner;
 use Illuminate\Console\Command;
+use InvalidArgumentException;
+use RuntimeException;
 use Symfony\Component\Process\Process;
 
 /**
- * @phpstan-type ScenarioMeasurement array{median_ms: float, median_peak_mb: float, median_retained_mb: float}
+ * @phpstan-import-type BaselineMetrics from PerfBenchmarkReport
+ * @phpstan-import-type ScenarioMetrics from PerfBenchmarkReport
+ *
  * @phpstan-type ScenarioReport array{median_ms: float, samples_ms: list<float>, median_peak_mb: float, samples_peak_mb: list<float>, median_retained_mb: float, samples_retained_mb: list<float>}
  */
 class BenchmarkPerformanceCommand extends Command
 {
+    /**
+     * The compared metrics, in table order, with the label and unit their
+     * columns carry.
+     *
+     * @var array<string, array{label: string, unit: string}>
+     */
+    private const COMPARED_METRICS = [
+        'median_ms' => ['label' => 'time', 'unit' => 'ms'],
+        'median_peak_mb' => ['label' => 'peak memory', 'unit' => 'MB'],
+        'median_retained_mb' => ['label' => 'retained memory', 'unit' => 'MB'],
+    ];
+
     protected $signature = 'rfa:benchmark-perf
         {--child : Run a single benchmark sample in a child process}
         {--json : Emit JSON instead of a table}
@@ -37,24 +56,35 @@ class BenchmarkPerformanceCommand extends Command
 
     public function handle(PerfScenarioRunner $runner, BenchmarkIsolation $benchmarkIsolation): int
     {
-        $this->onlyScenarios($runner);
+        try {
+            $options = BenchmarkOptions::fromOptions($this->options(), $runner->scenarioNames());
+            // Read the baseline before measuring: an unreadable snapshot is
+            // worth a message now rather than after a full benchmark run.
+            $baseline = $options->comparePath === null
+                ? null
+                : PerfBenchmarkReport::decodeSnapshot($options->comparePath);
+        } catch (InvalidArgumentException|RuntimeException $exception) {
+            $this->error($exception->getMessage());
 
-        if ((bool) $this->option('child')) {
-            return $this->runChildSample($runner, $benchmarkIsolation);
+            return self::INVALID;
         }
 
-        $report = $this->collectReport($benchmarkIsolation);
-
-        if ($snapshotPath = $this->option('snapshot')) {
-            $this->writeSnapshot($snapshotPath, $report);
+        if ($options->child) {
+            return $this->runChildSample($options, $runner, $benchmarkIsolation);
         }
 
-        if ($comparePath = $this->option('compare')) {
-            return $this->compareAgainstSnapshot($comparePath, $report);
+        $report = $this->collectReport($options, $benchmarkIsolation);
+
+        if ($options->snapshotPath !== null) {
+            $this->writeSnapshot($options->snapshotPath, $report);
         }
 
-        if ((bool) $this->option('json')) {
-            $this->line($this->encodeReport($report));
+        if ($baseline !== null) {
+            return $this->compareAgainstSnapshot($options, $baseline['results'], $report);
+        }
+
+        if ($options->json) {
+            $this->line(PerfBenchmarkReport::encode($report));
 
             return self::SUCCESS;
         }
@@ -64,20 +94,20 @@ class BenchmarkPerformanceCommand extends Command
         return self::SUCCESS;
     }
 
-    private function runChildSample(PerfScenarioRunner $runner, BenchmarkIsolation $benchmarkIsolation): int
+    private function runChildSample(BenchmarkOptions $options, PerfScenarioRunner $runner, BenchmarkIsolation $benchmarkIsolation): int
     {
         $benchmarkIsolation->activate();
 
         $report = [
             'generated_at' => now()->toIso8601String(),
             'results' => $runner->measureAll(
-                rounds: (int) $this->option('rounds'),
-                warmupRounds: (int) $this->option('warmup-rounds'),
-                only: $this->onlyScenarios($runner),
+                rounds: $options->rounds,
+                warmupRounds: $options->warmupRounds,
+                only: $options->only,
             ),
         ];
 
-        $this->line($this->encodeReport($report));
+        $this->line(PerfBenchmarkReport::encode($report));
 
         return self::SUCCESS;
     }
@@ -85,18 +115,16 @@ class BenchmarkPerformanceCommand extends Command
     /**
      * @return array{generated_at: string, config: array<string, int|float>, results: array<string, ScenarioReport>}
      */
-    private function collectReport(BenchmarkIsolation $benchmarkIsolation): array
+    private function collectReport(BenchmarkOptions $options, BenchmarkIsolation $benchmarkIsolation): array
     {
-        $warmupSamples = (int) $this->option('warmup-samples');
-        $samples = (int) $this->option('samples');
         $measurementsByScenario = [];
 
-        for ($i = 0; $i < $warmupSamples; $i++) {
-            $this->runChildProcess($benchmarkIsolation);
+        for ($i = 0; $i < $options->warmupSamples; $i++) {
+            $this->runChildProcess($options, $benchmarkIsolation);
         }
 
-        for ($i = 0; $i < $samples; $i++) {
-            $sample = $this->runChildProcess($benchmarkIsolation);
+        for ($i = 0; $i < $options->samples; $i++) {
+            $sample = $this->runChildProcess($options, $benchmarkIsolation);
 
             foreach ($sample['results'] as $scenario => $measurement) {
                 $measurementsByScenario[$scenario] ??= [
@@ -140,23 +168,15 @@ class BenchmarkPerformanceCommand extends Command
 
         return [
             'generated_at' => now()->toIso8601String(),
-            'config' => [
-                'samples' => $samples,
-                'warmup_samples' => $warmupSamples,
-                'rounds' => (int) $this->option('rounds'),
-                'warmup_rounds' => (int) $this->option('warmup-rounds'),
-                'max_regression' => (float) $this->option('max-regression'),
-                'max_memory_regression' => (float) $this->option('max-memory-regression'),
-                'max_retained_memory_regression' => (float) $this->option('max-retained-memory-regression'),
-            ],
+            'config' => $options->reportConfig(),
             'results' => $results,
         ];
     }
 
     /**
-     * @return array{generated_at: string, results: array<string, ScenarioMeasurement>}
+     * @return array{generated_at: string, results: array<string, ScenarioMetrics>}
      */
-    private function runChildProcess(BenchmarkIsolation $benchmarkIsolation): array
+    private function runChildProcess(BenchmarkOptions $options, BenchmarkIsolation $benchmarkIsolation): array
     {
         $environment = $benchmarkIsolation->createEnvironment();
         $databasePath = $environment[BenchmarkIsolation::ENV_DATABASE];
@@ -165,162 +185,56 @@ class BenchmarkPerformanceCommand extends Command
             PHP_BINARY,
             'artisan',
             'rfa:benchmark-perf',
-            '--child',
-            '--json',
-            '--rounds='.$this->option('rounds'),
-            '--warmup-rounds='.$this->option('warmup-rounds'),
-            ...array_map(
-                fn (string $scenario): string => '--only='.$scenario,
-                $this->onlyScenarios(),
-            ),
+            ...$options->childArguments(),
         ], base_path(), $environment);
 
         try {
             $process->setTimeout(null);
             $process->mustRun();
 
-            $payload = json_decode(trim($process->getOutput()), true);
-
-            if (! is_array($payload) || ! isset($payload['results']) || ! is_array($payload['results'])) {
-                throw new \RuntimeException('Unable to decode benchmark child-process output.');
-            }
-
-            return [
-                'generated_at' => (string) ($payload['generated_at'] ?? now()->toIso8601String()),
-                'results' => $this->normalizeChildResults($payload['results']),
-            ];
+            return PerfBenchmarkReport::decodeChildSample($process->getOutput());
         } finally {
             $benchmarkIsolation->cleanupDatabase($databasePath);
         }
     }
 
-    /** @return list<string> */
-    private function onlyScenarios(?PerfScenarioRunner $runner = null): array
-    {
-        $only = array_values(array_filter(
-            array_map('strval', (array) $this->option('only')),
-            fn (string $scenario): bool => $scenario !== '',
-        ));
-
-        if ($runner === null || $only === []) {
-            return $only;
-        }
-
-        $unknown = array_values(array_diff($only, $runner->scenarioNames()));
-
-        if ($unknown !== []) {
-            throw new \RuntimeException(sprintf(
-                'Unknown benchmark scenario [%s]. Available scenarios: %s',
-                implode(', ', $unknown),
-                implode(', ', $runner->scenarioNames()),
-            ));
-        }
-
-        return $only;
-    }
-
     /**
-     * @param  array<string, mixed>  $results
-     * @return array<string, ScenarioMeasurement>
-     */
-    private function normalizeChildResults(array $results): array
-    {
-        $normalized = [];
-
-        foreach ($results as $scenario => $measurement) {
-            if (is_array($measurement)) {
-                $normalized[$scenario] = [
-                    'median_ms' => (float) ($measurement['median_ms'] ?? 0.0),
-                    'median_peak_mb' => (float) ($measurement['median_peak_mb'] ?? 0.0),
-                    'median_retained_mb' => (float) ($measurement['median_retained_mb'] ?? 0.0),
-                ];
-
-                continue;
-            }
-
-            $normalized[$scenario] = [
-                'median_ms' => (float) $measurement,
-                'median_peak_mb' => 0.0,
-                'median_retained_mb' => 0.0,
-            ];
-        }
-
-        return $normalized;
-    }
-
-    /**
+     * @param  array<string, BaselineMetrics>  $baselines
      * @param  array{generated_at: string, config: array<string, int|float>, results: array<string, ScenarioReport>}  $report
      */
-    private function compareAgainstSnapshot(string $path, array $report): int
+    private function compareAgainstSnapshot(BenchmarkOptions $options, array $baselines, array $report): int
     {
-        if (! is_file($path)) {
-            throw new \RuntimeException("Benchmark snapshot not found: {$path}");
-        }
-
-        $snapshot = json_decode((string) file_get_contents($path), true);
-
-        if (! is_array($snapshot) || ! isset($snapshot['results']) || ! is_array($snapshot['results'])) {
-            throw new \RuntimeException("Invalid benchmark snapshot: {$path}");
-        }
-
         $rows = [];
         $hasRegression = false;
-        $maxRegression = (float) $this->option('max-regression');
-        $minAbsoluteMs = (float) $this->option('min-absolute-ms');
-        $maxMemoryRegression = (float) $this->option('max-memory-regression');
-        $minAbsoluteMemoryMb = (float) $this->option('min-absolute-memory-mb');
-        $maxRetainedMemoryRegression = (float) $this->option('max-retained-memory-regression');
-        $minAbsoluteRetainedMemoryMb = (float) $this->option('min-absolute-retained-memory-mb');
 
         foreach ($report['results'] as $scenario => $current) {
-            $snapshotResult = $snapshot['results'][$scenario] ?? null;
-            $baseline = $this->snapshotMetric($snapshotResult, 'median_ms') ?? 0.0;
-            $currentMs = $current['median_ms'];
-            $change = round(PerfBenchmarkStatistics::percentageChange($baseline, $currentMs), 2);
-            $absoluteIncrease = $currentMs - $baseline;
-            $baselinePeakMb = $this->snapshotMetric($snapshotResult, 'median_peak_mb');
-            $currentPeakMb = $current['median_peak_mb'];
-            $memoryChange = $baselinePeakMb === null
-                ? null
-                : round(PerfBenchmarkStatistics::percentageChange($baselinePeakMb, $currentPeakMb), 2);
-            $memoryIncrease = $baselinePeakMb === null ? 0.0 : $currentPeakMb - $baselinePeakMb;
-            $baselineRetainedMb = $this->snapshotMetric($snapshotResult, 'median_retained_mb');
-            $currentRetainedMb = $current['median_retained_mb'];
-            $retainedChange = $baselineRetainedMb === null
-                ? null
-                : round(PerfBenchmarkStatistics::percentageChange($baselineRetainedMb, $currentRetainedMb), 2);
-            $retainedIncrease = $baselineRetainedMb === null ? 0.0 : $currentRetainedMb - $baselineRetainedMb;
+            $cells = [$scenario];
 
-            if ($change > $maxRegression && $absoluteIncrease >= $minAbsoluteMs) {
-                $hasRegression = true;
+            foreach (self::COMPARED_METRICS as $metric => $column) {
+                $comparison = $this->compareMetric(
+                    $baselines[$scenario][$metric] ?? null,
+                    $current[$metric],
+                    $options->thresholds[$metric],
+                );
+
+                $hasRegression = $hasRegression || $comparison['regressed'];
+
+                $cells[] = $this->formatMetric($comparison['baseline'], $column['unit']);
+                $cells[] = $this->formatMetric($current[$metric], $column['unit']);
+                $cells[] = $this->formatChange($comparison['change']);
             }
 
-            if ($memoryChange !== null && $memoryChange > $maxMemoryRegression && $memoryIncrease >= $minAbsoluteMemoryMb) {
-                $hasRegression = true;
-            }
-
-            if ($retainedChange !== null && $retainedChange > $maxRetainedMemoryRegression && $retainedIncrease >= $minAbsoluteRetainedMemoryMb) {
-                $hasRegression = true;
-            }
-
-            $rows[] = [
-                $scenario,
-                number_format($baseline, 3).'ms',
-                number_format($currentMs, 3).'ms',
-                sprintf('%+.2f%%', $change),
-                $baselinePeakMb === null ? 'n/a' : number_format($baselinePeakMb, 3).'MB',
-                number_format($currentPeakMb, 3).'MB',
-                $memoryChange === null ? 'n/a' : sprintf('%+.2f%%', $memoryChange),
-                $baselineRetainedMb === null ? 'n/a' : number_format($baselineRetainedMb, 3).'MB',
-                number_format($currentRetainedMb, 3).'MB',
-                $retainedChange === null ? 'n/a' : sprintf('%+.2f%%', $retainedChange),
-            ];
+            $rows[] = $cells;
         }
 
-        $this->table(['Scenario', 'Base time', 'Current time', 'Time', 'Base peak', 'Current peak', 'Peak', 'Base retained', 'Current retained', 'Retained'], $rows);
+        $this->table($this->comparisonHeaders(), $rows);
 
         if ($hasRegression) {
-            $this->error("Performance regression exceeded time {$maxRegression}%, peak memory {$maxMemoryRegression}%, or retained memory {$maxRetainedMemoryRegression}%.");
+            $exceeded = collect(self::COMPARED_METRICS)
+                ->map(fn (array $column, string $metric): string => "{$column['label']} {$options->thresholds[$metric]->maxRegression}%")
+                ->implode(', ');
+
+            $this->error("Performance regression exceeded {$exceeded}.");
 
             return self::FAILURE;
         }
@@ -328,6 +242,50 @@ class BenchmarkPerformanceCommand extends Command
         $this->info('Performance benchmark is within the allowed time and memory thresholds.');
 
         return self::SUCCESS;
+    }
+
+    /** @return list<string> */
+    private function comparisonHeaders(): array
+    {
+        return collect(self::COMPARED_METRICS)
+            ->flatMap(fn (array $column): array => [
+                'Base '.$column['label'],
+                'Current '.$column['label'],
+                ucfirst($column['label']),
+            ])
+            ->prepend('Scenario')
+            ->all();
+    }
+
+    /**
+     * A metric the snapshot never recorded has no baseline to regress from, so
+     * it reports as unavailable rather than as a change against zero.
+     *
+     * @return array{baseline: float|null, change: float|null, regressed: bool}
+     */
+    private function compareMetric(?float $baseline, float $current, MetricThreshold $threshold): array
+    {
+        if ($baseline === null) {
+            return ['baseline' => null, 'change' => null, 'regressed' => false];
+        }
+
+        $change = round(PerfBenchmarkStatistics::percentageChange($baseline, $current), 2);
+
+        return [
+            'baseline' => $baseline,
+            'change' => $change,
+            'regressed' => $threshold->regressed($baseline, $current, $change),
+        ];
+    }
+
+    private function formatMetric(?float $value, string $unit): string
+    {
+        return $value === null ? 'n/a' : number_format($value, 3).$unit;
+    }
+
+    private function formatChange(?float $change): string
+    {
+        return $change === null ? 'n/a' : sprintf('%+.2f%%', $change);
     }
 
     /**
@@ -364,29 +322,8 @@ class BenchmarkPerformanceCommand extends Command
             mkdir($directory, 0755, true);
         }
 
-        file_put_contents($path, $this->encodeReport($report));
+        file_put_contents($path, PerfBenchmarkReport::encode($report));
 
         $this->info("Benchmark snapshot written to {$path}");
-    }
-
-    private function snapshotMetric(mixed $result, string $metric): ?float
-    {
-        if (is_array($result) && isset($result[$metric]) && is_numeric($result[$metric])) {
-            return (float) $result[$metric];
-        }
-
-        if ($metric === 'median_ms' && is_numeric($result)) {
-            return (float) $result;
-        }
-
-        return null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $report
-     */
-    private function encodeReport(array $report): string
-    {
-        return (string) json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     }
 }

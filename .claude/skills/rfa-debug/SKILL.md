@@ -39,18 +39,24 @@ When copying the SQLite file while the app is running, copy `database.sqlite`, `
 
 ## Reading the renderer console (Laravel Boost)
 
-Boost ships an `InjectBoost` middleware that injects a JS shim into HTML responses. The shim wraps `console.{log,info,warn,error,table}` plus uncaught errors and `unhandledrejection`, POSTing them to `route('boost.browser-logs')` (fallback: `/_boost/browser-logs`), which writes via `Log::channel('browser')` to `storage/logs/browser.log`.
+Boost ships an `InjectBoost` middleware that injects a JS shim into HTML responses. The shim wraps `console.{log,info,warn,error,table}` plus uncaught errors and `unhandledrejection`, POSTing them to `route('boost.browser-logs')` (fallback: `/_boost/browser-logs`), which writes via `Log::channel('browser')` to `storage/logs/browser-<date>.log`.
 
 **Prerequisites — Boost only injects when ALL hold (see `BoostServiceProvider::shouldRun`):**
 - `boost.enabled` is true (default).
 - App is in `local` env OR `app.debug=true`.
 - Not running unit tests.
 
-In a default packaged release (`APP_DEBUG=false`, `APP_ENV=production`), Boost is OFF and `browser.log` won't grow. This skill is dev-build territory.
+In a default packaged release (`APP_DEBUG=false`, `APP_ENV=production`), Boost is OFF and the browser log won't grow. This skill is dev-build territory.
 
 Verify the shim landed: in DevTools → Elements, search for `id="browser-logger-active"`, or in the Console you should see `🔍 Browser logger active...` on first paint.
 
-**Where the file lives.** `config/logging.php` pins the `browser` channel to `base_path('storage/logs/browser.log')` so renderer writes (which go through NativePHP's relocated `storage_path`) and Boost's MCP CLI reads (which don't) hit the same file. No symlink needed; just call the MCP `browser-logs` tool.
+**Where the file lives.** `config/logging.php` pins the `browser` channel to `base_path('storage/logs/browser.log')` so renderer writes (which go through NativePHP's relocated `storage_path`) and reads from the project checkout (which don't) hit the same directory. No symlink needed. The channel rotates daily, so the live file is dated:
+
+```bash
+tail -50 "$(ls -t storage/logs/browser-*.log | head -1)"
+```
+
+Boost's MCP `browser-logs` tool only reads the undated `storage/logs/browser.log`, so it finds nothing while the channel rotates. Read the dated file instead.
 
 Each entry includes URL + user-agent (Electron version), so you can tell which build produced it.
 
@@ -66,15 +72,15 @@ PORT=$(lsof -a -p "$SERVER_PID" -iTCP -sTCP:LISTEN -P 2>/dev/null \
 curl -s -X POST "http://127.0.0.1:$PORT/_boost/browser-logs" \
   -H 'Content-Type: application/json' \
   -d '{"logs":[{"type":"log","timestamp":"'"$(date -u +%FT%TZ)"'","data":["ping"],"url":"test","userAgent":"curl"}]}'
-tail -1 "$HOME/Library/Application Support/rfa-dev/storage/logs/browser.log"
+tail -1 "$(ls -t storage/logs/browser-*.log | head -1)"
 ```
 
 ## Reading server-side errors
 
-Boost's `last-error` and `read-log-entries` tools read the project's `storage/logs/laravel.log`, but the live app writes to `~/Library/Application Support/rfa-dev/storage/logs/laravel.log` (NativePHP relocation). Don't symlink (see boot-trap warning above). Read directly:
+Boost's `last-error` and `read-log-entries` tools read the project's `storage/logs/laravel.log`, but the live app writes under `~/Library/Application Support/rfa-dev/storage/logs/` (NativePHP relocation). `LOG_STACK` defaults to `daily`, so the live file is dated. Don't symlink (see boot-trap warning above). Read directly:
 
 ```bash
-tail -200 "$HOME/Library/Application Support/rfa-dev/storage/logs/laravel.log"
+tail -200 "$(ls -t "$HOME/Library/Application Support/rfa-dev/storage/logs/laravel-"*.log | head -1)"
 ```
 
 If you'd rather the MCP tools "just work" for `laravel.log` too, pin the `single` and `daily` channels' paths the same way `browser` is pinned in `config/logging.php`. Tradeoff: in a packaged release the project's `storage/` is read-only, so any code path that hits `Log::info(...)` would fail. The browser channel is safe to pin because Boost is OFF in production; the default channels aren't.
@@ -88,7 +94,7 @@ const el = document.querySelector('[data-testid="file-header"]');
 console.log('rfa-debug:', { found: !!el, alpine: !!el?._x_dataStack });
 ```
 
-The output lands in `browser.log` automatically via the Boost shim — read it back with the MCP tool instead of asking the user to copy/paste.
+The output lands in the dated browser log automatically via the Boost shim. Read it back yourself (see "Where the file lives") instead of asking the user to copy/paste.
 
 ## DB queries against the live app
 

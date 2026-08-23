@@ -4,6 +4,7 @@ use App\Models\Project;
 use App\Models\ReviewSession;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\Console\Command\Command;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -173,22 +174,16 @@ test('benchmark model writes use the isolated database', function () {
 });
 
 test('benchmark compare fails retained memory regressions', function () {
-    $snapshotPath = tempnam(sys_get_temp_dir(), 'rfa-perf-snapshot-');
-
-    if ($snapshotPath === false) {
-        throw new RuntimeException('Unable to allocate benchmark snapshot path.');
-    }
-
-    file_put_contents($snapshotPath, json_encode([
+    $snapshotPath = perfSnapshotFile([
         'generated_at' => now()->toIso8601String(),
         'results' => [
             'diff-small' => [
                 'median_ms' => 1_000_000.0,
                 'median_peak_mb' => 1_000_000.0,
-                'median_retained_mb' => 1.0,
+                'median_retained_mb' => 0.5,
             ],
         ],
-    ], JSON_THROW_ON_ERROR));
+    ]);
 
     $this->artisan('rfa:benchmark-perf', [
         '--compare' => $snapshotPath,
@@ -198,9 +193,19 @@ test('benchmark compare fails retained memory regressions', function () {
         '--warmup-rounds' => 0,
         '--max-regression' => 1_000_000,
         '--max-memory-regression' => 1_000_000,
-        '--max-retained-memory-regression' => -1_000,
-        '--min-absolute-retained-memory-mb' => -1_000,
+        '--max-retained-memory-regression' => 0,
+        '--min-absolute-retained-memory-mb' => 0,
     ])->assertExitCode(1);
+});
 
-    @unlink($snapshotPath);
+test('benchmark command rejects invalid input before it starts measuring', function () {
+    $this->artisan('rfa:benchmark-perf', ['--samples' => 0])
+        ->expectsOutputToContain('The --samples option must be a whole number of 1 or more.')
+        ->assertExitCode(Command::INVALID);
+});
+
+test('benchmark command reports an unreadable snapshot before it starts measuring', function () {
+    $this->artisan('rfa:benchmark-perf', ['--compare' => sys_get_temp_dir().'/rfa-perf-missing-'.getmypid().'.json'])
+        ->expectsOutputToContain('Benchmark snapshot not found')
+        ->assertExitCode(Command::INVALID);
 });

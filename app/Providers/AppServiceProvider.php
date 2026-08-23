@@ -7,11 +7,8 @@ namespace App\Providers;
 use App\Services\GitFileContentService;
 use App\Services\ReviewConfigService;
 use App\Support\LocalAsset;
-use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Blaze\Blaze;
 
@@ -45,9 +42,6 @@ class AppServiceProvider extends ServiceProvider
             LocalAsset::class,
             $expression,
         ));
-
-        RateLimiter::for('diagnostics', fn (Request $request): Limit => Limit::perMinute(120)
-            ->by($request->ip() ?: 'local'));
 
         Blaze::optimize()->in(resource_path('views/components'));
     }
