@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Console\Benchmark\BenchmarkIsolation;
+use App\Console\Benchmark\BenchmarkOptions;
 use App\Console\Benchmark\PerfBenchmarkStatistics;
 use App\Console\Benchmark\PerfScenarioRunner;
 use Illuminate\Console\Command;
+use InvalidArgumentException;
 use Symfony\Component\Process\Process;
 
 /**
@@ -37,23 +39,29 @@ class BenchmarkPerformanceCommand extends Command
 
     public function handle(PerfScenarioRunner $runner, BenchmarkIsolation $benchmarkIsolation): int
     {
-        $this->onlyScenarios($runner);
+        try {
+            $options = BenchmarkOptions::fromOptions($this->options(), $runner->scenarioNames());
+        } catch (InvalidArgumentException $exception) {
+            $this->error($exception->getMessage());
 
-        if ((bool) $this->option('child')) {
-            return $this->runChildSample($runner, $benchmarkIsolation);
+            return self::INVALID;
         }
 
-        $report = $this->collectReport($benchmarkIsolation);
-
-        if ($snapshotPath = $this->option('snapshot')) {
-            $this->writeSnapshot($snapshotPath, $report);
+        if ($options->child) {
+            return $this->runChildSample($options, $runner, $benchmarkIsolation);
         }
 
-        if ($comparePath = $this->option('compare')) {
-            return $this->compareAgainstSnapshot($comparePath, $report);
+        $report = $this->collectReport($options, $benchmarkIsolation);
+
+        if ($options->snapshotPath !== null) {
+            $this->writeSnapshot($options->snapshotPath, $report);
         }
 
-        if ((bool) $this->option('json')) {
+        if ($options->comparePath !== null) {
+            return $this->compareAgainstSnapshot($options, $report);
+        }
+
+        if ($options->json) {
             $this->line($this->encodeReport($report));
 
             return self::SUCCESS;
@@ -64,16 +72,16 @@ class BenchmarkPerformanceCommand extends Command
         return self::SUCCESS;
     }
 
-    private function runChildSample(PerfScenarioRunner $runner, BenchmarkIsolation $benchmarkIsolation): int
+    private function runChildSample(BenchmarkOptions $options, PerfScenarioRunner $runner, BenchmarkIsolation $benchmarkIsolation): int
     {
         $benchmarkIsolation->activate();
 
         $report = [
             'generated_at' => now()->toIso8601String(),
             'results' => $runner->measureAll(
-                rounds: (int) $this->option('rounds'),
-                warmupRounds: (int) $this->option('warmup-rounds'),
-                only: $this->onlyScenarios($runner),
+                rounds: $options->rounds,
+                warmupRounds: $options->warmupRounds,
+                only: $options->only,
             ),
         ];
 
@@ -85,18 +93,16 @@ class BenchmarkPerformanceCommand extends Command
     /**
      * @return array{generated_at: string, config: array<string, int|float>, results: array<string, ScenarioReport>}
      */
-    private function collectReport(BenchmarkIsolation $benchmarkIsolation): array
+    private function collectReport(BenchmarkOptions $options, BenchmarkIsolation $benchmarkIsolation): array
     {
-        $warmupSamples = (int) $this->option('warmup-samples');
-        $samples = (int) $this->option('samples');
         $measurementsByScenario = [];
 
-        for ($i = 0; $i < $warmupSamples; $i++) {
-            $this->runChildProcess($benchmarkIsolation);
+        for ($i = 0; $i < $options->warmupSamples; $i++) {
+            $this->runChildProcess($options, $benchmarkIsolation);
         }
 
-        for ($i = 0; $i < $samples; $i++) {
-            $sample = $this->runChildProcess($benchmarkIsolation);
+        for ($i = 0; $i < $options->samples; $i++) {
+            $sample = $this->runChildProcess($options, $benchmarkIsolation);
 
             foreach ($sample['results'] as $scenario => $measurement) {
                 $measurementsByScenario[$scenario] ??= [
@@ -140,15 +146,7 @@ class BenchmarkPerformanceCommand extends Command
 
         return [
             'generated_at' => now()->toIso8601String(),
-            'config' => [
-                'samples' => $samples,
-                'warmup_samples' => $warmupSamples,
-                'rounds' => (int) $this->option('rounds'),
-                'warmup_rounds' => (int) $this->option('warmup-rounds'),
-                'max_regression' => (float) $this->option('max-regression'),
-                'max_memory_regression' => (float) $this->option('max-memory-regression'),
-                'max_retained_memory_regression' => (float) $this->option('max-retained-memory-regression'),
-            ],
+            'config' => $options->reportConfig(),
             'results' => $results,
         ];
     }
@@ -156,7 +154,7 @@ class BenchmarkPerformanceCommand extends Command
     /**
      * @return array{generated_at: string, results: array<string, ScenarioMeasurement>}
      */
-    private function runChildProcess(BenchmarkIsolation $benchmarkIsolation): array
+    private function runChildProcess(BenchmarkOptions $options, BenchmarkIsolation $benchmarkIsolation): array
     {
         $environment = $benchmarkIsolation->createEnvironment();
         $databasePath = $environment[BenchmarkIsolation::ENV_DATABASE];
@@ -165,14 +163,7 @@ class BenchmarkPerformanceCommand extends Command
             PHP_BINARY,
             'artisan',
             'rfa:benchmark-perf',
-            '--child',
-            '--json',
-            '--rounds='.$this->option('rounds'),
-            '--warmup-rounds='.$this->option('warmup-rounds'),
-            ...array_map(
-                fn (string $scenario): string => '--only='.$scenario,
-                $this->onlyScenarios(),
-            ),
+            ...$options->childArguments(),
         ], base_path(), $environment);
 
         try {
@@ -192,31 +183,6 @@ class BenchmarkPerformanceCommand extends Command
         } finally {
             $benchmarkIsolation->cleanupDatabase($databasePath);
         }
-    }
-
-    /** @return list<string> */
-    private function onlyScenarios(?PerfScenarioRunner $runner = null): array
-    {
-        $only = array_values(array_filter(
-            array_map('strval', (array) $this->option('only')),
-            fn (string $scenario): bool => $scenario !== '',
-        ));
-
-        if ($runner === null || $only === []) {
-            return $only;
-        }
-
-        $unknown = array_values(array_diff($only, $runner->scenarioNames()));
-
-        if ($unknown !== []) {
-            throw new \RuntimeException(sprintf(
-                'Unknown benchmark scenario [%s]. Available scenarios: %s',
-                implode(', ', $unknown),
-                implode(', ', $runner->scenarioNames()),
-            ));
-        }
-
-        return $only;
     }
 
     /**
@@ -251,8 +217,10 @@ class BenchmarkPerformanceCommand extends Command
     /**
      * @param  array{generated_at: string, config: array<string, int|float>, results: array<string, ScenarioReport>}  $report
      */
-    private function compareAgainstSnapshot(string $path, array $report): int
+    private function compareAgainstSnapshot(BenchmarkOptions $options, array $report): int
     {
+        $path = (string) $options->comparePath;
+
         if (! is_file($path)) {
             throw new \RuntimeException("Benchmark snapshot not found: {$path}");
         }
@@ -265,12 +233,12 @@ class BenchmarkPerformanceCommand extends Command
 
         $rows = [];
         $hasRegression = false;
-        $maxRegression = (float) $this->option('max-regression');
-        $minAbsoluteMs = (float) $this->option('min-absolute-ms');
-        $maxMemoryRegression = (float) $this->option('max-memory-regression');
-        $minAbsoluteMemoryMb = (float) $this->option('min-absolute-memory-mb');
-        $maxRetainedMemoryRegression = (float) $this->option('max-retained-memory-regression');
-        $minAbsoluteRetainedMemoryMb = (float) $this->option('min-absolute-retained-memory-mb');
+        $maxRegression = $options->maxRegression;
+        $minAbsoluteMs = $options->minAbsoluteMs;
+        $maxMemoryRegression = $options->maxMemoryRegression;
+        $minAbsoluteMemoryMb = $options->minAbsoluteMemoryMb;
+        $maxRetainedMemoryRegression = $options->maxRetainedMemoryRegression;
+        $minAbsoluteRetainedMemoryMb = $options->minAbsoluteRetainedMemoryMb;
 
         foreach ($report['results'] as $scenario => $current) {
             $snapshotResult = $snapshot['results'][$scenario] ?? null;
