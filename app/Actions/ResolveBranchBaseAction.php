@@ -5,27 +5,19 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\BranchBaseResult;
+use App\Enums\BranchBaseUnavailableReason;
 use App\Exceptions\GitCommandException;
-use App\Services\GitMetadataService;
 use App\Services\GitProcessService;
 use Illuminate\Support\Facades\Log;
 
 final readonly class ResolveBranchBaseAction
 {
     public function __construct(
-        private GitMetadataService $gitMetadataService,
         private GitProcessService $gitProcessService,
     ) {}
 
     /**
      * Compute the diff range "since base branch" for the current HEAD.
-     *
-     * Returns one of five outcomes encoded as a {@see BranchBaseResult}:
-     *  - Ready          - base resolved, HEAD is ahead, range hashes returned
-     *  - UpToDate       - base resolved but HEAD has no commits ahead of it
-     *  - NotConfigured  - no base branch set on the project
-     *  - MissingRef     - base branch is configured but the ref isn't local
-     *  - OnBaseBranch   - current branch is the configured base
      *
      * `currentBranch` is the working branch (typically the project's branch).
      * Pass `null` (or empty string) for detached HEAD - the action treats it
@@ -43,27 +35,82 @@ final readonly class ResolveBranchBaseAction
             return BranchBaseResult::onBaseBranch($base);
         }
 
-        $baseSha = $this->gitMetadataService->resolveRef($repoPath, $base);
+        try {
+            $baseSha = $this->resolveBaseRef($repoPath, $base);
+        } catch (GitCommandException $exception) {
+            return $this->commandUnavailable($base, null, 'resolve_ref', $exception);
+        }
 
         if ($baseSha === null) {
             return BranchBaseResult::missingRef($base);
         }
 
-        $mergeBase = $this->gitMetadataService->getMergeBase($repoPath, $base, 'HEAD');
+        try {
+            $mergeBase = trim($this->gitProcessService->run($repoPath, ['merge-base', $baseSha, 'HEAD']));
+        } catch (GitCommandException $exception) {
+            if ($exception->exitCode === 1) {
+                return BranchBaseResult::unavailable($base, null, BranchBaseUnavailableReason::UnrelatedHistory);
+            }
 
-        if ($mergeBase === null) {
-            // Unrelated histories - treat like a missing ref so the UI surfaces
-            // an actionable state rather than silently doing nothing.
-            return BranchBaseResult::missingRef($base);
+            return $this->commandUnavailable($base, null, 'merge_base', $exception);
         }
 
-        $hashes = $this->commitsBetween($repoPath, $mergeBase, 'HEAD');
+        if ($mergeBase === '') {
+            return BranchBaseResult::unavailable($base, null, BranchBaseUnavailableReason::UnrelatedHistory);
+        }
+
+        try {
+            $hashes = $this->commitsBetween($repoPath, $mergeBase, 'HEAD');
+        } catch (GitCommandException $exception) {
+            return $this->commandUnavailable($base, $mergeBase, 'list_commits', $exception);
+        }
 
         if ($hashes === []) {
             return BranchBaseResult::upToDate($base, $mergeBase);
         }
 
         return BranchBaseResult::ready($base, $mergeBase, $hashes);
+    }
+
+    private function resolveBaseRef(string $repoPath, string $base): ?string
+    {
+        if (str_starts_with($base, '-')) {
+            return null;
+        }
+
+        try {
+            $resolved = trim($this->gitProcessService->run($repoPath, [
+                'rev-parse', '--verify', '--quiet', '--end-of-options', $base.'^{commit}',
+            ]));
+        } catch (GitCommandException $exception) {
+            if ($exception->exitCode === 1) {
+                return null;
+            }
+
+            throw $exception;
+        }
+
+        return $resolved !== '' ? $resolved : null;
+    }
+
+    private function commandUnavailable(
+        string $baseBranch,
+        ?string $baseSha,
+        string $stage,
+        GitCommandException $exception,
+    ): BranchBaseResult {
+        Log::warning('git.branch_base.resolve_failed', [
+            'reason' => 'branch_base_resolve_failed',
+            'base_branch' => $baseBranch,
+            'stage' => $stage,
+            'exit_code' => $exception->exitCode,
+        ]);
+
+        return BranchBaseResult::unavailable(
+            $baseBranch,
+            $baseSha,
+            BranchBaseUnavailableReason::CommandFailed,
+        );
     }
 
     /**
@@ -74,20 +121,9 @@ final readonly class ResolveBranchBaseAction
      */
     private function commitsBetween(string $repoPath, string $from, string $to): array
     {
-        try {
-            $output = $this->gitProcessService->run($repoPath, [
-                'log', '--format=%H', $from.'..'.$to,
-            ]);
-        } catch (GitCommandException $e) {
-            Log::warning('git.commit_range.list_failed', [
-                'reason' => 'commit_range_list_failed',
-                'from' => $from,
-                'to' => $to,
-                'exit_code' => $e->exitCode,
-            ]);
-
-            return [];
-        }
+        $output = $this->gitProcessService->run($repoPath, [
+            'log', '--format=%H', $from.'..'.$to,
+        ]);
 
         return collect(explode("\n", trim($output)))
             ->filter()

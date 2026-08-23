@@ -63,7 +63,7 @@ final readonly class LoadBranchExplorerSnapshotAction
     }
 
     /**
-     * @param  array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int}  $branchBase
+     * @param  array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int, unavailableReason: ?string}  $branchBase
      */
     private function loadedLimit(string $branch, string $currentBranch, array $branchBase, int $pageSize, int $minimumCommitCount): int
     {

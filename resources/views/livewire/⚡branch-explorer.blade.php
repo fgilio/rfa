@@ -52,7 +52,7 @@ new class extends Component {
      * Surfaced so the picker can render the "Since {base}" row and pre-fill
      * checkboxes when clicked.
      *
-     * @var array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int}|null
+     * @var array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int, unavailableReason: ?string}|null
      */
     public ?array $branchBase = null;
 

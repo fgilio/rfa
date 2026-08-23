@@ -119,7 +119,7 @@ final readonly class ResolveBranchExplorerSelectionAction
     }
 
     /**
-     * @param  array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int}  $branchBase
+     * @param  array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int, unavailableReason: ?string}  $branchBase
      * @param  list<string>  $selectedHashes
      */
     private function isExactSinceBaseSelection(

@@ -630,12 +630,12 @@ describe('since the beginning (entire repo)', () => {
 });
 
 describe('since-base row predictability', () => {
-    function withBase(state, { branch = 'main', baseBranch = 'main', commitCount = 3 } = {}) {
+    function withBase(state, { branch = 'main', baseBranch = 'main', commitCount = 3, unavailableReason = null } = {}) {
         return makeForView({
             branch,
             branchBase: state === null
                 ? null
-                : { state, baseBranch, commitCount, baseSha: 'base', hashesInRange: [] },
+                : { state, baseBranch, commitCount, baseSha: 'base', hashesInRange: [], unavailableReason },
         });
     }
 
@@ -645,6 +645,7 @@ describe('since-base row predictability', () => {
         expect(withBase(BranchBaseState.MissingRef).sinceBaseActionable).toBe(false);
         expect(withBase(BranchBaseState.NotConfigured).sinceBaseActionable).toBe(false);
         expect(withBase(BranchBaseState.OnBaseBranch).sinceBaseActionable).toBe(false);
+        expect(withBase(BranchBaseState.Unavailable).sinceBaseActionable).toBe(false);
     });
 
     it('is not actionable while browsing a different branch even when ready', () => {
@@ -658,6 +659,10 @@ describe('since-base row predictability', () => {
         expect(withBase(BranchBaseState.MissingRef).sinceBaseReason).toBe('base ref not found locally (run git fetch)');
         expect(withBase(BranchBaseState.OnBaseBranch).sinceBaseReason).toBe("you're on the base branch");
         expect(withBase(BranchBaseState.NotConfigured).sinceBaseReason).toBe('set a base branch to compare');
+        expect(withBase(BranchBaseState.Unavailable, { unavailableReason: 'unrelated_history' }).sinceBaseReason)
+            .toBe('base and current branch have unrelated histories');
+        expect(withBase(BranchBaseState.Unavailable, { unavailableReason: 'command_failed' }).sinceBaseReason)
+            .toBe('unable to compare with the base branch');
     });
 
     it('explains the off-branch case with the current branch name', () => {
@@ -707,15 +712,18 @@ describe('since-base auto-apply (row body)', () => {
 
     it('viewSinceBase is a noop when the row is not actionable', async () => {
         const upToDate = makeAutoApply({ branchBase: { ...readyBase, state: BranchBaseState.UpToDate } });
+        const unavailable = makeAutoApply({ branchBase: { ...readyBase, state: BranchBaseState.Unavailable } });
         const offBranch = makeAutoApply({ branch: 'feature/x' });
         const noBase = makeAutoApply({ branchBase: null });
         noBase.$wire.applySelection = vi.fn();
 
         await upToDate.viewSinceBase();
+        await unavailable.viewSinceBase();
         await offBranch.viewSinceBase();
         await noBase.viewSinceBase();
 
         expect(upToDate.$wire.applySelection).not.toHaveBeenCalled();
+        expect(unavailable.$wire.applySelection).not.toHaveBeenCalled();
         expect(offBranch.$wire.applySelection).not.toHaveBeenCalled();
         expect(noBase.$wire.applySelection).not.toHaveBeenCalled();
     });

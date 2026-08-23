@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\DTOs;
 
 use App\Enums\BranchBaseState;
+use App\Enums\BranchBaseUnavailableReason;
 
 final readonly class BranchBaseResult
 {
@@ -16,6 +17,7 @@ final readonly class BranchBaseResult
         public ?string $baseBranch,
         public ?string $baseSha,
         public array $hashesInRange,
+        public ?BranchBaseUnavailableReason $unavailableReason = null,
     ) {}
 
     public static function notConfigured(): self
@@ -44,7 +46,15 @@ final readonly class BranchBaseResult
         return new self(BranchBaseState::Ready, $baseBranch, $baseSha, $hashesInRange);
     }
 
-    /** @return array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int} */
+    public static function unavailable(
+        string $baseBranch,
+        ?string $baseSha,
+        BranchBaseUnavailableReason $reason,
+    ): self {
+        return new self(BranchBaseState::Unavailable, $baseBranch, $baseSha, [], $reason);
+    }
+
+    /** @return array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int, unavailableReason: ?string} */
     public function toArray(): array
     {
         return [
@@ -53,6 +63,7 @@ final readonly class BranchBaseResult
             'baseSha' => $this->baseSha,
             'hashesInRange' => $this->hashesInRange,
             'commitCount' => count($this->hashesInRange),
+            'unavailableReason' => $this->unavailableReason?->value,
         ];
     }
 }

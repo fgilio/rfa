@@ -8,13 +8,19 @@
         api.autoInstall(root);
     }
 })(typeof window !== 'undefined' ? window : null, function () {
-    // Mirrors App\Enums\BranchBaseState. Keep values in sync with the PHP enum.
+    // Mirrors the PHP branch-base enums. Keep values in sync.
     const BranchBaseState = Object.freeze({
         Ready: 'ready',
         NotConfigured: 'not_configured',
         UpToDate: 'up_to_date',
         MissingRef: 'missing_ref',
         OnBaseBranch: 'on_base_branch',
+        Unavailable: 'unavailable',
+    });
+
+    const BranchBaseUnavailableReason = Object.freeze({
+        UnrelatedHistory: 'unrelated_history',
+        CommandFailed: 'command_failed',
     });
 
     /**
@@ -189,6 +195,10 @@
                         return "you're on the base branch";
                     case BranchBaseState.NotConfigured:
                         return 'set a base branch to compare';
+                    case BranchBaseState.Unavailable:
+                        return base.unavailableReason === BranchBaseUnavailableReason.UnrelatedHistory
+                            ? 'base and current branch have unrelated histories'
+                            : 'unable to compare with the base branch';
                     default:
                         return '';
                 }
@@ -854,5 +864,5 @@
         }
     }
 
-    return { BranchBaseState, EMPTY_TREE_HASH, isSinceBaseExactly, violatesTipAnchor, stripRemotePrefix, createBranchExplorer, install, autoInstall };
+    return { BranchBaseState, BranchBaseUnavailableReason, EMPTY_TREE_HASH, isSinceBaseExactly, violatesTipAnchor, stripRemotePrefix, createBranchExplorer, install, autoInstall };
 });
