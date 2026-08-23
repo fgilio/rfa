@@ -60,7 +60,7 @@ final readonly class BuildDiffContextAction
             $key = "{$comment['file']}:{$comment['side']}:{$comment['startLine']}:{$comment['endLine']}";
 
             if ($diffData->outcome === DiffLoadOutcome::TooLarge) {
-                $context[$key] = '[Diff skipped: '.DiffLoadOutcome::TooLarge->value.']';
+                $context[$key] = "[Diff skipped: {$diffData->outcome->value}]";
 
                 continue;
             }
