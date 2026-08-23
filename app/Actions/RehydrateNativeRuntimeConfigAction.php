@@ -31,7 +31,7 @@ use Native\Desktop\Http\Middleware\PreventRegularBrowserAccess;
  * arrive as real process environment variables (not `.env` entries), `env()`
  * reads them live at runtime even under a cached config — so re-hydrating here
  * keeps the persisted config valid and lets the startup patch skip the
- * per-launch `config:cache` boot entirely (see scripts/patch-native-server.php).
+ * per-launch `config:cache` boot entirely (see scripts/patch-nativephp.php).
  *
  * Run from a `beforeBootstrapping(RegisterProviders)` hook in bootstrap/app.php
  * so it lands after the config is loaded but BEFORE any provider registers —

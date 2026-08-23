@@ -1,7 +1,63 @@
 <?php
 
 /**
- * Patch NativePHP's Electron server bootstrap for faster cold starts.
+ * The NativePHP vendor changes RFA depends on, applied as one patch set.
+ *
+ * Four edits across three compiled files in `nativephp/desktop`'s bundled
+ * Electron plugin. They are not independent in practice: two of them rewrite
+ * the same `dist/index.js`, and a build that ships some of them is a build
+ * whose startup behaviour nobody has tested. So the set is all-or-nothing —
+ * every expected source shape is checked, and every new file content computed,
+ * before the first byte is written. If any edit no longer matches, nothing is
+ * written at all and the composer hook fails.
+ *
+ * Runs automatically via composer post-autoload-dump and post-update-cmd.
+ */
+
+/**
+ * Expose webUtils.getPathForFile() from NativePHP's Electron preload.
+ *
+ * Electron 38+ removed File.path from the renderer. The replacement,
+ * webUtils.getPathForFile(), is only available in the preload context.
+ * NativePHP's preload doesn't expose it, so we patch the compiled JS
+ * to bridge it via contextBridge.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchPreloadFileBridge(string $content): ?string
+{
+    if (str_contains($content, "exposeInMainWorld('nativeGetFilePath'")) {
+        // Already bridged. The exposure is useless without webUtils on the
+        // import, so a half-applied file counts as a shape change, not a hit.
+        return str_contains($content, 'webUtils') ? $content : null;
+    }
+
+    // Add webUtils to the electron import
+    $original = $content;
+    $content = str_replace(
+        'import { ipcRenderer, contextBridge } from "electron";',
+        'import { ipcRenderer, contextBridge, webUtils } from "electron";',
+        $content
+    );
+
+    if ($content === $original) {
+        return null;
+    }
+
+    // Expose getPathForFile to the renderer via contextBridge
+    $content .= <<<'JS'
+
+// [rfa patch] Expose webUtils.getPathForFile for drag-and-drop support.
+// File objects pass through contextBridge via structured cloning.
+contextBridge.exposeInMainWorld('nativeGetFilePath', (file) => webUtils.getPathForFile(file));
+JS;
+
+    return $content."\n";
+}
+
+/**
+ * Speed up cold starts in NativePHP's Electron server bootstrap.
  *
  * Two independent edits to the compiled `dist/server/php.js` (the file
  * `electron-vite build` bundles directly — it does not run the plugin's `tsc`
@@ -28,20 +84,15 @@
  *     (The long-lived server and the optimize/migrate calls already get opcache
  *     via NativeAppServiceProvider::phpIni().)
  *
- * Each edit is applied idempotently and independently; a NativePHP bump that
- * reshapes one block leaves the others intact. Runs automatically via composer
- * post-autoload-dump.
+ * Both edits must land: this returns null unless every one of them is present
+ * in the result, so a NativePHP bump that reshapes one block fails the patch
+ * set rather than shipping a half-optimized bootstrap.
  *
- * @return 'patched'|'already_patched'|'block_not_found'|'not_found'
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
  */
-function patchNativeServerOptimize(string $serverPath): string
+function rfaPatchServerOptimize(string $content): ?string
 {
-    if (! file_exists($serverPath)) {
-        return 'not_found';
-    }
-
-    $content = file_get_contents($serverPath);
-
     $optimizeFind = <<<'JS'
         if (shouldOptimize(store)) {
             console.log('Caching view and routes...');
@@ -206,17 +257,7 @@ JS;
         && str_contains($patched, '[rfa opcache] persistent opcode cache dir')
         && substr_count($patched, '[rfa opcache] reuse compiled opcode') === 2;
 
-    if (! $fullyPatched) {
-        return 'block_not_found';
-    }
-
-    if ($patched === $content) {
-        return 'already_patched';
-    }
-
-    file_put_contents($serverPath, $patched);
-
-    return 'patched';
+    return $fullyPatched ? $patched : null;
 }
 
 /**
@@ -234,16 +275,11 @@ JS;
  * exactly today's behaviour. Disabled under NODE_ENV=development so a developer
  * always sees fresh config.
  *
- * @return 'patched'|'already_patched'|'block_not_found'|'not_found'
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
  */
-function patchNativePreflightCache(string $indexPath): string
+function rfaPatchPreflightCache(string $content): ?string
 {
-    if (! file_exists($indexPath)) {
-        return 'not_found';
-    }
-
-    $content = file_get_contents($indexPath);
-
     $importFind = "import electronUpdater from 'electron-updater';";
     $importMarker = 'import Store from "electron-store"; // [rfa preflight cache]';
     $importReplace = $importFind."\n".$importMarker;
@@ -372,17 +408,7 @@ JS;
         && str_contains($patched, "'preflight_config_'")
         && str_contains($patched, "'preflight_phpini_'");
 
-    if (! $fullyPatched) {
-        return 'block_not_found';
-    }
-
-    if ($patched === $content) {
-        return 'already_patched';
-    }
-
-    file_put_contents($indexPath, $patched);
-
-    return 'patched';
+    return $fullyPatched ? $patched : null;
 }
 
 /**
@@ -404,16 +430,11 @@ JS;
  * behaviour. On macOS (RFA's only desktop target) closing the splash while it is
  * the only window does not quit the app: `window-all-closed` is darwin-guarded.
  *
- * @return 'patched'|'already_patched'|'block_not_found'|'not_found'
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
  */
-function patchNativeSplashWindow(string $indexPath): string
+function rfaPatchSplashWindow(string $content): ?string
 {
-    if (! file_exists($indexPath)) {
-        return 'not_found';
-    }
-
-    $content = file_get_contents($indexPath);
-
     // 1. Pull BrowserWindow + nativeTheme into the electron import so the splash
     //    can create a window and tint it to the OS light/dark appearance.
     $importFind = 'import { app, session, powerMonitor } from "electron";';
@@ -611,61 +632,245 @@ JS;
         && str_contains($patched, 'rfaShowSplash() {')
         && str_contains($patched, 'this.rfaShowSplash()');
 
-    if (! $fullyPatched) {
-        return 'block_not_found';
+    return $fullyPatched ? $patched : null;
+}
+
+/**
+ * The patch set: what has to be true of the vendored Electron plugin.
+ *
+ * Order matters within a file — the pre-flight cache and the splash window
+ * both rewrite `dist/index.js`, and each is applied to the result of the one
+ * before it.
+ *
+ * @return list<array{name: string, file: string, apply: callable(string): ?string, summary: string}>
+ */
+function rfaNativePhpPatchSet(): array
+{
+    return [
+        [
+            'name' => 'preload-file-bridge',
+            'file' => 'preload/index.mjs',
+            'apply' => rfaPatchPreloadFileBridge(...),
+            'summary' => 'preload exposes webUtils.getPathForFile for drag-and-drop',
+        ],
+        [
+            'name' => 'server-optimize',
+            'file' => 'server/php.js',
+            'apply' => rfaPatchServerOptimize(...),
+            'summary' => 'optimize once per version + opcache-warmed pre-flight boots',
+        ],
+        [
+            'name' => 'preflight-cache',
+            'file' => 'index.js',
+            'apply' => rfaPatchPreflightCache(...),
+            'summary' => 'native:config / native:php-ini reused per app version',
+        ],
+        [
+            'name' => 'splash-window',
+            'file' => 'index.js',
+            'apply' => rfaPatchSplashWindow(...),
+            'summary' => 'splash window opens before the PHP server boots',
+        ],
+    ];
+}
+
+/**
+ * Apply the whole patch set under `$distRoot`, or none of it.
+ *
+ * Three phases, in order:
+ *
+ *  1. **Preflight.** Read each target once and run its edits in memory. A file
+ *     that is missing entirely is reported as absent and skipped — the release
+ *     build re-runs this hook over a pruned `--no-dev` copy where the plugin
+ *     dist legitimately isn't there. A file that is present but whose expected
+ *     shape is gone blocks the run.
+ *  2. **Abort on any block.** Nothing has been written yet, so there is nothing
+ *     to undo.
+ *  3. **Write.** Each changed file goes to a sibling temporary file that is
+ *     renamed into place, so a reader never sees a half-written file. If a
+ *     later write fails, the files already renamed are restored from the
+ *     originals held in memory.
+ *
+ * @return array{applied: list<string>, unchanged: list<string>, blocked: list<string>, absent: list<string>, written: list<string>, error: ?string, rolledBack: bool}
+ */
+function applyRfaNativePhpPatchSet(string $distRoot): array
+{
+    $result = [
+        'applied' => [],
+        'unchanged' => [],
+        'blocked' => [],
+        'absent' => [],
+        'written' => [],
+        'error' => null,
+        'rolledBack' => false,
+    ];
+
+    /** @var array<string, array{original: string, patched: string}> $files */
+    $files = [];
+
+    foreach (rfaNativePhpPatchSet() as $patch) {
+        $path = $distRoot.'/'.$patch['file'];
+
+        if (! isset($files[$path])) {
+            if (! is_file($path)) {
+                $result['absent'][] = $patch['name'];
+
+                continue;
+            }
+
+            $original = @file_get_contents($path);
+
+            if ($original === false) {
+                $result['blocked'][] = $patch['name'];
+
+                continue;
+            }
+
+            $files[$path] = ['original' => $original, 'patched' => $original];
+        }
+
+        $next = $patch['apply']($files[$path]['patched']);
+
+        if ($next === null) {
+            $result['blocked'][] = $patch['name'];
+
+            continue;
+        }
+
+        $result[$next === $files[$path]['patched'] ? 'unchanged' : 'applied'][] = $patch['name'];
+        $files[$path]['patched'] = $next;
     }
 
-    if ($patched === $content) {
-        return 'already_patched';
+    // All-or-nothing extends to the files themselves. The dist directory is
+    // either there or it is not — a pruned release copy drops it whole — so a
+    // tree holding only some of the targets is a broken install, and patching
+    // the survivors would ship exactly the half-patched vendor this set exists
+    // to prevent.
+    if ($result['absent'] !== [] && $files !== []) {
+        $result['blocked'] = [...$result['blocked'], ...$result['absent']];
     }
 
-    file_put_contents($indexPath, $patched);
+    if ($result['blocked'] !== []) {
+        return $result;
+    }
 
-    return 'patched';
+    /** @var array<string, string> $renamed */
+    $renamed = [];
+
+    foreach ($files as $path => $contents) {
+        if ($contents['patched'] === $contents['original']) {
+            continue;
+        }
+
+        if (! rfaWriteFileAtomically($path, $contents['patched'])) {
+            $result['error'] = $path;
+            $result['rolledBack'] = rfaRestoreFiles($renamed);
+
+            return $result;
+        }
+
+        $renamed[$path] = $contents['original'];
+        $result['written'][] = $path;
+    }
+
+    return $result;
+}
+
+/**
+ * Replace `$path` with `$contents` through a sibling temporary file, so the
+ * file is either its old self or its new self and never a truncated mix.
+ */
+function rfaWriteFileAtomically(string $path, string $contents): bool
+{
+    $temporaryPath = $path.'.rfa-patch-'.getmypid().'-'.bin2hex(random_bytes(4));
+
+    if (@file_put_contents($temporaryPath, $contents) !== strlen($contents)) {
+        @unlink($temporaryPath);
+
+        return false;
+    }
+
+    // rename() creates a new directory entry, so carry the original mode over
+    // rather than leaving the file on the process umask.
+    $mode = @fileperms($path);
+
+    if ($mode !== false) {
+        @chmod($temporaryPath, $mode & 0777);
+    }
+
+    if (! @rename($temporaryPath, $path)) {
+        @unlink($temporaryPath);
+
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Put back the files a failed run had already replaced.
+ *
+ * @param  array<string, string>  $originals  path => the bytes it held before
+ * @return bool whether every file was restored
+ */
+function rfaRestoreFiles(array $originals): bool
+{
+    $restored = true;
+
+    foreach ($originals as $path => $original) {
+        $restored = rfaWriteFileAtomically($path, $original) && $restored;
+    }
+
+    return $restored;
+}
+
+/**
+ * The dist directory of the vendored Electron plugin.
+ */
+function rfaNativePhpDistRoot(): string
+{
+    return dirname(__DIR__).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist';
 }
 
 // Run when executed directly (not when required by tests)
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
-    $electronPlugin = __DIR__.'/../vendor/nativephp/desktop/resources/electron/electron-plugin/dist';
+    $outcome = applyRfaNativePhpPatchSet(rfaNativePhpDistRoot());
 
-    $result = patchNativeServerOptimize($electronPlugin.'/server/php.js');
+    /** @var array<string, string> $summaries */
+    $summaries = array_column(rfaNativePhpPatchSet(), 'summary', 'name');
 
-    match ($result) {
-        'patched' => print "  NativePHP server patched: optimize once per version + opcache warm boots.\n",
-        'already_patched' => print "  NativePHP server already patched (optimize + opcache).\n",
-        'block_not_found' => fwrite(STDERR, "  ERROR: NativePHP server bootstrap changed shape — startup patch NOT applied. Update scripts/patch-native-server.php to match the new dist/server/php.js.\n"),
-        // not_found is benign: the release build runs `composer install --no-dev`
-        // on a pruned copy where the electron-plugin dist isn't present at this
-        // path, so the hook fires with nothing to patch. Skip silently — the real
-        // vendor dist (which the build bundles) was patched on the primary install.
-        'not_found' => null,
-    };
+    foreach ($outcome['applied'] as $name) {
+        printf("  NativePHP patched (%s): %s.\n", $name, $summaries[$name]);
+    }
 
-    $preflightResult = patchNativePreflightCache($electronPlugin.'/index.js');
+    foreach ($outcome['unchanged'] as $name) {
+        printf("  NativePHP already patched (%s).\n", $name);
+    }
 
-    match ($preflightResult) {
-        'patched' => print "  NativePHP pre-flight cached: native:config / native:php-ini reused per version.\n",
-        'already_patched' => print "  NativePHP pre-flight already cached.\n",
-        'block_not_found' => fwrite(STDERR, "  ERROR: NativePHP main bootstrap changed shape — pre-flight cache NOT applied. Update scripts/patch-native-server.php to match the new dist/index.js.\n"),
-        'not_found' => null,
-    };
+    foreach ($outcome['blocked'] as $name) {
+        fwrite(STDERR, sprintf(
+            "  ERROR: the '%s' patch (%s) could not be applied, so NOTHING was patched. The vendored NativePHP files changed shape or are incomplete — update scripts/patch-nativephp.php to match them, or reinstall nativephp/desktop.\n",
+            $name,
+            $summaries[$name],
+        ));
+    }
 
-    $splashResult = patchNativeSplashWindow($electronPlugin.'/index.js');
+    if ($outcome['error'] !== null) {
+        fwrite(STDERR, sprintf(
+            "  ERROR: could not write %s. %s\n",
+            $outcome['error'],
+            $outcome['rolledBack']
+                ? 'The files already written were restored.'
+                : 'RESTORING THE EARLIER FILES ALSO FAILED — reinstall nativephp/desktop before building.',
+        ));
+    }
 
-    match ($splashResult) {
-        'patched' => print "  NativePHP splash window added: instant feedback before PHP boots.\n",
-        'already_patched' => print "  NativePHP splash window already present.\n",
-        'block_not_found' => fwrite(STDERR, "  ERROR: NativePHP main bootstrap changed shape — splash window NOT applied. Update scripts/patch-native-server.php to match the new dist/index.js.\n"),
-        'not_found' => null,
-    };
-
-    // Fail the composer hook only when a vendored file is present but no longer
-    // matches (block_not_found): a NativePHP bump that reshaped the bootstrap must
-    // not silently ship without the startup optimizations. `not_found` is NOT
-    // fatal — the release build re-runs this hook via `composer install --no-dev`
-    // on a pruned copy where the dist legitimately isn't at this path, and that
-    // must not break the build (the bundled dist was already patched on install).
-    if ($result === 'block_not_found' || $preflightResult === 'block_not_found' || $splashResult === 'block_not_found') {
+    // Fail the composer hook when a vendored file is present but no longer
+    // matches, or when a write failed. `absent` is NOT fatal: the release build
+    // re-runs this hook via `composer install --no-dev` on a pruned copy where
+    // the plugin dist legitimately isn't at this path, and that must not break
+    // the build (the bundled dist was already patched on the primary install).
+    if ($outcome['blocked'] !== [] || $outcome['error'] !== null) {
         exit(1);
     }
 }

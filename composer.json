@@ -92,14 +92,12 @@
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi",
-            "@php scripts/patch-native-preload.php",
-            "@php scripts/patch-native-server.php"
+            "@php scripts/patch-nativephp.php"
         ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force",
             "@php artisan native:install --force --quiet ",
-            "@php scripts/patch-native-preload.php",
-            "@php scripts/patch-native-server.php"
+            "@php scripts/patch-nativephp.php"
         ],
         "native:dev": [
             "Composer\\Config::disableProcessTimeout",

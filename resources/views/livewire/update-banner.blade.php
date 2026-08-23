@@ -1,13 +1,25 @@
 <?php
 
-use Illuminate\Support\Facades\Cache;
+use App\Actions\UpdaterStateAction;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Native\Desktop\Facades\AutoUpdater;
 
+/**
+ * Thin view over the updater state store.
+ *
+ * @phpstan-import-type UpdaterViewSnapshot from UpdaterStateAction
+ *
+ * The renderer sees the same updater events as the main process, so this
+ * component reports them to `UpdaterStateAction` and renders the snapshot it
+ * gets back. Cache identity, TTLs, normalization and which transitions are
+ * legal all live behind that action; the four fields below are only what the
+ * template needs.
+ */
 new class extends Component
 {
-    public ?string $status = null; // checking, downloading, ready, up-to-date, checked-dev, error
+    /** One of the `UpdaterStatus` values, or null when there is nothing to show. */
+    public ?string $status = null;
 
     public ?string $version = null;
 
@@ -22,22 +34,7 @@ new class extends Component
 
     public function refreshState(): void
     {
-        $state = Cache::get('native-update-state');
-
-        if (! $state) {
-            $this->resetState();
-
-            return;
-        }
-
-        if (($state['status'] ?? null) === 'ready' && ($state['version'] ?? null) === config('nativephp.version')) {
-            Cache::forget('native-update-state');
-            $this->resetState();
-
-            return;
-        }
-
-        $this->applyState($this->resolveDevCheckState($state));
+        $this->apply($this->updater()->handle());
     }
 
     #[On('native:Native\\Desktop\\Events\\Menu\\MenuItemClicked')]
@@ -47,64 +44,43 @@ new class extends Component
             return;
         }
 
-        $this->storeState(
-            $this->checkingState(),
-            now()->addMinutes(2),
-        );
+        $this->apply($this->updater()->beginCheck());
     }
 
     #[On('native:Native\\Desktop\\Events\\AutoUpdater\\CheckingForUpdate')]
     public function handleCheckingForUpdate(): void
     {
-        $this->storeState(
-            $this->checkingState(),
-            now()->addMinutes(2),
-        );
+        $this->apply($this->updater()->beginCheck());
     }
 
     #[On('native:Native\\Desktop\\Events\\AutoUpdater\\UpdateAvailable')]
     public function handleUpdateAvailable(string $version, array|string|null $releaseNotes = null): void
     {
-        $this->storeState([
-            'status' => 'downloading',
-            'version' => $version,
-            'releaseNotes' => $this->normalizeReleaseNotes($releaseNotes),
-            'percent' => 0,
-        ], now()->addMinutes(30));
+        $this->apply($this->updater()->recordAvailable($version, $releaseNotes));
     }
 
     #[On('native:Native\\Desktop\\Events\\AutoUpdater\\DownloadProgress')]
     public function handleDownloadProgress(int|float $percent): void
     {
-        $this->storeState([
-            'status' => 'downloading',
-            'version' => $this->version,
-            'releaseNotes' => $this->releaseNotes,
-            'percent' => (int) round($percent),
-        ], now()->addMinutes(30));
+        $this->apply($this->updater()->recordProgress($percent));
     }
 
     #[On('native:Native\\Desktop\\Events\\AutoUpdater\\UpdateDownloaded')]
     public function handleUpdateDownloaded(string $version, array|string|null $releaseNotes = null): void
     {
-        $this->storeState([
-            'status' => 'ready',
-            'version' => $version,
-            'releaseNotes' => $this->normalizeReleaseNotes($releaseNotes),
-            'percent' => 100,
-        ], now()->addHours(24));
+        $this->apply($this->updater()->recordDownloaded($version, $releaseNotes));
     }
 
     #[On('native:Native\\Desktop\\Events\\AutoUpdater\\UpdateNotAvailable')]
     public function handleUpdateNotAvailable(): void
     {
-        $this->storeState(['status' => 'up-to-date'], now()->addSeconds(10));
+        $this->apply($this->updater()->recordUpToDate());
     }
 
     #[On('native:Native\\Desktop\\Events\\AutoUpdater\\Error')]
     public function handleUpdateError(): void
     {
-        $this->storeState(['status' => 'error'], now()->addMinutes(5));
+        $this->apply($this->updater()->recordError());
     }
 
     public function restartAndUpdate(): void
@@ -112,91 +88,28 @@ new class extends Component
         try {
             AutoUpdater::quitAndInstall();
         } catch (\Throwable) {
-            Cache::put('native-update-state', ['status' => 'error'], now()->addMinutes(5));
-            $this->status = 'error';
+            $this->apply($this->updater()->recordError());
             $this->dispatch('restart-failed');
         }
     }
 
     public function dismiss(): void
     {
-        Cache::forget('native-update-state');
-        $this->resetState();
+        $this->apply($this->updater()->dismiss());
     }
 
-    /** @return array<string, mixed> */
-    private function checkingState(): array
+    private function updater(): UpdaterStateAction
     {
-        return [
-            'status' => 'checking',
-            'startedAt' => now()->timestamp,
-            'simulateTerminalState' => config('app.debug'),
-        ];
+        return app(UpdaterStateAction::class);
     }
 
-    /** @param array<string, mixed> $state */
-    private function applyState(array $state): void
+    /** @param UpdaterViewSnapshot $snapshot */
+    private function apply(array $snapshot): void
     {
-        $this->status = $state['status'] ?? null;
-        $this->version = $state['version'] ?? null;
-        $this->releaseNotes = $state['releaseNotes'] ?? null;
-        $this->downloadPercent = $state['percent'] ?? 0;
-    }
-
-    private function resetState(): void
-    {
-        $this->status = null;
-        $this->version = null;
-        $this->releaseNotes = null;
-        $this->downloadPercent = 0;
-    }
-
-    /** @param array<string, mixed> $state */
-    private function storeState(array $state, \DateTimeInterface $ttl): void
-    {
-        Cache::put('native-update-state', $state, $ttl);
-
-        $this->applyState($state);
-    }
-
-    /** @param array<string, mixed> $state
-     * @return array<string, mixed>
-     */
-    private function resolveDevCheckState(array $state): array
-    {
-        if (! config('app.debug')) {
-            return $state;
-        }
-
-        if (($state['status'] ?? null) !== 'checking') {
-            return $state;
-        }
-
-        if (($state['simulateTerminalState'] ?? false) !== true) {
-            return $state;
-        }
-
-        $startedAt = $state['startedAt'] ?? null;
-
-        if (! is_int($startedAt) || (now()->timestamp - $startedAt) < 2) {
-            return $state;
-        }
-
-        $state = [
-            'status' => 'checked-dev',
-        ];
-
-        Cache::put('native-update-state', $state, now()->addSeconds(20));
-
-        return $state;
-    }
-
-    /** @param array<string>|string|null $notes */
-    private function normalizeReleaseNotes(array|string|null $notes): ?string
-    {
-        $text = is_array($notes) ? implode(' ', $notes) : $notes;
-
-        return $text ? trim(strip_tags($text)) : $text;
+        $this->status = $snapshot['status'];
+        $this->version = $snapshot['version'];
+        $this->releaseNotes = $snapshot['releaseNotes'];
+        $this->downloadPercent = $snapshot['downloadPercent'];
     }
 
     /**

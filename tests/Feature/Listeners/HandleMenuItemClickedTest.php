@@ -14,21 +14,13 @@ use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Native\Desktop\Events\Menu\MenuItemClicked;
-use Native\Desktop\Facades\Window;
+use Tests\Helpers\MainWindowNavigations;
 use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
 beforeEach(function () {
-    $this->capturedUrl = null;
-
-    $window = Mockery::mock(Native\Desktop\Windows\Window::class);
-    $window->shouldReceive('url')
-        ->andReturnUsing(function (string $url) {
-            $this->capturedUrl = $url;
-        });
-
-    Window::shouldReceive('get')->with('main')->andReturn($window);
+    $this->navigations = MainWindowNavigations::capture();
 });
 
 function bindOpenRepositoryDialogAction(?Project $project): void
@@ -66,7 +58,7 @@ test('show-context with cached active-project navigates to context-page for that
 
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'show-context']));
 
-    expect($this->capturedUrl)->toBe(route('context-page', ['slug' => 'rfa']))
+    expect($this->navigations->latest())->toBe(route('context-page', ['slug' => 'rfa']))
         ->and(Context::get('rfa.used_cached_project'))->toBeTrue();
 });
 
@@ -79,7 +71,7 @@ test('show-context with cache miss falls back to the file-picker flow', function
 
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'show-context']));
 
-    expect($this->capturedUrl)->toBe(route('context-page', ['slug' => 'picked']));
+    expect($this->navigations->latest())->toBe(route('context-page', ['slug' => 'picked']));
 });
 
 test('show-context with stale cached id (project deleted) falls back to the file-picker flow', function () {
@@ -91,7 +83,7 @@ test('show-context with stale cached id (project deleted) falls back to the file
 
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'show-context']));
 
-    expect($this->capturedUrl)->toBe(route('context-page', ['slug' => 'picked']))
+    expect($this->navigations->latest())->toBe(route('context-page', ['slug' => 'picked']))
         ->and(Context::get('rfa.used_cached_project'))->toBeFalse();
 });
 
@@ -103,7 +95,7 @@ test('show-context with no cached id and no project picked navigates nowhere', f
 
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'show-context']));
 
-    expect($this->capturedUrl)->toBeNull();
+    expect($this->navigations->latest())->toBeNull();
 });
 
 test('review-code with cached active-project navigates to review-page for that project', function () {
@@ -115,7 +107,7 @@ test('review-code with cached active-project navigates to review-page for that p
 
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'review-code']));
 
-    expect($this->capturedUrl)->toBe(route('review-page', ['slug' => 'rfa']));
+    expect($this->navigations->latest())->toBe(route('review-page', ['slug' => 'rfa']));
 });
 
 test('review-code with cache miss falls back to the file-picker flow', function () {
@@ -127,7 +119,7 @@ test('review-code with cache miss falls back to the file-picker flow', function 
 
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'review-code']));
 
-    expect($this->capturedUrl)->toBe(route('review-page', ['slug' => 'picked']));
+    expect($this->navigations->latest())->toBe(route('review-page', ['slug' => 'picked']));
 });
 
 test('review-code with no cached id and no project picked navigates nowhere', function () {
@@ -138,7 +130,7 @@ test('review-code with no cached id and no project picked navigates nowhere', fu
 
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'review-code']));
 
-    expect($this->capturedUrl)->toBeNull();
+    expect($this->navigations->latest())->toBeNull();
 });
 
 test('show-shortcuts broadcasts the cheat-sheet open request without navigating', function () {
@@ -150,7 +142,7 @@ test('show-shortcuts broadcasts the cheat-sheet open request without navigating'
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'show-shortcuts']));
 
     Event::assertDispatched(ShowShortcutsRequested::class);
-    expect($this->capturedUrl)->toBeNull();
+    expect($this->navigations->latest())->toBeNull();
 });
 
 test('toggle-sidebar broadcasts the sidebar toggle without navigating', function () {
@@ -162,7 +154,7 @@ test('toggle-sidebar broadcasts the sidebar toggle without navigating', function
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'toggle-sidebar']));
 
     Event::assertDispatched(ToggleSidebarRequested::class);
-    expect($this->capturedUrl)->toBeNull();
+    expect($this->navigations->latest())->toBeNull();
 });
 
 test('open-repo still routes to review-page', function () {
@@ -173,7 +165,7 @@ test('open-repo still routes to review-page', function () {
 
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'open-repo']));
 
-    expect($this->capturedUrl)->toBe(route('review-page', ['slug' => 'opened']));
+    expect($this->navigations->latest())->toBe(route('review-page', ['slug' => 'opened']));
 });
 
 test('scan-directory dispatches its action', function () {
@@ -201,7 +193,7 @@ test('unknown menu item ids are ignored', function () {
 
     app(HandleMenuItemClicked::class)->handle(new MenuItemClicked(['id' => 'whatever']));
 
-    expect($this->capturedUrl)->toBeNull();
+    expect($this->navigations->latest())->toBeNull();
 });
 
 test('emits a canonical menu.item.clicked event with completed outcome when open-repo picks a project', function () {

@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace App\Listeners;
 
-use App\Actions\OpenProjectFromPathAction;
+use App\Actions\OpenTerminalRequestAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
 use Native\Desktop\Events\App\OpenedFromURL;
-use Native\Desktop\Facades\Window;
 use Throwable;
 
 final readonly class HandleDeepLink
@@ -42,36 +41,45 @@ final readonly class HandleDeepLink
             }
 
             $mode = is_string($query['mode'] ?? null) ? $query['mode'] : null;
+            // The helper emits the inbox filename stem here so this open and
+            // the inbox copy of it resolve to the same request. Older
+            // path-only links carry no id and are opened unconditionally.
+            $requestId = OpenTerminalRequestAction::normalizeRequestId(
+                is_string($query['id'] ?? null) ? $query['id'] : null,
+            );
             $pathHash = hash('xxh128', $path);
+            $routeName = OpenTerminalRequestAction::routeName($mode);
 
             Context::add('rfa.mode', $mode);
             Context::add('rfa.path_hash', $pathHash);
+            Context::add('rfa.request_id', $requestId);
+            Context::add('rfa.route', $routeName);
 
             app(RecordRuntimeDiagnosticAction::class)->handle('deeplink.received', [
                 'mode' => $mode,
                 'path_hash' => $pathHash,
+                'request_id' => $requestId,
             ]);
 
-            $project = app(OpenProjectFromPathAction::class)->handle($path);
+            $project = app(OpenTerminalRequestAction::class)->handle($path, $mode, $requestId);
 
             if (! $project) {
-                // The action marks why it returned null via Context: an
-                // unexpected registration failure is an error, everything
-                // else (missing path, not a repo) is a rejection.
-                $outcome = Context::get('rfa.reason') === 'project_registration_failed'
-                    ? 'error'
-                    : 'rejected';
+                // The action marks why it returned null via Context. A
+                // request the inbox already claimed was handled correctly by
+                // the other transport, so this delivery stood down rather
+                // than being turned away; an unexpected registration failure
+                // is an error; anything else is a rejection.
+                $outcome = match (Context::get('rfa.reason')) {
+                    'request_already_claimed' => 'skipped',
+                    'project_registration_failed' => 'error',
+                    default => 'rejected',
+                };
 
                 Context::addIf('rfa.reason', 'not_a_project');
 
                 return;
             }
 
-            // Fail open on junk mode values: anything that isn't 'context' lands
-            // on review-page rather than failing the whole open.
-            $routeName = ($mode === 'context') ? 'context-page' : 'review-page';
-
-            Context::add('rfa.route', $routeName);
             Context::add('rfa.project_id', $project->id);
             Context::add('rfa.project_slug', $project->slug);
 
@@ -80,8 +88,6 @@ final readonly class HandleDeepLink
                 'project_id' => $project->id,
                 'project_slug' => $project->slug,
             ]);
-
-            Window::get('main')->url(route($routeName, ['slug' => $project->slug]));
         } catch (Throwable $e) {
             $outcome = 'error';
             Context::add('rfa.error_class', $e::class);
