@@ -7,7 +7,6 @@ namespace App\Actions;
 use App\Exceptions\NotAGitRepositoryException;
 use App\Models\Project;
 use Illuminate\Support\Facades\Context;
-use Illuminate\Support\Facades\Log;
 use Native\Desktop\Dialog;
 use Native\Desktop\Facades\Alert;
 use Throwable;
@@ -48,13 +47,6 @@ final readonly class OpenRepositoryDialogAction
             Context::add('rfa.reason', 'project_registration_failed');
             Context::add('rfa.error_class', $e::class);
 
-            // The picked path stays out of the payload: a dialog result is an
-            // absolute path with no project to relativize it against.
-            Log::warning('project.registration.failed', [
-                'reason' => 'project_registration_failed',
-                'error_class' => $e::class,
-            ]);
-
             Alert::new()
                 ->type('warning')
                 ->title('Could Not Open Repository')
@@ -62,5 +54,21 @@ final readonly class OpenRepositoryDialogAction
 
             return null;
         }
+    }
+
+    /**
+     * Map a null return from handle() to a canonical outcome.
+     *
+     * The caller owns the canonical event, so it reads back the reason
+     * this action recorded. A dismissed dialog is the only null
+     * left unmarked.
+     */
+    public static function outcomeForNullProject(): string
+    {
+        return match (Context::get('rfa.reason')) {
+            'project_registration_failed' => 'error',
+            'not_a_git_repository' => 'rejected',
+            default => 'cancelled',
+        };
     }
 }

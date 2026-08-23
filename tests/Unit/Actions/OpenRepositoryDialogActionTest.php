@@ -44,31 +44,27 @@ test('returns null when the dialog is dismissed', function () {
     fakeFolderPick(null);
 
     expect(app(OpenRepositoryDialogAction::class)->handle())->toBeNull()
-        ->and(Context::get('rfa.reason'))->toBeNull();
+        ->and(Context::get('rfa.reason'))->toBeNull()
+        ->and(OpenRepositoryDialogAction::outcomeForNullProject())->toBe('cancelled');
 });
 
-test('marks a picked non-repository as rejected without warning', function () {
+test('marks a picked non-repository as rejected', function () {
     fakeFolderPick($this->createTempDirectory('rfa_open_dialog_nongit_'));
-    Log::spy();
 
     expect(app(OpenRepositoryDialogAction::class)->handle())->toBeNull()
-        ->and(Context::get('rfa.reason'))->toBe('not_a_git_repository');
-
-    Log::shouldNotHaveReceived('warning');
+        ->and(Context::get('rfa.reason'))->toBe('not_a_git_repository')
+        ->and(OpenRepositoryDialogAction::outcomeForNullProject())->toBe('rejected');
 });
 
-test('warns without the picked path when registration fails unexpectedly', function () {
+test('marks an unexpected registration failure as an error for the owner', function () {
     fakeFolderPick($this->repoPath);
     Schema::drop('projects');
     Log::spy();
 
     expect(app(OpenRepositoryDialogAction::class)->handle())->toBeNull()
-        ->and(Context::get('rfa.reason'))->toBe('project_registration_failed');
+        ->and(Context::get('rfa.reason'))->toBe('project_registration_failed')
+        ->and(Context::get('rfa.error_class'))->not->toBeNull()
+        ->and(OpenRepositoryDialogAction::outcomeForNullProject())->toBe('error');
 
-    Log::shouldHaveReceived('warning')->once()->withArgs(
-        fn (string $event, array $payload): bool => $event === 'project.registration.failed'
-            && $payload['reason'] === 'project_registration_failed'
-            && $payload['error_class'] !== ''
-            && ! array_key_exists('path', $payload),
-    );
+    Log::shouldNotHaveReceived('warning');
 });

@@ -66,6 +66,22 @@ final readonly class OpenTerminalRequestAction
     }
 
     /**
+     * Map a null return from handle() to a canonical outcome.
+     *
+     * A request the other transport already claimed stood down rather
+     * than being turned away, so it reads as skipped instead
+     * of rejected.
+     */
+    public static function outcomeForNullProject(): string
+    {
+        return match (Context::get('rfa.reason')) {
+            'request_already_claimed' => 'skipped',
+            'project_registration_failed' => 'error',
+            default => 'rejected',
+        };
+    }
+
+    /**
      * Fail open on junk mode values: anything that isn't `context` lands on
      * the review page rather than failing the whole open.
      */
