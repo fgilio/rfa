@@ -46,10 +46,14 @@ class GitDiffService
             '--', '.',
         ]);
 
-        // Get +/- line counts for tracked changes
+        // Get +/- line counts for tracked changes. Lockfiles are excluded via
+        // pathspec so git never diffs them: `--numstat` computes real line
+        // counts, which is expensive for exactly the huge generated files the
+        // evaluator drops a moment later. Only the non-negatable lockfile set
+        // goes here, so this cannot disagree with isPathExcluded().
         $numstat = $this->git->run($repoPath, [
             ...$this->diffArgs($target, ['--numstat']),
-            '--', '.',
+            '--', '.', ...$this->ignoreService->alwaysExcludePathspecs(),
         ]);
 
         // Parse name-status into [path => [status, oldPath]]
@@ -289,7 +293,12 @@ class GitDiffService
 
     private function withWorkingTreeFileFingerprint(string $repoPath, string $line): string
     {
-        $path = $this->statusLineWorkingTreePath($line);
+        // A deleted file has no on-disk content left to fingerprint.
+        if (str_starts_with($line, "D\t")) {
+            return $line;
+        }
+
+        $path = $this->statusLinePath($line);
 
         if ($path === null) {
             return $line;
@@ -313,12 +322,6 @@ class GitDiffService
         return str_starts_with($status, 'R') || str_starts_with($status, 'C')
             ? ($parts[2] ?? null)
             : ($parts[1] ?? null);
-    }
-
-    /** The path whose on-disk content fingerprints the line, or null when nothing is left on disk. */
-    private function statusLineWorkingTreePath(string $line): ?string
-    {
-        return str_starts_with($line, "D\t") ? null : $this->statusLinePath($line);
     }
 
     public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, ?int $contextLines = null, ?DiffTarget $target = null, ?string $oldPath = null, bool $detectMovedLines = true): ?string

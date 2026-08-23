@@ -448,7 +448,7 @@ test('a too-large skip result is stored as a readable envelope (no git re-spawn 
     $result = $action->handle($this->tmpDir, 'hello.txt', cacheKey: $cacheKey)->toArray();
 
     expect($result['outcome'])->toBe(DiffLoadOutcome::TooLarge->value)
-        ->and(LoadedDiff::fromCache(Cache::get($cacheKey))?->outcome)->toBe(DiffLoadOutcome::TooLarge);
+        ->and(LoadedDiff::tryFrom(Cache::get($cacheKey))?->outcome)->toBe(DiffLoadOutcome::TooLarge);
 });
 
 test('a transient git error is not cached so the next read can retry', function () {

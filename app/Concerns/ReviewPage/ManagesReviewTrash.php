@@ -86,7 +86,7 @@ trait ManagesReviewTrash
         DiffCacheKey::forget(
             $projectKey,
             $fileId,
-            app(ResolveReviewConfigAction::class)->handle()->movedLineFingerprint(),
+            app(ResolveReviewConfigAction::class)->handle()->cacheFingerprint(),
             $this->buildDiffTarget()->contextKey(),
         );
 

@@ -37,6 +37,10 @@ enum DiscardOperation: string
             $status === 'added' => self::AddedFileRemoved,
             $status === 'renamed' => self::RenameReverted,
             $status === 'deleted' => self::DeletionReverted,
+            // 'binary' is a display distinction in the file list, not a
+            // different discard: both roll the tracked file back to HEAD. It is
+            // listed so `default` stays a genuine fallback for unknown states.
+            $status === 'modified', $status === 'binary' => self::ModificationReverted,
             default => self::ModificationReverted,
         };
     }

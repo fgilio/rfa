@@ -17,7 +17,7 @@ final readonly class LoadedDiff
 {
     /**
      * Stored format version. Bump it whenever the array {@see self::toArray()}
-     * writes changes shape: {@see self::fromCache()} reads every other version
+     * writes changes shape: {@see self::tryFrom()} reads every other version
      * as a miss, so entries written by an older build are recomputed.
      */
     public const VERSION = 1;
@@ -63,26 +63,26 @@ final readonly class LoadedDiff
     }
 
     /** Rebuild from a cached or in-flight array, or null when the entry is not a current envelope. */
-    public static function fromCache(mixed $cached): ?self
+    public static function tryFrom(mixed $stored): ?self
     {
-        if (! is_array($cached) || ($cached['cacheVersion'] ?? null) !== self::VERSION) {
+        if (! is_array($stored) || ($stored['cacheVersion'] ?? null) !== self::VERSION) {
             return null;
         }
 
-        $outcome = is_string($cached['outcome'] ?? null) ? DiffLoadOutcome::tryFrom($cached['outcome']) : null;
+        $outcome = is_string($stored['outcome'] ?? null) ? DiffLoadOutcome::tryFrom($stored['outcome']) : null;
 
         if ($outcome === null) {
             return null;
         }
 
-        $file = collect($cached)->except(self::ENVELOPE_KEYS)->all();
+        $file = collect($stored)->except(self::ENVELOPE_KEYS)->all();
 
         return new self(
             $outcome,
             $file,
-            is_string($cached['syntaxStyles'] ?? null) ? $cached['syntaxStyles'] : '',
-            is_int($cached['newFileLineCount'] ?? null) ? $cached['newFileLineCount'] : null,
-            is_string($cached['syntaxHighlighter'] ?? null) ? $cached['syntaxHighlighter'] : 'none',
+            is_string($stored['syntaxStyles'] ?? null) ? $stored['syntaxStyles'] : '',
+            is_int($stored['newFileLineCount'] ?? null) ? $stored['newFileLineCount'] : null,
+            is_string($stored['syntaxHighlighter'] ?? null) ? $stored['syntaxHighlighter'] : 'none',
         );
     }
 

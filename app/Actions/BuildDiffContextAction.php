@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
-use App\DTOs\LoadedDiff;
 use App\Enums\DiffLoadOutcome;
 use App\Enums\DiffSide;
 use App\Enums\LineType;
 use App\Services\ReviewConfigService;
 use App\Support\DiffCacheKey;
-use Illuminate\Support\Facades\Cache;
 
 final readonly class BuildDiffContextAction
 {
@@ -37,7 +35,7 @@ final readonly class BuildDiffContextAction
         $loaded = [];
         $filesById = collect($files)->keyBy('id');
         $contextKey = ($target ?? DiffTarget::workingDirectory())->contextKey();
-        $reviewFingerprint = $this->reviewConfigService->resolve()->movedLineFingerprint();
+        $reviewFingerprint = $this->reviewConfigService->resolve()->cacheFingerprint();
 
         foreach ($comments as $comment) {
             if ($comment['startLine'] === null) {
@@ -52,15 +50,25 @@ final readonly class BuildDiffContextAction
             $fileId = $file['id'];
 
             if (! array_key_exists($fileId, $loaded)) {
-                $loaded[$fileId] = LoadedDiff::fromCache(Cache::get(DiffCacheKey::for($repoPath, $fileId, $reviewFingerprint, $contextKey)))
-                    ?? $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false, oldPath: $file['oldPath'] ?? null, target: $target);
+                // Read and write through the Action's own cache path rather than
+                // reimplementing it: exporting twice used to recompute every miss
+                // (a git spawn plus syntax highlighting per file) and throw the
+                // result away, because nothing wrote it back.
+                $loaded[$fileId] = $this->loadFileDiffAction->handle(
+                    $repoPath,
+                    $file['path'],
+                    $file['isUntracked'] ?? false,
+                    cacheKey: DiffCacheKey::for($repoPath, $fileId, $reviewFingerprint, $contextKey),
+                    oldPath: $file['oldPath'] ?? null,
+                    target: $target,
+                );
             }
 
             $diffData = $loaded[$fileId];
             $key = "{$comment['file']}:{$comment['side']}:{$comment['startLine']}:{$comment['endLine']}";
 
             if ($diffData->outcome === DiffLoadOutcome::TooLarge) {
-                $context[$key] = "[Diff skipped: {$diffData->outcome->value}]";
+                $context[$key] = '[Diff skipped: '.DiffLoadOutcome::TooLarge->value.']';
 
                 continue;
             }

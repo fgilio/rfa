@@ -39,7 +39,7 @@ final readonly class GetFileListAction
 
         if ($clearCache && ! $target->isImmutable()) {
             $projectKey = $projectId ?? $repoPath;
-            $reviewFingerprint = $this->reviewConfigService->resolve()->movedLineFingerprint();
+            $reviewFingerprint = $this->reviewConfigService->resolve()->cacheFingerprint();
 
             collect($files)->each(function (array $file) use ($projectKey, $reviewFingerprint, $target): void {
                 DiffCacheKey::forget($projectKey, $file['id'], $reviewFingerprint, $target->contextKey());

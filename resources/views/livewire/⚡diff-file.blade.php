@@ -58,8 +58,6 @@ new class extends Component {
 
     private ?DiffTarget $cachedTarget = null;
 
-    private ?ReviewConfig $cachedReviewConfig = null;
-
     public function placeholder(): string
     {
         return <<<'HTML'
@@ -76,7 +74,7 @@ HTML;
 
     public function hydrate(): void
     {
-        $this->diffData = LoadedDiff::fromCache(Cache::get($this->diffCacheKey()))?->toArray();
+        $this->diffData = LoadedDiff::tryFrom(Cache::get($this->diffCacheKey()))?->toArray();
     }
 
     /** @param array<int, array<string, mixed>> $comments */
@@ -204,7 +202,7 @@ HTML;
 
     public function expandGap(int $hunkIndex, ?int $lineCount = null): void
     {
-        $loaded = LoadedDiff::fromCache($this->diffData);
+        $loaded = LoadedDiff::tryFrom($this->diffData);
 
         if ($loaded === null || $loaded->hunks() === []) {
             // Diff fell out of cache between render and click: nothing to expand.
@@ -295,7 +293,7 @@ HTML;
             'extension' => isset($this->file['path']) ? pathinfo((string) $this->file['path'], PATHINFO_EXTENSION) : '',
             'status' => ($this->file['isUntracked'] ?? false) ? 'added' : ($this->file['status'] ?? 'modified'),
             'target' => $this->buildDiffTarget()->contextKey(),
-            'too_large' => ($diffData['outcome'] ?? null) === DiffLoadOutcome::TooLarge->value,
+            'too_large' => $this->outcome($diffData) === DiffLoadOutcome::TooLarge,
             'binary' => (bool) ($diffData['isBinary'] ?? false),
             'hunk_count' => count($diffData['hunks'] ?? []),
             'diff_line_count' => $lineCount,
@@ -396,7 +394,21 @@ HTML;
 
     private function reviewConfig(): ReviewConfig
     {
-        return $this->cachedReviewConfig ??= app(ResolveReviewConfigAction::class)->handle();
+        // ReviewConfigService is a container singleton that memoizes resolve(),
+        // so this is already cheap enough not to need a local copy.
+        return app(ResolveReviewConfigAction::class)->handle();
+    }
+
+    /**
+     * The load outcome of the currently-held diff, as an enum. The stored
+     * envelope carries the backing string, so this is the single place that
+     * converts it — the view compares cases, never strings.
+     */
+    private function outcome(?array $diffData): ?DiffLoadOutcome
+    {
+        $outcome = $diffData['outcome'] ?? null;
+
+        return is_string($outcome) ? DiffLoadOutcome::tryFrom($outcome) : null;
     }
 
     private function diffCacheKey(string $variant = ''): string
@@ -406,14 +418,17 @@ HTML;
         return DiffCacheKey::for(
             $projectKey,
             $this->file['id'],
-            $this->reviewConfig()->movedLineFingerprint(),
+            $this->reviewConfig()->cacheFingerprint(),
             $this->buildDiffTarget()->contextKey().$variant,
         );
     }
 
     public function render(): \Illuminate\Contracts\View\View
     {
-        return $this->view(['diffData' => $this->diffData]);
+        return $this->view([
+            'diffData' => $this->diffData,
+            'outcome' => $this->outcome($this->diffData),
+        ]);
     }
 };
 ?>
@@ -459,7 +474,7 @@ HTML;
 >
     <x-diff.file-header
         :file="$file"
-        :diff-data="$diffData"
+        :outcome="$outcome"
         :has-remote="$hasRemote"
         :diff-to="$diffTo"
         :repo-path="$repoPath"
@@ -576,12 +591,12 @@ HTML;
             <div x-intersect.once="setTimeout(() => { markDiffActionStart('loadFileDiff'); $wire.loadFileDiff(); }, {{ $loadDelay }})">
                 <x-diff-skeleton />
             </div>
-        @elseif(($diffData['outcome'] ?? null) === DiffLoadOutcome::TooLarge->value)
+        @elseif($outcome === DiffLoadOutcome::TooLarge)
             <div class="px-4 py-8 text-center">
                 <flux:icon icon="exclamation-triangle" variant="outline" class="!size-4 inline-block text-gh-muted mr-1" />
                 <flux:text variant="subtle" size="sm" inline>File diff too large to display</flux:text>
             </div>
-        @elseif(($diffData['outcome'] ?? null) === DiffLoadOutcome::TransientError->value)
+        @elseif($outcome === DiffLoadOutcome::TransientError)
             <div class="px-4 py-8 text-center">
                 <flux:icon icon="exclamation-triangle" variant="outline" class="!size-4 inline-block text-gh-red mr-1" />
                 <flux:text variant="subtle" size="sm" inline>Git error: failed to load the diff for this file.</flux:text>

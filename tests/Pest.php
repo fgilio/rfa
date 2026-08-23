@@ -1,7 +1,7 @@
 <?php
 
-use App\Actions\ResolveReviewConfigAction;
 use App\DTOs\FileSourceSpec;
+use App\Services\ReviewConfigService;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Mockery\Matcher\Closure;
 use Pest\Browser\Browsable;
@@ -31,10 +31,14 @@ function absoluteSourceSpec(string $absolutePath): Closure
         && $source->absolutePath === $absolutePath);
 }
 
-/** The effective moved-line fingerprint every diff cache key is built from. */
+/**
+ * The effective review fingerprint every diff cache key is built from. Resolved
+ * from a fresh service so a test's config changes are never masked by the
+ * memoization on the container's singleton.
+ */
 function reviewFingerprint(): string
 {
-    return app(ResolveReviewConfigAction::class)->handle()->movedLineFingerprint();
+    return (new ReviewConfigService)->resolve()->cacheFingerprint();
 }
 
 uses(TestCase::class, LazilyRefreshDatabase::class, Browsable::class, CreatesTestRepo::class)

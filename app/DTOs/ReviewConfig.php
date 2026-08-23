@@ -16,15 +16,27 @@ final readonly class ReviewConfig
     ) {}
 
     /**
-     * Cache-identity fingerprint for the moved-line settings. Git colorizes
-     * moves and the parser bakes those markers into the stored diff, so a
-     * cached diff is only valid for the settings that produced it. The mode
-     * only matters while detection is on, so a disabled run collapses to a
-     * single bucket.
+     * Cache-identity fingerprint for every setting that shapes a stored diff, so
+     * a cached entry is only ever read back by a run that would have produced
+     * it. Each covered setting changes the bytes we store:
+     *
+     * - moved-line detection and mode: git colorizes moves and the parser bakes
+     *   those markers into the hunks. The mode only matters while detection is
+     *   on, so a disabled run collapses to a single bucket.
+     * - `diffMaxBytes`: decides whether a file is diffed at all or stored as a
+     *   `too-large` outcome. Raising the limit must not keep serving the skip.
+     * - `defaultContextLines`: sets the `-U` width of the stored hunks.
+     *
+     * `sourceMaxBytes` and `cacheTtlHours` are deliberately absent: neither
+     * changes the diff content, so keying on them would discard good entries.
      */
-    public function movedLineFingerprint(): string
+    public function cacheFingerprint(): string
     {
-        return $this->movedLineDetection ? 'm1-'.$this->movedLineMode : 'm0';
+        return implode('|', [
+            $this->movedLineDetection ? 'm1-'.$this->movedLineMode : 'm0',
+            'b'.$this->diffMaxBytes,
+            'c'.$this->defaultContextLines,
+        ]);
     }
 
     /**

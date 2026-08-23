@@ -24,7 +24,7 @@ final class DiffCacheKey
 
     /**
      * @param  string  $reviewFingerprint  Effective review settings that shape the cached
-     *                                     content, from ReviewConfig::movedLineFingerprint().
+     *                                     content, from ReviewConfig::cacheFingerprint().
      *                                     Passing a raw config value here would let two runs
      *                                     with identical behavior land on different keys.
      */

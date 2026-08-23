@@ -13,7 +13,7 @@ test('a loaded diff round-trips through the cache array', function () {
     ], 1, 0);
 
     $loaded = LoadedDiff::loaded($fileDiff, syntaxStyles: '.hl{color:red}', newFileLineCount: 12, syntaxHighlighter: 'phiki');
-    $restored = LoadedDiff::fromCache($loaded->toArray());
+    $restored = LoadedDiff::tryFrom($loaded->toArray());
 
     expect($restored?->outcome)->toBe(DiffLoadOutcome::Loaded)
         ->and($restored?->syntaxStyles)->toBe('.hl{color:red}')
@@ -23,7 +23,7 @@ test('a loaded diff round-trips through the cache array', function () {
 });
 
 test('every skip outcome round-trips with no hunks', function (LoadedDiff $skipped, DiffLoadOutcome $outcome) {
-    $restored = LoadedDiff::fromCache($skipped->toArray());
+    $restored = LoadedDiff::tryFrom($skipped->toArray());
 
     expect($restored?->outcome)->toBe($outcome)
         ->and($restored?->hunks())->toBe([]);
@@ -43,7 +43,7 @@ test('only a transient error is uncacheable', function () {
 });
 
 test('unsupported cache entries read as a miss', function (mixed $entry) {
-    expect(LoadedDiff::fromCache($entry))->toBeNull();
+    expect(LoadedDiff::tryFrom($entry))->toBeNull();
 })->with([
     'not an array' => 'stale',
     'null' => null,
@@ -62,7 +62,7 @@ test('an expanded rewrite stays a readable envelope', function () {
     );
 
     $expanded = $loaded->withExpandedHunks([['header' => '@@', 'lines' => []]], '.b{}');
-    $restored = LoadedDiff::fromCache($expanded->toArray());
+    $restored = LoadedDiff::tryFrom($expanded->toArray());
 
     expect($restored?->outcome)->toBe(DiffLoadOutcome::Loaded)
         ->and($restored?->hunks())->toHaveCount(1)

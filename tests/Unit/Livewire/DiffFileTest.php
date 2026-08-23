@@ -29,7 +29,7 @@ beforeEach(function () {
     {
         public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
         {
-            return LoadedDiff::fromCache(DiffFixtureFactory::diffData(path: $path)) ?? LoadedDiff::empty($path);
+            return DiffFixtureFactory::loadedDiff(path: $path);
         }
     });
 });
@@ -313,7 +313,7 @@ function mountMultiHunkDiffFile(array $diffData, array $file): Testable
 
         public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
         {
-            return LoadedDiff::fromCache($this->diffData) ?? LoadedDiff::empty($path);
+            return LoadedDiff::tryFrom($this->diffData) ?? LoadedDiff::empty($path);
         }
     });
 
@@ -461,7 +461,7 @@ test('expandGap writes a readable envelope back to the cache', function () {
         'fileComments' => [],
     ])->call('expandGap', 0);
 
-    expect(LoadedDiff::fromCache(Cache::get($cacheKey))?->outcome)->toBe(DiffLoadOutcome::Loaded);
+    expect(LoadedDiff::tryFrom(Cache::get($cacheKey))?->outcome)->toBe(DiffLoadOutcome::Loaded);
 });
 
 test('expandContext replaces the diff with a readable envelope', function () {
@@ -474,7 +474,7 @@ test('expandContext replaces the diff with a readable envelope', function () {
 
     $component->assertDispatched('rfa:diff-action-completed', action: 'expandContext');
 
-    expect(LoadedDiff::fromCache(Cache::get(DiffCacheKey::for(0, $this->file['id'], reviewFingerprint()))))->not->toBeNull();
+    expect(LoadedDiff::tryFrom(Cache::get(DiffCacheKey::for(0, $this->file['id'], reviewFingerprint()))))->not->toBeNull();
 });
 
 test('expandGap settles the action when the diff is no longer cached', function () {
@@ -504,7 +504,7 @@ test('expandGap settles the action when the full-context reload finds no diff', 
         {
             return $contextLines >= 99999
                 ? LoadedDiff::empty($path)
-                : (LoadedDiff::fromCache(DiffFixtureFactory::diffData(path: $path)) ?? LoadedDiff::empty($path));
+                : (DiffFixtureFactory::loadedDiff(path: $path));
         }
     });
 
@@ -528,7 +528,7 @@ test('expandGap settles a tiered-chip expand when the reload finds no diff', fun
         {
             return $contextLines >= 99999
                 ? LoadedDiff::empty($path)
-                : (LoadedDiff::fromCache(DiffFixtureFactory::diffData(path: $path)) ?? LoadedDiff::empty($path));
+                : (DiffFixtureFactory::loadedDiff(path: $path));
         }
     });
 

@@ -242,14 +242,14 @@ final class PerfScenarioRunner
                 ?string $oldPath = null,
                 ?string $externalAbsolutePath = null,
             ): LoadedDiff {
-                return LoadedDiff::fromCache($this->diffData) ?? LoadedDiff::empty($path);
+                return LoadedDiff::tryFrom($this->diffData) ?? LoadedDiff::empty($path);
             }
         });
 
         $cacheKey = DiffCacheKey::for(
             $project->id,
             $file['id'],
-            $this->app->make(ResolveReviewConfigAction::class)->handle()->movedLineFingerprint(),
+            $this->app->make(ResolveReviewConfigAction::class)->handle()->cacheFingerprint(),
         );
         Cache::put($cacheKey, $diffData, 3600);
 

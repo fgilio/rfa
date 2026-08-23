@@ -13,9 +13,14 @@ use Illuminate\Support\Facades\File;
  *
  * {@see self::isPathExcluded()} is the only evaluator. Tracked and untracked
  * files run through it alike, so a file's visibility never turns on whether git
- * happens to track it. Git pathspecs are deliberately not used for this: a
- * pathspec can express an exclude but not a `!` re-include, which is exactly
+ * happens to track it. Git pathspecs are deliberately not used for `.rfaignore`:
+ * a pathspec can express an exclude but not a `!` re-include, which is exactly
  * where the two would disagree.
+ *
+ * The one exception is {@see self::alwaysExcludePathspecs()}, which covers only
+ * the lockfiles no `.rfaignore` rule can re-include. Because that set is fixed
+ * and non-negatable, the pathspec and the evaluator cannot reach different
+ * answers, so git is allowed to skip those paths before it diffs them.
  *
  * Supported `.rfaignore` syntax (a practical subset of gitignore):
  * - `# comment` and blank lines are skipped.
@@ -42,6 +47,9 @@ class IgnoreService
     /** @var array<int, array{regex: string, negated: bool}>|null */
     private ?array $lockfileRules = null;
 
+    /** @var array<string, array<int, array{regex: string, negated: bool}>> */
+    private array $rulesByRepo = [];
+
     /**
      * Whether a repo-relative path is excluded, applying the rules in order with
      * last-match-wins so `!` negations can re-include.
@@ -54,7 +62,7 @@ class IgnoreService
      */
     public function isPathExcluded(string $path, array $rules): bool
     {
-        if ($this->matchesAny($path, $this->lockfileRules())) {
+        if ($this->isLockfile($path)) {
             return true;
         }
 
@@ -78,7 +86,27 @@ class IgnoreService
      */
     public function rules(string $repoPath): array
     {
-        return $this->compile($this->rawPatterns($repoPath));
+        // Memoized per repo: getFileDiff() consults the rules once per file, so
+        // without this a review of N files re-reads and recompiles `.rfaignore`
+        // N times. A service instance never outlives a single request.
+        return $this->rulesByRepo[$repoPath] ??= $this->compile($this->rawPatterns($repoPath));
+    }
+
+    /**
+     * Pathspecs for the always-excluded lockfiles, for git commands whose cost
+     * scales with the paths they touch (`--numstat` diffs every file it lists).
+     *
+     * Safe precisely because this set is fixed and non-negatable: unlike
+     * `.rfaignore` rules, no `!` line can re-include a lockfile, so git skipping
+     * these paths can never disagree with {@see self::isPathExcluded()}.
+     *
+     * @return array<int, string>
+     */
+    public function alwaysExcludePathspecs(): array
+    {
+        return collect(self::ALWAYS_EXCLUDE)
+            ->map(fn (string $pattern): string => ":(glob,exclude)**/{$pattern}")
+            ->all();
     }
 
     /**
@@ -116,16 +144,12 @@ class IgnoreService
             ->all();
     }
 
-    /** @return array<int, array{regex: string, negated: bool}> */
-    private function lockfileRules(): array
+    private function isLockfile(string $path): bool
     {
-        return $this->lockfileRules ??= $this->compile(self::ALWAYS_EXCLUDE);
-    }
+        $this->lockfileRules ??= $this->compile(self::ALWAYS_EXCLUDE);
 
-    /** @param array<int, array{regex: string, negated: bool}> $rules */
-    private function matchesAny(string $path, array $rules): bool
-    {
-        return collect($rules)->contains(fn (array $rule): bool => preg_match($rule['regex'], $path) === 1);
+        return collect($this->lockfileRules)
+            ->contains(fn (array $rule): bool => preg_match($rule['regex'], $path) === 1);
     }
 
     /**

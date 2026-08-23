@@ -116,7 +116,7 @@ final readonly class LoadFileDiffAction
             return $compute();
         }
 
-        $cached = LoadedDiff::fromCache(Cache::get($cacheKey));
+        $cached = LoadedDiff::tryFrom(Cache::get($cacheKey));
 
         if ($cached !== null) {
             return $cached;

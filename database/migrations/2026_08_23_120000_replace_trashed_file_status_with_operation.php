@@ -14,12 +14,20 @@ return new class extends Migration
             $table->string('operation')->nullable()->after('file_path');
         });
 
+        // `old_path` is normalized alongside the operation, not just carried
+        // over: the legacy writer stored whatever it was handed, so a non-rename
+        // row can hold one. Left in place it would satisfy the schema but
+        // violate the operation/old_path pairing TrashedFile now enforces,
+        // making the row unsaveable the next time anything touched it.
         DB::table('trashed_files')->orderBy('id')->lazyById()->each(function (object $row): void {
+            $operation = DiscardOperation::forChangedFile(
+                (string) $row->file_status,
+                (bool) $row->is_untracked,
+            );
+
             DB::table('trashed_files')->where('id', $row->id)->update([
-                'operation' => DiscardOperation::forChangedFile(
-                    (string) $row->file_status,
-                    (bool) $row->is_untracked,
-                )->value,
+                'operation' => $operation->value,
+                'old_path' => $operation->usesOldPath() ? $row->old_path : null,
             ]);
         });
 
