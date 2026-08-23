@@ -9,12 +9,12 @@ use App\Actions\IsSinceBaseViewAction;
 use App\Actions\LinkExternalPathAction;
 use App\Actions\LoadCommitMetadataAction;
 use App\Actions\PersistProjectViewAction;
+use App\Actions\RecordProjectEntryAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveCommitAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\ResolveRangeAction;
 use App\Actions\ResolveRangeToWorkingAction;
-use App\Actions\ResolveStartupRouteAction;
 use App\Actions\ReviewCommentWorkflowAction;
 use App\Actions\ScanReviewFilesAction;
 use App\Actions\SessionStateAction;
@@ -30,14 +30,11 @@ use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
 use App\DTOs\ReviewCommentMutation;
 use App\DTOs\ReviewState;
+use App\DTOs\SavedView;
 use App\Enums\DivergenceState;
-use App\Enums\LastViewKind;
-use App\Enums\LastViewMode;
 use App\Events\HardReloadShortcutPressed;
 use App\Events\RefreshShortcutPressed;
 use App\Exceptions\GitCommandException;
-use App\Listeners\HandleMenuItemClicked;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
@@ -85,15 +82,15 @@ new #[Layout('layouts.app')] class extends Component
 
     public bool $hasRemote = false;
 
-    public ?string $exportResult = null;
-
-    public bool $submitted = false;
-
     /**
-     * Basename of the review file the "Review submitted" bar currently points
-     * at. Lets a delete of that same review reset the bar (see deleteReviewPair).
+     * The last submitted review, or null while the user is still editing.
+     * `path` is the exported .rfa/ file, `clipboard` the prompt copied for it.
+     * Both the "Review submitted" bar and the basename a delete matches against
+     * are derived from this, so they cannot drift apart.
+     *
+     * @var array{path: string, clipboard: string}|null
      */
-    public ?string $submittedReviewBasename = null;
+    public ?array $submissionReceipt = null;
 
     public ?string $gitError = null;
 
@@ -204,9 +201,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->projectSlug = $project['slug'];
         $this->hasRemote = ! empty($project['remote_url']);
 
-        app(ResolveStartupRouteAction::class)->rememberLastOpened($slug);
-
-        Cache::put(HandleMenuItemClicked::ACTIVE_PROJECT_CACHE_KEY, $this->projectId, now()->addDay());
+        app(RecordProjectEntryAction::class)->handle($this->projectId, $this->projectSlug);
 
         if (config('nativephp-internal.running')) {
             \Native\Desktop\Facades\Window::get('main')->title("rfa - {$this->projectName}");
@@ -289,31 +284,27 @@ new #[Layout('layouts.app')] class extends Component
      */
     private function persistCurrentView(?string $hash, ?string $from, ?string $to, ?string $ref, ?string $baseRef, ?string $rangeFromWorking): void
     {
-        $kind = match (true) {
-            $hash !== null => LastViewKind::Commit,
-            $from !== null && $to !== null => LastViewKind::Range,
-            $rangeFromWorking !== null => $this->isSinceBaseView ? LastViewKind::SinceBase : LastViewKind::RangeToWorking,
-            $ref !== null && $baseRef !== null => LastViewKind::Range,
-            default => LastViewKind::WorkingTree,
+        // Built here rather than inside the deferred closure so an unusable
+        // tuple surfaces at mount instead of after the response is sent. Each
+        // branch's refs are already resolved (mount aborts on an invalid one).
+        $view = match (true) {
+            $hash !== null => SavedView::commit((string) $this->diffTo),
+            $from !== null && $to !== null => SavedView::range($this->diffFrom, (string) $this->diffTo),
+            $rangeFromWorking !== null => $this->isSinceBaseView
+                ? SavedView::sinceBase()
+                : SavedView::rangeToWorking($this->diffFrom),
+            $ref !== null && $baseRef !== null => SavedView::range($this->diffFrom, (string) $this->diffTo),
+            default => SavedView::workingTree(),
         };
 
         $projectId = $this->projectId;
         $repoPath = $this->repoPath;
-        $diffFrom = $this->diffFrom;
-        $diffTo = $this->diffTo;
 
         // Run after the response is sent: the persisted view is only consumed
         // on the next navigation, so making the user wait for the UPSERT here
         // would be needless mount latency.
-        defer(static function () use ($projectId, $repoPath, $kind, $diffFrom, $diffTo) {
-            app(PersistProjectViewAction::class)->handle(
-                $projectId,
-                $repoPath,
-                LastViewMode::Review,
-                $kind,
-                $kind === LastViewKind::WorkingTree || $kind === LastViewKind::Commit ? null : $diffFrom,
-                $kind === LastViewKind::WorkingTree ? null : $diffTo,
-            );
+        defer(static function () use ($projectId, $repoPath, $view) {
+            app(PersistProjectViewAction::class)->handle($projectId, $repoPath, $view);
         });
     }
 
@@ -1081,7 +1072,7 @@ new #[Layout('layouts.app')] class extends Component
 
         // The "Review submitted" bar points at this file — deleting it leaves
         // the bar referencing a file that no longer exists, so drop back to the editor.
-        if ($basename === $this->submittedReviewBasename) {
+        if ($basename === $this->submittedReviewBasename()) {
             $this->resetSubmittedState();
         }
 
@@ -1100,7 +1091,7 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->reviewPairs = [];
 
-        if (in_array($this->submittedReviewBasename, $basenames, true)) {
+        if (in_array($this->submittedReviewBasename(), $basenames, true)) {
             $this->resetSubmittedState();
         }
 
@@ -1883,8 +1874,7 @@ new #[Layout('layouts.app')] class extends Component
     @include('livewire.undo-toast')
 
     <x-feedback-submit-bar
-        :submitted="$submitted"
-        :export-result="$exportResult"
+        :receipt="$submissionReceipt"
         secondary-label="Export snapshot"
         secondary-action="exportSnapshot"
         secondary-icon="arrow-down-tray"

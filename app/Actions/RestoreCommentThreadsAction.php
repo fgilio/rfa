@@ -7,7 +7,6 @@ namespace App\Actions;
 use App\DTOs\Comment as CommentData;
 use App\DTOs\CommentReply as CommentReplyData;
 use App\DTOs\CommentThreadSnapshot;
-use App\Enums\DiffSide;
 use App\Enums\GitRef;
 use App\Models\Comment;
 use App\Models\CommentReply;
@@ -30,7 +29,10 @@ final readonly class RestoreCommentThreadsAction
         string $defaultOriginRef = GitRef::Working->value,
     ): array {
         $threads = collect($snapshots)
-            ->map(fn (array $snapshot): CommentThreadSnapshot => CommentThreadSnapshot::fromArray($snapshot))
+            ->map(fn (array $snapshot): CommentThreadSnapshot => CommentThreadSnapshot::fromArray(
+                $snapshot,
+                $defaultOriginRef,
+            ))
             ->values();
 
         if ($threads->isEmpty()) {
@@ -39,13 +41,13 @@ final readonly class RestoreCommentThreadsAction
 
         $this->validateSnapshots($threads);
 
-        return DB::transaction(function () use ($repoPath, $projectId, $threads, $defaultOriginRef): array {
+        return DB::transaction(function () use ($repoPath, $projectId, $threads): array {
             $restoredAt = now();
             $commentIds = $threads->map(
                 fn (CommentThreadSnapshot $thread): string => $thread->commentId(),
             );
             $replies = $threads->flatMap(
-                fn (CommentThreadSnapshot $thread): array => $thread->replies,
+                fn (CommentThreadSnapshot $thread): array => $thread->replies(),
             )->values();
 
             $this->ensureExistingCommentsBelongToScope($commentIds, $repoPath, $projectId);
@@ -57,7 +59,6 @@ final readonly class RestoreCommentThreadsAction
                         $repoPath,
                         $projectId,
                         $thread,
-                        $defaultOriginRef,
                         $restoredAt,
                     ),
                 )->all(),
@@ -115,11 +116,14 @@ final readonly class RestoreCommentThreadsAction
 
                     $loaded = CommentData::fromArray($comment->toArray())->toArray();
 
+                    // Replies and timestamps come back from the row the upsert
+                    // just wrote; everything else is the snapshot's, so view-only
+                    // fields (fileId, anchor status, original side) survive undo.
                     return [
                         ...$thread->toCommentArray(),
                         'replies' => $loaded['replies'],
-                        'createdAt' => $comment->created_at?->toIso8601String(),
-                        'updatedAt' => $comment->updated_at?->toIso8601String(),
+                        'createdAt' => $loaded['createdAt'],
+                        'updatedAt' => $loaded['updatedAt'],
                     ];
                 })
                 ->all();
@@ -145,7 +149,7 @@ final readonly class RestoreCommentThreadsAction
 
         $replyIds = $threads
             ->flatMap(function (CommentThreadSnapshot $thread): array {
-                collect($thread->replies)->each(function (CommentReplyData $reply) use ($thread): void {
+                collect($thread->replies())->each(function (CommentReplyData $reply) use ($thread): void {
                     if ($reply->commentId !== $thread->commentId()) {
                         throw new InvalidArgumentException(
                             "Reply {$reply->id} does not belong to comment {$thread->commentId()}.",
@@ -153,7 +157,7 @@ final readonly class RestoreCommentThreadsAction
                     }
                 });
 
-                return $thread->replies;
+                return $thread->replies();
             })
             ->map(fn (CommentReplyData $reply): string => $reply->id);
 
@@ -205,32 +209,40 @@ final readonly class RestoreCommentThreadsAction
             });
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * The snapshot carries the complete thread, so restore copies its fields
+     * straight across instead of substituting defaults for missing ones. The
+     * one fallback is the restore timestamp, for a snapshot that carries no
+     * row timestamps of its own.
+     *
+     * @return array<string, mixed>
+     */
     private function rootAttributes(
         string $repoPath,
         ?int $projectId,
         CommentThreadSnapshot $thread,
-        string $defaultOriginRef,
         Carbon $restoredAt,
     ): array {
         $comment = $thread->comment;
 
         return [
-            'id' => $thread->commentId(),
+            'id' => $comment->id,
             'project_id' => $projectId,
             'repo_path' => $repoPath,
-            'origin_ref' => (string) ($comment['originRef'] ?? $defaultOriginRef),
-            'file_path' => (string) ($comment['file'] ?? ''),
-            'side' => (string) ($comment['side'] ?? DiffSide::Right->value),
-            'start_line' => $comment['startLine'] ?? null,
-            'end_line' => $comment['endLine'] ?? null,
-            'file_content_hash' => $comment['fileContentHash'] ?? null,
-            'line_snippet' => $comment['lineSnippet'] ?? null,
-            'body' => (string) ($comment['body'] ?? ''),
-            'is_draft' => (bool) ($comment['isDraft'] ?? false),
-            'submitted_at' => $this->dateOrNull($comment['submittedAt'] ?? null),
-            'created_at' => $this->dateOr($comment['createdAt'] ?? null, $restoredAt),
-            'updated_at' => $this->dateOr($comment['updatedAt'] ?? null, $restoredAt),
+            'origin_ref' => $comment->originRef,
+            'file_path' => $comment->file,
+            // The stored side, not the side the anchor resolver moved the
+            // comment to for the diff that happened to be on screen.
+            'side' => $comment->originalSide()->value,
+            'start_line' => $comment->startLine,
+            'end_line' => $comment->endLine,
+            'file_content_hash' => $comment->fileContentHash,
+            'line_snippet' => $comment->lineSnippet,
+            'body' => $comment->body,
+            'is_draft' => $comment->isDraft,
+            'submitted_at' => $this->dateOrNull($comment->submittedAt),
+            'created_at' => $this->dateOr($comment->createdAt, $restoredAt),
+            'updated_at' => $this->dateOr($comment->updatedAt, $restoredAt),
         ];
     }
 

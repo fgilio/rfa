@@ -2,8 +2,12 @@
 
 use App\Actions\ContextCommentWorkflowAction;
 use App\Actions\DiscoverAgentContextFilesAction;
+use App\Actions\ExportContextFeedbackAction;
 use App\Actions\LoadContextCommentsAction;
+use App\Actions\PersistProjectViewAction;
 use App\Actions\ResolveProjectAction;
+use App\Actions\ResolveStartupRouteAction;
+use App\DTOs\SavedView;
 use App\Enums\ContextCommentRejection;
 use App\Events\HardReloadShortcutPressed;
 use App\Events\RefreshShortcutPressed;
@@ -64,12 +68,33 @@ beforeEach(function () {
     });
 });
 
-test('mount writes the project id to the active-project-id cache key', function () {
+test('mount records the project entry for the menu handler and for startup', function () {
     Cache::forget('rfa.active-project-id');
+    app(ResolveStartupRouteAction::class)->forgetLastOpened();
 
     Livewire::test('pages::context-page', ['slug' => 'test-project']);
 
-    expect(Cache::get('rfa.active-project-id'))->toBe($this->project->id);
+    expect(Cache::get('rfa.active-project-id'))->toBe($this->project->id)
+        ->and(app(ResolveStartupRouteAction::class)->lastOpenedSlug())->toBe('test-project');
+});
+
+test('mount makes startup restore the project the user was last in on Context', function () {
+    Project::create([
+        'slug' => 'other-project',
+        'name' => 'Other Project',
+        'path' => '/tmp/other-repo',
+        'git_common_dir' => '/tmp/other-repo/.git',
+        'branch' => 'main',
+    ]);
+    app(ResolveStartupRouteAction::class)->rememberLastOpened('other-project');
+
+    Livewire::test('pages::context-page', ['slug' => 'test-project']);
+
+    // Stands in for the view persistence mount defers until after the response.
+    app(PersistProjectViewAction::class)->handle($this->project->id, $this->project->path, SavedView::context());
+
+    expect(app(ResolveStartupRouteAction::class)->handle())
+        ->toBe(route('context-page', ['slug' => 'test-project']));
 });
 
 test('native refresh shortcut refreshes context files', function () {
@@ -85,13 +110,11 @@ test('native hard reload shortcut requests a browser reload from context page', 
         ->assertDispatched('hard-reload-requested');
 });
 
-test('startNewFeedback clears the submitted, exportResult, and globalComment fields', fn () => Livewire::test('pages::context-page', ['slug' => 'test-project'])
-    ->set('submitted', true)
-    ->set('exportResult', '/tmp/repo/.rfa/feedback.md')
+test('startNewFeedback clears the submission receipt and the globalComment field', fn () => Livewire::test('pages::context-page', ['slug' => 'test-project'])
+    ->set('submissionReceipt', ['path' => '/tmp/repo/.rfa/feedback.md', 'clipboard' => 'improve the context files'])
     ->set('globalComment', 'leftover thoughts')
     ->call('startNewFeedback')
-    ->assertSet('submitted', false)
-    ->assertSet('exportResult', null)
+    ->assertSet('submissionReceipt', null)
     ->assertSet('globalComment', ''));
 
 test('deleteComment dispatches an undo-available event with the deleted payload', function () {
@@ -321,4 +344,34 @@ test('addComment records an error outcome and rethrows on unexpected failure', f
     Log::shouldHaveReceived('info')->once()->with('context.comment.written');
     expect(Context::get('rfa.outcome'))->toBe('error')
         ->and(Context::get('rfa.reason'))->toBe('comment_write_failed');
+});
+
+test('submitFeedback records the exported path and clipboard text as one receipt', function () {
+    app()->bind(ExportContextFeedbackAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, ?int $projectId, array $comments, string $globalComment): array
+        {
+            return [
+                'md' => '/tmp/repo/.rfa/20260227_173000_comments_abcd1234.md',
+                'clipboard' => 'improve the agent context files',
+                'submittedIds' => [],
+                'excludedComments' => [],
+            ];
+        }
+    });
+
+    Livewire::test('pages::context-page', ['slug' => 'test-project'])
+        ->set('globalComment', 'overall thoughts')
+        ->call('submitFeedback')
+        ->assertSet('submissionReceipt', [
+            'path' => '/tmp/repo/.rfa/20260227_173000_comments_abcd1234.md',
+            'clipboard' => 'improve the agent context files',
+        ])
+        ->assertDispatched('copy-to-clipboard', text: 'improve the agent context files');
+});
+
+test('submitFeedback with nothing to export leaves the page in its editing state', function () {
+    Livewire::test('pages::context-page', ['slug' => 'test-project'])
+        ->call('submitFeedback')
+        ->assertSet('submissionReceipt', null);
 });

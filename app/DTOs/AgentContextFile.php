@@ -23,7 +23,16 @@ final readonly class AgentContextFile
 
     public function id(): string
     {
-        return 'ctx-'.hash('xxh128', $this->path);
+        return self::idFor($this->path);
+    }
+
+    /**
+     * The id of the file card a context path renders as, for callers that hold
+     * a path rather than the file itself.
+     */
+    public static function idFor(string $path): string
+    {
+        return 'ctx-'.hash('xxh128', $path);
     }
 
     public function directory(): string

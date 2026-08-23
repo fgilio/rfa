@@ -24,10 +24,6 @@ final readonly class LoadCommentThreadAction
             return null;
         }
 
-        return [
-            ...CommentData::fromArray($comment->toArray())->toArray(),
-            'createdAt' => $comment->created_at?->toIso8601String(),
-            'updatedAt' => $comment->updated_at?->toIso8601String(),
-        ];
+        return CommentData::fromArray($comment->toArray())->toArray();
     }
 }

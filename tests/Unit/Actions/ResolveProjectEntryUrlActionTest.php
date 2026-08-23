@@ -249,3 +249,39 @@ test('since_base falls back to working tree when on the base branch itself', fun
     expect($this->action->handle($this->project->slug))
         ->toBe(route('review-page', ['slug' => 'entry-test']));
 });
+
+// -- malformed rows --
+
+test('falls back to working tree for a saved tuple no view could have produced', function (LastViewKind $kind, ?string $from, ?string $to) {
+    ReviewSession::create([
+        'project_id' => $this->project->id,
+        'repo_path' => $this->repoPath,
+        'last_view_mode' => LastViewMode::Review,
+        'last_view_kind' => $kind,
+        'last_view_from' => $from,
+        'last_view_to' => $to,
+    ]);
+
+    expect($this->action->handle($this->project->slug))
+        ->toBe(route('review-page', ['slug' => 'entry-test']));
+})->with([
+    'commit without a target' => [LastViewKind::Commit, null, null],
+    'commit with a blank target' => [LastViewKind::Commit, null, '   '],
+    'range missing its end' => [LastViewKind::Range, 'aaaa1111', null],
+    'range missing its start' => [LastViewKind::Range, null, 'bbbb2222'],
+    'range-to-working without a start' => [LastViewKind::RangeToWorking, null, 'bbbb2222'],
+]);
+
+test('a Context row carrying stale review refs still routes to context-page', function () {
+    ReviewSession::create([
+        'project_id' => $this->project->id,
+        'repo_path' => $this->repoPath,
+        'last_view_mode' => LastViewMode::Context,
+        'last_view_kind' => LastViewKind::Range,
+        'last_view_from' => $this->firstSha,
+        'last_view_to' => $this->secondSha,
+    ]);
+
+    expect($this->action->handle($this->project->slug))
+        ->toBe(route('context-page', ['slug' => 'entry-test']));
+});

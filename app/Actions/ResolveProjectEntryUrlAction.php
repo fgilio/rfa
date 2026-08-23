@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
+use App\DTOs\SavedView;
 use App\Enums\LastViewKind;
 use App\Enums\LastViewMode;
 use App\Models\Project;
@@ -36,44 +37,46 @@ final readonly class ResolveProjectEntryUrlAction
             return $this->workingTreeUrl($slug);
         }
 
+        $view = $this->savedView($project, $fallbackMode);
+
+        if ($view->mode === LastViewMode::Context) {
+            return route('context-page', ['slug' => $slug]);
+        }
+
+        return $this->buildReviewUrl($project, $slug, $view)
+            ?? $this->workingTreeUrl($slug);
+    }
+
+    /**
+     * The stored view for this project, or the caller's fallback landing view
+     * when nothing was ever saved. Malformed rows degrade to the working tree
+     * inside {@see SavedView::fromColumns()}.
+     */
+    private function savedView(Project $project, ?LastViewMode $fallbackMode): SavedView
+    {
         $session = ReviewSession::query()
             ->where(ReviewSession::lookupKey($project->path, $project->id))
             ->first();
 
-        $mode = ($session === null ? null : $session->last_view_mode)
-            ?? $fallbackMode
-            ?? LastViewMode::Review;
-
-        if ($mode === LastViewMode::Context) {
-            return route('context-page', ['slug' => $slug]);
-        }
-
-        if ($session === null) {
-            return $this->workingTreeUrl($slug);
-        }
-
-        $kind = $session->last_view_kind;
-
-        if ($kind === null || $kind === LastViewKind::WorkingTree) {
-            return $this->workingTreeUrl($slug);
-        }
-
-        return $this->buildReviewUrl($project, $session, $kind, $slug)
-            ?? $this->workingTreeUrl($slug);
+        return SavedView::fromColumns(
+            $session->last_view_mode ?? $fallbackMode ?? LastViewMode::Review,
+            $session?->last_view_kind,
+            $session?->last_view_from,
+            $session?->last_view_to,
+        );
     }
 
-    private function buildReviewUrl(Project $project, ReviewSession $session, LastViewKind $kind, string $slug): ?string
+    private function buildReviewUrl(Project $project, string $slug, SavedView $view): ?string
     {
-        $from = $session->last_view_from;
-        $to = $session->last_view_to;
-
-        return match ($kind) {
+        return match ($view->kind) {
             LastViewKind::SinceBase => $this->buildSinceBaseUrl($project, $slug),
-            LastViewKind::Commit => $this->buildCommitUrl($project, $slug, $to),
-            LastViewKind::Range => $this->buildRangeUrl($project, $slug, $from, $to),
-            LastViewKind::RangeToWorking => $this->buildRangeToWorkingUrl($project, $slug, $from),
-            // Unreachable: `handle()` returns early for WorkingTree before delegating here.
-            LastViewKind::WorkingTree => $this->workingTreeUrl($slug),
+            LastViewKind::Commit => $this->buildCommitUrl($project, $slug, (string) $view->to),
+            LastViewKind::Range => $this->buildRangeUrl($project, $slug, (string) $view->from, (string) $view->to),
+            LastViewKind::RangeToWorking => $this->buildRangeToWorkingUrl($project, $slug, (string) $view->from),
+            // WorkingTree (and the null kind a Context view carries, which
+            // handle() returns on before delegating here) has no ref URL to
+            // build; the caller falls back to the working-tree route.
+            default => null,
         };
     }
 
@@ -118,21 +121,17 @@ final readonly class ResolveProjectEntryUrlAction
         ]);
     }
 
-    private function buildCommitUrl(Project $project, string $slug, ?string $to): ?string
+    private function buildCommitUrl(Project $project, string $slug, string $to): ?string
     {
-        if ($to === null || ! $this->refExists($project->path, $to)) {
+        if (! $this->refExists($project->path, $to)) {
             return null;
         }
 
         return route('review-page.commit', ['slug' => $slug, 'hash' => $to]);
     }
 
-    private function buildRangeUrl(Project $project, string $slug, ?string $from, ?string $to): ?string
+    private function buildRangeUrl(Project $project, string $slug, string $from, string $to): ?string
     {
-        if ($from === null || $to === null) {
-            return null;
-        }
-
         if (! $this->refExists($project->path, $to)) {
             return null;
         }
@@ -149,12 +148,8 @@ final readonly class ResolveProjectEntryUrlAction
         return route('review-page', ['slug' => $slug, 'ref' => $to, 'baseRef' => $from]);
     }
 
-    private function buildRangeToWorkingUrl(Project $project, string $slug, ?string $from): ?string
+    private function buildRangeToWorkingUrl(Project $project, string $slug, string $from): ?string
     {
-        if ($from === null) {
-            return null;
-        }
-
         $fromBase = str_ends_with($from, '^') ? substr($from, 0, -1) : $from;
 
         // "Since the beginning" diffs from git's empty tree, which always exists

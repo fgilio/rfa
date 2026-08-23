@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace App\Listeners;
 
 use App\Actions\OpenRepositoryDialogAction;
+use App\Actions\RecordProjectEntryAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveProjectByIdAction;
 use App\Actions\ScanDirectoryDialogAction;
 use App\Actions\UpdaterStateAction;
 use App\Events\ShowShortcutsRequested;
 use App\Events\ToggleSidebarRequested;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
 use Native\Desktop\Events\Menu\MenuItemClicked;
@@ -21,13 +21,6 @@ use Throwable;
 
 final readonly class HandleMenuItemClicked
 {
-    /**
-     * Cross-process channel: the renderer page's mount() writes the active
-     * project id here so the main-process menu listener can resolve which
-     * project the user is on when "Show Context" fires.
-     */
-    public const string ACTIVE_PROJECT_CACHE_KEY = 'rfa.active-project-id';
-
     public function handle(MenuItemClicked $event): void
     {
         Context::flush();
@@ -132,15 +125,15 @@ final readonly class HandleMenuItemClicked
     }
 
     /**
-     * Resolve the active project from the renderer's mount-time cache write and
+     * Resolve the active project from the entry record the renderer's mount() wrote and
      * point the main window at the given route for it. Falls back to the file
      * picker when the cache is empty or stale (project deleted, or user is on
      * select-repo-page which forgets the key).
      */
     private function navigateToActiveProject(string $routeName, string $diagnostic): string
     {
-        $cachedId = Cache::get(self::ACTIVE_PROJECT_CACHE_KEY);
-        $project = is_int($cachedId) ? app(ResolveProjectByIdAction::class)->handle($cachedId) : null;
+        $cachedId = app(RecordProjectEntryAction::class)->activeProjectId();
+        $project = $cachedId === null ? null : app(ResolveProjectByIdAction::class)->handle($cachedId);
         $usedCachedProject = $project !== null;
 
         if (! $project) {

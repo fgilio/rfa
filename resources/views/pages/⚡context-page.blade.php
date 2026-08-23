@@ -5,17 +5,16 @@ use App\Actions\DiscoverAgentContextFilesAction;
 use App\Actions\ExportContextFeedbackAction;
 use App\Actions\LoadContextCommentsAction;
 use App\Actions\PersistProjectViewAction;
+use App\Actions\RecordProjectEntryAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreCommentThreadsAction;
 use App\Concerns\ManagesCommentReplies;
 use App\DTOs\CommentThreadSnapshot;
 use App\DTOs\AgentContextFile;
-use App\Enums\LastViewMode;
+use App\DTOs\SavedView;
 use App\Events\HardReloadShortcutPressed;
 use App\Events\RefreshShortcutPressed;
-use App\Listeners\HandleMenuItemClicked;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -62,9 +61,14 @@ new #[Layout('layouts.app')] class extends Component
 
     public string $globalComment = '';
 
-    public bool $submitted = false;
-
-    public ?string $exportResult = null;
+    /**
+     * The last exported feedback round, or null while the user is still
+     * editing. Same shape as the review page's receipt: `path` is the exported
+     * .rfa/ file and `clipboard` the prompt copied for it.
+     *
+     * @var array{path: string, clipboard: string}|null
+     */
+    public ?array $submissionReceipt = null;
 
     #[Locked]
     public string $diffFrom = 'HEAD';
@@ -83,7 +87,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->projectBranch = $project['branch'] ?? '';
         $this->hasRemote = ! empty($project['remote_url']);
 
-        Cache::put(HandleMenuItemClicked::ACTIVE_PROJECT_CACHE_KEY, $this->projectId, now()->addDay());
+        app(RecordProjectEntryAction::class)->handle($this->projectId, $this->projectSlug);
 
         $projectId = $this->projectId;
         $repoPath = $this->repoPath;
@@ -92,11 +96,7 @@ new #[Layout('layouts.app')] class extends Component
         // on the next navigation, so making the user wait for the UPSERT here
         // would be needless mount latency.
         defer(static function () use ($projectId, $repoPath) {
-            app(PersistProjectViewAction::class)->handle(
-                $projectId,
-                $repoPath,
-                LastViewMode::Context,
-            );
+            app(PersistProjectViewAction::class)->handle($projectId, $repoPath, SavedView::context());
         });
 
         if (config('nativephp-internal.running')) {
@@ -426,7 +426,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->reloadComments();
         $this->dispatchSidebarSummary();
         collect($comments)
-            ->map(fn (array $comment): ?string => CommentThreadSnapshot::fromArray($comment)->fileId())
+            ->map(fn (array $comment): ?string => CommentThreadSnapshot::fileIdFrom($comment))
             ->filter()
             ->unique()
             ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));
@@ -445,8 +445,7 @@ new #[Layout('layouts.app')] class extends Component
 
         $this->dispatch('copy-to-clipboard', text: $result['clipboard'], toast: 'Feedback copied');
 
-        $this->exportResult = $result['clipboard'];
-        $this->submitted = true;
+        $this->submissionReceipt = ['path' => $result['md'], 'clipboard' => $result['clipboard']];
 
         // Surface any comment whose anchor drifted past recovery instead of
         // silently dropping it from the export.
@@ -462,8 +461,7 @@ new #[Layout('layouts.app')] class extends Component
 
     public function startNewFeedback(): void
     {
-        $this->submitted = false;
-        $this->exportResult = null;
+        $this->submissionReceipt = null;
         $this->globalComment = '';
         $this->reloadComments();
     }
@@ -592,8 +590,7 @@ new #[Layout('layouts.app')] class extends Component
     @include('livewire.undo-toast')
 
     <x-feedback-submit-bar
-        :submitted="$submitted"
-        :export-result="$exportResult"
+        :receipt="$submissionReceipt"
         submitted-heading="Feedback exported"
         submit-label="Submit feedback"
         submit-action="submitFeedback"
