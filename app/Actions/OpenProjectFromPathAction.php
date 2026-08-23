@@ -45,9 +45,8 @@ final readonly class OpenProjectFromPathAction
             Context::add('rfa.reason', 'project_registration_failed');
             Context::add('rfa.error_class', $e::class);
 
-            // The deep-link owner already carries this hash as rfa.path_hash,
-            // so triage keeps the correlation without a second copy of
-            // an absolute path in the log.
+            // The owner already carries this hash as rfa.path_hash, so the
+            // correlation survives without a second copy of the path.
             Log::warning('project.registration.failed', [
                 'reason' => 'project_registration_failed',
                 'path_hash' => hash('xxh128', $path),
