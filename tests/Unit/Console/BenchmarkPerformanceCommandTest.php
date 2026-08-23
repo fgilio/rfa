@@ -211,3 +211,9 @@ test('benchmark command rejects invalid input before it starts measuring', funct
         ->expectsOutputToContain('The --samples option must be a whole number of 1 or more.')
         ->assertExitCode(Command::INVALID);
 });
+
+test('benchmark command reports an unreadable snapshot before it starts measuring', function () {
+    $this->artisan('rfa:benchmark-perf', ['--compare' => sys_get_temp_dir().'/rfa-perf-missing-'.getmypid().'.json'])
+        ->expectsOutputToContain('Benchmark snapshot not found')
+        ->assertExitCode(Command::INVALID);
+});
