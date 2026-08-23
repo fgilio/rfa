@@ -205,11 +205,9 @@ final class BrowserDiagnosticSampleRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            $accepted = $this->acceptedFields();
-
-            Collection::make(array_keys($this->all()))
+            collect(array_keys($this->all()))
                 ->map(fn (int|string $field): string => (string) $field)
-                ->reject(fn (string $field): bool => $accepted->contains($field))
+                ->diff($this->acceptedFields())
                 ->each(fn (string $field) => $validator->errors()->add(
                     $field,
                     "The {$field} field is not a browser diagnostic sample field.",
@@ -217,10 +215,15 @@ final class BrowserDiagnosticSampleRequest extends FormRequest
         }];
     }
 
-    /** @return Collection<int, string> */
-    private function acceptedFields(): Collection
+    /**
+     * The sample fields the endpoint stores, which are the rule keys that name
+     * no nested path.
+     *
+     * @return Collection<int, string>
+     */
+    public function acceptedFields(): Collection
     {
-        return Collection::make(array_keys($this->rules()))
+        return collect(array_keys($this->rules()))
             ->reject(fn (string $field): bool => str_contains($field, '.'))
             ->values();
     }

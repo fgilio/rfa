@@ -15,7 +15,10 @@ use InvalidArgumentException;
  */
 final readonly class BenchmarkOptions
 {
-    /** @param list<string> $only */
+    /**
+     * @param  list<string>  $only
+     * @param  array<string, MetricThreshold>  $thresholds  keyed by the metric each one gates
+     */
     private function __construct(
         public bool $child,
         public bool $json,
@@ -26,12 +29,7 @@ final readonly class BenchmarkOptions
         public int $rounds,
         public int $warmupRounds,
         public array $only,
-        public float $maxRegression,
-        public float $minAbsoluteMs,
-        public float $maxMemoryRegression,
-        public float $minAbsoluteMemoryMb,
-        public float $maxRetainedMemoryRegression,
-        public float $minAbsoluteRetainedMemoryMb,
+        public array $thresholds,
     ) {}
 
     /**
@@ -52,12 +50,7 @@ final readonly class BenchmarkOptions
             rounds: self::wholeNumber($options, 'rounds', minimum: 1),
             warmupRounds: self::wholeNumber($options, 'warmup-rounds', minimum: 0),
             only: self::scenarios($options, $availableScenarios),
-            maxRegression: self::threshold($options, 'max-regression'),
-            minAbsoluteMs: self::threshold($options, 'min-absolute-ms'),
-            maxMemoryRegression: self::threshold($options, 'max-memory-regression'),
-            minAbsoluteMemoryMb: self::threshold($options, 'min-absolute-memory-mb'),
-            maxRetainedMemoryRegression: self::threshold($options, 'max-retained-memory-regression'),
-            minAbsoluteRetainedMemoryMb: self::threshold($options, 'min-absolute-retained-memory-mb'),
+            thresholds: self::thresholds($options),
         );
 
         $parsed->assertModesAgree();
@@ -65,12 +58,7 @@ final readonly class BenchmarkOptions
         return $parsed;
     }
 
-    /**
-     * The child invocation of this command, which measures one sample of the
-     * same scenarios and prints it as JSON.
-     *
-     * @return list<string>
-     */
+    /** @return list<string> */
     public function childArguments(): array
     {
         return [
@@ -90,9 +78,34 @@ final readonly class BenchmarkOptions
             'warmup_samples' => $this->warmupSamples,
             'rounds' => $this->rounds,
             'warmup_rounds' => $this->warmupRounds,
-            'max_regression' => $this->maxRegression,
-            'max_memory_regression' => $this->maxMemoryRegression,
-            'max_retained_memory_regression' => $this->maxRetainedMemoryRegression,
+            'max_regression' => $this->thresholds['median_ms']->maxRegression,
+            'max_memory_regression' => $this->thresholds['median_peak_mb']->maxRegression,
+            'max_retained_memory_regression' => $this->thresholds['median_retained_mb']->maxRegression,
+        ];
+    }
+
+    /**
+     * The regression policy per metric, so a metric added to the report gates
+     * the build by adding one row here rather than a pair of scalar fields.
+     *
+     * @param  array<string, mixed>  $options
+     * @return array<string, MetricThreshold>
+     */
+    private static function thresholds(array $options): array
+    {
+        return [
+            'median_ms' => new MetricThreshold(
+                self::threshold($options, 'max-regression'),
+                self::threshold($options, 'min-absolute-ms'),
+            ),
+            'median_peak_mb' => new MetricThreshold(
+                self::threshold($options, 'max-memory-regression'),
+                self::threshold($options, 'min-absolute-memory-mb'),
+            ),
+            'median_retained_mb' => new MetricThreshold(
+                self::threshold($options, 'max-retained-memory-regression'),
+                self::threshold($options, 'min-absolute-retained-memory-mb'),
+            ),
         ];
     }
 
@@ -135,7 +148,7 @@ final readonly class BenchmarkOptions
         throw_unless(is_string($value), InvalidArgumentException::class, sprintf(
             'The --%s option must be a file path. Received: %s.',
             $name,
-            get_debug_type($value),
+            self::describe($value),
         ));
 
         return $value;

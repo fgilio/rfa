@@ -4,6 +4,7 @@ use App\Console\Benchmark\BenchmarkOptions;
 
 /**
  * @param  array<string, mixed>  $overrides
+ * @param  list<string>  $scenarios
  */
 function benchmarkOptions(array $overrides = [], array $scenarios = ['diff-small', 'diff-large']): BenchmarkOptions
 {
@@ -40,7 +41,7 @@ test('parses the command input into typed values', function () {
         ->and($options->snapshotPath)->toBe('/tmp/rfa-perf.json')
         ->and($options->samples)->toBe(3)
         ->and($options->only)->toBe(['diff-small'])
-        ->and($options->minAbsoluteMs)->toBe(15.0);
+        ->and($options->thresholds['median_ms']->minimumAbsoluteIncrease)->toBe(15.0);
 });
 
 test('builds the child process arguments from the validated value', function () {
@@ -99,6 +100,22 @@ test('writing a snapshot and comparing against another one stays allowed', funct
 
     expect($options->snapshotPath)->toBe('/tmp/rfa-perf-head.json')
         ->and($options->comparePath)->toBe('/tmp/rfa-perf-base.json');
+});
+
+test('gates each metric with its own threshold pair', function () {
+    $thresholds = benchmarkOptions(['max-memory-regression' => '25', 'min-absolute-memory-mb' => '4'])->thresholds;
+
+    expect(array_keys($thresholds))->toBe(['median_ms', 'median_peak_mb', 'median_retained_mb'])
+        ->and($thresholds['median_peak_mb']->maxRegression)->toBe(25.0)
+        ->and($thresholds['median_peak_mb']->minimumAbsoluteIncrease)->toBe(4.0);
+});
+
+test('a metric only regresses once it clears both bars', function () {
+    $threshold = benchmarkOptions()->thresholds['median_ms'];
+
+    expect($threshold->regressed(100.0, 100.5, 0.5))->toBeFalse()
+        ->and($threshold->regressed(100.0, 106.0, 6.0))->toBeTrue()
+        ->and($threshold->regressed(1.0, 1.1, 10.0))->toBeFalse();
 });
 
 test('reports the configuration the run measured with', function () {

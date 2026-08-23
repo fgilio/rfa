@@ -174,13 +174,7 @@ test('benchmark model writes use the isolated database', function () {
 });
 
 test('benchmark compare fails retained memory regressions', function () {
-    $snapshotPath = tempnam(sys_get_temp_dir(), 'rfa-perf-snapshot-');
-
-    if ($snapshotPath === false) {
-        throw new RuntimeException('Unable to allocate benchmark snapshot path.');
-    }
-
-    file_put_contents($snapshotPath, json_encode([
+    $snapshotPath = perfSnapshotFile([
         'generated_at' => now()->toIso8601String(),
         'results' => [
             'diff-small' => [
@@ -189,7 +183,7 @@ test('benchmark compare fails retained memory regressions', function () {
                 'median_retained_mb' => 0.5,
             ],
         ],
-    ], JSON_THROW_ON_ERROR));
+    ]);
 
     $this->artisan('rfa:benchmark-perf', [
         '--compare' => $snapshotPath,
@@ -202,8 +196,6 @@ test('benchmark compare fails retained memory regressions', function () {
         '--max-retained-memory-regression' => 0,
         '--min-absolute-retained-memory-mb' => 0,
     ])->assertExitCode(1);
-
-    @unlink($snapshotPath);
 });
 
 test('benchmark command rejects invalid input before it starts measuring', function () {

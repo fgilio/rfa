@@ -1,7 +1,7 @@
 <?php
 
+use App\Actions\EnforceLocalLogChannelsAction;
 use Monolog\Handler\StreamHandler;
-use Monolog\Handler\SyslogUdpHandler;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -15,18 +15,6 @@ uses(TestCase::class);
  * This needs the resolved Laravel config (env + stack expansion), so it lives
  * here rather than in tests/Arch, which runs without app context.
  */
-
-/** Drivers that always write to an off-box destination. */
-function remoteLogDrivers(): array
-{
-    return ['slack', 'syslog', 'errorlog'];
-}
-
-/** Monolog `handler_with` keys that point at a network destination. */
-function remoteHandlerKeys(): array
-{
-    return ['host', 'port', 'url', 'connectionString'];
-}
 
 /**
  * Channel names reachable from `$channel`, expanding any `stack` driver
@@ -63,29 +51,7 @@ function resolvedLogChannels(string $channel, array $seen = []): array
 
 function isRemoteLogChannel(string $channel): bool
 {
-    $config = config("logging.channels.{$channel}");
-
-    if (! is_array($config)) {
-        return false;
-    }
-
-    $driver = $config['driver'] ?? null;
-
-    if (in_array($driver, remoteLogDrivers(), true)) {
-        return true;
-    }
-
-    if ($driver !== 'monolog') {
-        return false;
-    }
-
-    if (($config['handler'] ?? null) === SyslogUdpHandler::class) {
-        return true;
-    }
-
-    $handlerWith = $config['handler_with'] ?? [];
-
-    return collect(remoteHandlerKeys())->contains(fn (string $key): bool => array_key_exists($key, $handlerWith));
+    return EnforceLocalLogChannelsAction::writesOffBox(config("logging.channels.{$channel}"));
 }
 
 test('the default log channel resolves to local-only sinks', function () {

@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Console\Benchmark\BenchmarkIsolation;
 use App\Console\Benchmark\BenchmarkOptions;
+use App\Console\Benchmark\MetricThreshold;
 use App\Console\Benchmark\PerfBenchmarkReport;
 use App\Console\Benchmark\PerfBenchmarkStatistics;
 use App\Console\Benchmark\PerfScenarioRunner;
@@ -16,12 +17,24 @@ use Symfony\Component\Process\Process;
 
 /**
  * @phpstan-import-type BaselineMetrics from PerfBenchmarkReport
+ * @phpstan-import-type ScenarioMetrics from PerfBenchmarkReport
  *
- * @phpstan-type ScenarioMeasurement array{median_ms: float, median_peak_mb: float, median_retained_mb: float}
  * @phpstan-type ScenarioReport array{median_ms: float, samples_ms: list<float>, median_peak_mb: float, samples_peak_mb: list<float>, median_retained_mb: float, samples_retained_mb: list<float>}
  */
 class BenchmarkPerformanceCommand extends Command
 {
+    /**
+     * The compared metrics, in table order, with the label and unit their
+     * columns carry.
+     *
+     * @var array<string, array{label: string, unit: string}>
+     */
+    private const COMPARED_METRICS = [
+        'median_ms' => ['label' => 'time', 'unit' => 'ms'],
+        'median_peak_mb' => ['label' => 'peak memory', 'unit' => 'MB'],
+        'median_retained_mb' => ['label' => 'retained memory', 'unit' => 'MB'],
+    ];
+
     protected $signature = 'rfa:benchmark-perf
         {--child : Run a single benchmark sample in a child process}
         {--json : Emit JSON instead of a table}
@@ -161,7 +174,7 @@ class BenchmarkPerformanceCommand extends Command
     }
 
     /**
-     * @return array{generated_at: string, results: array<string, ScenarioMeasurement>}
+     * @return array{generated_at: string, results: array<string, ScenarioMetrics>}
      */
     private function runChildProcess(BenchmarkOptions $options, BenchmarkIsolation $benchmarkIsolation): array
     {
@@ -195,47 +208,33 @@ class BenchmarkPerformanceCommand extends Command
         $hasRegression = false;
 
         foreach ($report['results'] as $scenario => $current) {
-            $baseline = $baselines[$scenario] ?? null;
+            $cells = [$scenario];
 
-            $time = $this->compareMetric(
-                $baseline['median_ms'] ?? null,
-                $current['median_ms'],
-                $options->maxRegression,
-                $options->minAbsoluteMs,
-            );
-            $peak = $this->compareMetric(
-                $baseline['median_peak_mb'] ?? null,
-                $current['median_peak_mb'],
-                $options->maxMemoryRegression,
-                $options->minAbsoluteMemoryMb,
-            );
-            $retained = $this->compareMetric(
-                $baseline['median_retained_mb'] ?? null,
-                $current['median_retained_mb'],
-                $options->maxRetainedMemoryRegression,
-                $options->minAbsoluteRetainedMemoryMb,
-            );
+            foreach (self::COMPARED_METRICS as $metric => $column) {
+                $comparison = $this->compareMetric(
+                    $baselines[$scenario][$metric] ?? null,
+                    $current[$metric],
+                    $options->thresholds[$metric],
+                );
 
-            $hasRegression = $hasRegression || $time['regressed'] || $peak['regressed'] || $retained['regressed'];
+                $hasRegression = $hasRegression || $comparison['regressed'];
 
-            $rows[] = [
-                $scenario,
-                $this->formatMetric($time['baseline'], 'ms'),
-                $this->formatMetric($current['median_ms'], 'ms'),
-                $this->formatChange($time['change']),
-                $this->formatMetric($peak['baseline'], 'MB'),
-                $this->formatMetric($current['median_peak_mb'], 'MB'),
-                $this->formatChange($peak['change']),
-                $this->formatMetric($retained['baseline'], 'MB'),
-                $this->formatMetric($current['median_retained_mb'], 'MB'),
-                $this->formatChange($retained['change']),
-            ];
+                $cells[] = $this->formatMetric($comparison['baseline'], $column['unit']);
+                $cells[] = $this->formatMetric($current[$metric], $column['unit']);
+                $cells[] = $this->formatChange($comparison['change']);
+            }
+
+            $rows[] = $cells;
         }
 
-        $this->table(['Scenario', 'Base time', 'Current time', 'Time', 'Base peak', 'Current peak', 'Peak', 'Base retained', 'Current retained', 'Retained'], $rows);
+        $this->table($this->comparisonHeaders(), $rows);
 
         if ($hasRegression) {
-            $this->error("Performance regression exceeded time {$options->maxRegression}%, peak memory {$options->maxMemoryRegression}%, or retained memory {$options->maxRetainedMemoryRegression}%.");
+            $exceeded = collect(self::COMPARED_METRICS)
+                ->map(fn (array $column, string $metric): string => "{$column['label']} {$options->thresholds[$metric]->maxRegression}%")
+                ->implode(', ');
+
+            $this->error("Performance regression exceeded {$exceeded}.");
 
             return self::FAILURE;
         }
@@ -245,13 +244,26 @@ class BenchmarkPerformanceCommand extends Command
         return self::SUCCESS;
     }
 
+    /** @return list<string> */
+    private function comparisonHeaders(): array
+    {
+        return collect(self::COMPARED_METRICS)
+            ->flatMap(fn (array $column): array => [
+                'Base '.$column['label'],
+                'Current '.$column['label'],
+                ucfirst($column['label']),
+            ])
+            ->prepend('Scenario')
+            ->all();
+    }
+
     /**
      * A metric the snapshot never recorded has no baseline to regress from, so
      * it reports as unavailable rather than as a change against zero.
      *
      * @return array{baseline: float|null, change: float|null, regressed: bool}
      */
-    private function compareMetric(?float $baseline, float $current, float $maxRegression, float $minimumAbsoluteIncrease): array
+    private function compareMetric(?float $baseline, float $current, MetricThreshold $threshold): array
     {
         if ($baseline === null) {
             return ['baseline' => null, 'change' => null, 'regressed' => false];
@@ -262,7 +274,7 @@ class BenchmarkPerformanceCommand extends Command
         return [
             'baseline' => $baseline,
             'change' => $change,
-            'regressed' => $change > $maxRegression && ($current - $baseline) >= $minimumAbsoluteIncrease,
+            'regressed' => $threshold->regressed($baseline, $current, $change),
         ];
     }
 

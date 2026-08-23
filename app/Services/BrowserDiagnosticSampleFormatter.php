@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use Illuminate\Support\Arr;
+use Illuminate\Support\Number;
 use Illuminate\Support\Str;
 
 /**
@@ -11,9 +13,7 @@ use Illuminate\Support\Str;
  * `browser.sample` breadcrumb.
  *
  * Keys arrive bounded by App\Http\Requests\BrowserDiagnosticSampleRequest, so
- * this class owns what is left before the sample becomes durable: the URL
- * reduced to a redacted path plus a hash, animation detail capped to the
- * configured limits, and empty sections dropped.
+ * this class owns only what is left before the sample becomes durable.
  */
 final class BrowserDiagnosticSampleFormatter
 {
@@ -23,10 +23,12 @@ final class BrowserDiagnosticSampleFormatter
      */
     public function format(array $sample): array
     {
+        $path = $this->urlPath($sample['url'] ?? null);
+
         return [
             'reason' => $sample['reason'] ?? 'unknown',
-            'path' => $this->redactedUrlPath($sample['url'] ?? null),
-            'path_hash' => $this->urlPathHash($sample['url'] ?? null),
+            'path' => $this->redactedUrlPath($path),
+            'path_hash' => $path === null ? null : hash('xxh128', $path),
             'hidden' => (bool) ($sample['hidden'] ?? false),
             'focused' => (bool) ($sample['focused'] ?? false),
             'viewport' => $sample['viewport'] ?? null,
@@ -51,11 +53,7 @@ final class BrowserDiagnosticSampleFormatter
      */
     private function presentSections(mixed $value): ?array
     {
-        if (! is_array($value)) {
-            return null;
-        }
-
-        return array_filter($value, fn (mixed $section): bool => $section !== null);
+        return is_array($value) ? Arr::whereNotNull($value) : null;
     }
 
     /** @return array<string, mixed>|null */
@@ -67,12 +65,12 @@ final class BrowserDiagnosticSampleFormatter
 
         $detailLimit = $this->boundedLimit('animation_detail_limit');
 
-        $animations = array_filter([
+        $animations = $this->withoutEmptyCells([
             ...$value,
             'classSummary' => $this->animationRows($value['classSummary'] ?? null, $this->boundedLimit('animation_class_summary_limit')),
             'elementGroups' => $this->animationRows($value['elementGroups'] ?? null, $detailLimit),
             'elements' => $this->animationRows($value['elements'] ?? null, $detailLimit),
-        ], fn (mixed $item): bool => $item !== null && $item !== []);
+        ]);
 
         return $animations === [] ? null : $animations;
     }
@@ -92,25 +90,29 @@ final class BrowserDiagnosticSampleFormatter
 
         return collect($rows)
             ->filter(fn (mixed $row): bool => is_array($row))
-            ->map(fn (array $row): array => array_filter(
-                $row,
-                fn (mixed $item): bool => $item !== null && $item !== [],
-            ))
+            ->map(fn (array $row): array => $this->withoutEmptyCells($row))
             ->filter()
             ->take($limit)
             ->values()
             ->all();
     }
 
-    private function boundedLimit(string $setting): int
+    /**
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    private function withoutEmptyCells(array $values): array
     {
-        return max(0, min(50, (int) config("rfa.diagnostics.{$setting}", 20)));
+        return array_filter($values, fn (mixed $value): bool => $value !== null && $value !== []);
     }
 
-    private function redactedUrlPath(mixed $url): ?string
+    private function boundedLimit(string $setting): int
     {
-        $path = $this->urlPath($url);
+        return Number::clamp((int) config("rfa.diagnostics.{$setting}", 20), 0, 50);
+    }
 
+    private function redactedUrlPath(?string $path): ?string
+    {
         if ($path === null) {
             return null;
         }
@@ -121,22 +123,15 @@ final class BrowserDiagnosticSampleFormatter
             $segments[1] = '{project}';
         }
 
-        if (isset($segments[2], $segments[3]) && $segments[2] === 'c') {
-            $segments[3] = '{hash}';
-        }
-
-        if (isset($segments[2], $segments[3]) && in_array($segments[2], ['r', 'rw'], true)) {
-            $segments[3] = '{range}';
+        if (isset($segments[2], $segments[3])) {
+            $segments[3] = match ($segments[2]) {
+                'c' => '{hash}',
+                'r', 'rw' => '{range}',
+                default => $segments[3],
+            };
         }
 
         return '/'.implode('/', array_filter($segments, fn (string $segment): bool => $segment !== ''));
-    }
-
-    private function urlPathHash(mixed $url): ?string
-    {
-        $path = $this->urlPath($url);
-
-        return $path === null ? null : hash('xxh128', $path);
     }
 
     /** The query string never reaches the log: it carries the CSRF token. */

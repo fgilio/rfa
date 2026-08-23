@@ -59,11 +59,12 @@ test('runtime-diagnostics.js posts the fields the diagnostics request accepts', 
 
     preg_match_all('/^ {12}(\w+)[,:]/m', (string) $sample, $matches);
 
-    $accepted = collect(array_keys((new BrowserDiagnosticSampleRequest)->rules()))
-        ->reject(fn (string $field): bool => str_contains($field, '.'))
-        ->sort()
-        ->values()
-        ->all();
+    // An empty match set means the literal moved or was reindented, not that
+    // the JS stopped posting fields.
+    expect($matches[1])->not->toBeEmpty();
 
-    expect(collect($matches[1])->sort()->values()->all())->toBe($accepted);
+    $posted = collect($matches[1])->sort()->values()->all();
+    $accepted = (new BrowserDiagnosticSampleRequest)->acceptedFields()->sort()->values()->all();
+
+    expect($posted)->toBe($accepted);
 });

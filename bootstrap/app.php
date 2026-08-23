@@ -3,6 +3,7 @@
 use App\Actions\EnforceLocalLogChannelsAction;
 use App\Actions\RehydrateNativeRuntimeConfigAction;
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Foundation\Bootstrap\RegisterProviders;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -30,9 +31,7 @@ $app->beforeBootstrapping(RegisterProviders::class, function (): void {
     (new RehydrateNativeRuntimeConfigAction)->handle();
 });
 
-// RFA keeps logs on the user's machine, so the off-box stock channels come out
-// of the resolved configuration before any provider can resolve one.
-$app->beforeBootstrapping(RegisterProviders::class, function (): void {
+$app->afterBootstrapping(LoadConfiguration::class, function (): void {
     (new EnforceLocalLogChannelsAction)->handle();
 });
 

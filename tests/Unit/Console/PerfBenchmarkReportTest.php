@@ -2,25 +2,6 @@
 
 use App\Console\Benchmark\PerfBenchmarkReport;
 
-function perfSnapshotFile(mixed $contents): string
-{
-    $path = tempnam(sys_get_temp_dir(), 'rfa-perf-snapshot-'.getmypid().'-');
-
-    if ($path === false) {
-        throw new RuntimeException('Unable to allocate benchmark snapshot path.');
-    }
-
-    file_put_contents($path, is_string($contents) ? $contents : json_encode($contents, JSON_THROW_ON_ERROR));
-
-    return $path;
-}
-
-afterEach(function () {
-    foreach (glob(sys_get_temp_dir().'/rfa-perf-snapshot-'.getmypid().'-*') ?: [] as $path) {
-        @unlink($path);
-    }
-});
-
 test('a report round trips through the codec with its schema version', function () {
     $report = [
         'generated_at' => '2026-01-01T00:00:00+00:00',
