@@ -8,6 +8,7 @@ use App\Actions\OpenRepositoryDialogAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveProjectByIdAction;
 use App\Actions\ScanDirectoryDialogAction;
+use App\Actions\UpdaterStateAction;
 use App\Events\ShowShortcutsRequested;
 use App\Events\ToggleSidebarRequested;
 use Illuminate\Support\Facades\Cache;
@@ -69,11 +70,10 @@ final readonly class HandleMenuItemClicked
 
     private function handleCheckUpdates(): string
     {
-        Cache::put('native-update-state', [
-            'status' => 'checking',
-            'startedAt' => now()->timestamp,
-            'simulateTerminalState' => config('app.debug'),
-        ], now()->addMinutes(2));
+        // Show the spinner before asking Electron to check: the updater can
+        // take a moment to emit CheckingForUpdate, and on a dev build it
+        // never reports back at all.
+        app(UpdaterStateAction::class)->beginCheck();
 
         AutoUpdater::checkForUpdates();
 

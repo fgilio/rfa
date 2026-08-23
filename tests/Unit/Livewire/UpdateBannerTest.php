@@ -274,3 +274,43 @@ test('pollCadence returns expected pairs per status', function (?string $status,
     'error' => ['error', '30s', '5m'],
     'checked-dev' => ['checked-dev', '30s', '5m'],
 ]);
+
+test('drops a ready update that names the version already running', function () {
+    config(['nativephp.version' => '1.2.0']);
+
+    Cache::put('native-update-state', [
+        'status' => 'ready',
+        'version' => '1.2.0',
+        'percent' => 100,
+    ], now()->addHours(24));
+
+    Livewire::test('update-banner')->assertSet('status', null);
+
+    expect(Cache::get('native-update-state'))->toBeNull();
+});
+
+test('keeps the simulation bookkeeping out of public component state', function () {
+    // `startedAt` / `simulateTerminalState` are how the dev-only check settles
+    // itself. They belong to the store, not to the wire payload.
+    config(['app.debug' => true]);
+
+    $component = Livewire::test('update-banner')
+        ->dispatch('native:Native\\Desktop\\Events\\Menu\\MenuItemClicked', item: ['id' => 'check-updates'])
+        ->assertSet('status', 'checking');
+
+    expect(array_keys($component->instance()->all()))
+        ->toBe(['status', 'version', 'releaseNotes', 'downloadPercent']);
+});
+
+test('a late download progress event does not hide the restart affordance', function () {
+    Cache::put('native-update-state', [
+        'status' => 'ready',
+        'version' => '1.2.0',
+        'percent' => 100,
+    ], now()->addHours(24));
+
+    Livewire::test('update-banner')
+        ->dispatch('native:Native\\Desktop\\Events\\AutoUpdater\\DownloadProgress', percent: 80)
+        ->assertSet('status', 'ready')
+        ->assertSee('Restart to update');
+});

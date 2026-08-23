@@ -7,6 +7,7 @@ namespace App\Providers;
 use App\Actions\OpenTerminalRequestAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveStartupRouteAction;
+use App\Actions\UpdaterStateAction;
 use App\Actions\ZoomWindowAction;
 use App\Console\Benchmark\BenchmarkIsolation;
 use App\Events\ZoomShortcutPressed;
@@ -18,7 +19,6 @@ use App\Listeners\UnregisterNativeGlobalShortcuts;
 use App\Support\LogSanitizer;
 use App\Support\Shortcuts;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
@@ -85,11 +85,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         });
 
         Event::listen(CheckingForUpdate::class, function () {
-            Cache::put('native-update-state', [
-                'status' => 'checking',
-                'startedAt' => now()->timestamp,
-                'simulateTerminalState' => config('app.debug'),
-            ], now()->addMinutes(2));
+            app(UpdaterStateAction::class)->beginCheck();
         });
 
         Event::listen(UpdateAvailable::class, function (UpdateAvailable $event) {
@@ -99,13 +95,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             $outcome = 'completed';
 
             try {
-                $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
-                Cache::put('native-update-state', [
-                    'status' => 'downloading',
-                    'version' => $event->version,
-                    'releaseNotes' => $releaseNotes,
-                    'percent' => 0,
-                ], now()->addMinutes(30));
+                app(UpdaterStateAction::class)->recordAvailable($event->version, $event->releaseNotes);
 
                 Notification::new()
                     ->title('Update Available')
@@ -126,10 +116,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         });
 
         Event::listen(DownloadProgress::class, function (DownloadProgress $event) {
-            $state = Cache::get('native-update-state', []);
-            $state['status'] = 'downloading';
-            $state['percent'] = (int) round($event->percent);
-            Cache::put('native-update-state', $state, now()->addMinutes(30));
+            app(UpdaterStateAction::class)->recordProgress($event->percent);
         });
 
         Event::listen(UpdateNotAvailable::class, function (UpdateNotAvailable $event) {
@@ -139,7 +126,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             $outcome = 'completed';
 
             try {
-                Cache::put('native-update-state', ['status' => 'up-to-date'], now()->addSeconds(10));
+                app(UpdaterStateAction::class)->recordUpToDate();
                 Notification::new()
                     ->title('No Updates')
                     ->message('You are running the latest version.')
@@ -165,13 +152,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             $outcome = 'completed';
 
             try {
-                $releaseNotes = $this->normalizeReleaseNotes($event->releaseNotes);
-                Cache::put('native-update-state', [
-                    'status' => 'ready',
-                    'version' => $event->version,
-                    'releaseNotes' => $releaseNotes,
-                    'percent' => 100,
-                ], now()->addHours(24));
+                app(UpdaterStateAction::class)->recordDownloaded($event->version, $event->releaseNotes);
 
                 Notification::new()
                     ->title('Update Ready')
@@ -205,7 +186,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                     'message' => LogSanitizer::summary($event->message),
                     'stack' => LogSanitizer::summary($event->stack, 500),
                 ]);
-                Cache::put('native-update-state', ['status' => 'error'], now()->addMinutes(5));
+                app(UpdaterStateAction::class)->recordError();
                 Notification::new()
                     ->title('Update Error')
                     ->message('Could not check for updates. Try again later.')
@@ -231,12 +212,6 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     private function elapsedMs(float $startedAt): int
     {
         return (int) round((microtime(true) - $startedAt) * 1000);
-    }
-
-    /** @param array<string>|string|null $notes */
-    private function normalizeReleaseNotes(array|string|null $notes): ?string
-    {
-        return is_array($notes) ? implode(' ', $notes) : $notes;
     }
 
     private function createWindow(): void
