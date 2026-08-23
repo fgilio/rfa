@@ -256,3 +256,102 @@ test('rejects duplicate root and reply IDs before restoring snapshots', function
         'Comment reply snapshot IDs must be unique.',
     ],
 ]);
+
+test('a full round trip preserves anchors, sides, timestamps, and reply order', function () {
+    $project = Project::factory()->create(['path' => '/tmp/roundtrip']);
+    $comment = Comment::factory()->for($project)->create([
+        'id' => 'c-roundtrip',
+        'repo_path' => '/tmp/roundtrip',
+        'origin_ref' => Comment::ORIGIN_CONTEXT,
+        'file_path' => 'app/Foo.php',
+        'side' => 'left',
+        'start_line' => 12,
+        'end_line' => 14,
+        'file_content_hash' => 'abc123',
+        'line_snippet' => '$x = 1;',
+        'is_draft' => true,
+        'created_at' => '2026-07-27 09:00:00',
+        'updated_at' => '2026-07-27 09:01:00',
+    ]);
+    foreach (['r-first' => 'First', 'r-second' => 'Second'] as $id => $body) {
+        CommentReply::factory()->for($comment)->create(['id' => $id, 'body' => $body]);
+    }
+
+    $snapshots = app(CreateCommentThreadSnapshotsAction::class)->handle(
+        '/tmp/roundtrip',
+        $project->id,
+        [[
+            'id' => 'c-roundtrip',
+            'fileId' => 'f-1',
+            // The resolver had moved this one to the right for the diff on
+            // screen; the snapshot must still record where it is stored.
+            'side' => 'right',
+            'originalSide' => 'left',
+            'anchorStatus' => 'unplaced',
+        ]],
+    );
+
+    $comment->delete();
+
+    $restored = app(RestoreCommentThreadsAction::class)->handle('/tmp/roundtrip', $project->id, $snapshots);
+    $row = Comment::query()->findOrFail('c-roundtrip');
+
+    // The row goes back the way it was stored, not the way it was displayed.
+    expect($row->side)->toBe('left')
+        ->and($row->origin_ref)->toBe(Comment::ORIGIN_CONTEXT)
+        ->and($row->start_line)->toBe(12)
+        ->and($row->end_line)->toBe(14)
+        ->and($row->file_content_hash)->toBe('abc123')
+        ->and($row->line_snippet)->toBe('$x = 1;')
+        ->and((bool) $row->is_draft)->toBeTrue()
+        ->and($row->created_at->toDateTimeString())->toBe('2026-07-27 09:00:00')
+        ->and($row->updated_at->toDateTimeString())->toBe('2026-07-27 09:01:00');
+
+    // The view state comes back off the snapshot, which is database-authoritative
+    // for the side: undo must not write back the side the resolver happened to be
+    // displaying, and the page re-resolves the anchor on its next load anyway.
+    expect($restored[0])->toMatchArray([
+        'fileId' => 'f-1',
+        'side' => 'left',
+        'originalSide' => 'left',
+        'anchorStatus' => 'unplaced',
+        'originRef' => Comment::ORIGIN_CONTEXT,
+    ])
+        ->and(array_column($restored[0]['replies'], 'id'))->toBe(['r-first', 'r-second'])
+        ->and($restored[0]['createdAt'])->toBe($snapshots[0]['comment']['createdAt']);
+});
+
+test('an unplaced anchor round trips as unplaced', function () {
+    $project = Project::factory()->create(['path' => '/tmp/unplaced']);
+    Comment::factory()->for($project)->create([
+        'id' => 'c-unplaced',
+        'repo_path' => '/tmp/unplaced',
+        'file_path' => 'gone.php',
+    ]);
+
+    $snapshots = app(CreateCommentThreadSnapshotsAction::class)->handle(
+        '/tmp/unplaced',
+        $project->id,
+        [['id' => 'c-unplaced', 'fileId' => 'f-gone', 'anchorStatus' => 'unplaced']],
+    );
+
+    Comment::query()->whereKey('c-unplaced')->delete();
+
+    $restored = app(RestoreCommentThreadsAction::class)->handle('/tmp/unplaced', $project->id, $snapshots);
+
+    expect($snapshots[0]['comment']['anchorStatus'])->toBe('unplaced')
+        ->and($restored[0]['anchorStatus'])->toBe('unplaced');
+});
+
+test('a snapshot with no origin ref restores onto the caller surface', function () {
+    $project = Project::factory()->create(['path' => '/tmp/surface']);
+
+    app(RestoreCommentThreadsAction::class)->handle(
+        '/tmp/surface',
+        $project->id,
+        [['id' => 'c-surface', 'file' => 'CLAUDE.md', 'side' => 'right', 'body' => 'Root']],
+        Comment::ORIGIN_CONTEXT,
+    );
+
+    expect(Comment::query()->findOrFail('c-surface')->origin_ref)->toBe(Comment::ORIGIN_CONTEXT);
+});

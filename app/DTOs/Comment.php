@@ -7,11 +7,30 @@ namespace App\DTOs;
 use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use App\Enums\GitRef;
+use DateTimeInterface;
+use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
+/**
+ * One comment thread: the root comment plus its replies.
+ *
+ * This is the complete shape: every field any producer needs to hand a
+ * thread to another producer without re-deriving or inventing anything.
+ * The anchor resolvers, the drawer loader, the exporters, and
+ * {@see CommentThreadSnapshot} all speak it, so a thread that survives a
+ * delete/restore round trip comes back with the same side, anchor status,
+ * and timestamps it went in with.
+ *
+ * Arrays stay at the persistence and Livewire boundaries: `fromArray()`
+ * accepts either camelCase view state or a snake_case database row, and
+ * `toArray()` emits the camelCase view shape.
+ */
 class Comment
 {
     /**
+     * @param  ?DiffSide  $originalSide  The stored side, when the anchor resolver moved
+     *                                   the comment to the other side of the diff. Null
+     *                                   means it never moved. {@see self::originalSide()}
      * @param  list<CommentReply>  $replies
      */
     public function __construct(
@@ -27,9 +46,21 @@ class Comment
         public readonly ?string $lineSnippet = null,
         public readonly bool $isDraft = false,
         public readonly ?string $submittedAt = null,
-        public readonly string $anchorStatus = AnchorStatus::Placed->value,
+        public readonly AnchorStatus $anchorStatus = AnchorStatus::Placed,
+        public readonly ?DiffSide $originalSide = null,
+        public readonly ?string $createdAt = null,
+        public readonly ?string $updatedAt = null,
         public readonly array $replies = [],
     ) {}
+
+    /**
+     * The side the comment was stored on, which is the side it is on unless an
+     * anchor resolver re-anchored it across the diff.
+     */
+    public function originalSide(): DiffSide
+    {
+        return $this->originalSide ?? $this->side;
+    }
 
     /** @return array<string, mixed> */
     public function toArray(): array
@@ -39,6 +70,7 @@ class Comment
             'fileId' => $this->fileId,
             'file' => $this->file,
             'side' => $this->side->value,
+            'originalSide' => $this->originalSide()->value,
             'startLine' => $this->startLine,
             'endLine' => $this->endLine,
             'body' => $this->body,
@@ -47,7 +79,9 @@ class Comment
             'lineSnippet' => $this->lineSnippet,
             'isDraft' => $this->isDraft,
             'submittedAt' => $this->submittedAt,
-            'anchorStatus' => $this->anchorStatus,
+            'anchorStatus' => $this->anchorStatus->value,
+            'createdAt' => $this->createdAt,
+            'updatedAt' => $this->updatedAt,
             'replies' => collect($this->replies)
                 ->map(fn (CommentReply $reply): array => $reply->toArray())
                 ->values()
@@ -72,10 +106,33 @@ class Comment
             fileContentHash: self::stringOrNull($data['fileContentHash'] ?? $data['file_content_hash'] ?? null),
             lineSnippet: self::stringOrNull($data['lineSnippet'] ?? $data['line_snippet'] ?? null),
             isDraft: (bool) ($data['isDraft'] ?? $data['is_draft'] ?? false),
-            submittedAt: self::stringOrNull($data['submittedAt'] ?? $data['submitted_at'] ?? null),
-            anchorStatus: $data['anchorStatus'] ?? AnchorStatus::Placed->value,
+            submittedAt: self::dateOrNull($data['submittedAt'] ?? $data['submitted_at'] ?? null),
+            anchorStatus: self::anchorStatus($data['anchorStatus'] ?? null),
+            originalSide: self::sideOrNull($data['originalSide'] ?? $data['original_side'] ?? null),
+            createdAt: self::dateOrNull($data['createdAt'] ?? $data['created_at'] ?? null),
+            updatedAt: self::dateOrNull($data['updatedAt'] ?? $data['updated_at'] ?? null),
             replies: is_iterable($rawReplies) ? CommentReply::collect($rawReplies) : [],
         );
+    }
+
+    private static function anchorStatus(mixed $value): AnchorStatus
+    {
+        if ($value instanceof AnchorStatus) {
+            return $value;
+        }
+
+        return is_string($value)
+            ? AnchorStatus::tryFrom($value) ?? AnchorStatus::Placed
+            : AnchorStatus::Placed;
+    }
+
+    private static function sideOrNull(mixed $value): ?DiffSide
+    {
+        if ($value instanceof DiffSide) {
+            return $value;
+        }
+
+        return is_string($value) ? DiffSide::tryFrom($value) : null;
     }
 
     private static function intOrNull(mixed $value): ?int
@@ -86,6 +143,23 @@ class Comment
     private static function stringOrNull(mixed $value): ?string
     {
         return $value === null ? null : (string) $value;
+    }
+
+    /**
+     * Normalize a timestamp to ISO 8601 so a thread compares equal whether it
+     * arrived from a database row, a view-state array, or a stored snapshot.
+     */
+    private static function dateOrNull(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ($value instanceof DateTimeInterface) {
+            return Carbon::instance($value)->toIso8601String();
+        }
+
+        return Carbon::parse((string) $value)->toIso8601String();
     }
 
     /**

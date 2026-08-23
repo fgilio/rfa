@@ -1,6 +1,7 @@
 <?php
 
 use App\DTOs\Comment;
+use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use Faker\Factory as Faker;
 
@@ -26,6 +27,7 @@ test('toArray returns camelCase keys for internal use', function () {
         'fileId' => $fileId,
         'file' => $file,
         'side' => $side->value,
+        'originalSide' => $side->value,
         'startLine' => $startLine,
         'endLine' => $endLine,
         'body' => $body,
@@ -35,6 +37,8 @@ test('toArray returns camelCase keys for internal use', function () {
         'isDraft' => false,
         'submittedAt' => null,
         'anchorStatus' => 'placed',
+        'createdAt' => null,
+        'updatedAt' => null,
         'replies' => [],
     ]);
 });
@@ -109,4 +113,101 @@ test('properties are readonly', function () {
     foreach ($ref->getProperties() as $prop) {
         expect($prop->isReadOnly())->toBeTrue("Property {$prop->getName()} should be readonly");
     }
+});
+
+test('fromArray reads the complete thread shape from a database row', function () {
+    $comment = Comment::fromArray([
+        'id' => 'c-1',
+        'file_path' => 'src/app.php',
+        'side' => 'right',
+        'original_side' => 'left',
+        'start_line' => 10,
+        'end_line' => 15,
+        'body' => 'body',
+        'origin_ref' => 'context-file',
+        'file_content_hash' => 'abc123',
+        'line_snippet' => '$x = 1;',
+        'is_draft' => 1,
+        'submitted_at' => '2026-08-23T18:49:27+00:00',
+        'anchorStatus' => 'unplaced',
+        'created_at' => '2026-08-20T10:00:00+00:00',
+        'updated_at' => '2026-08-21T11:00:00+00:00',
+    ]);
+
+    expect($comment->side)->toBe(DiffSide::Right)
+        ->and($comment->originalSide)->toBe(DiffSide::Left)
+        ->and($comment->originalSide())->toBe(DiffSide::Left)
+        ->and($comment->originRef)->toBe('context-file')
+        ->and($comment->isDraft)->toBeTrue()
+        ->and($comment->anchorStatus)->toBe(AnchorStatus::Unplaced)
+        ->and($comment->submittedAt)->toBe('2026-08-23T18:49:27+00:00')
+        ->and($comment->createdAt)->toBe('2026-08-20T10:00:00+00:00')
+        ->and($comment->updatedAt)->toBe('2026-08-21T11:00:00+00:00');
+});
+
+test('originalSide falls back to the current side when the anchor never moved', function () {
+    $comment = Comment::fromArray([
+        'id' => 'c-1',
+        'file' => 'src/app.php',
+        'side' => 'left',
+        'body' => 'body',
+    ]);
+
+    expect($comment->originalSide)->toBeNull()
+        ->and($comment->originalSide())->toBe(DiffSide::Left)
+        ->and($comment->toArray()['originalSide'])->toBe('left');
+});
+
+test('an unknown anchor status degrades to placed rather than throwing', function () {
+    expect(Comment::fromArray([
+        'id' => 'c-1',
+        'file' => 'f.php',
+        'side' => 'right',
+        'body' => 'body',
+        'anchorStatus' => 'who-knows',
+    ])->anchorStatus)->toBe(AnchorStatus::Placed);
+});
+
+test('timestamps normalize to ISO 8601 whatever format they arrive in', function () {
+    $comment = Comment::fromArray([
+        'id' => 'c-1',
+        'file' => 'f.php',
+        'side' => 'right',
+        'body' => 'body',
+        'created_at' => '2026-08-20 10:00:00',
+        'updated_at' => new DateTimeImmutable('2026-08-21 11:00:00', new DateTimeZone('UTC')),
+    ]);
+
+    expect($comment->createdAt)->toBe('2026-08-20T10:00:00+00:00')
+        ->and($comment->updatedAt)->toBe('2026-08-21T11:00:00+00:00');
+});
+
+test('toArray round trips through fromArray unchanged', function () {
+    $original = Comment::fromArray([
+        'id' => 'c-1',
+        'fileId' => 'f-1',
+        'file' => 'src/app.php',
+        'side' => 'right',
+        'originalSide' => 'left',
+        'startLine' => 3,
+        'endLine' => 4,
+        'body' => 'body',
+        'originRef' => 'context-file',
+        'fileContentHash' => 'abc123',
+        'lineSnippet' => 'snippet',
+        'isDraft' => true,
+        'submittedAt' => '2026-08-23T18:49:27+00:00',
+        'anchorStatus' => 'unplaced',
+        'createdAt' => '2026-08-20T10:00:00+00:00',
+        'updatedAt' => '2026-08-21T11:00:00+00:00',
+        'replies' => [[
+            'id' => 'r-1',
+            'commentId' => 'c-1',
+            'authorType' => 'human',
+            'authorKey' => 'rfa-ui',
+            'body' => 'Reply',
+        ]],
+    ]);
+
+    expect(Comment::fromArray($original->toArray())->toArray())->toBe($original->toArray());
 });

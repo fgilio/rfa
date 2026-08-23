@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
-use App\DTOs\CommentReply;
+use App\DTOs\Comment;
 use App\DTOs\DiffTarget;
 use App\DTOs\FileListEntry;
 use App\DTOs\FileSourceSpec;
@@ -27,8 +27,9 @@ final readonly class ResolveCommentAnchorAction
      * - Anchors by `file_content_hash` + line number.
      * - Matches against the file hash on either the left (`target.from`) or right
      *   (`target.to`, or working copy when null) side of the current diff.
-     * - Returns an array of view-ready comment rows with `fileId`, `anchorStatus`
-     *   (`'placed'` or `'unplaced'`).
+     * - Returns view-ready {@see Comment} arrays with `fileId`, `anchorStatus`
+     *   (`'placed'` or `'unplaced'`), and `originalSide` (the stored side, when
+     *   re-anchoring moved the comment across the diff).
      *
      * @param  iterable<array<string, mixed>>  $rawComments  Rows from the comments table or their array form.
      * @param  array<int, array<string, mixed>>  $currentFiles  Output of GetFileListAction (includes `id`, `path`).
@@ -130,7 +131,8 @@ final readonly class ResolveCommentAnchorAction
                 $anchorStatus = AnchorStatus::Placed;
             }
 
-            $resolved[] = [
+            $resolved[] = Comment::fromArray([
+                ...$row,
                 'id' => (string) $row['id'],
                 'fileId' => $fileId,
                 'file' => $filePath,
@@ -138,17 +140,11 @@ final readonly class ResolveCommentAnchorAction
                 'originalSide' => $storedSide,
                 'startLine' => $startLine,
                 'endLine' => $endLine,
-                'body' => (string) ($row['body'] ?? ''),
                 'originRef' => $storedOriginRef,
                 'fileContentHash' => $storedHash,
                 'lineSnippet' => $lineSnippet,
-                'isDraft' => (bool) ($row['is_draft'] ?? $row['isDraft'] ?? false),
-                'submittedAt' => $row['submitted_at'] ?? $row['submittedAt'] ?? null,
                 'anchorStatus' => $anchorStatus->value,
-                'replies' => collect(CommentReply::collect($row['replies'] ?? []))
-                    ->map(fn (CommentReply $reply): array => $reply->toArray())
-                    ->all(),
-            ];
+            ])->toArray();
         }
 
         return $resolved;

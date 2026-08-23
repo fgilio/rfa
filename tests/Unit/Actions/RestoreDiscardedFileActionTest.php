@@ -126,7 +126,15 @@ test('restores renamed file', function () {
 
 test('returns saved comments on restore', function () {
     File::put($this->tmpDir.'/file.txt', "changed\n");
-    $comments = [['id' => 'c-1', 'body' => 'my comment', 'fileId' => 'file-abc']];
+    $comments = [[
+        'id' => 'c-1',
+        'fileId' => 'file-abc',
+        'file' => 'file.txt',
+        'side' => 'right',
+        'startLine' => 3,
+        'endLine' => 3,
+        'body' => 'my comment',
+    ]];
 
     $trashed = $this->discardAction->handle(
         $this->tmpDir, 'file.txt', 'modified', $this->project->id, comments: $comments
@@ -134,10 +142,12 @@ test('returns saved comments on restore', function () {
 
     $restored = $this->restoreAction->handle($trashed->id, $this->tmpDir, $this->project->id);
 
-    expect($restored)->toBe([[
+    expect($restored[0])->toMatchArray([
         ...$comments[0],
+        'originalSide' => 'right',
+        'anchorStatus' => 'placed',
         'replies' => [],
-    ]]);
+    ]);
 });
 
 test('returns replies from versioned thread snapshots on restore', function () {
@@ -146,6 +156,8 @@ test('returns replies from versioned thread snapshots on restore', function () {
         'version' => 1,
         'comment' => [
             'id' => 'c-thread',
+            'file' => 'file.txt',
+            'side' => 'right',
             'body' => 'Root',
             'fileId' => 'file-abc',
         ],
@@ -197,6 +209,8 @@ test('returns current database replies added while the file was discarded', func
             'version' => 1,
             'comment' => [
                 'id' => $comment->id,
+                'file' => $comment->file_path,
+                'side' => $comment->side,
                 'body' => $comment->body,
                 'fileId' => 'file-abc',
             ],

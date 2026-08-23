@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\Comment as CommentDTO;
-use App\DTOs\CommentReply;
 use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use App\Services\LineSnippetMatcherService;
@@ -92,22 +91,23 @@ final readonly class ResolveContextCommentAnchorAction
             }
         }
 
-        return (new CommentDTO(
-            id: (string) ($row['id'] ?? ''),
-            fileId: 'ctx-'.hash('xxh128', $filePath),
-            file: $filePath,
-            side: $side,
-            startLine: $startLine,
-            endLine: $endLine,
-            body: (string) ($row['body'] ?? ''),
-            originRef: (string) ($row['origin_ref'] ?? $row['originRef'] ?? ''),
-            fileContentHash: $storedHash,
-            lineSnippet: $lineSnippet,
-            isDraft: (bool) ($row['is_draft'] ?? $row['isDraft'] ?? false),
-            submittedAt: $row['submitted_at'] ?? $row['submittedAt'] ?? null,
-            anchorStatus: $anchorStatus->value,
-            replies: CommentReply::collect($row['replies'] ?? []),
-        ))->toArray();
+        // Overrides on top of the row so draft flag, submission and row
+        // timestamps, and replies carry through in the shape the DTO defines,
+        // the same way the review-side resolver builds its rows.
+        return CommentDTO::fromArray([
+            ...$row,
+            'id' => (string) ($row['id'] ?? ''),
+            'fileId' => 'ctx-'.hash('xxh128', $filePath),
+            'file' => $filePath,
+            'side' => $side->value,
+            'startLine' => $startLine,
+            'endLine' => $endLine,
+            'body' => (string) ($row['body'] ?? ''),
+            'originRef' => (string) ($row['origin_ref'] ?? $row['originRef'] ?? ''),
+            'fileContentHash' => $storedHash,
+            'lineSnippet' => $lineSnippet,
+            'anchorStatus' => $anchorStatus->value,
+        ])->toArray();
     }
 
     private function readFile(string $absolutePath): ?string
