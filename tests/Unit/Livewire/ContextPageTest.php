@@ -2,8 +2,12 @@
 
 use App\Actions\ContextCommentWorkflowAction;
 use App\Actions\DiscoverAgentContextFilesAction;
+use App\Actions\ExportContextFeedbackAction;
 use App\Actions\LoadContextCommentsAction;
+use App\Actions\PersistProjectViewAction;
 use App\Actions\ResolveProjectAction;
+use App\Actions\ResolveStartupRouteAction;
+use App\DTOs\SavedView;
 use App\Enums\ContextCommentRejection;
 use App\Events\HardReloadShortcutPressed;
 use App\Events\RefreshShortcutPressed;
@@ -64,12 +68,33 @@ beforeEach(function () {
     });
 });
 
-test('mount writes the project id to the active-project-id cache key', function () {
+test('mount records the project entry for the menu handler and for startup', function () {
     Cache::forget('rfa.active-project-id');
+    app(ResolveStartupRouteAction::class)->forgetLastOpened();
 
     Livewire::test('pages::context-page', ['slug' => 'test-project']);
 
-    expect(Cache::get('rfa.active-project-id'))->toBe($this->project->id);
+    expect(Cache::get('rfa.active-project-id'))->toBe($this->project->id)
+        ->and(app(ResolveStartupRouteAction::class)->lastOpenedSlug())->toBe('test-project');
+});
+
+test('mount makes startup restore the project the user was last in on Context', function () {
+    Project::create([
+        'slug' => 'other-project',
+        'name' => 'Other Project',
+        'path' => '/tmp/other-repo',
+        'git_common_dir' => '/tmp/other-repo/.git',
+        'branch' => 'main',
+    ]);
+    app(ResolveStartupRouteAction::class)->rememberLastOpened('other-project');
+
+    Livewire::test('pages::context-page', ['slug' => 'test-project']);
+
+    // Stands in for the view persistence mount defers until after the response.
+    app(PersistProjectViewAction::class)->handle($this->project->id, $this->project->path, SavedView::context());
+
+    expect(app(ResolveStartupRouteAction::class)->handle())
+        ->toBe(route('context-page', ['slug' => 'test-project']));
 });
 
 test('native refresh shortcut refreshes context files', function () {

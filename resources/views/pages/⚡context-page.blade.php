@@ -5,17 +5,16 @@ use App\Actions\DiscoverAgentContextFilesAction;
 use App\Actions\ExportContextFeedbackAction;
 use App\Actions\LoadContextCommentsAction;
 use App\Actions\PersistProjectViewAction;
+use App\Actions\RecordProjectEntryAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveProjectAction;
 use App\Actions\RestoreCommentThreadsAction;
 use App\Concerns\ManagesCommentReplies;
 use App\DTOs\CommentThreadSnapshot;
 use App\DTOs\AgentContextFile;
-use App\Enums\LastViewMode;
+use App\DTOs\SavedView;
 use App\Events\HardReloadShortcutPressed;
 use App\Events\RefreshShortcutPressed;
-use App\Listeners\HandleMenuItemClicked;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -83,7 +82,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->projectBranch = $project['branch'] ?? '';
         $this->hasRemote = ! empty($project['remote_url']);
 
-        Cache::put(HandleMenuItemClicked::ACTIVE_PROJECT_CACHE_KEY, $this->projectId, now()->addDay());
+        app(RecordProjectEntryAction::class)->handle($this->projectId, $this->projectSlug);
 
         $projectId = $this->projectId;
         $repoPath = $this->repoPath;
@@ -92,11 +91,7 @@ new #[Layout('layouts.app')] class extends Component
         // on the next navigation, so making the user wait for the UPSERT here
         // would be needless mount latency.
         defer(static function () use ($projectId, $repoPath) {
-            app(PersistProjectViewAction::class)->handle(
-                $projectId,
-                $repoPath,
-                LastViewMode::Context,
-            );
+            app(PersistProjectViewAction::class)->handle($projectId, $repoPath, SavedView::context());
         });
 
         if (config('nativephp-internal.running')) {
