@@ -96,11 +96,19 @@ final class UpdaterStateService
 
         $percent = (int) round($percent);
 
-        return $this->put(
-            $current === null
-                ? new UpdaterState(status: UpdaterStatus::Downloading, percent: $percent)
-                : $current->with(status: UpdaterStatus::Downloading, percent: $percent)
-        );
+        // The updater reports progress per response chunk, but the banner only
+        // renders whole percents, so most events carry a figure already
+        // stored. Writing it again would cost a cache round-trip per chunk.
+        if ($current?->status === UpdaterStatus::Downloading && $current->percent === $percent) {
+            return $current;
+        }
+
+        return $this->put(new UpdaterState(
+            status: UpdaterStatus::Downloading,
+            version: $current?->version,
+            releaseNotes: $current?->releaseNotes,
+            percent: $percent,
+        ));
     }
 
     /** @param array<string>|string|null $releaseNotes */

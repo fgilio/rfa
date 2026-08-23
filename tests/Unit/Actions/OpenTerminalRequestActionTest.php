@@ -4,8 +4,8 @@ use App\Actions\OpenTerminalRequestAction;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
-use Native\Desktop\Facades\Window;
 use Tests\Helpers\InteractsWithTestRepositories;
+use Tests\Helpers\MainWindowNavigations;
 use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, InteractsWithTestRepositories::class);
@@ -21,14 +21,7 @@ beforeEach(function () {
 
     $this->notARepoPath = $this->createTempDirectory('rfa_terminal_request_plain_');
 
-    $this->capturedUrl = null;
-
-    $window = Mockery::mock(Native\Desktop\Windows\Window::class);
-    $window->shouldReceive('url')->andReturnUsing(function (string $url) {
-        $this->capturedUrl = $url;
-    });
-
-    Window::shouldReceive('get')->with('main')->andReturn($window);
+    $this->navigations = MainWindowNavigations::capture();
 
     $this->action = app(OpenTerminalRequestAction::class);
 });
@@ -39,17 +32,16 @@ test('a request without an id is always opened', function () {
     $project = $this->action->handle($this->repoPath);
 
     expect($project)->not->toBeNull()
-        ->and($this->capturedUrl)->toBe(route('review-page', ['slug' => $project->slug]));
+        ->and($this->navigations->latest())->toBe(route('review-page', ['slug' => $project->slug]));
 });
 
 test('two claims on the same request id have exactly one winner', function () {
     $first = $this->action->handle($this->repoPath, null, '1755975000-4242');
-    $this->capturedUrl = null;
     $second = $this->action->handle($this->repoPath, null, '1755975000-4242');
 
     expect($first)->not->toBeNull()
         ->and($second)->toBeNull()
-        ->and($this->capturedUrl)->toBeNull()
+        ->and($this->navigations->all())->toHaveCount(1)
         ->and(Context::get('rfa.reason'))->toBe('request_already_claimed');
 });
 
@@ -74,18 +66,18 @@ test('a malformed request id is treated as unidentified rather than claimed', fu
 test('mode=context navigates to the context page', function () {
     $project = $this->action->handle($this->repoPath, 'context');
 
-    expect($this->capturedUrl)->toBe(route('context-page', ['slug' => $project->slug]));
+    expect($this->navigations->latest())->toBe(route('context-page', ['slug' => $project->slug]));
 });
 
 test('an unknown mode falls open to the review page', function () {
     $project = $this->action->handle($this->repoPath, 'junk');
 
-    expect($this->capturedUrl)->toBe(route('review-page', ['slug' => $project->slug]));
+    expect($this->navigations->latest())->toBe(route('review-page', ['slug' => $project->slug]));
 });
 
 test('a path that is not a project neither navigates nor reports a claim conflict', function () {
     expect($this->action->handle($this->notARepoPath, null, '1755975000-4242'))->toBeNull()
-        ->and($this->capturedUrl)->toBeNull()
+        ->and($this->navigations->latest())->toBeNull()
         ->and(Context::get('rfa.reason'))->toBe('not_a_git_repository');
 });
 

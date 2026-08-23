@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Enums\LastViewMode;
 use App\Models\Project;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
@@ -70,7 +71,9 @@ final readonly class OpenTerminalRequestAction
      */
     public static function routeName(?string $mode): string
     {
-        return $mode === 'context' ? 'context-page' : 'review-page';
+        return LastViewMode::tryFrom($mode ?? '') === LastViewMode::Context
+            ? 'context-page'
+            : 'review-page';
     }
 
     /**
@@ -109,7 +112,7 @@ final readonly class OpenTerminalRequestAction
      */
     public static function normalizeRequestId(?string $requestId): ?string
     {
-        if (! is_string($requestId) || preg_match(self::REQUEST_ID_PATTERN, $requestId) !== 1) {
+        if ($requestId === null || preg_match(self::REQUEST_ID_PATTERN, $requestId) !== 1) {
             return null;
         }
 
@@ -125,14 +128,21 @@ final readonly class OpenTerminalRequestAction
      */
     private function claim(?string $requestId): bool
     {
-        $requestId = self::normalizeRequestId($requestId);
+        $claimId = self::normalizeRequestId($requestId);
 
-        if ($requestId === null) {
+        if ($claimId === null) {
+            // An id that was supplied but rejected means the helper and this
+            // pattern have drifted apart, which silently turns deduplication
+            // off. Say so in the event rather than opening twice in silence.
+            if ($requestId !== null) {
+                Context::add('rfa.unrecognized_request_id', $requestId);
+            }
+
             return true;
         }
 
         return Cache::add(
-            self::CLAIM_CACHE_PREFIX.$requestId,
+            self::CLAIM_CACHE_PREFIX.$claimId,
             true,
             now()->addMinutes(self::CLAIM_MINUTES),
         );

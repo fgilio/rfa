@@ -1,19 +1,20 @@
 <?php
 
 use Symfony\Component\Process\Process;
+use Tests\Helpers\InteractsWithTestRepositories;
+use Tests\TestCase;
 
 require_once dirname(__DIR__, 3).'/scripts/patch-nativephp.php';
 require_once dirname(__DIR__, 2).'/Helpers/native-php-dist-fixtures.php';
 
-/**
- * Build a throwaway `dist` tree seeded from the real vendored plugin, so the
- * fixtures are the shapes the patch set actually runs against rather than
- * hand-written approximations.
- */
-function stubDistRoot(?callable $mutate = null): string
-{
-    $root = sys_get_temp_dir().'/rfa_test_dist_'.getmypid().'_'.uniqid('', true);
+uses(TestCase::class, InteractsWithTestRepositories::class);
 
+/**
+ * Build a throwaway `dist` tree holding the stock NativePHP shapes the patch
+ * set is written against, so each test starts from an unpatched vendor tree.
+ */
+function stubDistRoot(string $root, ?callable $mutate = null): string
+{
     foreach (['preload', 'server'] as $subdirectory) {
         mkdir($root.'/'.$subdirectory, 0755, true);
     }
@@ -38,18 +39,6 @@ function distSnapshot(string $root): array
         ->all();
 }
 
-afterEach(function () {
-    foreach (glob(sys_get_temp_dir().'/rfa_test_dist_'.getmypid().'_*', GLOB_ONLYDIR) as $root) {
-        foreach (['preload', 'server', ''] as $subdirectory) {
-            $dir = rtrim($root.'/'.$subdirectory, '/');
-            array_map('unlink', array_filter(glob($dir.'/*'), 'is_file'));
-        }
-
-        array_map('rmdir', glob($root.'/*', GLOB_ONLYDIR));
-        rmdir($root);
-    }
-});
-
 // -- The set --
 
 test('the patch set covers every vendored file rfa depends on', function () {
@@ -65,7 +54,7 @@ test('the dist root points at the vendored electron plugin', function () {
 // -- Applying the whole set --
 
 test('applies every patch in one run', function () {
-    $root = stubDistRoot();
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'));
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
@@ -85,7 +74,7 @@ test('both edits to the shared index.js survive each other', function () {
     // The pre-flight cache and the splash window rewrite the same file. Applying
     // them in one pass is what keeps the second from being computed against a
     // stale copy and silently dropping the first.
-    $root = stubDistRoot();
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'));
 
     applyRfaNativePhpPatchSet($root);
 
@@ -95,7 +84,7 @@ test('both edits to the shared index.js survive each other', function () {
 });
 
 test('a second run changes nothing', function () {
-    $root = stubDistRoot();
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'));
 
     applyRfaNativePhpPatchSet($root);
     $afterFirst = distSnapshot($root);
@@ -114,7 +103,7 @@ test('one reshaped source block leaves every file untouched', function () {
     // The splash anchors are gone, so its edit cannot land. The preload and
     // server edits still match — and must not be written anyway, or the build
     // would ship a vendor tree nobody has run.
-    $root = stubDistRoot(function (string $root) {
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'), function (string $root) {
         file_put_contents($root.'/index.js', str_replace(
             'import { app, session, powerMonitor } from "electron";',
             'import { app, session, powerMonitor } from "electron/renamed";',
@@ -131,7 +120,7 @@ test('one reshaped source block leaves every file untouched', function () {
 });
 
 test('a reshaped block in one file blocks the patches to the other files', function () {
-    $root = stubDistRoot(function (string $root) {
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'), function (string $root) {
         file_put_contents($root.'/server/php.js', 'const reshaped = true;');
     });
     $before = distSnapshot($root);
@@ -145,7 +134,7 @@ test('a reshaped block in one file blocks the patches to the other files', funct
 test('an unreadable target blocks the run rather than half-patching', function () {
     // Snapshot while the tree is still readable: the comparison below is about
     // what the run wrote, so it must not also record the unreadable target.
-    $root = stubDistRoot();
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'));
     $before = distSnapshot($root);
 
     chmod($root.'/server/php.js', 0000);
@@ -165,7 +154,7 @@ test('a failed write restores the files already replaced', function () {
     // index.js is the last file the set writes and is made unwritable, so the
     // preload and server files have already been renamed into place when it
     // fails. Both must come back.
-    $root = stubDistRoot(fn (string $root) => chmod($root, 0555));
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'), fn (string $root) => chmod($root, 0555));
     $before = distSnapshot($root);
 
     $outcome = applyRfaNativePhpPatchSet($root);
@@ -179,7 +168,7 @@ test('a failed write restores the files already replaced', function () {
 })->skip(fn () => posix_geteuid() === 0, 'root can write into a read-only directory');
 
 test('a run leaves no temporary files behind', function () {
-    $root = stubDistRoot();
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'));
 
     applyRfaNativePhpPatchSet($root);
 
@@ -188,7 +177,7 @@ test('a run leaves no temporary files behind', function () {
 });
 
 test('a rewritten file keeps its original permissions', function () {
-    $root = stubDistRoot(fn (string $root) => chmod($root.'/server/php.js', 0640));
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'), fn (string $root) => chmod($root.'/server/php.js', 0640));
 
     applyRfaNativePhpPatchSet($root);
 
@@ -210,7 +199,7 @@ test('an absent dist tree is reported, not failed', function () {
 // -- Composer hook contract --
 
 test('the composer hook fails when a patch cannot apply', function () {
-    $root = stubDistRoot(fn (string $root) => file_put_contents($root.'/server/php.js', 'const reshaped = true;'));
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'), fn (string $root) => file_put_contents($root.'/server/php.js', 'const reshaped = true;'));
 
     $process = new Process(
         ['php', '-r', sprintf(
@@ -225,7 +214,7 @@ test('the composer hook fails when a patch cannot apply', function () {
 });
 
 test('the composer hook succeeds on a clean vendor tree', function () {
-    $root = stubDistRoot();
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'));
 
     $process = new Process(
         ['php', '-r', sprintf(
@@ -249,7 +238,7 @@ test('an atomic write leaves no temporary file when it fails', function () {
 });
 
 test('restoring puts every file back and reports success', function () {
-    $root = stubDistRoot();
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'));
     $originals = distSnapshot($root);
 
     foreach (array_keys($originals) as $file) {
@@ -275,7 +264,7 @@ test('restoring reports failure when a file cannot be put back', function () {
 test('a tree holding only some of the targets is refused, not half-patched', function () {
     // The dist directory is dropped whole by a pruned release install, so a
     // tree missing one target is a broken vendor copy rather than a pruned one.
-    $root = stubDistRoot(fn (string $root) => unlink($root.'/server/php.js'));
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'), fn (string $root) => unlink($root.'/server/php.js'));
     $before = distSnapshot($root);
 
     $outcome = applyRfaNativePhpPatchSet($root);

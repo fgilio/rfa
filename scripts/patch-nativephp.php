@@ -836,18 +836,11 @@ function rfaNativePhpDistRoot(): string
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
     $outcome = applyRfaNativePhpPatchSet(rfaNativePhpDistRoot());
 
-    $describe = static function (string $name): string {
-        foreach (rfaNativePhpPatchSet() as $patch) {
-            if ($patch['name'] === $name) {
-                return $patch['summary'];
-            }
-        }
-
-        return $name;
-    };
+    /** @var array<string, string> $summaries */
+    $summaries = array_column(rfaNativePhpPatchSet(), 'summary', 'name');
 
     foreach ($outcome['applied'] as $name) {
-        printf("  NativePHP patched (%s): %s.\n", $name, $describe($name));
+        printf("  NativePHP patched (%s): %s.\n", $name, $summaries[$name]);
     }
 
     foreach ($outcome['unchanged'] as $name) {
@@ -858,7 +851,7 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
         fwrite(STDERR, sprintf(
             "  ERROR: the '%s' patch (%s) could not be applied, so NOTHING was patched. The vendored NativePHP files changed shape or are incomplete — update scripts/patch-nativephp.php to match them, or reinstall nativephp/desktop.\n",
             $name,
-            $describe($name),
+            $summaries[$name],
         ));
     }
 

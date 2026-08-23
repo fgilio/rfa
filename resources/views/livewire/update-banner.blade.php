@@ -8,6 +8,8 @@ use Native\Desktop\Facades\AutoUpdater;
 /**
  * Thin view over the updater state store.
  *
+ * @phpstan-import-type UpdaterViewSnapshot from UpdaterStateAction
+ *
  * The renderer sees the same updater events as the main process, so this
  * component reports them to `UpdaterStateAction` and renders the snapshot it
  * gets back. Cache identity, TTLs, normalization and which transitions are
@@ -16,7 +18,8 @@ use Native\Desktop\Facades\AutoUpdater;
  */
 new class extends Component
 {
-    public ?string $status = null; // checking, downloading, ready, up-to-date, checked-dev, error
+    /** One of the `UpdaterStatus` values, or null when there is nothing to show. */
+    public ?string $status = null;
 
     public ?string $version = null;
 
@@ -31,7 +34,7 @@ new class extends Component
 
     public function refreshState(): void
     {
-        $this->apply(app(UpdaterStateAction::class)->handle());
+        $this->apply($this->updater()->handle());
     }
 
     #[On('native:Native\\Desktop\\Events\\Menu\\MenuItemClicked')]
@@ -41,43 +44,43 @@ new class extends Component
             return;
         }
 
-        $this->apply(app(UpdaterStateAction::class)->beginCheck());
+        $this->apply($this->updater()->beginCheck());
     }
 
     #[On('native:Native\\Desktop\\Events\\AutoUpdater\\CheckingForUpdate')]
     public function handleCheckingForUpdate(): void
     {
-        $this->apply(app(UpdaterStateAction::class)->beginCheck());
+        $this->apply($this->updater()->beginCheck());
     }
 
     #[On('native:Native\\Desktop\\Events\\AutoUpdater\\UpdateAvailable')]
     public function handleUpdateAvailable(string $version, array|string|null $releaseNotes = null): void
     {
-        $this->apply(app(UpdaterStateAction::class)->recordAvailable($version, $releaseNotes));
+        $this->apply($this->updater()->recordAvailable($version, $releaseNotes));
     }
 
     #[On('native:Native\\Desktop\\Events\\AutoUpdater\\DownloadProgress')]
     public function handleDownloadProgress(int|float $percent): void
     {
-        $this->apply(app(UpdaterStateAction::class)->recordProgress($percent));
+        $this->apply($this->updater()->recordProgress($percent));
     }
 
     #[On('native:Native\\Desktop\\Events\\AutoUpdater\\UpdateDownloaded')]
     public function handleUpdateDownloaded(string $version, array|string|null $releaseNotes = null): void
     {
-        $this->apply(app(UpdaterStateAction::class)->recordDownloaded($version, $releaseNotes));
+        $this->apply($this->updater()->recordDownloaded($version, $releaseNotes));
     }
 
     #[On('native:Native\\Desktop\\Events\\AutoUpdater\\UpdateNotAvailable')]
     public function handleUpdateNotAvailable(): void
     {
-        $this->apply(app(UpdaterStateAction::class)->recordUpToDate());
+        $this->apply($this->updater()->recordUpToDate());
     }
 
     #[On('native:Native\\Desktop\\Events\\AutoUpdater\\Error')]
     public function handleUpdateError(): void
     {
-        $this->apply(app(UpdaterStateAction::class)->recordError());
+        $this->apply($this->updater()->recordError());
     }
 
     public function restartAndUpdate(): void
@@ -85,17 +88,22 @@ new class extends Component
         try {
             AutoUpdater::quitAndInstall();
         } catch (\Throwable) {
-            $this->apply(app(UpdaterStateAction::class)->recordError());
+            $this->apply($this->updater()->recordError());
             $this->dispatch('restart-failed');
         }
     }
 
     public function dismiss(): void
     {
-        $this->apply(app(UpdaterStateAction::class)->dismiss());
+        $this->apply($this->updater()->dismiss());
     }
 
-    /** @param array{status: ?string, version: ?string, releaseNotes: ?string, downloadPercent: int} $snapshot */
+    private function updater(): UpdaterStateAction
+    {
+        return app(UpdaterStateAction::class);
+    }
+
+    /** @param UpdaterViewSnapshot $snapshot */
     private function apply(array $snapshot): void
     {
         $this->status = $snapshot['status'];

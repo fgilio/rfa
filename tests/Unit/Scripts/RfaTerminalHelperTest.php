@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\OpenTerminalRequestAction;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Process\Process;
 use Tests\Helpers\InteractsWithTestRepositories;
@@ -137,6 +138,10 @@ test('terminal helper emits the inbox filename stem as the deep link request id'
 
     expect($inboxFiles)->toHaveCount(1)
         ->and($requestId)->not->toBe('')
+        // The id only deduplicates the two transports if the app accepts the
+        // shape the helper emits. Left unchecked, a drift here silently turns
+        // deduplication off and every ./rfa opens the project twice.
+        ->and(OpenTerminalRequestAction::normalizeRequestId($requestId))->toBe($requestId)
         ->and(File::get($this->openCapturePath))
         ->toContain('&id='.$requestId)
         ->toContain('&mode=context');

@@ -64,13 +64,16 @@ final readonly class HandleDeepLink
             $project = app(OpenTerminalRequestAction::class)->handle($path, $mode, $requestId);
 
             if (! $project) {
-                // The action marks why it returned null via Context: an
-                // unexpected registration failure is an error, everything
-                // else (already claimed by the inbox, missing path, not a
-                // repo) is a rejection.
-                $outcome = Context::get('rfa.reason') === 'project_registration_failed'
-                    ? 'error'
-                    : 'rejected';
+                // The action marks why it returned null via Context. A
+                // request the inbox already claimed was handled correctly by
+                // the other transport, so this delivery stood down rather
+                // than being turned away; an unexpected registration failure
+                // is an error; anything else is a rejection.
+                $outcome = match (Context::get('rfa.reason')) {
+                    'request_already_claimed' => 'skipped',
+                    'project_registration_failed' => 'error',
+                    default => 'rejected',
+                };
 
                 Context::addIf('rfa.reason', 'not_a_project');
 

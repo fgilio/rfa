@@ -51,21 +51,21 @@ final readonly class UpdaterState
     }
 
     /**
-     * The cache payload. Keys match what every previous build wrote, so a
-     * cache entry survives an update in either direction.
+     * The cache payload. Every field is written unconditionally; `fromArray()`
+     * defaults anything an older, sparser entry left out.
      *
      * @return array<string, mixed>
      */
     public function toArray(): array
     {
-        return array_filter([
+        return [
             'status' => $this->status->value,
             'version' => $this->version,
             'releaseNotes' => $this->releaseNotes,
             'percent' => $this->percent,
             'startedAt' => $this->startedAt,
             'simulateTerminalState' => $this->simulateTerminalState,
-        ], fn (mixed $value) => $value !== null && $value !== false && $value !== 0);
+        ];
     }
 
     /**
@@ -83,17 +83,5 @@ final readonly class UpdaterState
             'releaseNotes' => $this->releaseNotes,
             'downloadPercent' => $this->percent,
         ];
-    }
-
-    public function with(?UpdaterStatus $status = null, ?int $percent = null): self
-    {
-        return new self(
-            status: $status ?? $this->status,
-            version: $this->version,
-            releaseNotes: $this->releaseNotes,
-            percent: $percent ?? $this->percent,
-            startedAt: $this->startedAt,
-            simulateTerminalState: $this->simulateTerminalState,
-        );
     }
 }

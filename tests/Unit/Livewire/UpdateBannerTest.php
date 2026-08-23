@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\UpdaterStateAction;
+use App\Services\UpdaterStateService;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Native\Desktop\Facades\AutoUpdater;
@@ -278,15 +280,11 @@ test('pollCadence returns expected pairs per status', function (?string $status,
 test('drops a ready update that names the version already running', function () {
     config(['nativephp.version' => '1.2.0']);
 
-    Cache::put('native-update-state', [
-        'status' => 'ready',
-        'version' => '1.2.0',
-        'percent' => 100,
-    ], now()->addHours(24));
+    app(UpdaterStateAction::class)->recordDownloaded('1.2.0');
 
     Livewire::test('update-banner')->assertSet('status', null);
 
-    expect(Cache::get('native-update-state'))->toBeNull();
+    expect(Cache::get(UpdaterStateService::CACHE_KEY))->toBeNull();
 });
 
 test('keeps the simulation bookkeeping out of public component state', function () {
@@ -303,11 +301,7 @@ test('keeps the simulation bookkeeping out of public component state', function 
 });
 
 test('a late download progress event does not hide the restart affordance', function () {
-    Cache::put('native-update-state', [
-        'status' => 'ready',
-        'version' => '1.2.0',
-        'percent' => 100,
-    ], now()->addHours(24));
+    app(UpdaterStateAction::class)->recordDownloaded('1.2.0');
 
     Livewire::test('update-banner')
         ->dispatch('native:Native\\Desktop\\Events\\AutoUpdater\\DownloadProgress', percent: 80)

@@ -141,9 +141,10 @@ test('emits a canonical deeplink.opened event with rejected outcome when the pat
         ->and(Context::get('rfa.reason'))->toBe('not_a_project');
 });
 
-test('emits a canonical deeplink.opened event with rejected outcome when the inbox already claimed the request', function () {
+test('emits a canonical deeplink.opened event with skipped outcome when the inbox already claimed the request', function () {
     // Cold start: boot drained the inbox copy of this request, so the deep
-    // link delivery of the same request must stand down.
+    // link delivery of the same request must stand down. The request was
+    // handled — by the other transport — so this is not a rejection.
     fakeOpenTerminalRequestAction($this, null, 'request_already_claimed');
 
     Log::spy();
@@ -151,7 +152,7 @@ test('emits a canonical deeplink.opened event with rejected outcome when the inb
     app(HandleDeepLink::class)->handle(new OpenedFromURL('rfa://open?path=/some/repo&id=1755975000-4242'));
 
     Log::shouldHaveReceived('info')->once()->with('deeplink.opened');
-    expect(Context::get('rfa.outcome'))->toBe('rejected')
+    expect(Context::get('rfa.outcome'))->toBe('skipped')
         ->and(Context::get('rfa.reason'))->toBe('request_already_claimed');
 });
 

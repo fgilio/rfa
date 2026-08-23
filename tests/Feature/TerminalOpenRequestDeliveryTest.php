@@ -5,8 +5,8 @@ use App\Providers\NativeAppServiceProvider;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Native\Desktop\Events\App\OpenedFromURL;
-use Native\Desktop\Facades\Window;
 use Tests\Helpers\InteractsWithTestRepositories;
+use Tests\Helpers\MainWindowNavigations;
 use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, InteractsWithTestRepositories::class);
@@ -28,14 +28,7 @@ beforeEach(function () {
     $this->inboxDir = NativeAppServiceProvider::inboxDir();
     File::ensureDirectoryExists($this->inboxDir);
 
-    $this->navigations = [];
-
-    $window = Mockery::mock(Native\Desktop\Windows\Window::class);
-    $window->shouldReceive('url')->andReturnUsing(function (string $url) {
-        $this->navigations[] = $url;
-    });
-
-    Window::shouldReceive('get')->with('main')->andReturn($window);
+    $this->navigations = MainWindowNavigations::capture();
 });
 
 afterEach(function () {
@@ -67,13 +60,13 @@ test('inbox and deep-link delivery of one request produce one open and one navig
 
     drainInbox();
 
-    expect($this->navigations)->toHaveCount(1);
+    expect($this->navigations->all())->toHaveCount(1);
 
     app(HandleDeepLink::class)->handle(new OpenedFromURL(
         'rfa://open?path='.rawurlencode($this->repoPath).'&id=1755975000-4242'
     ));
 
-    expect($this->navigations)->toHaveCount(1);
+    expect($this->navigations->all())->toHaveCount(1);
 });
 
 test('the deep link wins the claim when it arrives before the inbox is drained', function () {
@@ -83,11 +76,11 @@ test('the deep link wins the claim when it arrives before the inbox is drained',
         'rfa://open?path='.rawurlencode($this->repoPath).'&id=1755975000-4242'
     ));
 
-    expect($this->navigations)->toHaveCount(1);
+    expect($this->navigations->all())->toHaveCount(1);
 
     drainInbox();
 
-    expect($this->navigations)->toHaveCount(1)
+    expect($this->navigations->all())->toHaveCount(1)
         ->and(File::glob($this->inboxDir.'/*.path'))->toBeEmpty();
 });
 
@@ -100,7 +93,7 @@ test('two different requests each open once', function () {
         'rfa://open?path='.rawurlencode($this->repoPath).'&id=1755975000-2'
     ));
 
-    expect($this->navigations)->toHaveCount(2);
+    expect($this->navigations->all())->toHaveCount(2);
 });
 
 test('only the latest inbox request is opened and the rest are discarded', function () {
@@ -109,8 +102,8 @@ test('only the latest inbox request is opened and the rest are discarded', funct
 
     drainInbox();
 
-    expect($this->navigations)->toHaveCount(1)
-        ->and($this->navigations[0])->toEndWith('/context')
+    expect($this->navigations->all())->toHaveCount(1)
+        ->and($this->navigations->all()[0])->toEndWith('/context')
         ->and(File::glob($this->inboxDir.'/*.path'))->toBeEmpty();
 });
 
@@ -125,5 +118,5 @@ test('a legacy inbox file and a path-only deep link both still open', function (
         'rfa://open?path='.rawurlencode($this->repoPath)
     ));
 
-    expect($this->navigations)->toHaveCount(2);
+    expect($this->navigations->all())->toHaveCount(2);
 });

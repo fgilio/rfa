@@ -11,9 +11,19 @@ use App\Services\UpdaterStateService;
  * event listeners, the "Check for Updates..." menu item, and the update
  * banner in the renderer. Each of them reports what happened and reads back
  * the same view snapshot; none of them touches the cache.
+ *
+ * @phpstan-type UpdaterViewSnapshot array{status: ?string, version: ?string, releaseNotes: ?string, downloadPercent: int}
  */
 final readonly class UpdaterStateAction
 {
+    /** What the banner renders when there is no state to show. */
+    private const array IDLE_SNAPSHOT = [
+        'status' => null,
+        'version' => null,
+        'releaseNotes' => null,
+        'downloadPercent' => 0,
+    ];
+
     public function __construct(
         private UpdaterStateService $store,
     ) {}
@@ -21,19 +31,14 @@ final readonly class UpdaterStateAction
     /**
      * The scalars the banner renders, resolved for right now.
      *
-     * @return array{status: ?string, version: ?string, releaseNotes: ?string, downloadPercent: int}
+     * @return UpdaterViewSnapshot
      */
     public function handle(): array
     {
-        return $this->store->resolve()?->toViewSnapshot() ?? [
-            'status' => null,
-            'version' => null,
-            'releaseNotes' => null,
-            'downloadPercent' => 0,
-        ];
+        return $this->store->resolve()?->toViewSnapshot() ?? self::IDLE_SNAPSHOT;
     }
 
-    /** @return array{status: ?string, version: ?string, releaseNotes: ?string, downloadPercent: int} */
+    /** @return UpdaterViewSnapshot */
     public function beginCheck(): array
     {
         return $this->store->beginCheck()->toViewSnapshot();
@@ -41,14 +46,14 @@ final readonly class UpdaterStateAction
 
     /**
      * @param  array<string>|string|null  $releaseNotes
-     * @return array{status: ?string, version: ?string, releaseNotes: ?string, downloadPercent: int}
+     * @return UpdaterViewSnapshot
      */
     public function recordAvailable(string $version, array|string|null $releaseNotes = null): array
     {
         return $this->store->recordAvailable($version, $releaseNotes)->toViewSnapshot();
     }
 
-    /** @return array{status: ?string, version: ?string, releaseNotes: ?string, downloadPercent: int} */
+    /** @return UpdaterViewSnapshot */
     public function recordProgress(int|float $percent): array
     {
         return $this->store->recordProgress($percent)->toViewSnapshot();
@@ -56,30 +61,30 @@ final readonly class UpdaterStateAction
 
     /**
      * @param  array<string>|string|null  $releaseNotes
-     * @return array{status: ?string, version: ?string, releaseNotes: ?string, downloadPercent: int}
+     * @return UpdaterViewSnapshot
      */
     public function recordDownloaded(string $version, array|string|null $releaseNotes = null): array
     {
         return $this->store->recordDownloaded($version, $releaseNotes)->toViewSnapshot();
     }
 
-    /** @return array{status: ?string, version: ?string, releaseNotes: ?string, downloadPercent: int} */
+    /** @return UpdaterViewSnapshot */
     public function recordUpToDate(): array
     {
         return $this->store->recordUpToDate()->toViewSnapshot();
     }
 
-    /** @return array{status: ?string, version: ?string, releaseNotes: ?string, downloadPercent: int} */
+    /** @return UpdaterViewSnapshot */
     public function recordError(): array
     {
         return $this->store->recordError()->toViewSnapshot();
     }
 
-    /** @return array{status: ?string, version: ?string, releaseNotes: ?string, downloadPercent: int} */
+    /** @return UpdaterViewSnapshot */
     public function dismiss(): array
     {
         $this->store->clear();
 
-        return $this->handle();
+        return self::IDLE_SNAPSHOT;
     }
 }
