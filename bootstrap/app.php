@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\EnforceLocalLogChannelsAction;
 use App\Actions\RehydrateNativeRuntimeConfigAction;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Bootstrap\RegisterProviders;
@@ -27,6 +28,12 @@ $app = Application::configure(basePath: dirname(__DIR__))
 // the config is cached (a packaged build). See RehydrateNativeRuntimeConfigAction.
 $app->beforeBootstrapping(RegisterProviders::class, function (): void {
     (new RehydrateNativeRuntimeConfigAction)->handle();
+});
+
+// RFA keeps logs on the user's machine, so the off-box stock channels come out
+// of the resolved configuration before any provider can resolve one.
+$app->beforeBootstrapping(RegisterProviders::class, function (): void {
+    (new EnforceLocalLogChannelsAction)->handle();
 });
 
 return $app;

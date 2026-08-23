@@ -1,14 +1,16 @@
 <?php
 
+use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Tests\TestCase;
 
 uses(TestCase::class);
 
 /**
- * Wide-events Storage rule C8 (see .claude/skills/wide-events/SKILL.md): the
- * resolved default log channel — and, when it is a stack, every channel in it —
- * must stay local. RFA ships to user machines and never sends logs off-box.
+ * Wide-events Storage rule C8 (see .claude/skills/wide-events/SKILL.md): RFA
+ * ships to user machines and never sends logs off-box. The resolved default
+ * channel must stay local, and so must every channel the configuration defines,
+ * because LOG_CHANNEL and LOG_STACK can name any of them.
  *
  * This needs the resolved Laravel config (env + stack expansion), so it lives
  * here rather than in tests/Arch, which runs without app context.
@@ -98,4 +100,29 @@ test('the default log channel resolves to local-only sinks', function () {
     $remote = collect($channels)->filter(fn (string $channel): bool => isRemoteLogChannel($channel))->values()->all();
 
     expect($remote)->toBeEmpty();
+});
+
+test('no configured log channel writes off the machine', function () {
+    $remote = collect(array_keys(config('logging.channels')))
+        ->filter(fn (string $channel): bool => isRemoteLogChannel($channel))
+        ->values()
+        ->all();
+
+    expect($remote)->toBeEmpty();
+});
+
+test('the off-box stock channels are undefined so no environment value can select them', function () {
+    expect(config('logging.channels'))->not->toHaveKeys(['slack', 'papertrail', 'syslog', 'errorlog']);
+});
+
+test('the application and browser channels rotate with a retention window', function () {
+    foreach (['daily', 'browser'] as $channel) {
+        expect(config("logging.channels.{$channel}.driver"))->toBe('daily')
+            ->and((int) config("logging.channels.{$channel}.days"))->toBeGreaterThan(0);
+    }
+});
+
+test('the stderr channel stays available for development and CLI runs', function () {
+    expect(config('logging.channels.stderr.handler'))->toBe(StreamHandler::class)
+        ->and(config('logging.channels.stderr.handler_with.stream'))->toBe('php://stderr');
 });
