@@ -288,32 +288,42 @@
 
     function createChangePoller(config = {}) {
         return {
-            hasChanges: false,
-            fingerprint: null,
-            currentCount: 0,
+            baselineFingerprint: null,
+            pendingChangeCount: null,
+            pollGeneration: 0,
             stopPoll: null,
+            get hasChanges() {
+                return this.pendingChangeCount !== null;
+            },
             async check() {
+                const generation = ++this.pollGeneration;
                 try {
                     const res = await fetch('/api/changes/' + config.projectId);
                     const data = await res.json();
-                    if (this.fingerprint === null) {
-                        this.fingerprint = data.fingerprint;
-                    } else if (data.fingerprint !== this.fingerprint) {
-                        const newCount = data.count ?? 0;
-                        if (!this.hasChanges || this.currentCount !== newCount) {
-                            this.hasChanges = true;
-                            this.currentCount = newCount;
-                        }
+
+                    if (generation !== this.pollGeneration) {
+                        return;
+                    }
+
+                    if (this.baselineFingerprint === null) {
+                        this.baselineFingerprint = data.fingerprint;
+
+                        return;
+                    }
+
+                    if (data.fingerprint !== this.baselineFingerprint) {
+                        this.pendingChangeCount = data.count ?? 0;
                     }
                 } catch {}
             },
             // Re-baseline after a refresh applied the pending changes. Bound to the
             // page's fingerprint-reset event.
             reset() {
-                this.fingerprint = null;
-                this.hasChanges = false;
-                this.currentCount = 0;
-                this.check();
+                this.pollGeneration++;
+                this.baselineFingerprint = null;
+                this.pendingChangeCount = null;
+
+                return this.check();
             },
             softRefresh() { this.$wire.softRefresh(); },
             hardReload() { window.location.reload(); },
@@ -321,7 +331,7 @@
                 if (!this.hasChanges) {
                     return `Refresh · ${config.refreshCombo} · ${config.hardReloadCombo} to hard reload`;
                 }
-                const n = this.currentCount;
+                const n = this.pendingChangeCount;
                 const noun = n === 1 ? 'file' : 'files';
                 return `${n} ${noun} changed externally - click to refresh`;
             },
@@ -342,6 +352,7 @@
                 }
             },
             destroy() {
+                this.pollGeneration++;
                 if (this.stopPoll) this.stopPoll();
                 // Drop the shortcut bindings on teardown so a poller that's gone
                 // (e.g. after navigating away) doesn't leave ⌘R pointing at a
