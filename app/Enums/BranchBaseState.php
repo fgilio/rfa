@@ -20,4 +20,7 @@ enum BranchBaseState: string
 
     /** HEAD is currently on the configured base branch - comparing to itself is nonsense. */
     case OnBaseBranch = 'on_base_branch';
+
+    /** Git could not produce a safe base comparison. */
+    case Unavailable = 'unavailable';
 }

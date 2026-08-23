@@ -8,7 +8,7 @@ final readonly class BranchExplorerSnapshot
 {
     /**
      * @param  array{local: list<array<string, mixed>>, remote: list<array<string, mixed>>, current: string}  $branches
-     * @param  array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int}  $branchBase
+     * @param  array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int, unavailableReason: ?string}  $branchBase
      * @param  list<array<string, mixed>>  $commits
      */
     public function __construct(
@@ -24,7 +24,7 @@ final readonly class BranchExplorerSnapshot
     ) {}
 
     /**
-     * @param  array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int}  $branchBase
+     * @param  array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int, unavailableReason: ?string}  $branchBase
      */
     public static function keyFor(string $selectedBranch, ?string $selectedBranchTipSha, array $branchBase): string
     {
@@ -35,6 +35,7 @@ final readonly class BranchExplorerSnapshot
             'branchBaseBranch' => $branchBase['baseBranch'],
             'branchBaseSha' => $branchBase['baseSha'],
             'branchBaseHashes' => $branchBase['hashesInRange'],
+            'branchBaseUnavailableReason' => $branchBase['unavailableReason'],
         ], JSON_THROW_ON_ERROR));
     }
 
@@ -43,7 +44,7 @@ final readonly class BranchExplorerSnapshot
      *     branches: array{local: list<array<string, mixed>>, remote: list<array<string, mixed>>, current: string},
      *     selectedBranch: string,
      *     selectedBranchTipSha: ?string,
-     *     branchBase: array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int},
+     *     branchBase: array{state: string, baseBranch: ?string, baseSha: ?string, hashesInRange: list<string>, commitCount: int, unavailableReason: ?string},
      *     commits: list<array<string, mixed>>,
      *     hasMore: bool,
      *     pageSize: int,

@@ -139,14 +139,24 @@ describe('createChangePoller', () => {
         return fn;
     }
 
+    function deferredResponse() {
+        let resolve;
+        const response = new Promise((resolvePromise) => {
+            resolve = (payload) => resolvePromise({ json: async () => payload });
+        });
+
+        return { response, resolve };
+    }
+
     it('baselines the fingerprint on the first check without flagging changes', async () => {
         respondWith({ fingerprint: 'fp-1', count: 0 });
         const poller = createChangePoller({ projectId: 5 });
 
         await poller.check();
 
-        expect(poller.fingerprint).toBe('fp-1');
+        expect(poller.baselineFingerprint).toBe('fp-1');
         expect(poller.hasChanges).toBe(false);
+        expect(poller.pendingChangeCount).toBeNull();
     });
 
     it('flags changes and records the count when the fingerprint moves', async () => {
@@ -158,7 +168,7 @@ describe('createChangePoller', () => {
 
         expect(fetchFn).toHaveBeenCalledWith('/api/changes/5');
         expect(poller.hasChanges).toBe(true);
-        expect(poller.currentCount).toBe(3);
+        expect(poller.pendingChangeCount).toBe(3);
     });
 
     it('swallows fetch failures and leaves state untouched', async () => {
@@ -167,8 +177,24 @@ describe('createChangePoller', () => {
 
         await poller.check();
 
-        expect(poller.fingerprint).toBeNull();
+        expect(poller.baselineFingerprint).toBeNull();
         expect(poller.hasChanges).toBe(false);
+        expect(poller.pendingChangeCount).toBeNull();
+    });
+
+    it.each([
+        new Error('offline'),
+        new DOMException('aborted', 'AbortError'),
+    ])('preserves an established baseline when a request fails', async (error) => {
+        const fetchFn = respondWith({ fingerprint: 'fp-1', count: 0 });
+        fetchFn.mockRejectedValueOnce(error);
+        const poller = createChangePoller({ projectId: 5 });
+
+        await poller.check();
+        await poller.check();
+
+        expect(poller.baselineFingerprint).toBe('fp-1');
+        expect(poller.pendingChangeCount).toBeNull();
     });
 
     it('reset() re-baselines and re-checks', async () => {
@@ -179,24 +205,82 @@ describe('createChangePoller', () => {
         await poller.check();
         expect(poller.hasChanges).toBe(true);
 
-        poller.reset();
-        await Promise.resolve();
-        await Promise.resolve();
+        await poller.reset();
 
         expect(poller.hasChanges).toBe(false);
-        expect(poller.currentCount).toBe(0);
-        expect(poller.fingerprint).toBe('fp-3');
+        expect(poller.pendingChangeCount).toBeNull();
+        expect(poller.baselineFingerprint).toBe('fp-3');
+    });
+
+    it('ignores a response from before reset establishes a new baseline', async () => {
+        const staleResponse = deferredResponse();
+        const currentResponse = deferredResponse();
+        const fetchFn = respondWith({ fingerprint: 'fp-1', count: 0 });
+        fetchFn
+            .mockReturnValueOnce(staleResponse.response)
+            .mockReturnValueOnce(currentResponse.response);
+        const poller = createChangePoller({ projectId: 5 });
+
+        await poller.check();
+        const staleCheck = poller.check();
+        const resetCheck = poller.reset();
+
+        currentResponse.resolve({ fingerprint: 'fp-3', count: 0 });
+        await resetCheck;
+        staleResponse.resolve({ fingerprint: 'fp-2', count: 2 });
+        await staleCheck;
+
+        expect(poller.baselineFingerprint).toBe('fp-3');
+        expect(poller.pendingChangeCount).toBeNull();
+    });
+
+    it('keeps the newest check when responses arrive out of order', async () => {
+        const olderResponse = deferredResponse();
+        const newerResponse = deferredResponse();
+        const fetchFn = respondWith({ fingerprint: 'fp-1', count: 0 });
+        fetchFn
+            .mockReturnValueOnce(olderResponse.response)
+            .mockReturnValueOnce(newerResponse.response);
+        const poller = createChangePoller({ projectId: 5 });
+
+        await poller.check();
+        const olderCheck = poller.check();
+        const newerCheck = poller.check();
+
+        newerResponse.resolve({ fingerprint: 'fp-3', count: 3 });
+        await newerCheck;
+        olderResponse.resolve({ fingerprint: 'fp-2', count: 2 });
+        await olderCheck;
+
+        expect(poller.baselineFingerprint).toBe('fp-1');
+        expect(poller.pendingChangeCount).toBe(3);
+    });
+
+    it('ignores pending work after destruction', async () => {
+        const pendingResponse = deferredResponse();
+        const fetchFn = respondWith({ fingerprint: 'fp-1', count: 0 });
+        fetchFn.mockReturnValueOnce(pendingResponse.response);
+        const poller = createChangePoller({ projectId: 5 });
+
+        await poller.check();
+        const pendingCheck = poller.check();
+        poller.destroy();
+
+        pendingResponse.resolve({ fingerprint: 'fp-2', count: 2 });
+        await pendingCheck;
+
+        expect(poller.baselineFingerprint).toBe('fp-1');
+        expect(poller.pendingChangeCount).toBeNull();
     });
 
     it('renders the changed-file count in the tooltip', () => {
         const poller = createChangePoller({ projectId: 5, refreshCombo: '⌘R', hardReloadCombo: '⌘⇧R' });
         expect(poller.tooltip).toBe('Refresh · ⌘R · ⌘⇧R to hard reload');
 
-        poller.hasChanges = true;
-        poller.currentCount = 1;
+        poller.pendingChangeCount = 1;
         expect(poller.tooltip).toBe('1 file changed externally - click to refresh');
 
-        poller.currentCount = 4;
+        poller.pendingChangeCount = 4;
         expect(poller.tooltip).toBe('4 files changed externally - click to refresh');
     });
 

@@ -8,13 +8,19 @@
         api.autoInstall(root);
     }
 })(typeof window !== 'undefined' ? window : null, function () {
-    // Mirrors App\Enums\BranchBaseState. Keep values in sync with the PHP enum.
+    // Mirrors the PHP branch-base enums. Keep values in sync.
     const BranchBaseState = Object.freeze({
         Ready: 'ready',
         NotConfigured: 'not_configured',
         UpToDate: 'up_to_date',
         MissingRef: 'missing_ref',
         OnBaseBranch: 'on_base_branch',
+        Unavailable: 'unavailable',
+    });
+
+    const BranchBaseUnavailableReason = Object.freeze({
+        UnrelatedHistory: 'unrelated_history',
+        CommandFailed: 'command_failed',
     });
 
     /**
@@ -122,6 +128,7 @@
             lastSelectionIndex: -1,
             lastSelectionAnchorIsWT: false,
             _loadId: 0, // Stale-response guard: incremented before each async load, checked after
+            _openGeneration: 0,
 
             get isWorkingTreeActive() {
                 return this.activeCommitHash === null && this.selectedBranch === this.currentBranch;
@@ -188,6 +195,10 @@
                         return "you're on the base branch";
                     case BranchBaseState.NotConfigured:
                         return 'set a base branch to compare';
+                    case BranchBaseState.Unavailable:
+                        return base.unavailableReason === BranchBaseUnavailableReason.UnrelatedHistory
+                            ? 'base and current branch have unrelated histories'
+                            : 'unable to compare with the base branch';
                     default:
                         return '';
                 }
@@ -278,6 +289,7 @@
             },
 
             async openPanel() {
+                const generation = ++this._openGeneration;
                 this.open = true;
                 this.search = '';
                 this.selectedIndex = 0;
@@ -286,19 +298,29 @@
                 this._clearSelectionError();
                 Alpine.store('overlays').open('branch-explorer');
 
-                await this.refreshSnapshot(this.selectedBranch || this.currentBranch, { force: true });
+                const refreshed = await this.refreshSnapshot(this.selectedBranch || this.currentBranch, { force: true });
+                if (!refreshed || !this._ownsOverlay(generation)) return;
 
                 const currentIdx = this.allFiltered.findIndex(b => b.name === this.selectedBranch);
                 if (currentIdx >= 0) this.selectedIndex = currentIdx;
                 this._rehydrateSelectionFromActiveView();
                 await this.$nextTick();
+                if (!this._ownsOverlay(generation)) return;
+
                 this._scrollActiveCommitIntoView();
                 this.$refs.searchInput?.focus();
             },
 
             closePanel() {
+                this._openGeneration++;
                 this.open = false;
                 if (Alpine.store('overlays').is('branch-explorer')) Alpine.store('overlays').close();
+            },
+
+            _ownsOverlay(generation) {
+                return this._openGeneration === generation
+                    && this.open
+                    && Alpine.store('overlays').is('branch-explorer');
             },
 
             async refreshSnapshot(branchName, { clear = false, force = false, minimumCommitCount = 0 } = {}) {
@@ -842,5 +864,5 @@
         }
     }
 
-    return { BranchBaseState, EMPTY_TREE_HASH, isSinceBaseExactly, violatesTipAnchor, stripRemotePrefix, createBranchExplorer, install, autoInstall };
+    return { BranchBaseState, BranchBaseUnavailableReason, EMPTY_TREE_HASH, isSinceBaseExactly, violatesTipAnchor, stripRemotePrefix, createBranchExplorer, install, autoInstall };
 });

@@ -2,9 +2,13 @@
 
 use App\Actions\ResolveBranchBaseAction;
 use App\Enums\BranchBaseState;
-use App\Services\GitMetadataService;
+use App\Enums\BranchBaseUnavailableReason;
+use App\Exceptions\GitCommandException;
 use App\Services\GitProcessService;
 use Illuminate\Support\Facades\File;
+use Symfony\Component\Process\Exception\ProcessStartFailedException;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -17,10 +21,7 @@ beforeEach(function () {
     $this->commitTestRepo($this->tmpDir, 'shared');
     $this->sharedSha = trim($this->runTestRepoCommand($this->tmpDir, 'git rev-parse HEAD'));
 
-    $this->action = new ResolveBranchBaseAction(
-        new GitMetadataService(new GitProcessService),
-        new GitProcessService,
-    );
+    $this->action = new ResolveBranchBaseAction(new GitProcessService);
 });
 
 test('returns Ready with newest-first hashes when feature branch is ahead of base', function () {
@@ -79,7 +80,82 @@ test('returns MissingRef when base branch does not exist locally', function () {
     $result = $this->action->handle($this->tmpDir, 'origin/nonexistent', 'main');
 
     expect($result->state)->toBe(BranchBaseState::MissingRef)
-        ->and($result->baseBranch)->toBe('origin/nonexistent');
+        ->and($result->baseBranch)->toBe('origin/nonexistent')
+        ->and($result->unavailableReason)->toBeNull();
+});
+
+test('returns Unavailable for unrelated histories', function () {
+    $this->runTestRepoCommand($this->tmpDir, 'git checkout --orphan feature');
+    $this->runTestRepoCommand($this->tmpDir, 'git rm -rf .');
+    File::put($this->tmpDir.'/unrelated.txt', "unrelated\n");
+    $this->commitTestRepo($this->tmpDir, 'unrelated root');
+
+    $result = $this->action->handle($this->tmpDir, 'main', 'feature');
+
+    expect($result->state)->toBe(BranchBaseState::Unavailable)
+        ->and($result->unavailableReason)->toBe(BranchBaseUnavailableReason::UnrelatedHistory)
+        ->and($result->baseBranch)->toBe('main')
+        ->and($result->baseSha)->toBeNull();
+});
+
+test('returns Unavailable when ref resolution fails', function () {
+    $result = $this->action->handle('/path/that/does/not/exist', 'main', 'feature');
+
+    expect($result->state)->toBe(BranchBaseState::Unavailable)
+        ->and($result->unavailableReason)->toBe(BranchBaseUnavailableReason::CommandFailed)
+        ->and($result->baseBranch)->toBe('main')
+        ->and($result->baseSha)->toBeNull();
+});
+
+test('returns Unavailable when listing the resolved range fails', function () {
+    $git = Mockery::mock(GitProcessService::class);
+    $git->shouldReceive('run')
+        ->once()
+        ->with('/tmp/repo', ['rev-parse', '--verify', '--quiet', '--end-of-options', 'main^{commit}'])
+        ->andReturn("base-sha\n");
+    $git->shouldReceive('run')
+        ->once()
+        ->with('/tmp/repo', ['merge-base', 'base-sha', 'HEAD'])
+        ->andReturn("merge-base\n");
+    $git->shouldReceive('run')
+        ->once()
+        ->with('/tmp/repo', ['log', '--format=%H', 'merge-base..HEAD'])
+        ->andThrow(new GitCommandException('git log', 'failed', 128));
+
+    $result = (new ResolveBranchBaseAction($git))->handle('/tmp/repo', 'main', 'feature');
+
+    expect($result->state)->toBe(BranchBaseState::Unavailable)
+        ->and($result->unavailableReason)->toBe(BranchBaseUnavailableReason::CommandFailed)
+        ->and($result->baseSha)->toBe('merge-base')
+        ->and($result->hashesInRange)->toBeEmpty();
+});
+
+test('returns Unavailable when merge-base times out', function () {
+    $process = new Process(['git', 'merge-base']);
+    $process->setTimeout(30);
+    $git = Mockery::mock(GitProcessService::class);
+    $git->shouldReceive('run')->once()->andReturn("base-sha\n");
+    $git->shouldReceive('run')->once()->andThrow(
+        new ProcessTimedOutException($process, ProcessTimedOutException::TYPE_GENERAL),
+    );
+
+    $result = (new ResolveBranchBaseAction($git))->handle('/tmp/repo', 'main', 'feature');
+
+    expect($result->state)->toBe(BranchBaseState::Unavailable)
+        ->and($result->unavailableReason)->toBe(BranchBaseUnavailableReason::CommandFailed);
+});
+
+test('returns Unavailable when merge-base cannot start', function () {
+    $git = Mockery::mock(GitProcessService::class);
+    $git->shouldReceive('run')->once()->andReturn("base-sha\n");
+    $git->shouldReceive('run')->once()->andThrow(
+        new ProcessStartFailedException(new Process(['git', 'merge-base']), 'unable to start'),
+    );
+
+    $result = (new ResolveBranchBaseAction($git))->handle('/tmp/repo', 'main', 'feature');
+
+    expect($result->state)->toBe(BranchBaseState::Unavailable)
+        ->and($result->unavailableReason)->toBe(BranchBaseUnavailableReason::CommandFailed);
 });
 
 test('treats detached HEAD (null currentBranch) as not on base branch', function () {

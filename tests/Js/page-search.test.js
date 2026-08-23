@@ -172,6 +172,23 @@ describe('refresh', () => {
         expect(data.currentMatch).toBe(0);
         expect(document.querySelectorAll('.rfa-search-match')).toHaveLength(0);
     });
+
+    it('rebuilds active state after the searchable DOM changes', () => {
+        document.body.innerHTML = '<p>cat one</p><p>cat two</p>';
+        data.query = 'cat';
+        data.refresh();
+        data.find(false);
+
+        document.body.insertAdjacentHTML('beforeend', '<p>cat three</p>');
+        data.refresh();
+
+        expect(data.matches).toHaveLength(3);
+        expect(data.currentMatch).toBe(1);
+        expect(document.querySelectorAll('.rfa-search-match--current')).toHaveLength(1);
+        expect(data.matches[0][0].getAttribute('data-match-number')).toBe('1 of 3');
+        expect(data.matches[1][0].hasAttribute('data-match-number')).toBe(false);
+        expect(data.matches[2][0].hasAttribute('data-match-number')).toBe(false);
+    });
 });
 
 describe('find', () => {
@@ -351,6 +368,31 @@ describe('updateCurrent', () => {
         expect(data.matches[1][0].classList.contains('rfa-search-match--current')).toBe(true);
     });
 
+    it('updates only the previous and next indexed groups during navigation', () => {
+        data.query = 'cat';
+        data.refresh();
+        const toggles = data.matches.map(([piece]) => vi.spyOn(piece.classList, 'toggle'));
+
+        data.find(false);
+
+        expect(toggles[0]).toHaveBeenCalledWith('rfa-search-match--current', false);
+        expect(toggles[1]).toHaveBeenCalledWith('rfa-search-match--current', true);
+        expect(toggles[2]).not.toHaveBeenCalled();
+    });
+
+    it('updates only the wrapped groups when navigation crosses either end', () => {
+        data.query = 'cat';
+        data.refresh();
+        const toggles = data.matches.map(([piece]) => vi.spyOn(piece.classList, 'toggle'));
+
+        data.find(true);
+
+        expect(toggles[0]).toHaveBeenCalledWith('rfa-search-match--current', false);
+        expect(toggles[1]).not.toHaveBeenCalled();
+        expect(toggles[2]).toHaveBeenCalledWith('rfa-search-match--current', true);
+        expect(data.currentMatch).toBe(3);
+    });
+
     it('toggles the current class on every span of a multi-piece match', () => {
         document.body.innerHTML = "<p><span>'</span><span>local</span><span>'</span></p>";
         data.query = "'local'";
@@ -368,6 +410,29 @@ describe('updateCurrent', () => {
         expect(spans[0].getAttribute('data-match-number')).toBe('1 of 1');
         expect(spans[1].hasAttribute('data-match-number')).toBe(false);
         expect(spans[2].hasAttribute('data-match-number')).toBe(false);
+    });
+
+    it('moves active state across every piece without touching other groups', () => {
+        document.body.innerHTML = [
+            "<p><span>'</span><span>local</span><span>'</span></p>",
+            "<p><span>'</span><span>local</span><span>'</span></p>",
+            "<p><span>'</span><span>local</span><span>'</span></p>",
+        ].join('');
+        data.query = "'local'";
+        data.refresh();
+        const untouchedToggles = data.matches[2].map((piece) => vi.spyOn(piece.classList, 'toggle'));
+
+        data.find(false);
+
+        data.matches[0].forEach((piece) => {
+            expect(piece.classList.contains('rfa-search-match--current')).toBe(false);
+        });
+        data.matches[1].forEach((piece) => {
+            expect(piece.classList.contains('rfa-search-match--current')).toBe(true);
+        });
+        untouchedToggles.forEach((toggle) => expect(toggle).not.toHaveBeenCalled());
+        expect(data.matches[0][0].hasAttribute('data-match-number')).toBe(false);
+        expect(data.matches[1][0].getAttribute('data-match-number')).toBe('2 of 3');
     });
 
     it('centers the badge across a multi-piece match via --rfa-match-center', () => {

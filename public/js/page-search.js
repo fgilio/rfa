@@ -203,35 +203,51 @@
                     }
                     return;
                 }
+                const previousIndex = this.currentMatch - 1;
                 if (backwards) {
                     this.currentMatch = this.currentMatch <= 1 ? total : this.currentMatch - 1;
                 } else {
                     this.currentMatch = this.currentMatch >= total ? 1 : this.currentMatch + 1;
                 }
-                this.updateCurrent(true);
+                this.updateCurrent(true, previousIndex);
             },
 
-            updateCurrent(scroll) {
+            updateCurrent(scroll, previousIndex = null) {
                 const total = this.matches.length;
                 const badge = `${this.currentMatch} of ${total}`;
-                this.matches.forEach((pieces, i) => {
-                    const isCurrent = (i + 1) === this.currentMatch;
-                    pieces.forEach((piece, j) => {
-                        piece.classList.toggle(CURRENT_CLASS, isCurrent);
-                        if (isCurrent && j === 0) {
-                            piece.setAttribute('data-match-number', badge);
-                        } else {
-                            piece.removeAttribute('data-match-number');
-                            piece.style.removeProperty('--rfa-match-center');
-                        }
+                const currentIndex = this.currentMatch - 1;
+
+                if (previousIndex === null) {
+                    this.matches.forEach((pieces, index) => {
+                        this.updateMatch(pieces, index === currentIndex, badge, scroll);
                     });
-                    if (isCurrent) {
-                        this.centerBadge(pieces);
-                        if (scroll && pieces[0]) {
-                            pieces[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
-                        }
+
+                    return;
+                }
+
+                this.updateMatch(this.matches[previousIndex], false, badge, false);
+                this.updateMatch(this.matches[currentIndex], true, badge, scroll);
+            },
+
+            updateMatch(pieces, isCurrent, badge, scroll) {
+                if (!pieces) return;
+
+                pieces.forEach((piece, index) => {
+                    piece.classList.toggle(CURRENT_CLASS, isCurrent);
+                    if (isCurrent && index === 0) {
+                        piece.setAttribute('data-match-number', badge);
+                    } else {
+                        piece.removeAttribute('data-match-number');
+                        piece.style.removeProperty('--rfa-match-center');
                     }
                 });
+
+                if (!isCurrent) return;
+
+                this.centerBadge(pieces);
+                if (scroll && pieces[0]) {
+                    pieces[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+                }
             },
 
             // Center the "X of Y" pill on the horizontal midpoint of the whole
