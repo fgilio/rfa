@@ -42,14 +42,8 @@ final readonly class CommentThreadSnapshot
             throw new InvalidArgumentException("Unsupported comment thread snapshot version: {$schemaVersion}.");
         }
 
-        $comment = isset($data['comment']) && is_array($data['comment'])
-            ? $data['comment']
-            : $data;
-        $replies = $data['replies'] ?? $comment['replies'] ?? [];
-
-        unset($comment['version'], $comment['schemaVersion'], $comment['comment']);
-
-        $comment['replies'] = is_iterable($replies) ? $replies : [];
+        $comment = self::commentIn($data);
+        $comment['replies'] = $data['replies'] ?? $comment['replies'] ?? [];
 
         if ($defaultOriginRef !== null
             && ! array_key_exists('originRef', $comment)
@@ -94,5 +88,38 @@ final readonly class CommentThreadSnapshot
     public function fileId(): ?string
     {
         return $this->comment->fileId !== '' ? $this->comment->fileId : null;
+    }
+
+    /**
+     * Read one field out of a stored payload without hydrating the thread, for
+     * callers that only want to know which comment or file card it belongs to.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function commentIdFrom(array $data): string
+    {
+        return (string) (self::commentIn($data)['id'] ?? '');
+    }
+
+    /** @param array<string, mixed> $data */
+    public static function fileIdFrom(array $data): ?string
+    {
+        $fileId = (string) (self::commentIn($data)['fileId'] ?? '');
+
+        return $fileId !== '' ? $fileId : null;
+    }
+
+    /**
+     * The comment half of an envelope, or the whole payload when it arrived as
+     * a bare comment array.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private static function commentIn(array $data): array
+    {
+        return isset($data['comment']) && is_array($data['comment'])
+            ? $data['comment']
+            : $data;
     }
 }

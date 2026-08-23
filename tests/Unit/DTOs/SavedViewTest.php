@@ -61,9 +61,9 @@ test('there is no public constructor to bypass the factories', function () {
     expect((new ReflectionClass(SavedView::class))->getConstructor()->isPrivate())->toBeTrue();
 });
 
-test('forMode returns the default landing view for a mode', function () {
-    expect(SavedView::forMode(LastViewMode::Context)->mode)->toBe(LastViewMode::Context)
-        ->and(SavedView::forMode(LastViewMode::Review)->kind)->toBe(LastViewKind::WorkingTree);
+test('an empty tuple is the default landing view for its mode', function () {
+    expect(SavedView::fromColumns(LastViewMode::Context, null, null, null))->toEqual(SavedView::context())
+        ->and(SavedView::fromColumns(LastViewMode::Review, null, null, null))->toEqual(SavedView::workingTree());
 });
 
 test('fromColumns round trips every view a factory can produce', function (SavedView $view) {

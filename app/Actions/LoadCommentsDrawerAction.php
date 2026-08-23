@@ -64,8 +64,6 @@ final readonly class LoadCommentsDrawerAction
 
                 return [
                     ...$data,
-                    'createdAt' => $comment->created_at?->toIso8601String(),
-                    'updatedAt' => $comment->updated_at?->toIso8601String(),
                     'isReplyFilterMatch' => $this->repliesMatchFilter($data['replies'], $filter),
                 ];
             })

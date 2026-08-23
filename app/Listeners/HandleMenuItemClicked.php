@@ -12,7 +12,6 @@ use App\Actions\ScanDirectoryDialogAction;
 use App\Actions\UpdaterStateAction;
 use App\Events\ShowShortcutsRequested;
 use App\Events\ToggleSidebarRequested;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
 use Native\Desktop\Events\Menu\MenuItemClicked;

@@ -5,13 +5,9 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\Comment as CommentData;
-use App\DTOs\CommentReply as CommentReplyData;
 use App\DTOs\CommentThreadSnapshot;
-use App\Enums\AnchorStatus;
 use App\Enums\CommentSurface;
-use App\Enums\DiffSide;
 use App\Models\Comment;
-use Illuminate\Support\Carbon;
 
 final readonly class CreateCommentThreadSnapshotsAction
 {
@@ -61,41 +57,17 @@ final readonly class CreateCommentThreadSnapshotsAction
                     return null;
                 }
 
-                $storedSide = DiffSide::from((string) $storedComment->side);
-
-                $comment = new CommentData(
-                    id: $storedComment->id,
-                    fileId: (string) ($viewComment['fileId'] ?? ''),
-                    file: $storedComment->file_path,
-                    side: $storedSide,
-                    startLine: $storedComment->start_line,
-                    endLine: $storedComment->end_line,
-                    body: $storedComment->body,
-                    originRef: $storedComment->origin_ref,
-                    fileContentHash: $storedComment->file_content_hash,
-                    lineSnippet: $storedComment->line_snippet,
-                    isDraft: (bool) $storedComment->is_draft,
-                    submittedAt: $this->dateOrNull($storedComment->getAttribute('submitted_at')),
-                    anchorStatus: AnchorStatus::tryFrom((string) ($viewComment['anchorStatus'] ?? ''))
-                        ?? AnchorStatus::Placed,
-                    originalSide: DiffSide::tryFrom((string) ($viewComment['originalSide'] ?? ''))
-                        ?? $storedSide,
-                    createdAt: $storedComment->created_at?->toIso8601String(),
-                    updatedAt: $storedComment->updated_at?->toIso8601String(),
-                    replies: CommentReplyData::collect($storedComment->replies->toArray()),
-                );
+                $comment = CommentData::fromArray([
+                    ...$storedComment->toArray(),
+                    'fileId' => $viewComment['fileId'] ?? null,
+                    'anchorStatus' => $viewComment['anchorStatus'] ?? null,
+                    'originalSide' => $viewComment['originalSide'] ?? null,
+                ]);
 
                 return (new CommentThreadSnapshot($comment))->toArray();
             })
             ->filter()
             ->values()
             ->all();
-    }
-
-    private function dateOrNull(mixed $value): ?string
-    {
-        return $value === null || $value === ''
-            ? null
-            : Carbon::parse($value)->toIso8601String();
     }
 }

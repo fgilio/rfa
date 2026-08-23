@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\DTOs\AgentContextFile;
 use App\DTOs\Comment as CommentDTO;
 use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
@@ -97,7 +98,7 @@ final readonly class ResolveContextCommentAnchorAction
         return CommentDTO::fromArray([
             ...$row,
             'id' => (string) ($row['id'] ?? ''),
-            'fileId' => 'ctx-'.hash('xxh128', $filePath),
+            'fileId' => AgentContextFile::idFor($filePath),
             'file' => $filePath,
             'side' => $side->value,
             'startLine' => $startLine,

@@ -7,7 +7,6 @@ namespace App\DTOs;
 use App\Enums\AnchorStatus;
 use App\Enums\DiffSide;
 use App\Enums\GitRef;
-use DateTimeInterface;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
@@ -107,32 +106,12 @@ class Comment
             lineSnippet: self::stringOrNull($data['lineSnippet'] ?? $data['line_snippet'] ?? null),
             isDraft: (bool) ($data['isDraft'] ?? $data['is_draft'] ?? false),
             submittedAt: self::dateOrNull($data['submittedAt'] ?? $data['submitted_at'] ?? null),
-            anchorStatus: self::anchorStatus($data['anchorStatus'] ?? null),
-            originalSide: self::sideOrNull($data['originalSide'] ?? $data['original_side'] ?? null),
+            anchorStatus: AnchorStatus::tryFrom((string) ($data['anchorStatus'] ?? '')) ?? AnchorStatus::Placed,
+            originalSide: DiffSide::tryFrom((string) ($data['originalSide'] ?? $data['original_side'] ?? '')),
             createdAt: self::dateOrNull($data['createdAt'] ?? $data['created_at'] ?? null),
             updatedAt: self::dateOrNull($data['updatedAt'] ?? $data['updated_at'] ?? null),
             replies: is_iterable($rawReplies) ? CommentReply::collect($rawReplies) : [],
         );
-    }
-
-    private static function anchorStatus(mixed $value): AnchorStatus
-    {
-        if ($value instanceof AnchorStatus) {
-            return $value;
-        }
-
-        return is_string($value)
-            ? AnchorStatus::tryFrom($value) ?? AnchorStatus::Placed
-            : AnchorStatus::Placed;
-    }
-
-    private static function sideOrNull(mixed $value): ?DiffSide
-    {
-        if ($value instanceof DiffSide) {
-            return $value;
-        }
-
-        return is_string($value) ? DiffSide::tryFrom($value) : null;
     }
 
     private static function intOrNull(mixed $value): ?int
@@ -151,15 +130,9 @@ class Comment
      */
     private static function dateOrNull(mixed $value): ?string
     {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        if ($value instanceof DateTimeInterface) {
-            return Carbon::instance($value)->toIso8601String();
-        }
-
-        return Carbon::parse((string) $value)->toIso8601String();
+        return $value === null || $value === ''
+            ? null
+            : Carbon::parse($value)->toIso8601String();
     }
 
     /**

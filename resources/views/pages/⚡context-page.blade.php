@@ -426,7 +426,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->reloadComments();
         $this->dispatchSidebarSummary();
         collect($comments)
-            ->map(fn (array $comment): ?string => CommentThreadSnapshot::fromArray($comment)->fileId())
+            ->map(fn (array $comment): ?string => CommentThreadSnapshot::fileIdFrom($comment))
             ->filter()
             ->unique()
             ->each(fn (string $fileId) => $this->dispatchFileComments($fileId));

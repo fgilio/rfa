@@ -67,17 +67,10 @@ final readonly class SavedView
     }
 
     /**
-     * The default landing view for a mode, used when nothing was ever saved.
-     */
-    public static function forMode(LastViewMode $mode): self
-    {
-        return $mode === LastViewMode::Context ? self::context() : self::workingTree();
-    }
-
-    /**
      * Interpret persisted columns. Any tuple that no factory could have
      * produced (a Commit without `to`, a Range missing an end, a blank ref)
-     * degrades to the working tree.
+     * degrades to the working tree, which is also what an empty tuple gives a
+     * project with nothing saved yet.
      */
     public static function fromColumns(LastViewMode $mode, ?LastViewKind $kind, ?string $from, ?string $to): self
     {
@@ -110,13 +103,8 @@ final readonly class SavedView
 
     private static function ref(string $ref, string $field): string
     {
-        $trimmed = trim($ref);
-
-        if ($trimmed === '') {
-            throw new InvalidArgumentException("The {$field} ref must not be blank.");
-        }
-
-        return $trimmed;
+        return self::refOrNull($ref)
+            ?? throw new InvalidArgumentException("The {$field} ref must not be blank.");
     }
 
     private static function refOrNull(?string $ref): ?string

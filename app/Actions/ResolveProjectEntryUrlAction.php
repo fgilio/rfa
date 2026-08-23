@@ -58,19 +58,11 @@ final readonly class ResolveProjectEntryUrlAction
             ->where(ReviewSession::lookupKey($project->path, $project->id))
             ->first();
 
-        $mode = ($session === null ? null : $session->last_view_mode)
-            ?? $fallbackMode
-            ?? LastViewMode::Review;
-
-        if ($session === null) {
-            return SavedView::forMode($mode);
-        }
-
         return SavedView::fromColumns(
-            $mode,
-            $session->last_view_kind,
-            $session->last_view_from,
-            $session->last_view_to,
+            $session->last_view_mode ?? $fallbackMode ?? LastViewMode::Review,
+            $session?->last_view_kind,
+            $session?->last_view_from,
+            $session?->last_view_to,
         );
     }
 

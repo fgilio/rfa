@@ -181,7 +181,7 @@ final readonly class ReviewCommentWorkflowAction
 
         $newSnapshots = collect($incomingComments)
             ->reject(fn (array $comment): bool => in_array(
-                CommentThreadSnapshot::fromArray($comment)->commentId(),
+                CommentThreadSnapshot::commentIdFrom($comment),
                 $existingIds,
                 true,
             ))
