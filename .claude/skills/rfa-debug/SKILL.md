@@ -72,15 +72,15 @@ PORT=$(lsof -a -p "$SERVER_PID" -iTCP -sTCP:LISTEN -P 2>/dev/null \
 curl -s -X POST "http://127.0.0.1:$PORT/_boost/browser-logs" \
   -H 'Content-Type: application/json' \
   -d '{"logs":[{"type":"log","timestamp":"'"$(date -u +%FT%TZ)"'","data":["ping"],"url":"test","userAgent":"curl"}]}'
-tail -1 "$(ls -t "$HOME/Library/Application Support/rfa-dev/storage/logs/browser-"*.log | head -1)"
+tail -1 "$(ls -t storage/logs/browser-*.log | head -1)"
 ```
 
 ## Reading server-side errors
 
-Boost's `last-error` and `read-log-entries` tools read the project's `storage/logs/laravel.log`, but the live app writes to `~/Library/Application Support/rfa-dev/storage/logs/laravel.log` (NativePHP relocation). Don't symlink (see boot-trap warning above). Read directly:
+Boost's `last-error` and `read-log-entries` tools read the project's `storage/logs/laravel.log`, but the live app writes under `~/Library/Application Support/rfa-dev/storage/logs/` (NativePHP relocation). `LOG_STACK` defaults to `daily`, so the live file is dated. Don't symlink (see boot-trap warning above). Read directly:
 
 ```bash
-tail -200 "$HOME/Library/Application Support/rfa-dev/storage/logs/laravel.log"
+tail -200 "$(ls -t "$HOME/Library/Application Support/rfa-dev/storage/logs/laravel-"*.log | head -1)"
 ```
 
 If you'd rather the MCP tools "just work" for `laravel.log` too, pin the `single` and `daily` channels' paths the same way `browser` is pinned in `config/logging.php`. Tradeoff: in a packaged release the project's `storage/` is read-only, so any code path that hits `Log::info(...)` would fail. The browser channel is safe to pin because Boost is OFF in production; the default channels aren't.
