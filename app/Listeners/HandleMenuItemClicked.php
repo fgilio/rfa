@@ -108,7 +108,7 @@ final readonly class HandleMenuItemClicked
         $project = app(OpenRepositoryDialogAction::class)->handle();
 
         if (! $project) {
-            return $this->outcomeForNullProject();
+            return OpenRepositoryDialogAction::outcomeForNullProject();
         }
 
         Context::add('rfa.project_id', $project->id);
@@ -141,7 +141,7 @@ final readonly class HandleMenuItemClicked
         }
 
         if (! $project) {
-            return $this->outcomeForNullProject();
+            return OpenRepositoryDialogAction::outcomeForNullProject();
         }
 
         Context::add('rfa.project_id', $project->id);
@@ -157,20 +157,5 @@ final readonly class HandleMenuItemClicked
         Window::get('main')->url(route($routeName, ['slug' => $project->slug]));
 
         return 'completed';
-    }
-
-    /**
-     * Map a null project from OpenRepositoryDialogAction to its outcome.
-     *
-     * The action marks non-dismissal causes via Context (rfa.reason), so
-     * a plain dismissal is the only null left unmarked.
-     */
-    private function outcomeForNullProject(): string
-    {
-        return match (Context::get('rfa.reason')) {
-            'project_registration_failed' => 'error',
-            'not_a_git_repository' => 'rejected',
-            default => 'cancelled',
-        };
     }
 }

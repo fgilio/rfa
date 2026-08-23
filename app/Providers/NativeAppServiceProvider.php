@@ -291,19 +291,54 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
     private function processInbox(): void
     {
+        $latest = $this->claimLatestInboxFile();
+
+        if ($latest === null) {
+            return;
+        }
+
+        Context::flush();
+
+        $startedAt = microtime(true);
+        $outcome = 'completed';
+
+        try {
+            $outcome = $this->openFromInboxFile($latest);
+        } catch (Throwable $e) {
+            $outcome = 'error';
+            Context::add('rfa.error_class', $e::class);
+            Context::add('rfa.reason', 'inbox_open_failed');
+
+            throw $e;
+        } finally {
+            Context::add('rfa.outcome', $outcome);
+            Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
+
+            Log::info('inbox.opened');
+        }
+    }
+
+    /**
+     * Take the newest queued request and discard the rest.
+     *
+     * Returns null when the terminal helper left nothing to open, which
+     * is the common case on any boot the user did not start
+     * from `./rfa`.
+     */
+    private function claimLatestInboxFile(): ?string
+    {
         $dir = self::inboxDir();
 
         if (! File::isDirectory($dir)) {
-            return;
+            return null;
         }
 
         $files = File::glob($dir.'/*.path');
 
         if ($files === []) {
-            return;
+            return null;
         }
 
-        // Process the most recent entry, discard the rest
         sort($files);
         $latest = array_pop($files);
 
@@ -311,36 +346,66 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             File::delete($stale);
         }
 
-        $contents = rescue(fn () => File::get($latest));
+        return $latest;
+    }
+
+    /**
+     * Open the repository a claimed inbox file names, and return the outcome
+     * for the canonical event.
+     */
+    private function openFromInboxFile(string $file): string
+    {
+        $contents = rescue(fn () => File::get($file));
         // The filename stem is the request id the terminal helper also put in
         // the deep link, so claiming it here is what stops the URL delivery of
         // the same request from opening the project a second time.
-        $requestId = OpenTerminalRequestAction::inboxRequestId($latest);
-        File::delete($latest);
+        $requestId = OpenTerminalRequestAction::inboxRequestId($file);
+        File::delete($file);
+
+        Context::add('rfa.request_id', $requestId);
 
         if ($contents === null) {
-            return;
+            Context::add('rfa.reason', 'unreadable_inbox_file');
+
+            return 'rejected';
         }
 
         ['path' => $path, 'mode' => $mode] = OpenTerminalRequestAction::parseInboxContents($contents);
 
         if ($path === '') {
-            return;
+            Context::add('rfa.reason', 'missing_path');
+
+            return 'rejected';
         }
+
+        $routeName = OpenTerminalRequestAction::routeName($mode);
+
+        Context::add('rfa.mode', $mode);
+        Context::add('rfa.path_hash', hash('xxh128', $path));
+        Context::add('rfa.route', $routeName);
 
         $project = app(OpenTerminalRequestAction::class)->handle($path, $mode, $requestId);
 
         if (! $project) {
-            return;
+            $outcome = OpenTerminalRequestAction::outcomeForNullProject();
+
+            Context::addIf('rfa.reason', 'not_a_project');
+
+            return $outcome;
         }
 
+        Context::add('rfa.project_id', $project->id);
+        Context::add('rfa.project_slug', $project->slug);
+
         app(RecordRuntimeDiagnosticAction::class)->handle('inbox.opened', [
-            'route' => OpenTerminalRequestAction::routeName($mode),
+            'route' => $routeName,
             'request_id' => $requestId,
             'project_id' => $project->id,
             'project_slug' => $project->slug,
             'path_hash' => hash('xxh128', $path),
         ]);
+
+        return 'completed';
     }
 
     public static function inboxDir(): string

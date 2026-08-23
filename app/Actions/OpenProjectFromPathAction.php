@@ -45,9 +45,11 @@ final readonly class OpenProjectFromPathAction
             Context::add('rfa.reason', 'project_registration_failed');
             Context::add('rfa.error_class', $e::class);
 
+            // The owner already carries this hash as rfa.path_hash, so the
+            // correlation survives without a second copy of the path.
             Log::warning('project.registration.failed', [
                 'reason' => 'project_registration_failed',
-                'path' => $path,
+                'path_hash' => hash('xxh128', $path),
                 'error_class' => $e::class,
             ]);
 

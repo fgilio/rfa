@@ -55,4 +55,20 @@ final readonly class OpenRepositoryDialogAction
             return null;
         }
     }
+
+    /**
+     * Map a null return from handle() to a canonical outcome.
+     *
+     * The caller owns the canonical event, so it reads back the reason
+     * this action recorded. A dismissed dialog is the only null
+     * left unmarked.
+     */
+    public static function outcomeForNullProject(): string
+    {
+        return match (Context::get('rfa.reason')) {
+            'project_registration_failed' => 'error',
+            'not_a_git_repository' => 'rejected',
+            default => 'cancelled',
+        };
+    }
 }

@@ -5,6 +5,8 @@ use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
@@ -43,4 +45,19 @@ test('returns null and swallows the exception when registration fails', function
         ->and(Context::get('rfa.reason'))->toBe('not_a_git_repository');
 
     expect(Project::count())->toBe(0);
+});
+
+test('warns with a hashed path when registration fails unexpectedly', function () {
+    Schema::drop('projects');
+    Log::spy();
+
+    expect(app(OpenProjectFromPathAction::class)->handle($this->repoPath))->toBeNull()
+        ->and(Context::get('rfa.reason'))->toBe('project_registration_failed');
+
+    Log::shouldHaveReceived('warning')->once()->withArgs(
+        fn (string $event, array $payload): bool => $event === 'project.registration.failed'
+            && $payload['reason'] === 'project_registration_failed'
+            && $payload['path_hash'] === hash('xxh128', $this->repoPath)
+            && ! array_key_exists('path', $payload),
+    );
 });

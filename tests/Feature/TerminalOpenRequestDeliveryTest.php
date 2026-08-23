@@ -3,7 +3,9 @@
 use App\Listeners\HandleDeepLink;
 use App\Providers\NativeAppServiceProvider;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Native\Desktop\Events\App\OpenedFromURL;
 use Tests\Helpers\InteractsWithTestRepositories;
 use Tests\Helpers\MainWindowNavigations;
@@ -119,4 +121,58 @@ test('a legacy inbox file and a path-only deep link both still open', function (
     ));
 
     expect($this->navigations->all())->toHaveCount(2);
+});
+
+// -- canonical events --
+
+test('draining a queued request emits a canonical inbox.opened event', function () {
+    writeInboxRequest($this->inboxDir, '1755975000-4242', $this->repoPath, 'context');
+
+    Log::spy();
+
+    drainInbox();
+
+    Log::shouldHaveReceived('info')->once()->with('inbox.opened');
+    expect(Context::get('rfa.outcome'))->toBe('completed')
+        ->and(Context::get('rfa.request_id'))->toBe('1755975000-4242')
+        ->and(Context::get('rfa.route'))->toBe('context-page')
+        ->and(Context::get('rfa.path_hash'))->toBe(hash('xxh128', $this->repoPath))
+        ->and(Context::get('rfa.project_slug'))->not->toBeNull()
+        ->and(Context::get('rfa.duration_ms'))->toBeInt();
+});
+
+test('a request the deep link already claimed drains as skipped', function () {
+    writeInboxRequest($this->inboxDir, '1755975000-4242', $this->repoPath);
+
+    app(HandleDeepLink::class)->handle(new OpenedFromURL(
+        'rfa://open?path='.rawurlencode($this->repoPath).'&id=1755975000-4242'
+    ));
+
+    Log::spy();
+
+    drainInbox();
+
+    Log::shouldHaveReceived('info')->once()->with('inbox.opened');
+    expect(Context::get('rfa.outcome'))->toBe('skipped')
+        ->and(Context::get('rfa.reason'))->toBe('request_already_claimed');
+});
+
+test('an inbox request for a non-repository drains as rejected', function () {
+    writeInboxRequest($this->inboxDir, '1755975000-4242', '/does/not/exist');
+
+    Log::spy();
+
+    drainInbox();
+
+    Log::shouldHaveReceived('info')->once()->with('inbox.opened');
+    expect(Context::get('rfa.outcome'))->toBe('rejected')
+        ->and(Context::get('rfa.reason'))->toBe('path_not_found');
+});
+
+test('an empty inbox stays silent', function () {
+    Log::spy();
+
+    drainInbox();
+
+    Log::shouldNotHaveReceived('info');
 });
