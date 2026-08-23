@@ -5,6 +5,7 @@ use App\Actions\GetProjectStatusAction;
 use App\Actions\ServeImageAction;
 use App\Models\Project;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
@@ -179,6 +180,28 @@ test('diagnostics route accepts validated browser samples', function () {
     }
 
     @rmdir($diagnosticsDir);
+});
+
+/**
+ * routes/AGENTS.md: these routes are loopback-only plumbing inside the packaged
+ * app, so no throttling. A dropped sample is a lost diagnostic, and the payload
+ * guard in BrowserDiagnosticSampleRequest is what bounds the endpoint.
+ */
+test('diagnostics route is not rate limited', function () {
+    $middleware = collect(Route::getRoutes()->getByName('api.diagnostics.browser')?->gatherMiddleware() ?? []);
+
+    expect($middleware->filter(fn (mixed $entry): bool => str_contains((string) $entry, 'throttle')))->toBeEmpty();
+});
+
+test('diagnostics route refuses a payload past the configured budget', function () {
+    config([
+        'rfa.diagnostics.enabled' => true,
+        'rfa.diagnostics.max_browser_payload_bytes' => 64,
+    ]);
+
+    $this->postJson('/api/diagnostics/browser', [
+        'reason' => str_repeat('heartbeat', 50),
+    ])->assertStatus(413);
 });
 
 test('diagnostics route rejects unknown browser sample fields', function () {

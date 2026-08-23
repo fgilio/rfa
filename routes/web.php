@@ -44,7 +44,7 @@ Route::post('/api/diagnostics/browser', function (BrowserDiagnosticSampleRequest
     $diagnostics->recordBrowserSample($request->validated());
 
     return response()->noContent();
-})->middleware('throttle:diagnostics')->name('api.diagnostics.browser');
+})->name('api.diagnostics.browser');
 
 Route::get('/api/image/{project}/{ref}/{path}', function (Project $project, string $ref, string $path) {
     $result = app(ServeImageAction::class)->handle($project->id, $path, $ref);
