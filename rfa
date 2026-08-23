@@ -23,54 +23,55 @@ RFA_REPO_PATH="$(git -C "$RFA_REPO_PATH" rev-parse --show-toplevel)"
 
 # Write inbox file (cold-start safety: deep links can be lost if app isn't running yet)
 # Uses unique filenames to avoid races between concurrent invocations.
-# Two-line format when --context: <repo-path>\n<mode>. processInbox() splits
+# Two-line format when --context: <repo-path>\n<mode>. The inbox parser splits
 # then trims each line independently, so the trailing newline doesn't drop
 # the mode line.
 if [ "$(uname)" = "Darwin" ]; then
-    INBOX_DIR="$HOME/Library/Application Support/com.fgilio.rfa/inbox"
+    APP_DATA_BASE="$HOME/Library/Application Support"
 else
-    INBOX_DIR="$HOME/.local/share/com.fgilio.rfa/inbox"
+    APP_DATA_BASE="$HOME/.local/share"
 fi
-INBOX_PARENT="${INBOX_DIR%/*}"
+APP_DATA_DIR="$APP_DATA_BASE/com.fgilio.rfa"
+INBOX_DIR="$APP_DATA_DIR/inbox"
 
-ensure_dir_path() {
+# Recover a stale non-directory node by moving it aside, then (re)create the
+# directory. Only ever called for the two nodes rfa owns: its app-data
+# directory and that directory's inbox child. Concurrent invocations race
+# here, so every step tolerates another process having already done it; the
+# directory existing at the end is the only success condition.
+ensure_rfa_dir() {
     local path="$1"
-    local current=""
-    local segment=""
 
-    if [ "${path#/}" != "$path" ]; then
-        current="/"
-        path="${path#/}"
+    if [ -d "$path" ]; then
+        return 0
     fi
 
-    while [ -n "$path" ]; do
-        segment="${path%%/*}"
-        if [ "$path" = "$segment" ]; then
-            path=""
-        else
-            path="${path#*/}"
-        fi
+    if [ -e "$path" ] || [ -L "$path" ]; then
+        mv "$path" "$path.$(date +%s)-$$.bak" 2>/dev/null || true
+    fi
 
-        [ -z "$segment" ] && continue
+    mkdir -p "$path" 2>/dev/null || true
 
-        if [ "$current" = "/" ]; then
-            current="/$segment"
-        elif [ -z "$current" ]; then
-            current="$segment"
-        else
-            current="$current/$segment"
-        fi
-
-        if [ -e "$current" ] && [ ! -d "$current" ]; then
-            mv "$current" "$current.$(date +%s)-$$.bak"
-        fi
-
-        mkdir -p "$current"
-    done
+    [ -d "$path" ]
 }
 
-ensure_dir_path "$INBOX_PARENT"
-ensure_dir_path "$INBOX_DIR"
+# Everything above the app-data directory ($HOME, Library, Application Support,
+# .local/share) belongs to the user, not to rfa. Create it if it is missing,
+# but never move a node aside to make room: report the blockage and leave the
+# user's filesystem exactly as it was.
+mkdir -p "$APP_DATA_BASE" 2>/dev/null || true
+if [ ! -d "$APP_DATA_BASE" ]; then
+    echo "Error: $APP_DATA_BASE is not a directory. rfa only repairs the paths it owns, so nothing was changed. Move or remove that node and retry." >&2
+    exit 1
+fi
+
+for dir in "$APP_DATA_DIR" "$INBOX_DIR"; do
+    ensure_rfa_dir "$dir" || {
+        echo "Error: could not prepare $dir." >&2
+        exit 1
+    }
+done
+
 INBOX_FILE="$INBOX_DIR/$(date +%s%N)-$$.path"
 INBOX_TMP="$INBOX_FILE.tmp"
 if [ -n "$MODE" ]; then

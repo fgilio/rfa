@@ -81,3 +81,43 @@ test('terminal helper replaces a stale app data file with the app data directory
         ->and(File::get($backupFiles[0]))->toBe("/stale/app-data\n")
         ->and(File::get($this->openCapturePath))->toStartWith('rfa://open?path=');
 });
+
+test('terminal helper creates its directories without backups when nothing is stale', function () {
+    $appSupportPath = rfaTerminalHelperDataPath($this->homePath);
+
+    $process = new Process([base_path('rfa'), $this->repoPath], base_path(), [
+        'HOME' => $this->homePath,
+        'PATH' => $this->fakeBinPath.':'.getenv('PATH'),
+        'RFA_OPEN_CAPTURE' => $this->openCapturePath,
+    ]);
+    $process->mustRun();
+
+    expect(File::isDirectory($appSupportPath.'/inbox'))->toBeTrue()
+        ->and(File::glob($appSupportPath.'/inbox/*.path'))->toHaveCount(1)
+        ->and(File::glob(dirname($appSupportPath).'/*.bak'))->toBeEmpty()
+        ->and(File::glob($appSupportPath.'/*.bak'))->toBeEmpty();
+});
+
+test('terminal helper leaves a blocked ancestor untouched and fails', function () {
+    // `Application Support` (macOS) / `.local/share` (elsewhere) is the user's,
+    // not rfa's. A non-directory there must be preserved, not renamed aside.
+    $appDataBase = dirname(rfaTerminalHelperDataPath($this->homePath));
+
+    File::makeDirectory(dirname($appDataBase), 0755, true);
+    File::put($appDataBase, "user data, not ours\n");
+
+    $process = new Process([base_path('rfa'), $this->repoPath], base_path(), [
+        'HOME' => $this->homePath,
+        'PATH' => $this->fakeBinPath.':'.getenv('PATH'),
+        'RFA_OPEN_CAPTURE' => $this->openCapturePath,
+    ]);
+    $process->run();
+
+    expect($process->isSuccessful())->toBeFalse()
+        ->and($process->getErrorOutput())->toContain('rfa only repairs the paths it owns')
+        ->and(File::isFile($appDataBase))->toBeTrue()
+        ->and(File::get($appDataBase))->toBe("user data, not ours\n")
+        ->and(File::glob($appDataBase.'.*.bak'))->toBeEmpty()
+        ->and(File::glob(dirname($appDataBase).'/*.bak'))->toBeEmpty()
+        ->and(File::exists($this->openCapturePath))->toBeFalse();
+});
