@@ -72,7 +72,8 @@ for dir in "$APP_DATA_DIR" "$INBOX_DIR"; do
     }
 done
 
-INBOX_FILE="$INBOX_DIR/$(date +%s%N)-$$.path"
+REQUEST_ID="$(date +%s%N)-$$"
+INBOX_FILE="$INBOX_DIR/$REQUEST_ID.path"
 INBOX_TMP="$INBOX_FILE.tmp"
 if [ -n "$MODE" ]; then
     printf '%s\n%s\n' "$RFA_REPO_PATH" "$MODE" > "$INBOX_TMP"
@@ -84,8 +85,10 @@ mv "$INBOX_TMP" "$INBOX_FILE"
 # URL-encode the path
 ENCODED_PATH=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$RFA_REPO_PATH")
 
-# Open via deep link (launches app if not running, or sends to running instance)
-DEEP_LINK="rfa://open?path=$ENCODED_PATH"
+# Open via deep link (launches app if not running, or sends to running instance).
+# The id is the inbox filename stem, so the two transports announce the same
+# request: whichever reaches the app first claims it and the other stands down.
+DEEP_LINK="rfa://open?path=$ENCODED_PATH&id=$REQUEST_ID"
 if [ -n "$MODE" ]; then
     DEEP_LINK="$DEEP_LINK&mode=$MODE"
 fi

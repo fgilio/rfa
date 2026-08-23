@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use App\Actions\OpenProjectFromPathAction;
+use App\Actions\OpenTerminalRequestAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\ZoomWindowAction;
@@ -337,54 +337,35 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         }
 
         $contents = rescue(fn () => File::get($latest));
+        // The filename stem is the request id the terminal helper also put in
+        // the deep link, so claiming it here is what stops the URL delivery of
+        // the same request from opening the project a second time.
+        $requestId = OpenTerminalRequestAction::inboxRequestId($latest);
         File::delete($latest);
 
         if ($contents === null) {
             return;
         }
 
-        ['path' => $path, 'route' => $routeName] = self::parseInboxContents($contents);
+        ['path' => $path, 'mode' => $mode] = OpenTerminalRequestAction::parseInboxContents($contents);
 
         if ($path === '') {
             return;
         }
 
-        $project = app(OpenProjectFromPathAction::class)->handle($path);
+        $project = app(OpenTerminalRequestAction::class)->handle($path, $mode, $requestId);
 
         if (! $project) {
             return;
         }
 
-        Window::get('main')->url(route($routeName, ['slug' => $project->slug]));
-
         app(RecordRuntimeDiagnosticAction::class)->handle('inbox.opened', [
-            'route' => $routeName,
+            'route' => OpenTerminalRequestAction::routeName($mode),
+            'request_id' => $requestId,
             'project_id' => $project->id,
             'project_slug' => $project->slug,
             'path_hash' => hash('xxh128', $path),
         ]);
-    }
-
-    /**
-     * Parse the two-line inbox file format: `<repo-path>\n<mode>`. The path
-     * lives on line 1, the optional mode on line 2. Splitting on newline
-     * first and trimming each line independently keeps a trailing newline
-     * (added by every `printf` / `echo`) from silently dropping the mode.
-     * Single-line legacy files and unknown mode values both fall through
-     * to review-page (fail open).
-     *
-     * @return array{path: string, route: string}
-     */
-    public static function parseInboxContents(string $contents): array
-    {
-        $lines = preg_split('/\r?\n/', $contents) ?: [];
-        $path = isset($lines[0]) ? trim($lines[0]) : '';
-        $mode = isset($lines[1]) ? trim($lines[1]) : '';
-
-        return [
-            'path' => $path,
-            'route' => $mode === 'context' ? 'context-page' : 'review-page',
-        ];
     }
 
     public static function inboxDir(): string

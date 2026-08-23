@@ -121,3 +121,23 @@ test('terminal helper leaves a blocked ancestor untouched and fails', function (
         ->and(File::glob(dirname($appDataBase).'/*.bak'))->toBeEmpty()
         ->and(File::exists($this->openCapturePath))->toBeFalse();
 });
+
+test('terminal helper emits the inbox filename stem as the deep link request id', function () {
+    $appSupportPath = rfaTerminalHelperDataPath($this->homePath);
+
+    $process = new Process([base_path('rfa'), $this->repoPath, '--context'], base_path(), [
+        'HOME' => $this->homePath,
+        'PATH' => $this->fakeBinPath.':'.getenv('PATH'),
+        'RFA_OPEN_CAPTURE' => $this->openCapturePath,
+    ]);
+    $process->mustRun();
+
+    $inboxFiles = File::glob($appSupportPath.'/inbox/*.path');
+    $requestId = pathinfo($inboxFiles[0], PATHINFO_FILENAME);
+
+    expect($inboxFiles)->toHaveCount(1)
+        ->and($requestId)->not->toBe('')
+        ->and(File::get($this->openCapturePath))
+        ->toContain('&id='.$requestId)
+        ->toContain('&mode=context');
+});
