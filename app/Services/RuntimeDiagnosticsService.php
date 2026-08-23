@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use Illuminate\Support\Arr;
-use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
 use Throwable;
 
 final class RuntimeDiagnosticsService
 {
+    public function __construct(
+        private readonly BrowserDiagnosticSampleFormatter $formatter,
+    ) {}
+
     /**
      * Record a timestamped diagnostic breadcrumb.
      *
@@ -37,70 +39,17 @@ final class RuntimeDiagnosticsService
     /**
      * Record a browser-originated heartbeat or workflow event.
      *
-     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $sample  validated by BrowserDiagnosticSampleRequest
      */
-    public function recordBrowserSample(array $payload): void
+    public function recordBrowserSample(array $sample): void
     {
         if (! $this->enabled()) {
             return;
         }
 
-        $this->breadcrumb('browser.sample', [
-            'reason' => $this->shortString($payload['reason'] ?? 'unknown', 64),
-            'path' => $this->redactedUrlPath($payload['url'] ?? null),
-            'path_hash' => $this->urlPathHash($payload['url'] ?? null),
-            'hidden' => (bool) ($payload['hidden'] ?? false),
-            'focused' => (bool) ($payload['focused'] ?? false),
-            'viewport' => $this->arrayOnly($payload['viewport'] ?? null, ['width', 'height', 'devicePixelRatio']),
-            'screen' => $this->arrayOnly($payload['screen'] ?? null, ['width', 'height', 'availWidth', 'availHeight']),
-            'visibility' => $this->arrayOnly($payload['visibility'] ?? null, [
-                'state',
-                'hidden',
-                'focused',
-                'focusAgeMs',
-                'visibilityAgeMs',
-            ]),
-            'activity' => $this->arrayOnly($payload['activity'] ?? null, ['idleMs', 'lastEvent']),
-            'scroll' => $this->arrayOnly($payload['scroll'] ?? null, ['x', 'y', 'maxY']),
-            'heap' => $this->arrayOnly($payload['heap'] ?? null, [
-                'usedJSHeapSize',
-                'totalJSHeapSize',
-                'jsHeapSizeLimit',
-                'usedJSHeapSizeMb',
-                'totalJSHeapSizeMb',
-            ]),
-            'dom' => $this->arrayOnly($payload['dom'] ?? null, [
-                'nodes',
-                'livewireComponents',
-                'diffFiles',
-                'expandedDiffFiles',
-                'diffLines',
-                'comments',
-                'animatedElements',
-                'animateSpin',
-                'animatePing',
-                'animatePulse',
-                'backdropBlur',
-                'sticky',
-            ]),
-            'animations' => $this->normalizeAnimations($payload['animations'] ?? null),
-            'navigation' => $this->arrayOnly($payload['navigation'] ?? null, [
-                'type',
-                'domCompleteMs',
-                'resources',
-            ]),
-            'poll' => $this->arrayOnly($payload['poll'] ?? null, [
-                'source',
-                'method',
-                'intervalMs',
-                'ageMs',
-                'hidden',
-                'focused',
-            ]),
-            'timings' => $this->normalizeTimings($payload['timings'] ?? null),
-        ]);
+        $this->breadcrumb('browser.sample', $this->formatter->format($sample));
 
-        if (($payload['includeProcessSnapshot'] ?? false) === true) {
+        if (($sample['includeProcessSnapshot'] ?? false) === true) {
             $this->breadcrumb('system.processes', [
                 'processes' => $this->rfaProcesses(),
             ]);
@@ -358,222 +307,6 @@ final class RuntimeDiagnosticsService
             @flock($lockHandle, LOCK_UN);
             @fclose($lockHandle);
         }
-    }
-
-    /**
-     * @param  array<string, mixed>|null  $value
-     * @param  list<string>  $keys
-     * @return array<string, mixed>|null
-     */
-    private function arrayOnly(mixed $value, array $keys): ?array
-    {
-        return is_array($value) ? Arr::only($value, $keys) : null;
-    }
-
-    /** @return array<string, mixed>|null */
-    private function normalizeTimings(mixed $value): ?array
-    {
-        if (! is_array($value)) {
-            return null;
-        }
-
-        return array_filter([
-            'longTasks' => $this->arrayOnly($value['longTasks'] ?? null, ['count', 'totalMs', 'maxMs']),
-            'longTasksDuringAction' => $this->arrayOnly($value['longTasksDuringAction'] ?? null, ['count', 'totalMs', 'maxMs']),
-            'longTasksDuringCommit' => $this->arrayOnly($value['longTasksDuringCommit'] ?? null, ['count', 'totalMs', 'maxMs']),
-            'diffAction' => $this->arrayOnly($value['diffAction'] ?? null, [
-                'fileId',
-                'action',
-                'elapsedMs',
-                'phpMs',
-                'hunkCount',
-                'diffLines',
-                'lineContentBytes',
-                'tooLarge',
-                'binary',
-                'cached',
-            ]),
-            'livewireCommit' => $this->arrayOnly($value['livewireCommit'] ?? null, [
-                'status',
-                'elapsedMs',
-                'componentId',
-                'componentName',
-                'callCount',
-                'calls',
-                'updateCount',
-                'updateKeys',
-                'pollSource',
-                'pollMethod',
-                'pollAgeMs',
-            ]),
-        ], fn (mixed $item): bool => $item !== null);
-    }
-
-    /** @return array<string, mixed>|null */
-    private function normalizeAnimations(mixed $value): ?array
-    {
-        if (! is_array($value)) {
-            return null;
-        }
-
-        $summary = $this->arrayOnly($value, [
-            'activeCount',
-            'runningCount',
-            'cssAnimationCount',
-            'cssTransitionCount',
-        ]) ?? [];
-        $detailLimit = $this->animationDetailLimit();
-        $classSummaryLimit = $this->animationClassSummaryLimit();
-
-        $animations = array_filter([
-            ...$summary,
-            'classSummary' => $this->normalizeAnimationRows($value['classSummary'] ?? null, [
-                'name',
-                'count',
-            ], $classSummaryLimit),
-            'elementGroups' => $this->normalizeAnimationRows($value['elementGroups'] ?? null, [
-                'signature',
-                'count',
-                'runningCount',
-                'animationNames',
-                'classes',
-                'nearestLivewireName',
-                'nearestTestId',
-                'nearestInteractiveSignature',
-                'nearestButtonLabel',
-                'nearestButtonText',
-                'nearestButtonTitle',
-                'nearestButtonRole',
-                'nearestButtonDisabled',
-                'nearestLoading',
-                'nearestWireClick',
-                'nearestWireTarget',
-            ], $detailLimit),
-            'elements' => $this->normalizeAnimationRows($value['elements'] ?? null, [
-                'signature',
-                'tag',
-                'id',
-                'testId',
-                'role',
-                'classes',
-                'animationNames',
-                'playStates',
-                'animationCount',
-                'runningCount',
-                'maxDurationMs',
-                'connected',
-                'visible',
-                'nearestLivewireId',
-                'nearestLivewireName',
-                'nearestTestId',
-                'nearestDiffFileState',
-                'nearestInteractiveSignature',
-                'nearestButtonLabel',
-                'nearestButtonText',
-                'nearestButtonTitle',
-                'nearestButtonRole',
-                'nearestButtonDisabled',
-                'nearestLoading',
-                'nearestWireClick',
-                'nearestWireTarget',
-                'rectX',
-                'rectY',
-                'rectWidth',
-                'rectHeight',
-                'computedDisplay',
-                'computedVisibility',
-                'computedOpacity',
-                'computedPointerEvents',
-                'cssAnimationName',
-                'cssAnimationDuration',
-                'cssAnimationPlayState',
-            ], $detailLimit),
-        ], fn (mixed $item): bool => $item !== null && $item !== []);
-
-        return $animations === [] ? null : $animations;
-    }
-
-    private function animationDetailLimit(): int
-    {
-        return max(0, min(50, (int) config('rfa.diagnostics.animation_detail_limit', 20)));
-    }
-
-    private function animationClassSummaryLimit(): int
-    {
-        return max(0, min(50, (int) config('rfa.diagnostics.animation_class_summary_limit', 20)));
-    }
-
-    /**
-     * @param  list<string>  $keys
-     * @return list<array<string, mixed>>|null
-     */
-    private function normalizeAnimationRows(mixed $rows, array $keys, int $limit): ?array
-    {
-        if (! is_array($rows)) {
-            return null;
-        }
-
-        return collect($rows)
-            ->filter(fn (mixed $row): bool => is_array($row))
-            ->map(fn (array $row): array => array_filter(
-                Arr::only($row, $keys),
-                fn (mixed $item): bool => $item !== null && $item !== [],
-            ))
-            ->filter()
-            ->take($limit)
-            ->values()
-            ->all();
-    }
-
-    private function redactedUrlPath(mixed $url): ?string
-    {
-        $path = $this->urlPath($url);
-
-        if ($path === null) {
-            return null;
-        }
-
-        $segments = explode('/', trim($path, '/'));
-
-        if ($segments[0] === 'p' && isset($segments[1])) {
-            $segments[1] = '{project}';
-        }
-
-        if (isset($segments[2], $segments[3]) && $segments[2] === 'c') {
-            $segments[3] = '{hash}';
-        }
-
-        if (isset($segments[2], $segments[3]) && $segments[2] === 'r') {
-            $segments[3] = '{range}';
-        }
-
-        if (isset($segments[2], $segments[3]) && $segments[2] === 'rw') {
-            $segments[3] = '{range}';
-        }
-
-        return '/'.implode('/', array_filter($segments, fn (string $segment): bool => $segment !== ''));
-    }
-
-    private function urlPathHash(mixed $url): ?string
-    {
-        $path = $this->urlPath($url);
-
-        return $path === null ? null : hash('xxh128', $path);
-    }
-
-    private function urlPath(mixed $url): ?string
-    {
-        if (! is_string($url) || $url === '') {
-            return null;
-        }
-
-        $path = parse_url($url, PHP_URL_PATH);
-
-        if (! is_string($path) || ! Str::startsWith($path, '/')) {
-            return null;
-        }
-
-        return $this->shortString($path, 256);
     }
 
     private function bytesToMegabytes(int|float $bytes): float

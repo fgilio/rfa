@@ -3,7 +3,9 @@
 use App\DTOs\DiffTarget;
 use App\Enums\BranchBaseState;
 use App\Enums\BranchBaseUnavailableReason;
+use App\Http\Requests\BrowserDiagnosticSampleRequest;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -37,4 +39,31 @@ test('branch-explorer.js branch-base enums match the PHP enums', function () {
             BranchBaseUnavailableReason::cases(),
         ),
     );
+});
+
+/**
+ * runtime-diagnostics.js is the only producer of browser diagnostic samples, and
+ * BrowserDiagnosticSampleRequest rejects any field it does not name. A sample
+ * field added on one side alone turns every heartbeat into a 422, so the two
+ * lists have to agree.
+ */
+test('runtime-diagnostics.js posts the fields the diagnostics request accepts', function () {
+    $js = File::get(base_path('public/js/runtime-diagnostics.js'));
+
+    expect($js)->toMatch('/function collectSample\(/');
+
+    $sample = Str::of($js)
+        ->after('function collectSample(')
+        ->after('return {')
+        ->before("\n        };");
+
+    preg_match_all('/^ {12}(\w+)[,:]/m', (string) $sample, $matches);
+
+    $accepted = collect(array_keys((new BrowserDiagnosticSampleRequest)->rules()))
+        ->reject(fn (string $field): bool => str_contains($field, '.'))
+        ->sort()
+        ->values()
+        ->all();
+
+    expect(collect($matches[1])->sort()->values()->all())->toBe($accepted);
 });

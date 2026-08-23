@@ -190,6 +190,24 @@ test('diagnostics route rejects unknown browser sample fields', function () {
     ])->assertUnprocessable();
 });
 
+test('diagnostics route rejects unknown top-level browser sample fields', function () {
+    config(['rfa.diagnostics.enabled' => true]);
+
+    $this->postJson('/api/diagnostics/browser', [
+        'reason' => 'heartbeat',
+        'cookies' => 'rejected',
+    ])->assertUnprocessable();
+});
+
+test('diagnostics route rejects nested values outside their bounds', function () {
+    config(['rfa.diagnostics.enabled' => true]);
+
+    $this->postJson('/api/diagnostics/browser', [
+        'reason' => 'heartbeat',
+        'viewport' => ['width' => 99_999, 'height' => 720],
+    ])->assertUnprocessable();
+});
+
 test('diagnostics route rejects unknown timing fields', function () {
     config(['rfa.diagnostics.enabled' => true]);
 

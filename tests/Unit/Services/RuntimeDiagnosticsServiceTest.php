@@ -158,7 +158,6 @@ test('browser sample records useful counters without query strings', function ()
                     'cssAnimationName' => 'spin',
                     'cssAnimationDuration' => '1s',
                     'cssAnimationPlayState' => 'running',
-                    'unexpected' => 'dropped',
                 ],
             ],
         ],
@@ -185,7 +184,6 @@ test('browser sample records useful counters without query strings', function ()
         ->and($entry['context']['animations']['elements'][0]['signature'])->toBe('svg.animate-spin')
         ->and($entry['context']['animations']['elements'][0]['nearestWireClick'])->toBe('softRefresh')
         ->and($entry['context']['animations']['elements'][0]['rectWidth'])->toBe(16)
-        ->and($entry['context']['animations']['elements'][0])->not->toHaveKey('unexpected')
         ->and($entry['context']['visibility']['focusAgeMs'])->toBe(1200)
         ->and($entry['context']['activity']['idleMs'])->toBe(45000)
         ->and($entry['context']['scroll']['y'])->toBe(240)
@@ -193,37 +191,6 @@ test('browser sample records useful counters without query strings', function ()
         ->and($entry['context']['timings']['diffAction']['phpMs'])->toBe(2200)
         ->and($entry['context']['timings']['longTasksDuringAction']['count'])->toBe(3)
         ->and($entry['context']['viewport']['width'])->toBe(1280);
-});
-
-test('browser sample keeps only allowed timing fields', function () {
-    app(RuntimeDiagnosticsService::class)->recordBrowserSample([
-        'reason' => 'diff.action',
-        'timings' => [
-            'unexpected' => ['leak' => true],
-            'diffAction' => [
-                'action' => 'expandContext',
-                'elapsedMs' => 2400,
-                'extra' => 'dropped',
-            ],
-            'livewireCommit' => [
-                'status' => 'succeeded',
-                'elapsedMs' => 180,
-                'component' => 'dropped',
-            ],
-        ],
-    ]);
-
-    $entry = json_decode(trim((string) file_get_contents($this->diagnosticsPath)), true);
-
-    expect($entry['context']['timings'])->not->toHaveKey('unexpected')
-        ->and($entry['context']['timings']['diffAction'])->toBe([
-            'action' => 'expandContext',
-            'elapsedMs' => 2400,
-        ])
-        ->and($entry['context']['timings']['livewireCommit'])->toBe([
-            'status' => 'succeeded',
-            'elapsedMs' => 180,
-        ]);
 });
 
 test('browser sample does not leak process snapshot timeouts', function () {
