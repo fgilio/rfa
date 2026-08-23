@@ -6,6 +6,8 @@ namespace App\Console\Benchmark;
 
 use App\DTOs\CommentAuthor;
 use App\DTOs\FileListEntry;
+use App\DTOs\LoadedDiff;
+use App\Enums\DiffLoadOutcome;
 use App\Enums\DiffSide;
 use App\Enums\LineType;
 
@@ -45,8 +47,10 @@ use App\Enums\LineType;
  *     additions: int,
  *     deletions: int,
  *     isBinary: bool,
- *     tooLarge: bool,
+ *     cacheVersion: int,
+ *     outcome: string,
  *     syntaxStyles: string,
+ *     newFileLineCount: ?int,
  *     syntaxHighlighter: string
  * }
  * @phpstan-type CommentData array{
@@ -214,10 +218,11 @@ final class DiffFixtureFactory
             'additions' => $totalAdditions,
             'deletions' => $totalDeletions,
             'isBinary' => false,
-            'tooLarge' => false,
+            'cacheVersion' => LoadedDiff::VERSION,
+            'outcome' => DiffLoadOutcome::Loaded->value,
             'syntaxStyles' => '.hl-variable{color:#e36209;}.dark .hl-variable{color:#ffab70;}.hl-comment{color:#6a737d;}.dark .hl-comment{color:#6a737d;}',
+            'newFileLineCount' => null,
             'syntaxHighlighter' => 'fixture',
-            'lineTypesAreEnum' => true,
         ];
     }
 

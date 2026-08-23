@@ -5,6 +5,8 @@ use App\Actions\LoadFileDiffAction;
 use App\Console\Benchmark\DiffFixtureFactory;
 use App\DTOs\CopyContentResult;
 use App\DTOs\DiffTarget;
+use App\DTOs\LoadedDiff;
+use App\Enums\DiffLoadOutcome;
 use App\Enums\LineType;
 use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
@@ -25,9 +27,9 @@ beforeEach(function () {
     // Mock LoadFileDiffAction so it never touches git
     app()->bind(LoadFileDiffAction::class, fn () => new class
     {
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
         {
-            return DiffFixtureFactory::diffData(path: $path);
+            return LoadedDiff::fromCache(DiffFixtureFactory::diffData(path: $path)) ?? LoadedDiff::empty($path);
         }
     });
 });
@@ -309,9 +311,9 @@ function mountMultiHunkDiffFile(array $diffData, array $file): Testable
     {
         public function __construct(private array $diffData) {}
 
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
         {
-            return $this->diffData;
+            return LoadedDiff::fromCache($this->diffData) ?? LoadedDiff::empty($path);
         }
     });
 
@@ -449,6 +451,32 @@ test('1-line gap shows single expand button', function () {
 
 // -- Expand loading spinner settles on no-op early returns --
 
+test('expandGap writes a readable envelope back to the cache', function () {
+    $cacheKey = DiffCacheKey::for(0, $this->file['id'], reviewFingerprint());
+
+    Livewire::test('diff-file', [
+        'file' => $this->file,
+        'repoPath' => '/tmp/test',
+        'projectId' => 0,
+        'fileComments' => [],
+    ])->call('expandGap', 0);
+
+    expect(LoadedDiff::fromCache(Cache::get($cacheKey))?->outcome)->toBe(DiffLoadOutcome::Loaded);
+});
+
+test('expandContext replaces the diff with a readable envelope', function () {
+    $component = Livewire::test('diff-file', [
+        'file' => $this->file,
+        'repoPath' => '/tmp/test',
+        'projectId' => 0,
+        'fileComments' => [],
+    ])->call('expandContext');
+
+    $component->assertDispatched('rfa:diff-action-completed', action: 'expandContext');
+
+    expect(LoadedDiff::fromCache(Cache::get(DiffCacheKey::for(0, $this->file['id'], reviewFingerprint()))))->not->toBeNull();
+});
+
 test('expandGap settles the action when the diff is no longer cached', function () {
     // Force diffData to hydrate null: the cached diff was evicted between the
     // render that showed the expander and this click. expandGap hits its first
@@ -472,9 +500,11 @@ test('expandGap settles the action when the full-context reload finds no diff', 
     // the completion event itself or the spinner stays stuck until a refresh.
     app()->bind(LoadFileDiffAction::class, fn () => new class
     {
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
         {
-            return $contextLines >= 99999 ? ['hunks' => []] : DiffFixtureFactory::diffData(path: $path);
+            return $contextLines >= 99999
+                ? LoadedDiff::empty($path)
+                : (LoadedDiff::fromCache(DiffFixtureFactory::diffData(path: $path)) ?? LoadedDiff::empty($path));
         }
     });
 
@@ -494,9 +524,11 @@ test('expandGap settles a tiered-chip expand when the reload finds no diff', fun
     // stuck. Guards a regression that only settles when $lineCount is null.
     app()->bind(LoadFileDiffAction::class, fn () => new class
     {
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): array
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
         {
-            return $contextLines >= 99999 ? ['hunks' => []] : DiffFixtureFactory::diffData(path: $path);
+            return $contextLines >= 99999
+                ? LoadedDiff::empty($path)
+                : (LoadedDiff::fromCache(DiffFixtureFactory::diffData(path: $path)) ?? LoadedDiff::empty($path));
         }
     });
 

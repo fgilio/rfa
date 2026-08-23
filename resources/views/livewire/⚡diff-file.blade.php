@@ -6,7 +6,9 @@ use App\Actions\LoadFileDiffAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveReviewConfigAction;
 use App\DTOs\DiffTarget;
+use App\DTOs\LoadedDiff;
 use App\DTOs\ReviewConfig;
+use App\Enums\DiffLoadOutcome;
 use App\Enums\DiffSide;
 use App\Enums\GitRef;
 use App\Support\DiffCacheKey;
@@ -74,8 +76,7 @@ HTML;
 
     public function hydrate(): void
     {
-        $cached = Cache::get($this->diffCacheKey());
-        $this->diffData = DiffCacheKey::isCurrentShape($cached) ? $cached : null;
+        $this->diffData = LoadedDiff::fromCache(Cache::get($this->diffCacheKey()))?->toArray();
     }
 
     /** @param array<int, array<string, mixed>> $comments */
@@ -117,7 +118,7 @@ HTML;
             target: $this->buildDiffTarget(),
             oldPath: $this->file['oldPath'] ?? null,
             externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
-        );
+        )->toArray();
 
         $durationMs = $this->durationSince($startedAt);
 
@@ -190,7 +191,7 @@ HTML;
             target: $this->buildDiffTarget(),
             oldPath: $this->file['oldPath'] ?? null,
             externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
-        );
+        )->toArray();
 
         $durationMs = $this->durationSince($startedAt);
 
@@ -203,7 +204,9 @@ HTML;
 
     public function expandGap(int $hunkIndex, ?int $lineCount = null): void
     {
-        if ($this->diffData === null || empty($this->diffData['hunks'])) {
+        $loaded = LoadedDiff::fromCache($this->diffData);
+
+        if ($loaded === null || $loaded->hunks() === []) {
             // Diff fell out of cache between render and click: nothing to expand.
             // Still settle the action so the client clears the optimistic loading
             // spinner and the paired runtime-diagnostics start mark isn't orphaned.
@@ -225,8 +228,8 @@ HTML;
             externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
         );
 
-        if (empty($fullDiff['hunks'])) {
-            // The full-context reload found no diff — the file changed underneath
+        if ($fullDiff->hunks() === []) {
+            // The full-context reload found no diff: the file changed underneath
             // the cached hunks. Same settle contract as the guard above so the
             // expander's spinner can't get stuck on a no-op that morphs nothing.
             $this->dispatchDiffActionCompleted('expandGap', $this->durationSince($startedAt));
@@ -234,17 +237,18 @@ HTML;
             return;
         }
 
-        $this->diffData['hunks'] = app(ExpandDiffGapAction::class)->handle(
-            hunks: $this->diffData['hunks'],
-            hunkIndex: $hunkIndex,
-            fullDiffLines: $fullDiff['hunks'][0]['lines'],
-            lineCount: $lineCount,
-            newFileLineCount: $this->diffData['newFileLineCount'] ?? null,
+        $expanded = $loaded->withExpandedHunks(
+            app(ExpandDiffGapAction::class)->handle(
+                hunks: $loaded->hunks(),
+                hunkIndex: $hunkIndex,
+                fullDiffLines: $fullDiff->hunks()[0]['lines'],
+                lineCount: $lineCount,
+                newFileLineCount: $loaded->newFileLineCount,
+            ),
+            $fullDiff->syntaxStyles,
         );
 
-        if (! empty($fullDiff['syntaxStyles'])) {
-            $this->diffData['syntaxStyles'] = ($this->diffData['syntaxStyles'] ?? '').$fullDiff['syntaxStyles'];
-        }
+        $this->diffData = $expanded->toArray();
 
         Cache::put(
             $this->diffCacheKey(),
@@ -291,7 +295,7 @@ HTML;
             'extension' => isset($this->file['path']) ? pathinfo((string) $this->file['path'], PATHINFO_EXTENSION) : '',
             'status' => ($this->file['isUntracked'] ?? false) ? 'added' : ($this->file['status'] ?? 'modified'),
             'target' => $this->buildDiffTarget()->contextKey(),
-            'too_large' => (bool) ($diffData['tooLarge'] ?? false),
+            'too_large' => ($diffData['outcome'] ?? null) === DiffLoadOutcome::TooLarge->value,
             'binary' => (bool) ($diffData['isBinary'] ?? false),
             'hunk_count' => count($diffData['hunks'] ?? []),
             'diff_line_count' => $lineCount,
@@ -572,15 +576,15 @@ HTML;
             <div x-intersect.once="setTimeout(() => { markDiffActionStart('loadFileDiff'); $wire.loadFileDiff(); }, {{ $loadDelay }})">
                 <x-diff-skeleton />
             </div>
-        @elseif($diffData['tooLarge'] ?? false)
+        @elseif(($diffData['outcome'] ?? null) === DiffLoadOutcome::TooLarge->value)
             <div class="px-4 py-8 text-center">
                 <flux:icon icon="exclamation-triangle" variant="outline" class="!size-4 inline-block text-gh-muted mr-1" />
                 <flux:text variant="subtle" size="sm" inline>File diff too large to display</flux:text>
             </div>
-        @elseif($diffData['error'] ?? false)
+        @elseif(($diffData['outcome'] ?? null) === DiffLoadOutcome::TransientError->value)
             <div class="px-4 py-8 text-center">
                 <flux:icon icon="exclamation-triangle" variant="outline" class="!size-4 inline-block text-gh-red mr-1" />
-                <flux:text variant="subtle" size="sm" inline>Git error: {{ $diffData['error'] }}</flux:text>
+                <flux:text variant="subtle" size="sm" inline>Git error: failed to load the diff for this file.</flux:text>
             </div>
         @elseif(empty($diffData['hunks']))
             <div class="px-4 py-8 text-center">

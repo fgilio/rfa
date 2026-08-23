@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\DTOs\DiffTarget;
+use App\DTOs\LoadedDiff;
+use App\Enums\DiffLoadOutcome;
 use App\Enums\DiffSide;
 use App\Enums\LineType;
 use App\Services\ReviewConfigService;
@@ -50,29 +52,26 @@ final readonly class BuildDiffContextAction
             $fileId = $file['id'];
 
             if (! array_key_exists($fileId, $loaded)) {
-                $cached = Cache::get(DiffCacheKey::for($repoPath, $fileId, $reviewFingerprint, $contextKey));
-                $loaded[$fileId] = DiffCacheKey::isCurrentShape($cached)
-                    ? $cached
-                    : $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false, oldPath: $file['oldPath'] ?? null, target: $target);
+                $loaded[$fileId] = LoadedDiff::fromCache(Cache::get(DiffCacheKey::for($repoPath, $fileId, $reviewFingerprint, $contextKey)))
+                    ?? $this->loadFileDiffAction->handle($repoPath, $file['path'], $file['isUntracked'] ?? false, oldPath: $file['oldPath'] ?? null, target: $target);
             }
 
             $diffData = $loaded[$fileId];
             $key = "{$comment['file']}:{$comment['side']}:{$comment['startLine']}:{$comment['endLine']}";
 
-            if (($diffData['tooLarge'] ?? false)) {
-                $reason = $diffData['skipReason'] ?? 'too-large';
-                $context[$key] = "[Diff skipped: {$reason}]";
+            if ($diffData->outcome === DiffLoadOutcome::TooLarge) {
+                $context[$key] = '[Diff skipped: '.DiffLoadOutcome::TooLarge->value.']';
 
                 continue;
             }
 
-            if (array_key_exists('error', $diffData)) {
+            if ($diffData->outcome === DiffLoadOutcome::TransientError) {
                 continue;
             }
 
             $useOld = $comment['side'] === DiffSide::Left->value;
             $lines = [];
-            foreach ($diffData['hunks'] as $hunk) {
+            foreach ($diffData->hunks() as $hunk) {
                 foreach ($hunk['lines'] as $line) {
                     // Use the line number for the comment's own side only. Falling back
                     // to the other side would pull in lines absent from this side. For example,

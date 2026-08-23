@@ -12,6 +12,7 @@ use App\Actions\ResolveProjectAction;
 use App\Actions\ResolveReviewConfigAction;
 use App\Actions\SessionStateAction;
 use App\DTOs\DiffTarget;
+use App\DTOs\LoadedDiff;
 use App\Models\Comment;
 use App\Models\CommentReply;
 use App\Models\Project;
@@ -231,7 +232,6 @@ final class PerfScenarioRunner
             /** @param  array<string, mixed>  $diffData */
             public function __construct(private readonly array $diffData) {}
 
-            /** @return array<string, mixed> */
             public function handle(
                 string $repoPath,
                 string $path,
@@ -241,8 +241,8 @@ final class PerfScenarioRunner
                 ?DiffTarget $target = null,
                 ?string $oldPath = null,
                 ?string $externalAbsolutePath = null,
-            ): array {
-                return $this->diffData;
+            ): LoadedDiff {
+                return LoadedDiff::fromCache($this->diffData) ?? LoadedDiff::empty($path);
             }
         });
 

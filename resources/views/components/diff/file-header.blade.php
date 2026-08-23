@@ -13,7 +13,7 @@
 @php
     $showContentCopy = ! ($file['isBinary'] ?? false)
         && ! ($file['isSymlink'] ?? false)
-        && ! ($diffData['tooLarge'] ?? false);
+        && ($diffData['outcome'] ?? null) !== \App\Enums\DiffLoadOutcome::TooLarge->value;
     $isAdded = ($file['status'] ?? '') === 'added' || ($file['isUntracked'] ?? false);
     $isDeleted = ($file['status'] ?? '') === 'deleted';
 @endphp
