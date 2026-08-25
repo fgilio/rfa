@@ -47,6 +47,11 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- Fixture repos must never inherit the developer's git config: a global
+             core.excludesFile with "*.log" makes `git add -A` stage nothing, so
+             tests pass on CI (no global config) and fail only locally. -->
+        <env name="GIT_CONFIG_GLOBAL" value="/dev/null" force="true"/>
+        <env name="GIT_CONFIG_SYSTEM" value="/dev/null" force="true"/>
         <env name="GIT_AUTHOR_NAME" value="RFA Test" force="true"/>
         <env name="GIT_AUTHOR_EMAIL" value="test@rfa.test" force="true"/>
         <env name="GIT_COMMITTER_NAME" value="RFA Test" force="true"/>

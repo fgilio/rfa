@@ -32,3 +32,29 @@ test('failed repo commands append object store forensics to the exception', func
             ->toContain('count:');
     }
 });
+
+test('fixture repos ignore a hostile global git config', function () {
+    // The harness must beat the developer's machine, not just an empty CI box:
+    // a global core.excludesFile with "*.log" would otherwise leave `git add -A`
+    // with nothing to stage and fail the initial commit.
+    $configDir = $this->createTempDirectory('rfa_test_git_global_');
+    $excludesFile = $configDir.'/excludes';
+    $globalConfig = $configDir.'/config';
+
+    File::put($excludesFile, "*.log\n");
+    File::put($globalConfig, "[core]\n\texcludesFile = {$excludesFile}\n");
+
+    $previous = getenv('GIT_CONFIG_GLOBAL');
+    putenv('GIT_CONFIG_GLOBAL='.$globalConfig);
+
+    try {
+        File::put($this->repoDir.'/debug.log', "entry\n");
+        $this->commitTestRepo($this->repoDir, 'initial');
+
+        expect(trim($this->runTestRepoCommand($this->repoDir, 'git ls-files')))->toBe('debug.log');
+    } finally {
+        $previous === false
+            ? putenv('GIT_CONFIG_GLOBAL')
+            : putenv('GIT_CONFIG_GLOBAL='.$previous);
+    }
+});

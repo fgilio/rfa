@@ -19,9 +19,40 @@ If pre-flight fails locally, the tag push will also fail at the server. Don't by
 
 ## Steps
 
+### 0. Sync with the remote first
+
+Never reason about the release from stale local state. The session's opening git
+snapshot and any earlier `git log` output can be out of date. Always fetch before
+you read tags, commits, or status:
+
+```bash
+git branch --show-current
+git fetch --all --tags --prune
+git status --short
+git rev-list --left-right --count main...origin/main
+```
+
+Confirm `main` is the checked-out branch before anything else. Both the
+fast-forward below and the tag in step 4 act on the current `HEAD`, so running
+them from a feature branch releases the wrong commit. Switch first
+(`git switch main`) if you are somewhere else.
+
+Then reconcile with the remote, reading the `left<TAB>right` counts as
+`ahead<TAB>behind`:
+
+- behind only — fast-forward with `git merge --ff-only origin/main`.
+- ahead or diverged — stop and ask the user. Local commits on `main` have not
+  passed the required checks, and the tag ruleset will reject the push.
+- both zero — continue.
+
+Re-read tags and commits only after the fetch. The same rule applies to every
+later step: read CI, release, and PR state with a fresh command, never from
+memory of an earlier answer.
+
 ### 1. Determine version
 
-Ask the user what version to release. Suggest the next version based on the latest tag:
+Ask the user what version to release. Suggest the next version based on the latest tag
+(read after the fetch above):
 
 ```bash
 git tag --sort=-v:refname | head -5
