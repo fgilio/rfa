@@ -8,6 +8,19 @@ use Illuminate\Support\Facades\File;
 trait InteractsWithTestRepositories
 {
     /**
+     * Neutralize the developer's global and system git config for every command
+     * the harness runs. Without it a fixture repo inherits whatever the machine
+     * configures — a global `core.excludesFile` containing `*.log` makes
+     * `git add -A` stage nothing and the initial commit fails outright. CI has
+     * no global config, so such a test passes there and fails only locally.
+     *
+     * `phpunit.xml` sets the same two variables process-wide, which also covers
+     * the git calls application code makes. This prefix keeps fixture setup
+     * deterministic even when a test changes the ambient environment.
+     */
+    private const GIT_CONFIG_ISOLATION = 'export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null;';
+
+    /**
      * @param  array<string, mixed>  $overrides
      */
     protected function createTestProject(array $overrides = []): Project
@@ -113,7 +126,7 @@ trait InteractsWithTestRepositories
     {
         $output = [];
         exec(
-            '(cd '.escapeshellarg($directory).' && git count-objects -v && git fsck --no-progress) 2>&1',
+            self::GIT_CONFIG_ISOLATION.' (cd '.escapeshellarg($directory).' && git count-objects -v && git fsck --no-progress) 2>&1',
             $output,
         );
 
@@ -124,7 +137,7 @@ trait InteractsWithTestRepositories
     {
         $output = [];
         $exitCode = 0;
-        exec($command.' 2>&1', $output, $exitCode);
+        exec(self::GIT_CONFIG_ISOLATION.' '.$command.' 2>&1', $output, $exitCode);
 
         if ($exitCode === 0) {
             return implode("\n", $output);
