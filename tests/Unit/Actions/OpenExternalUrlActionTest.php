@@ -14,6 +14,7 @@ test('opens http and https urls in the system browser', function (string $url) {
     $shell->assertOpenedExternal($url);
 })->with([
     'https' => 'https://redsentry.com/contact?source=rfa#quote',
+    'https with userinfo' => 'https://user:password@example.test/report',
     'http' => 'http://127.0.0.1:8080/report',
 ]);
 
@@ -28,4 +29,5 @@ test('rejects malformed and non-web urls', function (string $url) {
     'ftp' => 'ftp://example.com/report',
     'relative' => '/internal/path',
     'missing host' => 'https://',
+    'http with userinfo' => 'http://user:password@example.test/report',
 ]);
