@@ -52,11 +52,15 @@
             ['{', '}'],
         ];
 
-        bracketPairs.forEach(([opening, closing]) => {
-            while (url.endsWith(closing) && url.split(closing).length > url.split(opening).length) {
-                url = url.slice(0, -1);
-            }
-        });
+        let previous;
+        do {
+            previous = url;
+            bracketPairs.forEach(([opening, closing]) => {
+                while (url.endsWith(closing) && url.split(closing).length > url.split(opening).length) {
+                    url = url.slice(0, -1);
+                }
+            });
+        } while (url !== previous);
 
         return url;
     }

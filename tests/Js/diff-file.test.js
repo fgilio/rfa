@@ -69,6 +69,7 @@ describe('Cmd+click URLs', () => {
     it.each([
         ['sentence punctuation', 'https://example.com/report).', 'https://example.com/report'],
         ['balanced parentheses', 'https://example.com/a_(b)', 'https://example.com/a_(b)'],
+        ['nested unmatched closers', 'https://example.com/foo)]', 'https://example.com/foo'],
         ['query and fragment', 'https://example.com/report?q=one&sort=asc#result', 'https://example.com/report?q=one&sort=asc#result'],
     ])('removes only URL-adjacent %s', (_, candidate, expected) => {
         expect(trimTrailingUrlPunctuation(candidate)).toBe(expected);
