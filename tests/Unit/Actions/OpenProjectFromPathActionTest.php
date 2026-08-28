@@ -47,17 +47,13 @@ test('returns null and swallows the exception when registration fails', function
     expect(Project::count())->toBe(0);
 });
 
-test('warns with a hashed path when registration fails unexpectedly', function () {
+test('records an owner error without a duplicate warning when registration fails unexpectedly', function () {
     Schema::drop('projects');
     Log::spy();
 
     expect(app(OpenProjectFromPathAction::class)->handle($this->repoPath))->toBeNull()
-        ->and(Context::get('rfa.reason'))->toBe('project_registration_failed');
+        ->and(Context::get('rfa.reason'))->toBe('project_registration_failed')
+        ->and(Context::get('rfa.error_class'))->not->toBeNull();
 
-    Log::shouldHaveReceived('warning')->once()->withArgs(
-        fn (string $event, array $payload): bool => $event === 'project.registration.failed'
-            && $payload['reason'] === 'project_registration_failed'
-            && $payload['path_hash'] === hash('xxh128', $this->repoPath)
-            && ! array_key_exists('path', $payload),
-    );
+    Log::shouldNotHaveReceived('warning');
 });
