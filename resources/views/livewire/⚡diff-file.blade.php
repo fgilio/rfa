@@ -3,6 +3,7 @@
 use App\Actions\ExpandDiffGapAction;
 use App\Actions\GetFileCopyContentAction;
 use App\Actions\LoadFileDiffAction;
+use App\Actions\OpenExternalUrlAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveReviewConfigAction;
 use App\DTOs\DiffTarget;
@@ -155,6 +156,13 @@ HTML;
         }
 
         Flux::toast(variant: 'warning', text: $this->copyUnavailableMessage($kind, $result));
+    }
+
+    public function openExternalUrl(string $url): void
+    {
+        app(OpenExternalUrlAction::class)->handle($url);
+
+        $this->skipRender();
     }
 
     private function copyUnavailableMessage(string $kind, \App\DTOs\CopyContentResult $result): string
@@ -447,6 +455,7 @@ HTML;
         status: @js(($file['isUntracked'] ?? false) ? 'added' : ($file['status'] ?? 'modified')),
         isReviewed: @js($isReviewed ?? false),
         singleFile: @js($singleFile ?? false),
+        urlHintId: @js('diff-url-hint-'.$file['id']),
     })"
     :data-file-id="fileId"
     :data-collapsed="collapsed ? 'true' : 'false'"
@@ -480,6 +489,19 @@ HTML;
         :repo-path="$repoPath"
         :allow-discard="$allowDiscard"
     />
+
+    <div
+        :id="urlHintId"
+        x-cloak
+        x-show="urlHintVisible"
+        x-transition.opacity.duration.150ms
+        role="tooltip"
+        :style="`left: ${urlHintLeft}px; top: ${urlHintTop}px`"
+        class="fixed z-[70] pointer-events-none whitespace-nowrap rounded-md border border-gh-border bg-gh-text px-2 py-1 font-display text-[10px] font-medium text-gh-bg shadow-sm"
+    >
+        <span x-show="urlHintMode === 'pointer'"><span class="font-mono">⌘</span> click to open</span>
+        <span x-show="urlHintMode === 'keyboard'"><span class="font-mono">↵</span> open link</span>
+    </div>
 
     {{-- File body --}}
     <div x-show="!collapsed" x-collapse.duration.150ms>
@@ -618,7 +640,12 @@ HTML;
                 data-testid="diff-table"
                 :data-view-mode="$store.settings.diffViewMode"
                 class="diff-grid font-mono text-xs leading-5"
-                :class="isDragging ? 'select-none' : ''"
+                :class="{ 'select-none': isDragging, 'cursor-pointer': hoveredUrl !== null }"
+                @mousemove="previewUrlAtPoint($event)"
+                @mouseleave="clearUrlPreview()"
+                @focusin="previewUrlForKeyboard($event)"
+                @focusout="clearUrlPreviewAfterFocus($event)"
+                @click="openUrlAtClick($event)"
             >
                 @if($hasGaps)
                     <x-diff.expand-control>

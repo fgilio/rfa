@@ -73,6 +73,15 @@ test('app layout includes keepalive component', function () {
     expect($content)->toContain('<livewire:keepalive');
 });
 
+test('app layout owns the single update banner mount', function () {
+    $layout = dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php';
+    $mounts = collect(bladeFiles())
+        ->sum(fn (string $file): int => substr_count(file_get_contents($file), '<livewire:update-banner'));
+
+    expect(file_get_contents($layout))->toContain('<livewire:update-banner')
+        ->and($mounts)->toBe(1);
+});
+
 test('app layout reloads directly on native hard reload shortcut', function () {
     $layout = dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php';
     $content = file_get_contents($layout);

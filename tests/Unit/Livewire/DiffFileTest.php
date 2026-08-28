@@ -12,6 +12,7 @@ use App\Support\DiffCacheKey;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use Native\Desktop\Facades\Shell;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -182,6 +183,36 @@ test('rendered HTML contains style block with syntax CSS', function () {
     expect($html)->toContain('<style>')
         ->and($html)->toContain('.hl-variable{color:#e36209;}')
         ->and($html)->toContain('.dark .hl-variable{color:#ffab70;}');
+});
+
+test('diff table delegates Cmd clicks to URL handling', function () {
+    $html = mountDiffFile($this->file)->html();
+
+    expect($html)->toContain('@mousemove="previewUrlAtPoint($event)"')
+        ->and($html)->toContain('@mouseleave="clearUrlPreview()"')
+        ->and($html)->toContain('@focusin="previewUrlForKeyboard($event)"')
+        ->and($html)->toContain('@focusout="clearUrlPreviewAfterFocus($event)"')
+        ->and($html)->toContain('@click="openUrlAtClick($event)"')
+        ->and($html)->toContain('role="tooltip"')
+        ->and($html)->toContain('⌘</span> click to open')
+        ->and($html)->toContain('↵</span> open link');
+});
+
+test('hovered diff URL uses a subtle wavy underline', function () {
+    $layout = file_get_contents(resource_path('views/layouts/app.blade.php'));
+
+    expect($layout)->toContain('::highlight(rfa-hovered-diff-url)')
+        ->and($layout)->toContain('text-decoration-style: wavy;')
+        ->and($layout)->toContain('text-decoration-thickness: 1px;')
+        ->and($layout)->toContain('text-underline-offset: 2px;');
+});
+
+test('opens a validated diff URL in the system browser', function () {
+    $shell = Shell::fake();
+
+    mountDiffFile($this->file)->call('openExternalUrl', 'https://redsentry.com/contact');
+
+    $shell->assertOpenedExternal('https://redsentry.com/contact');
 });
 
 // -- File header rendering --

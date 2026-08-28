@@ -111,10 +111,6 @@ new #[Layout('layouts.app')] class extends Component
             new ResizeObserver(update).observe($el);
         "
     >
-        @native
-            <livewire:update-banner />
-        @endnative
-
         <header class="bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-6 py-4 flex items-center justify-between">
             <div class="flex items-baseline gap-2">
                 <span class="rfa-logo text-2xl">rfa</span>

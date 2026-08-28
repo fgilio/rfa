@@ -4,6 +4,18 @@ import diffFile from '../../public/js/diff-file.js';
 const {
     getScrollSpeed,
     extractLineSnippet,
+    trimTrailingUrlPunctuation,
+    urlMatchesInText,
+    urlMatchAtTextOffset,
+    urlAtTextOffset,
+    urlMatchAtPoint,
+    urlAtClick,
+    rangeForUrlMatch,
+    rangeContainsPoint,
+    urlMatchForKeyboardControl,
+    installKeyboardUrlControls,
+    showUrlHighlight,
+    clearUrlHighlight,
     expanderToRefocus,
     createLinePoint,
     areLinePointsEqual,
@@ -16,6 +28,324 @@ const {
     install,
     autoInstall,
 } = diffFile;
+
+describe('Cmd+click URLs', () => {
+    const cssApi = document.defaultView.CSS;
+    const rangePrototype = document.defaultView.Range.prototype;
+    const originalGetClientRects = Object.getOwnPropertyDescriptor(rangePrototype, 'getClientRects');
+    const originalGetBoundingClientRect = Object.getOwnPropertyDescriptor(rangePrototype, 'getBoundingClientRect');
+
+    beforeEach(() => {
+        Object.defineProperty(rangePrototype, 'getClientRects', {
+            configurable: true,
+            value: vi.fn(() => [{ left: 0, right: 200, top: 0, bottom: 100, width: 200, height: 100 }]),
+        });
+        Object.defineProperty(rangePrototype, 'getBoundingClientRect', {
+            configurable: true,
+            value: vi.fn(() => ({ left: 20, right: 180, top: 50, bottom: 70, width: 160, height: 20 })),
+        });
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        delete document.caretPositionFromPoint;
+        delete document.caretRangeFromPoint;
+        Object.defineProperty(document.defaultView, 'CSS', { configurable: true, value: cssApi });
+        delete document.defaultView.Highlight;
+        if (originalGetClientRects) {
+            Object.defineProperty(rangePrototype, 'getClientRects', originalGetClientRects);
+        } else {
+            delete rangePrototype.getClientRects;
+        }
+        if (originalGetBoundingClientRect) {
+            Object.defineProperty(rangePrototype, 'getBoundingClientRect', originalGetBoundingClientRect);
+        } else {
+            delete rangePrototype.getBoundingClientRect;
+        }
+        document.body.innerHTML = '';
+        delete globalThis.Alpine;
+    });
+
+    it.each([
+        ['sentence punctuation', 'https://example.com/report).', 'https://example.com/report'],
+        ['balanced parentheses', 'https://example.com/a_(b)', 'https://example.com/a_(b)'],
+        ['nested unmatched closers', 'https://example.com/foo)]', 'https://example.com/foo'],
+        ['query and fragment', 'https://example.com/report?q=one&sort=asc#result', 'https://example.com/report?q=one&sort=asc#result'],
+    ])('removes only URL-adjacent %s', (_, candidate, expected) => {
+        expect(trimTrailingUrlPunctuation(candidate)).toBe(expected);
+    });
+
+    it('finds the URL under the text offset', () => {
+        const text = 'Quote at https://redsentry.com/contact, then continue.';
+        const start = text.indexOf('https://');
+
+        expect(urlAtTextOffset(text, text.indexOf('redsentry'))).toBe('https://redsentry.com/contact');
+        expect(urlMatchAtTextOffset(text, text.indexOf('redsentry'))).toEqual({
+            url: 'https://redsentry.com/contact',
+            start,
+            end: start + 'https://redsentry.com/contact'.length,
+        });
+        expect(urlAtTextOffset(text, text.indexOf('continue'))).toBeNull();
+        expect(urlAtTextOffset(text, start + 'https://redsentry.com/contact'.length)).toBeNull();
+        expect(urlMatchesInText(text)).toEqual([{
+            url: 'https://redsentry.com/contact',
+            start,
+            end: start + 'https://redsentry.com/contact'.length,
+        }]);
+    });
+
+    it('resolves a URL when syntax highlighting splits it across spans', () => {
+        document.body.innerHTML = `
+            <div class="diff-cell-content">
+                <span>Open https://red</span><span>sentry.com/contact</span><span>.</span>
+            </div>
+        `;
+        const target = document.querySelectorAll('.diff-cell-content span')[1];
+        const textNode = target.firstChild;
+        document.caretPositionFromPoint = vi.fn(() => ({
+            offsetNode: textNode,
+            offset: textNode.textContent.indexOf('contact'),
+        }));
+
+        const event = {
+            metaKey: true,
+            button: 0,
+            target,
+            clientX: 100,
+            clientY: 20,
+        };
+
+        expect(urlAtClick(event)).toBe('https://redsentry.com/contact');
+    });
+
+    it('keeps Markdown table cells separate while resolving URLs', () => {
+        document.body.innerHTML = `
+            <div class="diff-cell-content">
+                <div class="diff-md-table">
+                    <div class="diff-md-td">https://example.com/docs</div>
+                    <div class="diff-md-td">status</div>
+                </div>
+            </div>
+        `;
+        const target = document.querySelector('.diff-md-td');
+        document.caretPositionFromPoint = vi.fn(() => ({ offsetNode: target.firstChild, offset: 12 }));
+        const event = { metaKey: true, button: 0, target, clientX: 40, clientY: 20 };
+
+        const match = urlMatchAtPoint(event);
+
+        expect(match.url).toBe('https://example.com/docs');
+        expect(match.cell).toBe(target);
+        expect(urlAtClick(event)).toBe('https://example.com/docs');
+
+        installKeyboardUrlControls(document.body);
+        expect(document.querySelectorAll('[data-diff-url-control]')).toHaveLength(1);
+        expect(document.querySelector('[data-diff-url-control]').dataset.diffUrl).toBe('https://example.com/docs');
+    });
+
+    it('activates only points inside the rendered URL glyphs', () => {
+        const url = 'https://example.com/docs';
+        document.body.innerHTML = `<div class="diff-cell-content">${url},</div>`;
+        const target = document.querySelector('.diff-cell-content');
+        document.caretPositionFromPoint = vi.fn(() => ({ offsetNode: target.firstChild, offset: url.length }));
+        rangePrototype.getClientRects.mockReturnValue([
+            { left: 10, right: 100, top: 10, bottom: 30, width: 90, height: 20 },
+        ]);
+
+        expect(urlMatchAtPoint({ target, clientX: 99, clientY: 20 })?.url).toBe(url);
+        expect(urlMatchAtPoint({ target, clientX: 110, clientY: 20 })).toBeNull();
+        expect(urlMatchAtPoint({ target, clientX: 180, clientY: 20 })).toBeNull();
+
+        const range = rangeForUrlMatch({ url, start: 0, end: url.length, cell: target });
+        expect(rangeContainsPoint(range, 99, 20)).toBe(true);
+        expect(rangeContainsPoint(range, 100, 20)).toBe(false);
+        expect(rangeContainsPoint(range, 110, 20)).toBe(false);
+    });
+
+    it('highlights the exact URL range across syntax spans', () => {
+        document.body.innerHTML = `
+            <div class="diff-cell-content">
+                <span>Open https://red</span><span>sentry.com/contact</span><span>, then continue</span>
+            </div>
+        `;
+        const cell = document.querySelector('.diff-cell-content');
+        const target = cell.children[1];
+        document.caretPositionFromPoint = vi.fn(() => ({
+            offsetNode: target.firstChild,
+            offset: target.textContent.indexOf('contact'),
+        }));
+        const match = urlMatchAtPoint({ target, clientX: 100, clientY: 20 });
+        const range = rangeForUrlMatch(match);
+        const highlights = { set: vi.fn(), delete: vi.fn() };
+        const view = cell.ownerDocument.defaultView;
+        Object.defineProperty(view, 'CSS', { configurable: true, value: { highlights } });
+        Object.defineProperty(view, 'Highlight', {
+            configurable: true,
+            value: vi.fn(function (highlightedRange) {
+                this.range = highlightedRange;
+            }),
+        });
+
+        expect(range.toString()).toBe('https://redsentry.com/contact');
+        expect(showUrlHighlight(match)).toBe(true);
+        expect(highlights.set).toHaveBeenCalledWith('rfa-hovered-diff-url', expect.objectContaining({ range }));
+
+        clearUrlHighlight(document);
+
+        expect(highlights.delete).toHaveBeenCalledWith('rfa-hovered-diff-url');
+    });
+
+    it('requires Cmd and a primary-button click inside diff content', () => {
+        document.body.innerHTML = '<div class="diff-cell-content">https://example.com</div>';
+        const target = document.querySelector('.diff-cell-content');
+        document.caretPositionFromPoint = vi.fn(() => ({ offsetNode: target.firstChild, offset: 10 }));
+
+        expect(urlAtClick({ metaKey: false, button: 0, target, clientX: 1, clientY: 1 })).toBeNull();
+        expect(urlAtClick({ metaKey: true, button: 1, target, clientX: 1, clientY: 1 })).toBeNull();
+        expect(urlAtClick({ metaKey: true, button: 0, target: document.body, clientX: 1, clientY: 1 })).toBeNull();
+    });
+
+    it('opens the resolved URL through Livewire and consumes the click', () => {
+        globalThis.Alpine = { store: () => ({ collapseAll: false }) };
+        document.body.innerHTML = '<div class="diff-cell-content">https://example.com/docs</div>';
+        const target = document.querySelector('.diff-cell-content');
+        document.caretPositionFromPoint = vi.fn(() => ({ offsetNode: target.firstChild, offset: 12 }));
+        const component = createDiffFile({ fileId: 'file-1', filePath: 'README.md', isReviewed: false });
+        component.$wire = { openExternalUrl: vi.fn() };
+        const event = {
+            metaKey: true,
+            button: 0,
+            target,
+            clientX: 1,
+            clientY: 1,
+            preventDefault: vi.fn(),
+            stopPropagation: vi.fn(),
+        };
+
+        component.openUrlAtClick(event);
+
+        expect(component.$wire.openExternalUrl).toHaveBeenCalledWith('https://example.com/docs');
+        expect(event.preventDefault).toHaveBeenCalledOnce();
+        expect(event.stopPropagation).toHaveBeenCalledOnce();
+    });
+
+    it('previews only the URL under the pointer and clears it on leave', () => {
+        vi.useFakeTimers();
+        globalThis.Alpine = { store: () => ({ collapseAll: false }) };
+        document.body.innerHTML = '<div id="root"><div class="diff-cell-content">Read https://example.com/docs now</div></div>';
+        const root = document.getElementById('root');
+        const target = document.querySelector('.diff-cell-content');
+        document.caretPositionFromPoint = vi.fn(() => ({ offsetNode: target.firstChild, offset: 16 }));
+        const highlights = { set: vi.fn(), delete: vi.fn() };
+        const view = target.ownerDocument.defaultView;
+        Object.defineProperty(view, 'CSS', { configurable: true, value: { highlights } });
+        Object.defineProperty(view, 'Highlight', {
+            configurable: true,
+            value: vi.fn(function (range) {
+                this.range = range;
+            }),
+        });
+        const component = createDiffFile({ fileId: 'file-1', filePath: 'README.md', isReviewed: false });
+        component.$root = root;
+        const event = { target, clientX: 1, clientY: 1 };
+
+        component.previewUrlAtPoint(event);
+        component.previewUrlAtPoint(event);
+
+        expect(component.hoveredUrl).toBe('https://example.com/docs');
+        expect(highlights.set).toHaveBeenCalledOnce();
+        expect(component.urlHintVisible).toBe(false);
+
+        vi.advanceTimersByTime(350);
+
+        expect(component.urlHintVisible).toBe(true);
+        expect(component.urlHintLeft).toBe(13);
+        expect(component.urlHintTop).toBe(19);
+
+        component.clearUrlPreview();
+
+        expect(component.hoveredUrl).toBeNull();
+        expect(component.urlHintVisible).toBe(false);
+        expect(highlights.delete).toHaveBeenCalled();
+
+        vi.useRealTimers();
+    });
+
+    it('cancels the Cmd-click hint when the pointer leaves before the delay', () => {
+        vi.useFakeTimers();
+        globalThis.Alpine = { store: () => ({ collapseAll: false }) };
+        document.body.innerHTML = '<div id="root"><div class="diff-cell-content">https://example.com</div></div>';
+        const root = document.getElementById('root');
+        const target = document.querySelector('.diff-cell-content');
+        document.caretPositionFromPoint = vi.fn(() => ({ offsetNode: target.firstChild, offset: 10 }));
+        const component = createDiffFile({ fileId: 'file-1', filePath: 'README.md', isReviewed: false });
+        component.$root = root;
+
+        component.previewUrlAtPoint({ target, clientX: 10, clientY: 50 });
+        component.clearUrlPreview();
+        vi.advanceTimersByTime(350);
+
+        expect(component.urlHintVisible).toBe(false);
+        expect(component.urlHintTimer).toBeNull();
+
+        vi.useRealTimers();
+    });
+
+    it('creates focusable URL actions with Enter-key parity', () => {
+        globalThis.Alpine = { store: () => ({ collapseAll: false }) };
+        document.body.innerHTML = '<div id="root"><div class="diff-cell-content">Read https://example.com/docs now</div></div>';
+        const root = document.getElementById('root');
+        const highlights = { set: vi.fn(), delete: vi.fn() };
+        Object.defineProperty(document.defaultView, 'CSS', { configurable: true, value: { highlights } });
+        Object.defineProperty(document.defaultView, 'Highlight', {
+            configurable: true,
+            value: vi.fn(function (range) {
+                this.range = range;
+            }),
+        });
+
+        installKeyboardUrlControls(root, 'url-hint-file-1');
+        installKeyboardUrlControls(root, 'url-hint-file-1');
+
+        const control = root.querySelector('[data-diff-url-control]');
+        const match = urlMatchForKeyboardControl(control);
+        expect(root.querySelectorAll('[data-diff-url-control]')).toHaveLength(1);
+        expect(control.tagName).toBe('BUTTON');
+        expect(control.getAttribute('aria-label')).toBe('Open https://example.com/docs in the system browser');
+        expect(control.getAttribute('aria-describedby')).toBe('url-hint-file-1');
+        expect(match.url).toBe('https://example.com/docs');
+        expect(match.cell).toBe(root.querySelector('.diff-cell-content'));
+
+        const component = createDiffFile({
+            fileId: 'file-1',
+            filePath: 'README.md',
+            isReviewed: false,
+            urlHintId: 'url-hint-file-1',
+        });
+        component.$root = root;
+        component.$wire = { openExternalUrl: vi.fn() };
+        component.previewUrlForKeyboard({ target: control });
+
+        expect(component.hoveredUrl).toBe('https://example.com/docs');
+        expect(component.urlHintMode).toBe('keyboard');
+        expect(component.urlHintVisible).toBe(true);
+        expect(highlights.set).toHaveBeenCalledOnce();
+
+        const event = {
+            target: control,
+            detail: 0,
+            preventDefault: vi.fn(),
+            stopPropagation: vi.fn(),
+        };
+        component.openUrlAtClick(event);
+
+        expect(component.$wire.openExternalUrl).toHaveBeenCalledWith('https://example.com/docs');
+        expect(event.preventDefault).toHaveBeenCalledOnce();
+        expect(event.stopPropagation).toHaveBeenCalledOnce();
+
+        component.clearUrlPreviewAfterFocus({ relatedTarget: null });
+        expect(component.urlHintVisible).toBe(false);
+    });
+});
 
 describe('getScrollSpeed', () => {
     // Coherent fixture: viewport 800px tall, sticky header consumes 50px,
