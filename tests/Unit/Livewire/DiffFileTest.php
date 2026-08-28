@@ -190,9 +190,12 @@ test('diff table delegates Cmd clicks to URL handling', function () {
 
     expect($html)->toContain('@mousemove="previewUrlAtPoint($event)"')
         ->and($html)->toContain('@mouseleave="clearUrlPreview()"')
+        ->and($html)->toContain('@focusin="previewUrlForKeyboard($event)"')
+        ->and($html)->toContain('@focusout="clearUrlPreviewAfterFocus($event)"')
         ->and($html)->toContain('@click="openUrlAtClick($event)"')
         ->and($html)->toContain('role="tooltip"')
-        ->and($html)->toContain('⌘</span> click to open');
+        ->and($html)->toContain('⌘</span> click to open')
+        ->and($html)->toContain('↵</span> open link');
 });
 
 test('hovered diff URL uses a subtle wavy underline', function () {

@@ -61,23 +61,28 @@
         return url;
     }
 
+    function urlMatchesInText(text) {
+        if (typeof text !== 'string') {
+            return [];
+        }
+
+        return Array.from(text.matchAll(/\bhttps?:\/\/[^\s<>"'`]+/giu))
+            .map((match) => {
+                const url = trimTrailingUrlPunctuation(match[0]);
+                const start = match.index;
+
+                return { url, start, end: start + url.length };
+            })
+            .filter((match) => match.url.length > 0);
+    }
+
     function urlMatchAtTextOffset(text, offset) {
-        if (typeof text !== 'string' || !Number.isInteger(offset) || offset < 0) {
+        if (!Number.isInteger(offset) || offset < 0) {
             return null;
         }
 
-        const matches = text.matchAll(/\bhttps?:\/\/[^\s<>"'`]+/giu);
-        for (const match of matches) {
-            const url = trimTrailingUrlPunctuation(match[0]);
-            const start = match.index;
-            const end = start + url.length;
-
-            if (offset >= start && offset <= end) {
-                return { url, start, end };
-            }
-        }
-
-        return null;
+        return urlMatchesInText(text)
+            .find((match) => offset >= match.start && offset < match.end) ?? null;
     }
 
     function urlAtTextOffset(text, offset) {
@@ -107,22 +112,39 @@
             return null;
         }
 
-        const document = cell.ownerDocument;
+        const textRoot = target.closest('.diff-md-td') ?? cell;
+        const document = textRoot.ownerDocument;
         const caret = caretAtPoint(document, event.clientX, event.clientY);
-        if (!caret || !cell.contains(caret.node)) {
+        if (!caret || !textRoot.contains(caret.node)) {
             return null;
         }
 
         const range = document.createRange();
-        range.selectNodeContents(cell);
+        range.selectNodeContents(textRoot);
         range.setEnd(caret.node, caret.offset);
+        const textOffset = range.toString().length;
+        const text = textRoot.textContent ?? '';
+        const offsets = [textOffset, textOffset - 1].filter((offset, index, values) => offset >= 0 && values.indexOf(offset) === index);
 
-        const match = urlMatchAtTextOffset(cell.textContent ?? '', range.toString().length);
+        for (const offset of offsets) {
+            const match = urlMatchAtTextOffset(text, offset);
+            const scopedMatch = match ? { ...match, cell: textRoot } : null;
+            const urlRange = rangeForUrlMatch(scopedMatch);
 
-        return match ? { ...match, cell } : null;
+            if (rangeContainsPoint(urlRange, event.clientX, event.clientY)) {
+                return scopedMatch;
+            }
+        }
+
+        return null;
     }
 
     function urlAtClick(event) {
+        const control = event?.target?.closest?.('[data-diff-url-control]');
+        if (control && event.detail === 0) {
+            return urlMatchForKeyboardControl(control)?.url ?? null;
+        }
+
         if (!event?.metaKey || event.button !== 0) {
             return null;
         }
@@ -163,6 +185,71 @@
         range.setEnd(end.node, end.offset);
 
         return range;
+    }
+
+    function rangeContainsPoint(range, x, y) {
+        if (!range || typeof range.getClientRects !== 'function') {
+            return false;
+        }
+
+        return Array.from(range.getClientRects()).some((rect) => (
+            rect.width > 0
+            && rect.height > 0
+            && x >= rect.left
+            && x < rect.right
+            && y >= rect.top
+            && y < rect.bottom
+        ));
+    }
+
+    function urlTextRoots(root) {
+        if (!root) {
+            return [];
+        }
+
+        return Array.from(root.querySelectorAll('.diff-cell-content:not([aria-hidden="true"])'))
+            .flatMap((cell) => {
+                const tableCells = Array.from(cell.querySelectorAll('.diff-md-td'));
+
+                return tableCells.length > 0 ? tableCells : [cell];
+            });
+    }
+
+    function urlMatchForKeyboardControl(control) {
+        if (!control?.matches?.('[data-diff-url-control]')) {
+            return null;
+        }
+
+        const textRoot = control.closest('.diff-md-td') ?? control.closest('.diff-cell-content');
+        const start = Number(control.dataset.diffUrlStart);
+        const end = Number(control.dataset.diffUrlEnd);
+        const match = urlMatchesInText(textRoot?.textContent ?? '')
+            .find((candidate) => candidate.start === start && candidate.end === end && candidate.url === control.dataset.diffUrl);
+
+        return match && textRoot ? { ...match, cell: textRoot } : null;
+    }
+
+    function installKeyboardUrlControls(root, tooltipId) {
+        urlTextRoots(root).forEach((textRoot) => {
+            Array.from(textRoot.children)
+                .filter((child) => child.matches('[data-diff-url-control]'))
+                .forEach((control) => control.remove());
+
+            urlMatchesInText(textRoot.textContent ?? '').forEach((match) => {
+                const control = textRoot.ownerDocument.createElement('button');
+                control.type = 'button';
+                control.className = 'sr-only';
+                control.dataset.diffUrlControl = '';
+                control.dataset.diffUrl = match.url;
+                control.dataset.diffUrlStart = String(match.start);
+                control.dataset.diffUrlEnd = String(match.end);
+                control.setAttribute('aria-label', `Open ${match.url} in the system browser`);
+                if (tooltipId) {
+                    control.setAttribute('aria-describedby', tooltipId);
+                }
+                textRoot.append(control);
+            });
+        });
     }
 
     const hoveredUrlHighlightName = 'rfa-hovered-diff-url';
@@ -337,7 +424,7 @@
     // the user's unsent text instead of dropping it. Page-lifetime by design.
     const pendingCommentForms = new Map();
 
-    function createDiffFile({ fileId, filePath, oldPath = null, status = 'modified', isReviewed, singleFile = false }) {
+    function createDiffFile({ fileId, filePath, oldPath = null, status = 'modified', isReviewed, singleFile = false, urlHintId = null }) {
         const pending = window.__rfaPendingExpandFiles;
         const wantsExpand = pending && pending.has(fileId);
         if (wantsExpand) pending.delete(fileId);
@@ -348,6 +435,7 @@
             status,
             collapsed: wantsExpand ? false : (singleFile ? false : (Alpine.store('settings')?.collapseAll || isReviewed)),
             reviewed: isReviewed,
+            urlHintId,
 
             // Comment form state
             formLine: null,
@@ -372,6 +460,7 @@
             urlHintLeft: 0,
             urlHintTop: 0,
             urlHintTimer: null,
+            urlHintMode: 'pointer',
 
             // Line-drag state
             isDragging: false,
@@ -413,6 +502,7 @@
                 this.hoveredUrl = match.url;
                 this._hoveredUrlCell = match.cell;
                 this._hoveredUrlStart = match.start;
+                this.urlHintMode = 'pointer';
                 this.positionUrlHint(event);
                 this.urlHintTimer = setTimeout(() => {
                     this.urlHintVisible = this.hoveredUrl !== null;
@@ -422,8 +512,39 @@
 
             positionUrlHint(event) {
                 const view = event.target?.ownerDocument?.defaultView ?? window;
-                this.urlHintLeft = Math.max(8, Math.min(event.clientX + 12, view.innerWidth - 120));
-                this.urlHintTop = event.clientY >= 40 ? event.clientY - 32 : event.clientY + 18;
+                this.positionUrlHintAt(event.clientX, event.clientY, view);
+            },
+
+            positionUrlHintAt(x, y, view = window) {
+                this.urlHintLeft = Math.max(8, Math.min(x + 12, view.innerWidth - 120));
+                this.urlHintTop = y >= 40 ? y - 32 : y + 18;
+            },
+
+            previewUrlForKeyboard(event) {
+                const match = urlMatchForKeyboardControl(event.target);
+                if (!match) {
+                    return;
+                }
+
+                this.clearUrlPreview();
+                showUrlHighlight(match);
+                this.hoveredUrl = match.url;
+                this._hoveredUrlCell = match.cell;
+                this._hoveredUrlStart = match.start;
+                this.urlHintMode = 'keyboard';
+                this.urlHintVisible = true;
+
+                const range = rangeForUrlMatch(match);
+                const rect = range?.getBoundingClientRect?.();
+                if (rect) {
+                    this.positionUrlHintAt(rect.left, rect.top, match.cell.ownerDocument.defaultView);
+                }
+            },
+
+            clearUrlPreviewAfterFocus(event) {
+                if (!event.relatedTarget?.matches?.('[data-diff-url-control]')) {
+                    this.clearUrlPreview();
+                }
             },
 
             clearUrlPreview() {
@@ -685,6 +806,17 @@
                 });
             },
 
+            refreshKeyboardUrlControls() {
+                const installControls = () => installKeyboardUrlControls(this.$root, this.urlHintId);
+                if (typeof this.$nextTick === 'function') {
+                    this.$nextTick(installControls);
+
+                    return;
+                }
+
+                installControls();
+            },
+
             init() {
                 this.restorePendingCommentForm();
 
@@ -698,8 +830,10 @@
                         return;
                     }
                     this.restoreExpandFocus(detail.action);
+                    this.refreshKeyboardUrlControls();
                 };
                 window.addEventListener('rfa:diff-action-completed', this._onDiffActionCompleted);
+                this.refreshKeyboardUrlControls();
             },
 
             destroy() {
@@ -981,6 +1115,7 @@
         getScrollSpeed,
         extractLineSnippet,
         trimTrailingUrlPunctuation,
+        urlMatchesInText,
         urlMatchAtTextOffset,
         urlAtTextOffset,
         caretAtPoint,
@@ -988,6 +1123,9 @@
         urlAtClick,
         textPositionAtOffset,
         rangeForUrlMatch,
+        rangeContainsPoint,
+        urlMatchForKeyboardControl,
+        installKeyboardUrlControls,
         showUrlHighlight,
         clearUrlHighlight,
         expanderToRefocus,
