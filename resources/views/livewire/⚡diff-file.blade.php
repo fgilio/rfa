@@ -489,6 +489,15 @@ HTML;
         :allow-discard="$allowDiscard"
     />
 
+    <div
+        x-cloak
+        x-show="urlHintVisible"
+        x-transition.opacity.duration.150ms
+        role="tooltip"
+        :style="`left: ${urlHintLeft}px; top: ${urlHintTop}px`"
+        class="fixed z-[70] pointer-events-none whitespace-nowrap rounded-md border border-gh-border bg-gh-text px-2 py-1 font-display text-[10px] font-medium text-gh-bg shadow-sm"
+    ><span class="font-mono">⌘</span> click to open</div>
+
     {{-- File body --}}
     <div x-show="!collapsed" x-collapse.duration.150ms>
         <div x-ref="fileCommentForm">

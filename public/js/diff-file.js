@@ -368,6 +368,10 @@
             hoveredUrl: null,
             _hoveredUrlCell: null,
             _hoveredUrlStart: null,
+            urlHintVisible: false,
+            urlHintLeft: 0,
+            urlHintTop: 0,
+            urlHintTimer: null,
 
             // Line-drag state
             isDragging: false,
@@ -400,6 +404,7 @@
                 }
 
                 if (this._hoveredUrlCell === match.cell && this._hoveredUrlStart === match.start) {
+                    this.positionUrlHint(event);
                     return;
                 }
 
@@ -408,15 +413,31 @@
                 this.hoveredUrl = match.url;
                 this._hoveredUrlCell = match.cell;
                 this._hoveredUrlStart = match.start;
+                this.positionUrlHint(event);
+                this.urlHintTimer = setTimeout(() => {
+                    this.urlHintVisible = this.hoveredUrl !== null;
+                    this.urlHintTimer = null;
+                }, 350);
+            },
+
+            positionUrlHint(event) {
+                const view = event.target?.ownerDocument?.defaultView ?? window;
+                this.urlHintLeft = Math.max(8, Math.min(event.clientX + 12, view.innerWidth - 120));
+                this.urlHintTop = event.clientY >= 40 ? event.clientY - 32 : event.clientY + 18;
             },
 
             clearUrlPreview() {
                 if (this._hoveredUrlCell !== null) {
                     clearUrlHighlight(this.$root?.ownerDocument ?? document);
                 }
+                if (this.urlHintTimer !== null) {
+                    clearTimeout(this.urlHintTimer);
+                    this.urlHintTimer = null;
+                }
                 this.hoveredUrl = null;
                 this._hoveredUrlCell = null;
                 this._hoveredUrlStart = null;
+                this.urlHintVisible = false;
             },
 
             markDiffActionStart(action) {

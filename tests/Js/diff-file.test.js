@@ -29,6 +29,7 @@ describe('Cmd+click URLs', () => {
     const cssApi = document.defaultView.CSS;
 
     afterEach(() => {
+        vi.useRealTimers();
         delete document.caretPositionFromPoint;
         delete document.caretRangeFromPoint;
         Object.defineProperty(document.defaultView, 'CSS', { configurable: true, value: cssApi });
@@ -150,6 +151,7 @@ describe('Cmd+click URLs', () => {
     });
 
     it('previews only the URL under the pointer and clears it on leave', () => {
+        vi.useFakeTimers();
         globalThis.Alpine = { store: () => ({ collapseAll: false }) };
         document.body.innerHTML = '<div id="root"><div class="diff-cell-content">Read https://example.com/docs now</div></div>';
         const root = document.getElementById('root');
@@ -173,11 +175,41 @@ describe('Cmd+click URLs', () => {
 
         expect(component.hoveredUrl).toBe('https://example.com/docs');
         expect(highlights.set).toHaveBeenCalledOnce();
+        expect(component.urlHintVisible).toBe(false);
+
+        vi.advanceTimersByTime(350);
+
+        expect(component.urlHintVisible).toBe(true);
+        expect(component.urlHintLeft).toBe(13);
+        expect(component.urlHintTop).toBe(19);
 
         component.clearUrlPreview();
 
         expect(component.hoveredUrl).toBeNull();
+        expect(component.urlHintVisible).toBe(false);
         expect(highlights.delete).toHaveBeenCalled();
+
+        vi.useRealTimers();
+    });
+
+    it('cancels the Cmd-click hint when the pointer leaves before the delay', () => {
+        vi.useFakeTimers();
+        globalThis.Alpine = { store: () => ({ collapseAll: false }) };
+        document.body.innerHTML = '<div id="root"><div class="diff-cell-content">https://example.com</div></div>';
+        const root = document.getElementById('root');
+        const target = document.querySelector('.diff-cell-content');
+        document.caretPositionFromPoint = vi.fn(() => ({ offsetNode: target.firstChild, offset: 10 }));
+        const component = createDiffFile({ fileId: 'file-1', filePath: 'README.md', isReviewed: false });
+        component.$root = root;
+
+        component.previewUrlAtPoint({ target, clientX: 10, clientY: 50 });
+        component.clearUrlPreview();
+        vi.advanceTimersByTime(350);
+
+        expect(component.urlHintVisible).toBe(false);
+        expect(component.urlHintTimer).toBeNull();
+
+        vi.useRealTimers();
     });
 });
 
