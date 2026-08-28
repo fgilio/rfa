@@ -1287,11 +1287,6 @@ new #[Layout('layouts.app')] class extends Component
     @endif
 
     <x-page-header>
-        @native
-            <x-slot:above>
-                <livewire:update-banner />
-            </x-slot:above>
-        @endnative
             <div class="flex items-center gap-2 min-w-0">
                 <div
                     @if($hasRemote)

@@ -9,8 +9,6 @@
        below the bar without hard-coding a number.
 
     Slots:
-    - $above   optional content rendered above the bar but still inside
-               the sticky/observed wrapper (used for the update banner).
     - $slot    the bar contents (typically two flex children, left + right).
     - $below   optional content rendered below the bar inside the same
                wrapper. Used by review-page for the status-strip, which
@@ -27,8 +25,6 @@
         new ResizeObserver(update).observe($el);
     "
 >
-    {{ $above ?? '' }}
-
     <header class="bg-gh-bg/80 backdrop-blur-sm border-b border-gh-border px-5 py-3.5 flex items-center justify-between">
         {{ $slot }}
     </header>

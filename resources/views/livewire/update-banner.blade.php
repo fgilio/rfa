@@ -133,95 +133,97 @@ new class extends Component
 @php($cadence = $this->pollCadence())
 
 <div
+    data-testid="update-banner"
     wire:smart-poll="refreshState"
     data-focus="{{ $cadence['focus'] }}"
     data-blur="{{ $cadence['blur'] }}"
 >
-    @if($status === 'checking')
+    @if($status)
         <div
-            class="bg-gh-surface border-b border-gh-border px-4 py-2 font-mono text-xs text-gh-muted flex items-center justify-center gap-2"
-            role="status"
+            data-testid="update-notification"
+            wire:key="update-notification-{{ $status }}"
+            wire:transition.opacity
+            class="fixed top-3 left-1/2 z-[70] w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 pointer-events-none motion-reduce:transition-none"
+            role="{{ $status === 'error' ? 'alert' : 'status' }}"
+            aria-live="{{ $status === 'error' ? 'assertive' : 'polite' }}"
+            aria-atomic="true"
         >
-            <flux:icon icon="arrow-path" variant="outline" class="!size-3.5 animate-spin" />
-            Checking for updates...
-        </div>
-    @elseif($status === 'downloading')
-        <div
-            class="bg-gh-surface border-b border-gh-border px-4 py-2 font-mono text-xs text-gh-text flex items-center justify-center gap-3"
-            role="status"
-        >
-            <span>Downloading v{{ $version }}...</span>
-            <div class="w-24 h-1 bg-gh-border rounded-full overflow-hidden">
-                <div
-                    class="h-full bg-gh-link rounded-full transition-all duration-200 ease-out"
-                    style="width: {{ $downloadPercent }}%"
-                ></div>
+            <div class="pointer-events-auto relative overflow-hidden rounded-lg border border-gh-border/80 bg-gh-surface/95 shadow-lg shadow-black/10 backdrop-blur-md">
+                <div class="flex min-h-9 items-center gap-2.5 px-3 py-2 font-mono text-xs text-gh-text">
+                    @if($status === 'checking')
+                        <span class="grid size-5 shrink-0 place-items-center rounded bg-gh-link/10 text-gh-link">
+                            <flux:icon icon="arrow-path" variant="outline" class="!size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                        </span>
+                        <span>Checking for updates...</span>
+                    @elseif($status === 'downloading')
+                        <span class="grid size-5 shrink-0 place-items-center rounded bg-gh-link/10 text-gh-link">
+                            <flux:icon icon="arrow-down-tray" variant="outline" class="!size-3.5" aria-hidden="true" />
+                        </span>
+                        <span>Downloading v{{ $version }}...</span>
+                        <span class="tabular-nums text-gh-muted">{{ $downloadPercent }}%</span>
+                    @elseif($status === 'ready')
+                        <span class="grid size-5 shrink-0 place-items-center rounded bg-gh-green/10 text-gh-green">
+                            <flux:icon icon="arrow-up-circle" variant="outline" class="!size-3.5" aria-hidden="true" />
+                        </span>
+                        <span>v{{ $version }} ready</span>
+                        @if($releaseNotes)
+                            <span class="max-w-xs truncate text-gh-muted" title="{{ $releaseNotes }}">{{ Str::limit($releaseNotes, 60) }}</span>
+                        @endif
+                        <button
+                            type="button"
+                            x-data
+                            @click="$dispatch('restart-started')"
+                            wire:click="restartAndUpdate"
+                            class="rounded px-1.5 py-0.5 font-medium text-gh-link transition-colors hover:bg-gh-link/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gh-link"
+                        >
+                            Restart to update
+                        </button>
+                    @elseif($status === 'up-to-date')
+                        <span class="grid size-5 shrink-0 place-items-center rounded bg-gh-green/10 text-gh-green">
+                            <flux:icon icon="check" variant="outline" class="!size-3.5" aria-hidden="true" />
+                        </span>
+                        <span>You're up to date</span>
+                    @elseif($status === 'checked-dev')
+                        <span class="grid size-5 shrink-0 place-items-center rounded bg-gh-link/10 text-gh-link">
+                            <flux:icon icon="information-circle" variant="outline" class="!size-3.5" aria-hidden="true" />
+                        </span>
+                        <span>Checked for updates</span>
+                        <span class="text-gh-muted">Dev build - NativePHP updater does not complete here.</span>
+                    @elseif($status === 'error')
+                        <span class="grid size-5 shrink-0 place-items-center rounded bg-gh-red/10 text-gh-red">
+                            <flux:icon icon="exclamation-triangle" variant="outline" class="!size-3.5" aria-hidden="true" />
+                        </span>
+                        <span>Update check failed</span>
+                    @endif
+
+                    @if(in_array($status, ['ready', 'up-to-date', 'error'], true))
+                        <button
+                            type="button"
+                            wire:click="dismiss"
+                            class="grid size-5 shrink-0 place-items-center rounded text-gh-muted transition-colors hover:bg-gh-border/60 hover:text-gh-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gh-link"
+                            aria-label="Dismiss update notification"
+                        >
+                            <flux:icon icon="x-mark" variant="outline" class="!size-3.5" aria-hidden="true" />
+                        </button>
+                    @endif
+                </div>
+
+                @if($status === 'downloading')
+                    <div
+                        class="absolute inset-x-0 bottom-0 h-0.5 bg-gh-border"
+                        role="progressbar"
+                        aria-label="Update download progress"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-valuenow="{{ $downloadPercent }}"
+                    >
+                        <div
+                            class="h-full bg-gh-link transition-[width] duration-200 ease-out motion-reduce:transition-none"
+                            style="width: {{ $downloadPercent }}%"
+                        ></div>
+                    </div>
+                @endif
             </div>
-            <span class="text-gh-muted">{{ $downloadPercent }}%</span>
-        </div>
-    @elseif($status === 'ready')
-        <div
-            class="bg-gh-surface border-b border-gh-border px-4 py-2 font-mono text-xs text-gh-text flex items-center justify-center gap-3"
-            role="status"
-        >
-            <span>v{{ $version }} ready</span>
-            @if($releaseNotes)
-                <span class="text-gh-muted truncate max-w-xs" title="{{ $releaseNotes }}">{{ Str::limit($releaseNotes, 60) }}</span>
-            @endif
-            <button
-                x-data
-                @click="$dispatch('restart-started')"
-                wire:click="restartAndUpdate"
-                class="text-gh-link hover:underline font-medium"
-            >
-                Restart to update
-            </button>
-            <button
-                wire:click="dismiss"
-                class="text-gh-muted hover:text-gh-text"
-                aria-label="Dismiss"
-            >
-                <flux:icon icon="x-mark" variant="outline" class="!size-3.5" />
-            </button>
-        </div>
-    @elseif($status === 'up-to-date')
-        <div
-            class="bg-gh-surface border-b border-gh-border px-4 py-2 font-mono text-xs text-gh-green flex items-center justify-center gap-2"
-            role="status"
-        >
-            <flux:icon icon="check-circle" variant="outline" class="!size-3.5" />
-            You're up to date
-            <button
-                wire:click="dismiss"
-                class="text-gh-muted hover:text-gh-text"
-                aria-label="Dismiss"
-            >
-                <flux:icon icon="x-mark" variant="outline" class="!size-3.5" />
-            </button>
-        </div>
-    @elseif($status === 'checked-dev')
-        <div
-            class="bg-gh-surface border-b border-gh-border px-4 py-2 font-mono text-xs text-gh-link flex items-center justify-center gap-3"
-            role="status"
-        >
-            <flux:icon icon="information-circle" variant="outline" class="!size-3.5" />
-            <span>Checked for updates</span>
-            <span class="text-gh-muted">Dev build - NativePHP updater does not complete here.</span>
-        </div>
-    @elseif($status === 'error')
-        <div
-            class="bg-gh-surface border-b border-gh-border px-4 py-2 font-mono text-xs text-gh-red flex items-center justify-center gap-3"
-            role="status"
-        >
-            <flux:icon icon="exclamation-triangle" variant="outline" class="!size-3.5" />
-            <span>Update check failed</span>
-            <button
-                wire:click="dismiss"
-                class="text-gh-muted hover:text-gh-text"
-                aria-label="Dismiss"
-            >
-                <flux:icon icon="x-mark" variant="outline" class="!size-3.5" />
-            </button>
         </div>
     @endif
 

@@ -365,6 +365,9 @@
     <x-shortcuts-help />
 
     <livewire:keepalive />
+    @native
+        <livewire:update-banner />
+    @endnative
     {{-- Single defined home for Flux toasts (bottom-right), clear of the undo-toast
          and submit bar. Surface styling is brought onto gh-* tokens in app.css. --}}
     <flux:toast position="bottom end" />

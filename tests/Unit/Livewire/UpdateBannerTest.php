@@ -44,7 +44,9 @@ test('shows downloading state with progress', function () {
         ->assertSet('version', '1.2.0')
         ->assertSet('downloadPercent', 42)
         ->assertSee('Downloading v1.2.0...')
-        ->assertSee('42%');
+        ->assertSee('42%')
+        ->assertSeeHtml('role="progressbar"')
+        ->assertSeeHtml('aria-valuenow="42"');
 });
 
 test('shows ready state with version and restart button', function () {
@@ -90,7 +92,20 @@ test('shows error state', function () {
 
     Livewire::test('update-banner')
         ->assertSet('status', 'error')
-        ->assertSee('Update check failed');
+        ->assertSee('Update check failed')
+        ->assertSeeHtml('role="alert"')
+        ->assertSeeHtml('aria-live="assertive"');
+});
+
+test('renders status as a floating notification outside document flow', function () {
+    Cache::put('native-update-state', ['status' => 'up-to-date'], now()->addSeconds(10));
+
+    Livewire::test('update-banner')
+        ->assertSeeHtml('data-testid="update-notification"')
+        ->assertSeeHtml('class="fixed top-3 left-1/2 z-[70]')
+        ->assertSeeHtml('aria-live="polite"')
+        ->assertSeeHtml('aria-atomic="true"')
+        ->assertSeeHtml('aria-label="Dismiss update notification"');
 });
 
 test('resets state when cache is cleared', function () {
