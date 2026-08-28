@@ -160,6 +160,14 @@
         .diff-cell-num:not(:empty):hover { color: rgb(var(--gh-link)); }
         .diff-cell-prefix { padding: 0 0.25rem; text-align: center; user-select: none; }
         .diff-cell-content { padding: 0 0.5rem; white-space: pre-wrap; word-break: break-all; }
+        ::highlight(rfa-hovered-diff-url) {
+            color: rgb(var(--gh-link));
+            text-decoration-line: underline;
+            text-decoration-style: wavy;
+            text-decoration-color: rgb(var(--gh-link) / 0.75);
+            text-decoration-thickness: 1px;
+            text-underline-offset: 2px;
+        }
 
         /* Markdown table rows render their cells as a real grid so each cell wraps
            within its own column instead of the whole row wrapping mid-character.

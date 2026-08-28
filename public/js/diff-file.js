@@ -44,6 +44,145 @@
         return lines.length ? lines.join('\n').trimEnd() : null;
     }
 
+    function trimTrailingUrlPunctuation(candidate) {
+        let url = candidate.replace(/[.,;:!?]+$/u, '');
+        const bracketPairs = [
+            ['(', ')'],
+            ['[', ']'],
+            ['{', '}'],
+        ];
+
+        bracketPairs.forEach(([opening, closing]) => {
+            while (url.endsWith(closing) && url.split(closing).length > url.split(opening).length) {
+                url = url.slice(0, -1);
+            }
+        });
+
+        return url;
+    }
+
+    function urlMatchAtTextOffset(text, offset) {
+        if (typeof text !== 'string' || !Number.isInteger(offset) || offset < 0) {
+            return null;
+        }
+
+        const matches = text.matchAll(/\bhttps?:\/\/[^\s<>"'`]+/giu);
+        for (const match of matches) {
+            const url = trimTrailingUrlPunctuation(match[0]);
+            const start = match.index;
+            const end = start + url.length;
+
+            if (offset >= start && offset <= end) {
+                return { url, start, end };
+            }
+        }
+
+        return null;
+    }
+
+    function urlAtTextOffset(text, offset) {
+        return urlMatchAtTextOffset(text, offset)?.url ?? null;
+    }
+
+    function caretAtPoint(document, x, y) {
+        if (typeof document.caretPositionFromPoint === 'function') {
+            const position = document.caretPositionFromPoint(x, y);
+
+            return position ? { node: position.offsetNode, offset: position.offset } : null;
+        }
+
+        if (typeof document.caretRangeFromPoint === 'function') {
+            const range = document.caretRangeFromPoint(x, y);
+
+            return range ? { node: range.startContainer, offset: range.startOffset } : null;
+        }
+
+        return null;
+    }
+
+    function urlMatchAtPoint(event) {
+        const target = event.target?.nodeType === 3 ? event.target.parentElement : event.target;
+        const cell = target?.closest?.('.diff-cell-content');
+        if (!cell) {
+            return null;
+        }
+
+        const document = cell.ownerDocument;
+        const caret = caretAtPoint(document, event.clientX, event.clientY);
+        if (!caret || !cell.contains(caret.node)) {
+            return null;
+        }
+
+        const range = document.createRange();
+        range.selectNodeContents(cell);
+        range.setEnd(caret.node, caret.offset);
+
+        const match = urlMatchAtTextOffset(cell.textContent ?? '', range.toString().length);
+
+        return match ? { ...match, cell } : null;
+    }
+
+    function urlAtClick(event) {
+        if (!event?.metaKey || event.button !== 0) {
+            return null;
+        }
+
+        return urlMatchAtPoint(event)?.url ?? null;
+    }
+
+    function textPositionAtOffset(root, offset) {
+        const walker = root.ownerDocument.createTreeWalker(root, 4);
+        let remaining = offset;
+        let textNode = walker.nextNode();
+
+        while (textNode) {
+            if (remaining <= textNode.data.length) {
+                return { node: textNode, offset: remaining };
+            }
+
+            remaining -= textNode.data.length;
+            textNode = walker.nextNode();
+        }
+
+        return null;
+    }
+
+    function rangeForUrlMatch(match) {
+        if (!match?.cell) {
+            return null;
+        }
+
+        const start = textPositionAtOffset(match.cell, match.start);
+        const end = textPositionAtOffset(match.cell, match.end);
+        if (!start || !end) {
+            return null;
+        }
+
+        const range = match.cell.ownerDocument.createRange();
+        range.setStart(start.node, start.offset);
+        range.setEnd(end.node, end.offset);
+
+        return range;
+    }
+
+    const hoveredUrlHighlightName = 'rfa-hovered-diff-url';
+
+    function showUrlHighlight(match) {
+        const view = match?.cell?.ownerDocument?.defaultView;
+        const range = rangeForUrlMatch(match);
+        if (!view?.CSS?.highlights || typeof view.Highlight !== 'function' || !range) {
+            return false;
+        }
+
+        view.CSS.highlights.set(hoveredUrlHighlightName, new view.Highlight(range));
+
+        return true;
+    }
+
+    function clearUrlHighlight(document) {
+        document?.defaultView?.CSS?.highlights?.delete(hoveredUrlHighlightName);
+    }
+
     // The expander to refocus after a gap expand re-renders, keyed by hunk index.
     // A keyboard-activated expander loses focus when its node is replaced by the
     // post-expand morph; this hands focus to the expander that now occupies the
@@ -226,6 +365,9 @@
             escHint: false,
             escTimer: null,
             autoExpandedForComment: false,
+            hoveredUrl: null,
+            _hoveredUrlCell: null,
+            _hoveredUrlStart: null,
 
             // Line-drag state
             isDragging: false,
@@ -237,6 +379,44 @@
 
             toggleHeadingFold(id) {
                 this.foldedHeadings[id] = !this.foldedHeadings[id];
+            },
+
+            openUrlAtClick(event) {
+                const url = urlAtClick(event);
+                if (url === null) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                this.$wire.openExternalUrl(url);
+            },
+
+            previewUrlAtPoint(event) {
+                const match = urlMatchAtPoint(event);
+                if (!match) {
+                    this.clearUrlPreview();
+                    return;
+                }
+
+                if (this._hoveredUrlCell === match.cell && this._hoveredUrlStart === match.start) {
+                    return;
+                }
+
+                this.clearUrlPreview();
+                showUrlHighlight(match);
+                this.hoveredUrl = match.url;
+                this._hoveredUrlCell = match.cell;
+                this._hoveredUrlStart = match.start;
+            },
+
+            clearUrlPreview() {
+                if (this._hoveredUrlCell !== null) {
+                    clearUrlHighlight(this.$root?.ownerDocument ?? document);
+                }
+                this.hoveredUrl = null;
+                this._hoveredUrlCell = null;
+                this._hoveredUrlStart = null;
             },
 
             markDiffActionStart(action) {
@@ -503,6 +683,7 @@
 
             destroy() {
                 this.persistPendingCommentForm();
+                this.clearUrlPreview();
                 this.stopDragTracking();
                 if (this.escTimer) { clearTimeout(this.escTimer); this.escTimer = null; }
                 this.escHint = false;
@@ -778,6 +959,16 @@
     return {
         getScrollSpeed,
         extractLineSnippet,
+        trimTrailingUrlPunctuation,
+        urlMatchAtTextOffset,
+        urlAtTextOffset,
+        caretAtPoint,
+        urlMatchAtPoint,
+        urlAtClick,
+        textPositionAtOffset,
+        rangeForUrlMatch,
+        showUrlHighlight,
+        clearUrlHighlight,
         expanderToRefocus,
         createLinePoint,
         areLinePointsEqual,

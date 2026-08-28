@@ -3,6 +3,7 @@
 use App\Actions\ExpandDiffGapAction;
 use App\Actions\GetFileCopyContentAction;
 use App\Actions\LoadFileDiffAction;
+use App\Actions\OpenExternalUrlAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveReviewConfigAction;
 use App\DTOs\DiffTarget;
@@ -155,6 +156,13 @@ HTML;
         }
 
         Flux::toast(variant: 'warning', text: $this->copyUnavailableMessage($kind, $result));
+    }
+
+    public function openExternalUrl(string $url): void
+    {
+        app(OpenExternalUrlAction::class)->handle($url);
+
+        $this->skipRender();
     }
 
     private function copyUnavailableMessage(string $kind, \App\DTOs\CopyContentResult $result): string
@@ -618,7 +626,10 @@ HTML;
                 data-testid="diff-table"
                 :data-view-mode="$store.settings.diffViewMode"
                 class="diff-grid font-mono text-xs leading-5"
-                :class="isDragging ? 'select-none' : ''"
+                :class="{ 'select-none': isDragging, 'cursor-pointer': hoveredUrl !== null }"
+                @mousemove="previewUrlAtPoint($event)"
+                @mouseleave="clearUrlPreview()"
+                @click="openUrlAtClick($event)"
             >
                 @if($hasGaps)
                     <x-diff.expand-control>
