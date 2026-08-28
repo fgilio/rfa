@@ -122,16 +122,21 @@ new class extends Component
 
 ?>
 
-<div data-testid="context-tree" class="space-y-3">
-    <div class="flex items-center justify-between">
-        <span class="section-label text-gh-muted">Context files</span>
-        <span class="font-mono text-[10px] text-gh-muted">{{ count($contextFiles) }}</span>
-    </div>
+<div data-testid="context-tree">
+    <div
+        data-testid="sidebar-filter-bar"
+        class="sticky top-0 z-20 -mx-4 -mt-4 space-y-3 bg-gh-bg px-4 pt-4 pb-3"
+    >
+        <div class="flex items-center justify-between">
+            <span class="section-label text-gh-muted">Context files</span>
+            <span class="font-mono text-[10px] text-gh-muted">{{ count($contextFiles) }}</span>
+        </div>
 
-    <flux:select wire:model.live="filterMode" size="sm">
-        <flux:select.option value="all">All paths</flux:select.option>
-        <flux:select.option value="with-context">With context only</flux:select.option>
-    </flux:select>
+        <flux:select wire:model.live="filterMode" size="sm">
+            <flux:select.option value="all">All paths</flux:select.option>
+            <flux:select.option value="with-context">With context only</flux:select.option>
+        </flux:select>
+    </div>
 
     @if(empty($contextFiles))
         <div class="text-xs text-gh-muted px-1 py-4 text-center">

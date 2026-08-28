@@ -1532,6 +1532,50 @@ new #[Layout('layouts.app')] class extends Component
     <x-resizable-sidebar-shell>
         <x-slot:sidebar>
             <div class="p-4">
+                <div
+                    data-testid="sidebar-filter-bar"
+                    class="sticky top-0 z-20 -mx-4 -mt-4 bg-gh-bg px-4 pt-4 pb-3"
+                >
+                    {{-- Header island: the j/k hint and copy-paths trigger both read
+                         visibleFileCount, which Hide-reviewed changes. Kept separate
+                         from the file-list island below so it can refresh on the
+                         skipRender visibility path without re-rendering (and stealing
+                         focus from) the filter input that follows it. --}}
+                    @island(name: 'file-list-header', always: true)
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="section-label text-gh-muted">Files</span>
+                            @if($this->reviewState->visibleFileCount > 1)
+                                <x-kbd-hint
+                                    :keys="['j', 'k']"
+                                    class="text-gh-muted/70"
+                                    title="j next file · k previous file"
+                                    aria-label="Press j for the next file, k for the previous file"
+                                />
+                            @endif
+                        </div>
+                        @if(count($sourceFiles) > 0)
+                            <x-copy-paths-button
+                                testid-prefix="sidebar-copy-paths"
+                                :visible-count="$this->reviewState->visibleFileCount"
+                            />
+                        @endif
+                    </div>
+                    @endisland
+                    <flux:input
+                        wire:model.live.debounce.150ms="fileFilter"
+                        placeholder="Filter files..."
+                        icon="magnifying-glass"
+                        icon:variant="outline"
+                        clearable
+                        kbd="/"
+                        size="sm"
+                        variant="filled"
+                        data-testid="file-filter"
+                        x-ref="fileFilterInput"
+                    />
+                </div>
+
                 @if(! $this->isCommitMode() && count($reviewPairs) > 0)
                     <div class="flex items-center justify-between mb-3">
                         <span class="section-label text-gh-muted">Reviews</span>
@@ -1559,46 +1603,6 @@ new #[Layout('layouts.app')] class extends Component
                     @endforeach
                     <div class="border-b border-gh-border my-3"></div>
                 @endif
-
-                {{-- Header island: the j/k hint and copy-paths trigger both read
-                     visibleFileCount, which Hide-reviewed changes. Kept separate
-                     from the file-list island below so it can refresh on the
-                     skipRender visibility path without re-rendering (and stealing
-                     focus from) the filter input that sits between them. --}}
-                @island(name: 'file-list-header', always: true)
-                <div class="flex items-center justify-between mb-3">
-                    <div class="flex items-center gap-2">
-                        <span class="section-label text-gh-muted">Files</span>
-                        @if($this->reviewState->visibleFileCount > 1)
-                            <x-kbd-hint
-                                :keys="['j', 'k']"
-                                class="text-gh-muted/70"
-                                title="j next file · k previous file"
-                                aria-label="Press j for the next file, k for the previous file"
-                            />
-                        @endif
-                    </div>
-                    @if(count($sourceFiles) > 0)
-                        <x-copy-paths-button
-                            testid-prefix="sidebar-copy-paths"
-                            :visible-count="$this->reviewState->visibleFileCount"
-                        />
-                    @endif
-                </div>
-                @endisland
-                <flux:input
-                    wire:model.live.debounce.150ms="fileFilter"
-                    placeholder="Filter files..."
-                    icon="magnifying-glass"
-                    icon:variant="outline"
-                    clearable
-                    kbd="/"
-                    size="sm"
-                    variant="filled"
-                    class="mb-3"
-                    data-testid="file-filter"
-                    x-ref="fileFilterInput"
-                />
                 {{-- File list as an island so a reviewed mark/un-mark refreshes the
                      sidebar checkmarks and recovery group without a full page render.
                      always:true keeps it current on full renders too (filtering,
