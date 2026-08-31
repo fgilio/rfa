@@ -151,10 +151,10 @@ test('mount passes gitignore path when respectGlobalGitignore is true', function
     expect($captured->first())->toBe('/tmp/test-global-gitignore');
 });
 
-test('diff file lazy loads stay isolated to avoid Livewire max component payload', function () {
+test('diff file lazy bundles support reviews larger than the request component limit', function () {
     $maxComponents = config('livewire.payload.max_components', 20);
 
-    $files = collect(range(1, $maxComponents + 5))
+    $files = collect(range(1, 125))
         ->map(fn (int $index): array => [
             'id' => "file-{$index}",
             'path' => "src/File{$index}.php",
@@ -183,18 +183,21 @@ test('diff file lazy loads stay isolated to avoid Livewire max component payload
     });
 
     $html = Livewire::test('pages::review-page', ['slug' => 'test-project'])->html();
-    $lazyLoadCount = substr_count($html, '__lazyLoad');
+    $diffFileCount = substr_count($html, 'data-rfa-render-blocker');
 
-    expect($lazyLoadCount)
-        ->toBeGreaterThan($maxComponents)
-        ->and($html)->not->toContain('lazyIsolated&quot;:false');
+    expect($maxComponents)
+        ->toBeLessThan($diffFileCount)
+        ->and($diffFileCount)->toBe(125)
+        ->and($html)->toContain('lazyIsolated&quot;:false');
 });
 
 test('diff file lazy placeholders render stable file headers', function () {
     $html = Livewire::test('pages::review-page', ['slug' => 'test-project'])->html();
 
     expect($html)
-        ->toContain('data-rfa-diff-file-placeholder')
+        ->toContain('data-rfa-render-shells="2"')
+        ->toContain('data-rfa-render-shell')
+        ->toContain('data-rfa-render-blocker')
         ->toContain('src/Foo.php')
         ->toContain('src/Bar.php')
         ->toContain('+5')

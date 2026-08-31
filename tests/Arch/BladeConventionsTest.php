@@ -185,6 +185,18 @@ test('review-page diff-file keys include per-file refresh fingerprints', functio
     }
 });
 
+test('review-page bundles every lazy diff-file shell request', function () {
+    $page = dirname(__DIR__, 2).'/resources/views/pages/⚡review-page.blade.php';
+
+    preg_match_all('/<livewire:diff-file\b.*?\/>/s', file_get_contents($page), $matches);
+
+    expect($matches[0])->not->toBeEmpty();
+
+    foreach ($matches[0] as $tag) {
+        expect($tag)->toContain('lazy.bundle');
+    }
+});
+
 test('branch explorer active commit state uses ref-aware matching', function () {
     $component = dirname(__DIR__, 2).'/resources/views/livewire/⚡branch-explorer.blade.php';
     $content = file_get_contents($component);

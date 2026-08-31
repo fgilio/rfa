@@ -1802,7 +1802,7 @@ new #[Layout('layouts.app')] class extends Component
                             </div>
                             <div x-show="!collapsed" x-collapse.duration.150ms>
                                 <livewire:diff-file
-                                    lazy
+                                    lazy.bundle
                                     :key="$pair['mdFile']['id'].'-'.$pair['mdFile']['refreshFingerprint']"
                                     :file="$pair['mdFile']"
                                     :load-delay="0"
@@ -1835,7 +1835,7 @@ new #[Layout('layouts.app')] class extends Component
                              wire:key="source-file-shell-{{ $file['id'] }}-{{ $file['refreshFingerprint'] }}"
                              class="border-b border-gh-border transition-opacity duration-150 ease-out">
                             <livewire:diff-file
-                                lazy
+                                lazy.bundle
                                 :key="$file['id'].'-'.$file['refreshFingerprint']"
                                 :file="$file"
                                 :load-delay="(int) (floor($loop->index / 15) * 100)"
