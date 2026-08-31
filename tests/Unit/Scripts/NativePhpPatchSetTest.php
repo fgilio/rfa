@@ -15,11 +15,12 @@ uses(TestCase::class, InteractsWithTestRepositories::class);
  */
 function stubDistRoot(string $root, ?callable $mutate = null): string
 {
-    foreach (['preload', 'server'] as $subdirectory) {
+    foreach (['preload', 'server', 'server/api'] as $subdirectory) {
         mkdir($root.'/'.$subdirectory, 0755, true);
     }
 
     file_put_contents($root.'/preload/index.mjs', stockPreload());
+    file_put_contents($root.'/server/api/window.js', stockWindowApi());
     file_put_contents($root.'/server/php.js', stockServer());
     file_put_contents($root.'/index.js', stockIndexForSplash()."\n".stockIndex());
 
@@ -33,7 +34,7 @@ function stubDistRoot(string $root, ?callable $mutate = null): string
 /** @return array<string, string> */
 function distSnapshot(string $root): array
 {
-    return collect(['preload/index.mjs', 'server/php.js', 'index.js'])
+    return collect(['preload/index.mjs', 'server/api/window.js', 'server/php.js', 'index.js'])
         ->filter(fn (string $file) => is_file($root.'/'.$file))
         ->mapWithKeys(fn (string $file) => [$file => file_get_contents($root.'/'.$file)])
         ->all();
@@ -43,7 +44,7 @@ function distSnapshot(string $root): array
 
 test('the patch set covers every vendored file rfa depends on', function () {
     expect(collect(rfaNativePhpPatchSet())->pluck('name')->all())
-        ->toBe(['preload-file-bridge', 'server-optimize', 'preflight-cache', 'splash-window']);
+        ->toBe(['preload-file-bridge', 'window-ready-to-show', 'server-optimize', 'preflight-cache', 'splash-window']);
 });
 
 test('the dist root points at the vendored electron plugin', function () {
@@ -58,12 +59,13 @@ test('applies every patch in one run', function () {
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['applied'])->toBe(['preload-file-bridge', 'server-optimize', 'preflight-cache', 'splash-window'])
+    expect($outcome['applied'])->toBe(['preload-file-bridge', 'window-ready-to-show', 'server-optimize', 'preflight-cache', 'splash-window'])
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['absent'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 
     expect(file_get_contents($root.'/preload/index.mjs'))->toContain('nativeGetFilePath');
+    expect(file_get_contents($root.'/server/api/window.js'))->toContain('[rfa window readiness]');
     expect(file_get_contents($root.'/server/php.js'))->toContain('rfaNeedsFullOptimize');
     expect(file_get_contents($root.'/index.js'))
         ->toContain("'preflight_config_'")
@@ -92,7 +94,7 @@ test('a second run changes nothing', function () {
     $outcome = applyRfaNativePhpPatchSet($root);
 
     expect($outcome['applied'])->toBeEmpty()
-        ->and($outcome['unchanged'])->toHaveCount(4)
+        ->and($outcome['unchanged'])->toHaveCount(5)
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($afterFirst);
 });
@@ -191,7 +193,7 @@ test('an absent dist tree is reported, not failed', function () {
     // pruned copy where the plugin dist is not present.
     $outcome = applyRfaNativePhpPatchSet(sys_get_temp_dir().'/rfa_test_dist_nowhere_'.getmypid());
 
-    expect($outcome['absent'])->toHaveCount(4)
+    expect($outcome['absent'])->toHaveCount(5)
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 });

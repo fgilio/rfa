@@ -31,6 +31,35 @@ contextBridge.exposeInMainWorld('Native', Native);
 JS;
 }
 
+function stockWindowApi(): string
+{
+    return <<<'JS'
+import express from 'express';
+import { BrowserWindow } from 'electron';
+import state from '../state.js';
+const router = express.Router();
+router.post('/open', (req, res) => {
+    const window = new BrowserWindow({ show: false });
+    window.loadURL(url);
+    window.webContents.on('dom-ready', () => {
+        window.webContents.setZoomFactor(parseFloat(zoomFactor));
+    });
+    window.webContents.on('did-finish-load', () => {
+        if (state.noFocusOnRestart && window.isVisible()) {
+            return;
+        }
+        window.show();
+    });
+    window.webContents.on('did-fail-load', (event) => {
+        console.error('failed to open window...', event);
+    });
+    state.windows[id] = window;
+    res.sendStatus(200);
+});
+export default router;
+JS;
+}
+
 function stockServer(): string
 {
     return <<<'JS'

@@ -3,7 +3,7 @@
 /**
  * The NativePHP vendor changes RFA depends on, applied as one patch set.
  *
- * Four edits across three compiled files in `nativephp/desktop`'s bundled
+ * Five edits across four compiled files in `nativephp/desktop`'s bundled
  * Electron plugin. They are not independent in practice: two of them rewrite
  * the same `dist/index.js`, and a build that ships some of them is a build
  * whose startup behaviour nobody has tested. So the set is all-or-nothing —
@@ -54,6 +54,50 @@ contextBridge.exposeInMainWorld('nativeGetFilePath', (file) => webUtils.getPathF
 JS;
 
     return $content."\n";
+}
+
+/**
+ * Show NativePHP windows only after Electron has rendered their first frame.
+ *
+ * NativePHP currently shows a hidden BrowserWindow from `did-finish-load`.
+ * That event confirms navigation, but it does not confirm that Chromium has
+ * rendered a frame. Electron's `ready-to-show` event is the paint barrier for
+ * a BrowserWindow created with `show: false`.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchWindowReadyToShow(string $content): ?string
+{
+    $find = <<<'JS'
+    window.webContents.on('did-finish-load', () => {
+        if (state.noFocusOnRestart && window.isVisible()) {
+            return;
+        }
+        window.show();
+    });
+JS;
+
+    $replace = <<<'JS'
+    // [rfa window readiness] Navigation can finish before Chromium presents a
+    // frame. Keep the BrowserWindow hidden until Electron confirms first paint.
+    window.once('ready-to-show', () => {
+        if (state.noFocusOnRestart && window.isVisible()) {
+            return;
+        }
+        window.show();
+    });
+JS;
+
+    if (str_contains($content, $find)) {
+        $content = str_replace($find, $replace, $content);
+    }
+
+    $fullyPatched = str_contains($content, '[rfa window readiness]')
+        && str_contains($content, "window.once('ready-to-show'")
+        && ! str_contains($content, $find);
+
+    return $fullyPatched ? $content : null;
 }
 
 /**
@@ -652,6 +696,12 @@ function rfaNativePhpPatchSet(): array
             'file' => 'preload/index.mjs',
             'apply' => rfaPatchPreloadFileBridge(...),
             'summary' => 'preload exposes webUtils.getPathForFile for drag-and-drop',
+        ],
+        [
+            'name' => 'window-ready-to-show',
+            'file' => 'server/api/window.js',
+            'apply' => rfaPatchWindowReadyToShow(...),
+            'summary' => 'windows wait for Electron first paint before showing',
         ],
         [
             'name' => 'server-optimize',

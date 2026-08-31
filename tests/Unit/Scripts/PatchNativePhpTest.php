@@ -65,6 +65,42 @@ test('preserves existing preload code', function () {
 
 // ===== server/php.js and index.js: boot-path edits =====
 
+// -- Window first-paint readiness (server/api/window.js) --
+
+test('window readiness: reports a shape change when the load listener is missing', function () {
+    expect(rfaPatchWindowReadyToShow('const x = 1;'))->toBeNull();
+});
+
+test('window readiness: waits for first paint instead of navigation completion', function () {
+    $content = rfaPatchWindowReadyToShow(stockWindowApi());
+
+    expect($content)
+        ->toContain('[rfa window readiness]')
+        ->toContain("window.once('ready-to-show'")
+        ->not->toContain("window.webContents.on('did-finish-load'");
+});
+
+test('window readiness: preserves the restart focus guard and load failure handling', function () {
+    expect(rfaPatchWindowReadyToShow(stockWindowApi()))
+        ->toContain('state.noFocusOnRestart && window.isVisible()')
+        ->toContain("window.webContents.on('did-fail-load'");
+});
+
+test('window readiness: is idempotent', function () {
+    $patched = rfaPatchWindowReadyToShow(stockWindowApi());
+
+    expect(rfaPatchWindowReadyToShow($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP window API waits for first paint', function () {
+    $windowPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js';
+
+    expect(file_get_contents($windowPath))
+        ->toContain('[rfa window readiness]')
+        ->toContain("window.once('ready-to-show'")
+        ->not->toContain("window.webContents.on('did-finish-load'");
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js'), 'NativePHP desktop electron plugin not installed');
+
 // -- Shape changes --
 
 test('reports a shape change when the optimize block is missing', function () {
