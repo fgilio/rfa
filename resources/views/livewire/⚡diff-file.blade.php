@@ -547,7 +547,7 @@ HTML;
     </div>
 
     {{-- File body --}}
-    <div x-show="!collapsed" x-collapse.duration.150ms>
+    <div data-rfa-diff-body x-cloak x-show="!collapsed" x-collapse.duration.150ms>
         <div x-ref="fileCommentForm">
             <template x-if="showForm && formSide === 'file'">
                 <div class="comment-open">

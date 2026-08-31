@@ -64,6 +64,15 @@ test('file comment form renders before diff content', function () {
         ->and($formPos)->toBeLessThan($tablePos);
 });
 
+test('file body stays cloaked until Alpine applies its collapsed state', function () {
+    $html = mountDiffFile($this->file, loadDiff: false)->html();
+
+    expect($html)
+        ->toContain('data-rfa-diff-body')
+        ->toContain('x-cloak')
+        ->toContain('x-show="!collapsed"');
+});
+
 test('file-level saved comments render at top of file body', function () {
     $comments = [[
         'id' => 'fc-1',
