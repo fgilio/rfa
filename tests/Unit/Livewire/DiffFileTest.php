@@ -217,6 +217,48 @@ test('opens a validated diff URL in the system browser', function () {
 
 // -- File header rendering --
 
+test('lazy placeholder header is static before Livewire replaces it', function () {
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+        'file' => $this->file,
+        'fileComments' => [],
+        'isReviewed' => false,
+        'diffTo' => null,
+        'allowDiscard' => true,
+    ]);
+
+    expect($html)
+        ->toContain('data-rfa-static-file-header')
+        ->toContain('src/Test.php')
+        ->not->toContain('x-data=')
+        ->not->toContain('x-show=')
+        ->not->toContain('@click=')
+        ->not->toContain('wire:')
+        ->not->toContain('data-flux-')
+        ->not->toContain('<ui-');
+});
+
+test('lazy placeholder header escapes file metadata', function () {
+    $file = array_replace($this->file, [
+        'path' => 'src/<script>alert("path")</script>.php',
+        'oldPath' => 'src/<em>old</em>.php',
+        'isSymlink' => true,
+        'symlinkTarget' => '<img src=x onerror=alert("target")>',
+    ]);
+
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+        'file' => $file,
+        'fileComments' => [],
+    ]);
+
+    expect($html)
+        ->toContain('src/&lt;script&gt;alert(&quot;path&quot;)&lt;/script&gt;.php')
+        ->toContain('src/&lt;em&gt;old&lt;/em&gt;.php')
+        ->toContain('&lt;img src=x onerror=alert(&quot;target&quot;)&gt;')
+        ->not->toContain('<script>')
+        ->not->toContain('<em>')
+        ->not->toContain('<img');
+});
+
 test('file header shows rename arrow when oldPath is set', function () {
     $file = DiffFixtureFactory::fileEntry('src/NewName.php');
     $file['oldPath'] = 'src/OldName.php';

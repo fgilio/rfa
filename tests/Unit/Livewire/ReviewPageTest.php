@@ -190,6 +190,18 @@ test('diff file lazy loads stay isolated to avoid Livewire max component payload
         ->and($html)->not->toContain('lazyIsolated&quot;:false');
 });
 
+test('diff file lazy placeholders render stable file headers', function () {
+    $html = Livewire::test('pages::review-page', ['slug' => 'test-project'])->html();
+
+    expect($html)
+        ->toContain('data-rfa-diff-file-placeholder')
+        ->toContain('src/Foo.php')
+        ->toContain('src/Bar.php')
+        ->toContain('+5')
+        ->toContain('-2')
+        ->not->toContain('bg-gh-muted/20');
+});
+
 // -- File navigation shortcut hint --
 
 test('shows the j/k navigation keycaps when more than one file is visible', function () {

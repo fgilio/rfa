@@ -59,15 +59,58 @@ new class extends Component {
 
     private ?DiffTarget $cachedTarget = null;
 
-    public function placeholder(): string
+    /**
+     * Keep this as a raw string: the placeholder renders once per file, and a
+     * Blade view or component here adds measurable cost to large reviews.
+     *
+     * @param  array<string, mixed>  $params
+     */
+    public function placeholder(array $params = []): string
     {
-        return <<<'HTML'
-<div class="group">
-    <div class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5 h-10">
-        <span class="size-3.5 rounded bg-gh-muted/20"></span>
-        <span class="h-3 w-3 rounded-sm bg-gh-muted/20"></span>
-        <span class="h-3 flex-1 max-w-md rounded bg-gh-muted/15"></span>
-        <span class="h-3 w-14 rounded bg-gh-muted/15"></span>
+        $file = is_array($params['file'] ?? null) ? $params['file'] : [];
+        $fileComments = is_array($params['fileComments'] ?? null) ? $params['fileComments'] : [];
+        $isReviewed = (bool) ($params['isReviewed'] ?? false);
+        $allowDiscard = (bool) ($params['allowDiscard'] ?? true);
+        $showContentCopy = ! ($file['isBinary'] ?? false) && ! ($file['isSymlink'] ?? false);
+        $showDiscard = $allowDiscard
+            && ($params['diffTo'] ?? null) === null
+            && ($file['status'] ?? '') !== 'commented'
+            && ! ($file['isExternal'] ?? false);
+        $headerActionCount = 1 + (int) $showContentCopy + (int) $showDiscard;
+        $headerActionWidth = 32 * $headerActionCount + 2 * ($headerActionCount - 1);
+        $path = (string) ($file['path'] ?? '');
+        $oldPath = is_string($file['oldPath'] ?? null) ? $file['oldPath'] : null;
+        $title = e($oldPath ? $oldPath.' → '.$path : $path);
+        $path = e($path);
+        $oldPathLabel = $oldPath ? '<span class="text-gh-muted/50">'.e($oldPath).'&nbsp;→&nbsp;</span>' : '';
+        $chevron = $isReviewed ? '›' : '⌄';
+        $reviewedClass = $isReviewed ? 'bg-gh-accent' : 'bg-gh-bg';
+        $additions = (int) ($file['additions'] ?? 0);
+        $deletions = (int) ($file['deletions'] ?? 0);
+        $additionsLabel = $additions > 0 ? '<span class="text-gh-green">+'.$additions.'</span>' : '';
+        $deletionsLabel = $deletions > 0 ? '<span class="text-gh-red">-'.$deletions.'</span>' : '';
+        $commentsCount = count($fileComments);
+        $commentsLabel = $commentsCount > 0 ? '<span class="text-[10px] text-gh-muted tabular-nums">'.$commentsCount.'</span>' : '';
+        $symlinkLabel = ($file['isSymlink'] ?? false)
+            ? '<span class="size-3.5 shrink-0 text-gh-muted" aria-hidden="true">↗</span><span class="font-mono text-xs text-gh-muted">→ '.e((string) ($file['symlinkTarget'] ?? '')).'</span>'
+            : '';
+
+        return <<<HTML
+<div data-rfa-diff-file-placeholder class="group">
+    <div data-testid="file-header" data-rfa-static-file-header class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
+        <div class="flex items-center gap-2.5 flex-1 min-w-0">
+            <span class="inline-flex size-4 shrink-0 items-center justify-center text-gh-muted" aria-hidden="true">{$chevron}</span>
+            <span class="font-mono block truncate min-w-0 max-w-full text-left text-gh-text text-sm" title="{$title}">{$oldPathLabel}{$path}</span>
+            {$symlinkLabel}
+        </div>
+        <div class="flex items-center gap-2 text-xs shrink-0 font-mono">
+            <span class="block h-8 shrink-0" style="width: {$headerActionWidth}px" aria-hidden="true"></span>
+            {$additionsLabel}
+            {$deletionsLabel}
+            <span class="inline-flex size-8 shrink-0" aria-hidden="true"></span>
+            {$commentsLabel}
+            <span class="inline-flex size-4 shrink-0 rounded border border-gh-border {$reviewedClass}" aria-hidden="true"></span>
+        </div>
     </div>
 </div>
 HTML;

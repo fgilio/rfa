@@ -23,7 +23,7 @@ test('a copy-paths button delivered by a Livewire update still initializes', fun
     File::put($this->testRepoPath.'/README.md', "# Test\n\nchanged\n");
 
     $page->page()->getByLabel('Refresh')->first()->click();
-    $page->page()->getByTestId('file-header')->first()->waitFor();
+    $page->page()->getByTestId('file-header-copy-path')->first()->waitFor();
 
     $labelType = $page->page()->evaluate(<<<'JS'
         (() => {
