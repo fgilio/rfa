@@ -210,6 +210,12 @@ test('blade templates do not attach pending-save Livewire hooks inline', functio
     expect($violations)->toBeEmpty();
 });
 
+test('the document surface uses the resolved theme background token', function () {
+    $layout = file_get_contents(dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php');
+
+    expect($layout)->toContain('html, body { background-color: rgb(var(--gh-bg)); }');
+});
+
 test('blade templates version first-party javascript assets', function () {
     $violations = [];
 

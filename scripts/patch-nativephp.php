@@ -3,8 +3,8 @@
 /**
  * The NativePHP vendor changes RFA depends on, applied as one patch set.
  *
- * Five edits across four compiled files in `nativephp/desktop`'s bundled
- * Electron plugin. They are not independent in practice: two of them rewrite
+ * Seven edits across four compiled files in `nativephp/desktop`'s bundled
+ * Electron plugin. They are not independent in practice: three of them rewrite
  * the same `dist/index.js`, and a build that ships some of them is a build
  * whose startup behaviour nobody has tested. So the set is all-or-nothing —
  * every expected source shape is checked, and every new file content computed,
@@ -96,6 +96,38 @@ JS;
     $fullyPatched = str_contains($content, '[rfa window readiness]')
         && str_contains($content, "window.once('ready-to-show'")
         && ! str_contains($content, $find);
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
+ * Give every NativePHP BrowserWindow the resolved RFA background color.
+ *
+ * The renderer and splash both use RFA's light and dark background tokens.
+ * NativePHP otherwise uses the value sent by PHP, which can disagree with the
+ * persisted renderer appearance during the frame before HTML is presented.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchWindowTheme(string $content): ?string
+{
+    $importFind = "import { BrowserWindow } from 'electron';";
+    $importReplace = "import { BrowserWindow, nativeTheme } from 'electron'; // [rfa window theme]";
+    $backgroundFind = '        backgroundColor, transparent: transparency, alwaysOnTop,';
+    $backgroundReplace = "        backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff', transparent: transparency, alwaysOnTop,";
+
+    if (str_contains($content, $importFind)) {
+        $content = str_replace($importFind, $importReplace, $content);
+    }
+
+    if (str_contains($content, $backgroundFind)) {
+        $content = str_replace($backgroundFind, $backgroundReplace, $content);
+    }
+
+    $fullyPatched = str_contains($content, '[rfa window theme]')
+        && str_contains($content, $backgroundReplace)
+        && ! str_contains($content, $backgroundFind);
 
     return $fullyPatched ? $content : null;
 }
@@ -680,11 +712,86 @@ JS;
 }
 
 /**
+ * Resolve RFA's persisted appearance before either native window is created.
+ *
+ * Flux stores the selected appearance in renderer localStorage. The theme
+ * switcher mirrors that value to a cookie so Electron can read it before the
+ * renderer exists. Setting nativeTheme first gives the splash, main window
+ * fill, media queries, and Flux page the same light, dark, or system choice.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchResolvedAppearance(string $content): ?string
+{
+    $methodsAnchor = '    rfaShowSplash() {';
+    $methodsReplace = <<<'JS'
+    rfaResolveAppearance() {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const rfaCookies = yield session.defaultSession.cookies.get({
+                    url: 'http://127.0.0.1',
+                    name: 'rfa_appearance',
+                });
+                const rfaAppearance = rfaCookies.length > 0 ? rfaCookies[0].value : 'system';
+                nativeTheme.themeSource = ['light', 'dark', 'system'].includes(rfaAppearance)
+                    ? rfaAppearance
+                    : 'system';
+            }
+            catch (rfaError) {
+                nativeTheme.themeSource = 'system';
+            }
+        });
+    }
+    rfaBackgroundColor() {
+        return nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff';
+    }
+    rfaShowSplash() {
+JS;
+
+    $backgroundFind = "backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff',";
+    $backgroundReplace = 'backgroundColor: this.rfaBackgroundColor(),';
+
+    $callFind = <<<'JS'
+            yield app.whenReady();
+            this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots
+JS;
+    $callReplace = <<<'JS'
+            yield app.whenReady();
+            yield this.rfaResolveAppearance(); // [rfa appearance] resolve before either window exists
+            this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots
+JS;
+
+    $patched = $content;
+
+    if (str_contains($patched, $methodsAnchor) && ! str_contains($patched, 'rfaResolveAppearance() {')) {
+        $patched = str_replace($methodsAnchor, $methodsReplace, $patched);
+    }
+
+    if (str_contains($patched, $backgroundFind)) {
+        $patched = str_replace($backgroundFind, $backgroundReplace, $patched);
+    }
+
+    if (str_contains($patched, $callFind)) {
+        $patched = str_replace($callFind, $callReplace, $patched);
+    }
+
+    $fullyPatched = str_contains($patched, 'rfaResolveAppearance() {')
+        && str_contains($patched, "name: 'rfa_appearance'")
+        && str_contains($patched, "nativeTheme.themeSource = ['light', 'dark', 'system'].includes(rfaAppearance)")
+        && str_contains($patched, 'rfaBackgroundColor() {')
+        && str_contains($patched, $backgroundReplace)
+        && str_contains($patched, 'yield this.rfaResolveAppearance(); // [rfa appearance]');
+
+    return $fullyPatched ? $patched : null;
+}
+
+/**
  * The patch set: what has to be true of the vendored Electron plugin.
  *
- * Order matters within a file — the pre-flight cache and the splash window
- * both rewrite `dist/index.js`, and each is applied to the result of the one
- * before it.
+ * Order matters within a file. The pre-flight cache, splash window, and
+ * resolved appearance rewrite `dist/index.js`, and each is applied to the
+ * result of the one before it.
  *
  * @return list<array{name: string, file: string, apply: callable(string): ?string, summary: string}>
  */
@@ -704,6 +811,12 @@ function rfaNativePhpPatchSet(): array
             'summary' => 'windows wait for Electron first paint before showing',
         ],
         [
+            'name' => 'window-theme',
+            'file' => 'server/api/window.js',
+            'apply' => rfaPatchWindowTheme(...),
+            'summary' => 'window fills use the resolved RFA appearance',
+        ],
+        [
             'name' => 'server-optimize',
             'file' => 'server/php.js',
             'apply' => rfaPatchServerOptimize(...),
@@ -720,6 +833,12 @@ function rfaNativePhpPatchSet(): array
             'file' => 'index.js',
             'apply' => rfaPatchSplashWindow(...),
             'summary' => 'splash window opens before the PHP server boots',
+        ],
+        [
+            'name' => 'resolved-appearance',
+            'file' => 'index.js',
+            'apply' => rfaPatchResolvedAppearance(...),
+            'summary' => 'Electron resolves the persisted appearance before creating windows',
         ],
     ];
 }

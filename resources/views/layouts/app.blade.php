@@ -243,6 +243,10 @@
             width: 3px;
             background: rgb(var(--gh-muted) / 0.5);
         }
+        /* Keep Chromium's document surface on the same resolved token as the
+           native window fill. */
+        html, body { background-color: rgb(var(--gh-bg)); }
+
         /* Prevent Flux menu scroll-lock from hiding scrollbar and causing layout shift */
         html { overflow-y: scroll !important; }
 

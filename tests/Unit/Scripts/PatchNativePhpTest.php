@@ -101,6 +101,33 @@ test('the vendored NativePHP window API waits for first paint', function () {
         ->not->toContain("window.webContents.on('did-finish-load'");
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js'), 'NativePHP desktop electron plugin not installed');
 
+test('window theme: reports a shape change when the BrowserWindow options are missing', function () {
+    expect(rfaPatchWindowTheme("import { BrowserWindow } from 'electron';"))->toBeNull();
+});
+
+test('window theme: uses the resolved native appearance for every BrowserWindow fill', function () {
+    $content = rfaPatchWindowTheme(stockWindowApi());
+
+    expect($content)
+        ->toContain("import { BrowserWindow, nativeTheme } from 'electron'; // [rfa window theme]")
+        ->toContain("backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff'")
+        ->not->toContain('        backgroundColor, transparent: transparency, alwaysOnTop,');
+});
+
+test('window theme: is idempotent', function () {
+    $patched = rfaPatchWindowTheme(stockWindowApi());
+
+    expect(rfaPatchWindowTheme($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP window API uses the resolved appearance', function () {
+    $windowPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js';
+
+    expect(file_get_contents($windowPath))
+        ->toContain('[rfa window theme]')
+        ->toContain("backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff'");
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js'), 'NativePHP desktop electron plugin not installed');
+
 // -- Shape changes --
 
 test('reports a shape change when the optimize block is missing', function () {
@@ -580,6 +607,47 @@ test('the vendored NativePHP main bootstrap carries the splash window', function
         ->toContain('powerMonitor, BrowserWindow')
         ->toContain('const RFA_SPLASH_HTML')
         ->toContain('this.rfaShowSplash()');
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
+
+// -- Resolved appearance (dist/index.js) --
+
+test('appearance: reports a shape change when the splash methods are missing', function () {
+    expect(rfaPatchResolvedAppearance('const x = 1;'))->toBeNull();
+});
+
+test('appearance: resolves the persisted Flux mode before creating the splash', function () {
+    $content = rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash()));
+
+    expect($content)
+        ->toContain("name: 'rfa_appearance'")
+        ->toContain("nativeTheme.themeSource = ['light', 'dark', 'system'].includes(rfaAppearance)")
+        ->toContain("nativeTheme.themeSource = 'system'")
+        ->toContain('backgroundColor: this.rfaBackgroundColor()')
+        ->toContain('yield this.rfaResolveAppearance(); // [rfa appearance]');
+
+    expect(strpos($content, 'yield this.rfaResolveAppearance()'))
+        ->toBeLessThan(strpos($content, 'this.rfaShowSplash()'));
+});
+
+test('appearance: shares the exact RFA light and dark background tokens', function () {
+    expect(rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash())))
+        ->toContain("return nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff'")
+        ->not->toContain('#0d1117');
+});
+
+test('appearance: is idempotent', function () {
+    $patched = rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash()));
+
+    expect(rfaPatchResolvedAppearance($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP main bootstrap resolves appearance before windows', function () {
+    $indexPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js';
+
+    expect(file_get_contents($indexPath))
+        ->toContain('rfaResolveAppearance()')
+        ->toContain("name: 'rfa_appearance'")
+        ->toContain('backgroundColor: this.rfaBackgroundColor()');
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
 
 // -- Applied to the real vendored file --

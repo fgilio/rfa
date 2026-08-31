@@ -46,7 +46,7 @@ When a path's text content is set client-side (e.g. `x-text` from a JS object), 
 - Managed by Flux's `@fluxAppearance` + `$flux.appearance` (`'light' | 'dark' | 'system'`)
 - The `theme-switcher` SFC is a `flux:dropdown`: a square ghost trigger whose icon mirrors the current mode (sun/moon/computer-desktop, swapped via `x-show="$flux.appearance === …"`), opening a `flux:menu.radio.group` bound `x-model="$flux.appearance"` with the three states — light, dark, and system (follows the OS via `prefers-color-scheme`). The active state carries the menu check. `system` is the default when the user hasn't chosen.
 - Flux applies/removes the `dark` class on `<html>` and tracks the OS in system mode; read the resolved boolean via `$flux.dark` (reactive to both explicit picks and OS changes while in system mode).
-- The switcher mirrors that `$flux.dark` value into the persistent `rfa_theme` cookie (`dark`/`light`, 1-year) via a single `x-effect`, so non-Livewire consumers can read the resolved theme without JS.
+- The switcher mirrors `$flux.appearance` into `rfa_appearance` (`light`/`dark`/`system`) so Electron can resolve the theme before it creates a window. It also mirrors `$flux.dark` into `rfa_theme` (`dark`/`light`) for consumers that need the resolved palette. Both cookies persist for one year.
 
 ## Visual Style
 - Brutalist/raw aesthetic: bold type, dramatic scale contrast, generous whitespace in chrome

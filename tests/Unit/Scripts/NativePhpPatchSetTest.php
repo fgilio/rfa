@@ -44,7 +44,7 @@ function distSnapshot(string $root): array
 
 test('the patch set covers every vendored file rfa depends on', function () {
     expect(collect(rfaNativePhpPatchSet())->pluck('name')->all())
-        ->toBe(['preload-file-bridge', 'window-ready-to-show', 'server-optimize', 'preflight-cache', 'splash-window']);
+        ->toBe(['preload-file-bridge', 'window-ready-to-show', 'window-theme', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance']);
 });
 
 test('the dist root points at the vendored electron plugin', function () {
@@ -59,30 +59,33 @@ test('applies every patch in one run', function () {
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['applied'])->toBe(['preload-file-bridge', 'window-ready-to-show', 'server-optimize', 'preflight-cache', 'splash-window'])
+    expect($outcome['applied'])->toBe(['preload-file-bridge', 'window-ready-to-show', 'window-theme', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance'])
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['absent'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 
     expect(file_get_contents($root.'/preload/index.mjs'))->toContain('nativeGetFilePath');
-    expect(file_get_contents($root.'/server/api/window.js'))->toContain('[rfa window readiness]');
+    expect(file_get_contents($root.'/server/api/window.js'))
+        ->toContain('[rfa window readiness]')
+        ->toContain('[rfa window theme]');
     expect(file_get_contents($root.'/server/php.js'))->toContain('rfaNeedsFullOptimize');
     expect(file_get_contents($root.'/index.js'))
         ->toContain("'preflight_config_'")
-        ->toContain('const RFA_SPLASH_HTML');
+        ->toContain('const RFA_SPLASH_HTML')
+        ->toContain('rfaResolveAppearance()');
 });
 
-test('both edits to the shared index.js survive each other', function () {
-    // The pre-flight cache and the splash window rewrite the same file. Applying
-    // them in one pass is what keeps the second from being computed against a
-    // stale copy and silently dropping the first.
+test('all edits to the shared index.js survive each other', function () {
+    // These three patches rewrite the same file. Applying them in one pass keeps
+    // each edit based on the output of the previous edit.
     $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'));
 
     applyRfaNativePhpPatchSet($root);
 
     expect(file_get_contents($root.'/index.js'))
         ->toContain('import Store from "electron-store"; // [rfa preflight cache]')
-        ->toContain('powerMonitor, BrowserWindow, nativeTheme');
+        ->toContain('powerMonitor, BrowserWindow, nativeTheme')
+        ->toContain('rfaResolveAppearance()');
 });
 
 test('a second run changes nothing', function () {
@@ -94,7 +97,7 @@ test('a second run changes nothing', function () {
     $outcome = applyRfaNativePhpPatchSet($root);
 
     expect($outcome['applied'])->toBeEmpty()
-        ->and($outcome['unchanged'])->toHaveCount(5)
+        ->and($outcome['unchanged'])->toHaveCount(7)
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($afterFirst);
 });
@@ -116,7 +119,7 @@ test('one reshaped source block leaves every file untouched', function () {
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['blocked'])->toBe(['splash-window'])
+    expect($outcome['blocked'])->toBe(['splash-window', 'resolved-appearance'])
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($before);
 });
@@ -193,7 +196,7 @@ test('an absent dist tree is reported, not failed', function () {
     // pruned copy where the plugin dist is not present.
     $outcome = applyRfaNativePhpPatchSet(sys_get_temp_dir().'/rfa_test_dist_nowhere_'.getmypid());
 
-    expect($outcome['absent'])->toHaveCount(5)
+    expect($outcome['absent'])->toHaveCount(7)
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 });

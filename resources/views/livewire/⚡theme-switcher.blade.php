@@ -6,11 +6,17 @@ new class extends Component {};
 ?>
 
 <div
-    x-data
-    {{-- Mirror the resolved theme into the rfa_theme cookie. $flux.dark is reactive
-         to both explicit picks and OS changes while in system mode, so this single
-         effect covers all three states without a separate matchMedia listener. --}}
-    x-effect="document.cookie = 'rfa_theme=' + ($flux.dark ? 'dark' : 'light') + ';path=/;max-age=31536000;SameSite=Lax'"
+    x-data="{
+        setRfaCookie(name, value) {
+            document.cookie = name + '=' + value + ';path=/;max-age=31536000;SameSite=Lax'
+        },
+    }"
+    {{-- Electron reads the selected mode before the renderer exists. Keep the
+         resolved cookie for other non-Livewire consumers. --}}
+    x-effect="
+        setRfaCookie('rfa_appearance', $flux.appearance);
+        setRfaCookie('rfa_theme', $flux.dark ? 'dark' : 'light');
+    "
 >
     <flux:dropdown position="bottom" align="end">
         {{-- Trigger mirrors the current appearance: the icon swaps to whichever

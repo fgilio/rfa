@@ -39,7 +39,9 @@ import { BrowserWindow } from 'electron';
 import state from '../state.js';
 const router = express.Router();
 router.post('/open', (req, res) => {
-    const window = new BrowserWindow({ show: false });
+    const window = new BrowserWindow({ show: false,
+        backgroundColor, transparent: transparency, alwaysOnTop,
+    });
     window.loadURL(url);
     window.webContents.on('dom-ready', () => {
         window.webContents.setZoomFactor(parseFloat(zoomFactor));
