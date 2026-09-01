@@ -32,13 +32,13 @@ test('announces the active theme in the trigger accessible name', function () {
         ->assertSeeHtml("x-bind:aria-label=\"'Theme: ' + { light: 'Light', dark: 'Dark', system: 'System' }[\$flux.appearance]\"");
 });
 
-test('mirrors only the selected appearance into a cookie', function () {
+test('delegates selected appearance persistence to the startup store', function () {
     $html = Livewire::test('theme-switcher')
-        ->assertSeeHtml('rfa_appearance')
+        ->assertSeeHtml('rfaAppearanceStore.persistSelectedAppearance')
         ->assertSeeHtml('$flux.appearance')
         ->html();
 
     expect($html)
         ->not->toContain('rfa_theme')
-        ->and(substr_count($html, ';path=/;max-age=31536000;SameSite=Lax'))->toBe(1);
+        ->not->toContain('document.cookie');
 });

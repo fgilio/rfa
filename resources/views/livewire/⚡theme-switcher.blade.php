@@ -8,7 +8,7 @@ new class extends Component {};
 <div
     x-data
     {{-- Electron reads the selected mode before the renderer exists. --}}
-    x-effect="document.cookie = 'rfa_appearance=' + $flux.appearance + ';path=/;max-age=31536000;SameSite=Lax'"
+    x-effect="window.rfaAppearanceStore.persistSelectedAppearance(window, $flux.appearance)"
 >
     <flux:dropdown position="bottom" align="end">
         {{-- Trigger mirrors the current appearance: the icon swaps to whichever

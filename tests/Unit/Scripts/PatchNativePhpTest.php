@@ -699,6 +699,7 @@ test('appearance: resolves the persisted Flux mode before creating the splash', 
 
     expect($content)
         ->toContain("name: 'rfa_appearance'")
+        ->toContain("name: 'rfa_theme'")
         ->toContain("nativeTheme.themeSource = ['light', 'dark', 'system'].includes(rfaAppearance)")
         ->toContain("nativeTheme.themeSource = 'system'")
         ->toContain('backgroundColor: this.rfaBackgroundColor()')
@@ -706,6 +707,51 @@ test('appearance: resolves the persisted Flux mode before creating the splash', 
 
     expect(strpos($content, 'yield this.rfaResolveAppearance()'))
         ->toBeLessThan(strpos($content, 'this.rfaShowSplash()'));
+});
+
+test('appearance: falls back to the legacy resolved theme on the first upgraded launch', function () {
+    $content = rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash()));
+
+    expect(strpos($content, "name: 'rfa_appearance'"))
+        ->toBeLessThan(strpos($content, "name: 'rfa_theme'"))
+        ->and($content)
+        ->toContain('if (rfaAppearanceCookies.length > 0)')
+        ->toContain('if (rfaLegacyThemeCookies.length > 0)');
+});
+
+test('appearance: upgrades the exact appearance-only cookie lookup', function () {
+    $previous = str_replace(
+        <<<'JS'
+                const rfaAppearanceCookies = yield session.defaultSession.cookies.get({
+                    url: 'http://127.0.0.1',
+                    name: 'rfa_appearance',
+                });
+                let rfaAppearance = 'system';
+                if (rfaAppearanceCookies.length > 0) {
+                    rfaAppearance = rfaAppearanceCookies[0].value;
+                }
+                else {
+                    const rfaLegacyThemeCookies = yield session.defaultSession.cookies.get({
+                        url: 'http://127.0.0.1',
+                        name: 'rfa_theme',
+                    });
+                    if (rfaLegacyThemeCookies.length > 0) {
+                        rfaAppearance = rfaLegacyThemeCookies[0].value;
+                    }
+                }
+JS,
+        <<<'JS'
+                const rfaCookies = yield session.defaultSession.cookies.get({
+                    url: 'http://127.0.0.1',
+                    name: 'rfa_appearance',
+                });
+                const rfaAppearance = rfaCookies.length > 0 ? rfaCookies[0].value : 'system';
+JS,
+        rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash())),
+    );
+
+    expect(rfaPatchResolvedAppearance($previous))
+        ->toBe(rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash())));
 });
 
 test('appearance: shares the exact RFA light and dark background tokens', function () {
@@ -726,6 +772,7 @@ test('the vendored NativePHP main bootstrap resolves appearance before windows',
     expect(file_get_contents($indexPath))
         ->toContain('rfaResolveAppearance()')
         ->toContain("name: 'rfa_appearance'")
+        ->toContain("name: 'rfa_theme'")
         ->toContain('backgroundColor: this.rfaBackgroundColor()');
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
 

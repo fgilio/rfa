@@ -1003,11 +1003,23 @@ function rfaPatchResolvedAppearance(string $content): ?string
     rfaResolveAppearance() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const rfaCookies = yield session.defaultSession.cookies.get({
+                const rfaAppearanceCookies = yield session.defaultSession.cookies.get({
                     url: 'http://127.0.0.1',
                     name: 'rfa_appearance',
                 });
-                const rfaAppearance = rfaCookies.length > 0 ? rfaCookies[0].value : 'system';
+                let rfaAppearance = 'system';
+                if (rfaAppearanceCookies.length > 0) {
+                    rfaAppearance = rfaAppearanceCookies[0].value;
+                }
+                else {
+                    const rfaLegacyThemeCookies = yield session.defaultSession.cookies.get({
+                        url: 'http://127.0.0.1',
+                        name: 'rfa_theme',
+                    });
+                    if (rfaLegacyThemeCookies.length > 0) {
+                        rfaAppearance = rfaLegacyThemeCookies[0].value;
+                    }
+                }
                 nativeTheme.themeSource = ['light', 'dark', 'system'].includes(rfaAppearance)
                     ? rfaAppearance
                     : 'system';
@@ -1023,6 +1035,33 @@ function rfaPatchResolvedAppearance(string $content): ?string
     rfaShowSplash() {
 JS
     );
+
+    $previousCookieLookup = <<<'JS'
+                const rfaCookies = yield session.defaultSession.cookies.get({
+                    url: 'http://127.0.0.1',
+                    name: 'rfa_appearance',
+                });
+                const rfaAppearance = rfaCookies.length > 0 ? rfaCookies[0].value : 'system';
+JS;
+    $cookieLookup = <<<'JS'
+                const rfaAppearanceCookies = yield session.defaultSession.cookies.get({
+                    url: 'http://127.0.0.1',
+                    name: 'rfa_appearance',
+                });
+                let rfaAppearance = 'system';
+                if (rfaAppearanceCookies.length > 0) {
+                    rfaAppearance = rfaAppearanceCookies[0].value;
+                }
+                else {
+                    const rfaLegacyThemeCookies = yield session.defaultSession.cookies.get({
+                        url: 'http://127.0.0.1',
+                        name: 'rfa_theme',
+                    });
+                    if (rfaLegacyThemeCookies.length > 0) {
+                        rfaAppearance = rfaLegacyThemeCookies[0].value;
+                    }
+                }
+JS;
 
     $backgroundFind = 'backgroundColor: '.rfaBackgroundExpression().',';
     $backgroundReplace = 'backgroundColor: this.rfaBackgroundColor(),';
@@ -1043,6 +1082,10 @@ JS;
         $patched = str_replace($methodsAnchor, $methodsReplace, $patched);
     }
 
+    if (str_contains($patched, $previousCookieLookup)) {
+        $patched = str_replace($previousCookieLookup, $cookieLookup, $patched);
+    }
+
     if (str_contains($patched, $backgroundFind)) {
         $patched = str_replace($backgroundFind, $backgroundReplace, $patched);
     }
@@ -1053,6 +1096,7 @@ JS;
 
     $fullyPatched = str_contains($patched, 'rfaResolveAppearance() {')
         && str_contains($patched, "name: 'rfa_appearance'")
+        && str_contains($patched, "name: 'rfa_theme'")
         && str_contains($patched, "nativeTheme.themeSource = ['light', 'dark', 'system'].includes(rfaAppearance)")
         && str_contains($patched, 'rfaBackgroundColor() {')
         && str_contains($patched, $backgroundReplace)

@@ -40,6 +40,7 @@
         // shortcuts-store.js reads this to wire handlers and the cheat sheet.
         window.RFA_SHORTCUTS = @js(\App\Support\Shortcuts::all());
     </script>
+    @localScript('js/appearance-store.js')
     @localScript('js/runtime-diagnostics.js')
     @localScript('js/settings-store.js')
     @localScript('js/renderer-ready.js')

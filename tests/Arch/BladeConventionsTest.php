@@ -241,6 +241,15 @@ test('the document surface uses the resolved theme background token', function (
     expect($layout)->toContain('html, body { background-color: rgb(var(--gh-bg)); }');
 });
 
+test('restores the selected appearance before Flux resolves the document theme', function () {
+    $layout = file_get_contents(dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php');
+
+    expect($layout)
+        ->toContain("@localScript('js/appearance-store.js')")
+        ->and(strpos($layout, "@localScript('js/appearance-store.js')"))
+        ->toBeLessThan(strpos($layout, '@fluxAppearance'));
+});
+
 test('the layout loads renderer readiness before Livewire initializes', function () {
     $layout = file_get_contents(dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php');
 
