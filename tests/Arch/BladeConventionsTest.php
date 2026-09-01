@@ -73,6 +73,19 @@ test('app layout includes keepalive component', function () {
     expect($content)->toContain('<livewire:keepalive');
 });
 
+test('app stylesheet owns the lazy placeholder icon masks', function () {
+    $stylesheet = dirname(__DIR__, 2).'/resources/css/app.css';
+    $content = file_get_contents($stylesheet);
+
+    expect($content)
+        ->toContain('.rfa-lazy-icon--chevron-down')
+        ->toContain('.rfa-lazy-icon--copy-path')
+        ->toContain('.rfa-lazy-icon--copy-content')
+        ->toContain('.rfa-lazy-icon--discard')
+        ->toContain('.rfa-lazy-icon--comment')
+        ->toContain('mask: var(--rfa-lazy-icon)');
+});
+
 test('app layout owns the single update banner mount', function () {
     $layout = dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php';
     $mounts = collect(bladeFiles())

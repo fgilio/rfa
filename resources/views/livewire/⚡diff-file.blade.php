@@ -15,6 +15,7 @@ use App\Enums\GitRef;
 use App\Support\DiffCacheKey;
 use App\View\DiffFileViewModel;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\View as ViewFacade;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -59,11 +60,32 @@ new class extends Component {
 
     private ?DiffTarget $cachedTarget = null;
 
+    private const string PLACEHOLDER_TEMPLATE = <<<'BLADE'
+<div data-rfa-render-blocker class="group">{!! $__rfaDiffFilePlaceholderBody !!}</div>
+BLADE;
+
     /**
-     * Keep this as a raw string: the placeholder renders once per file, and a
-     * Blade view or component here adds measurable cost to large reviews.
+     * Keep the returned template stable: Livewire compiles each distinct raw
+     * string as a Blade view. The request-scoped shared body supplies escaped
+     * file data without creating one compiled template per file.
      *
-     * @param  array<string, mixed>  $params
+     * @param  array{
+     *     file?: array{
+     *         path?: string,
+     *         oldPath?: string|null,
+     *         status?: string,
+     *         additions?: int,
+     *         deletions?: int,
+     *         isBinary?: bool,
+     *         isSymlink?: bool,
+     *         symlinkTarget?: string|null,
+     *         isExternal?: bool
+     *     },
+     *     fileComments?: list<array<string, mixed>>,
+     *     isReviewed?: bool,
+     *     allowDiscard?: bool,
+     *     diffTo?: string|null
+     * }  $params
      */
     public function placeholder(array $params = []): string
     {
@@ -71,13 +93,12 @@ new class extends Component {
         $fileComments = is_array($params['fileComments'] ?? null) ? $params['fileComments'] : [];
         $isReviewed = (bool) ($params['isReviewed'] ?? false);
         $allowDiscard = (bool) ($params['allowDiscard'] ?? true);
-        $showContentCopy = ! ($file['isBinary'] ?? false) && ! ($file['isSymlink'] ?? false);
-        $showDiscard = $allowDiscard
-            && ($params['diffTo'] ?? null) === null
-            && ($file['status'] ?? '') !== 'commented'
-            && ! ($file['isExternal'] ?? false);
-        $headerActionCount = 1 + (int) $showContentCopy + (int) $showDiscard;
-        $headerActionWidth = 32 * $headerActionCount + 2 * ($headerActionCount - 1);
+        $showContentCopy = DiffFileViewModel::showsContentCopy($file);
+        $showDiscard = DiffFileViewModel::showsDiscard(
+            $file,
+            $allowDiscard,
+            is_string($params['diffTo'] ?? null) ? $params['diffTo'] : null,
+        );
         $path = (string) ($file['path'] ?? '');
         $oldPath = is_string($file['oldPath'] ?? null) ? $file['oldPath'] : null;
         $title = e($oldPath ? $oldPath.' → '.$path : $path);
@@ -85,39 +106,60 @@ new class extends Component {
         [$directory, $basename] = $pathPosition === false
             ? ['', $path]
             : [substr($path, 0, $pathPosition + 1), substr($path, $pathPosition + 1)];
-        $pathLabel = '<span class="text-gh-muted/70">'.e($directory).'</span>'.e($basename);
-        $oldPathLabel = $oldPath ? '<span class="text-gh-muted/50">'.e($oldPath).'&nbsp;→&nbsp;</span>' : '';
-        $chevron = $isReviewed ? '›' : '⌄';
-        $reviewedClass = $isReviewed ? 'bg-gh-accent' : 'bg-gh-bg';
+        $pathLabel = '<span class="rfa-lazy-directory">'.e($directory).'</span>'.e($basename);
+        $oldPathLabel = $oldPath ? '<span class="rfa-lazy-old-path">'.e($oldPath).'&nbsp;→&nbsp;</span>' : '';
+        $chevron = $isReviewed
+            ? $this->placeholderIcon('chevron-right', 'size-4')
+            : $this->placeholderIcon('chevron-down', 'size-4');
+        $reviewedClass = $isReviewed ? ' rfa-lazy-checkbox--reviewed' : '';
         $additions = (int) ($file['additions'] ?? 0);
         $deletions = (int) ($file['deletions'] ?? 0);
         $additionsLabel = $additions > 0 ? '<span class="text-gh-green">+'.$additions.'</span>' : '';
         $deletionsLabel = $deletions > 0 ? '<span class="text-gh-red">-'.$deletions.'</span>' : '';
         $commentsCount = count($fileComments);
-        $commentsLabel = $commentsCount > 0 ? '<span class="text-[10px] text-gh-muted tabular-nums">'.$commentsCount.'</span>' : '';
+        $commentsLabel = $commentsCount > 0 ? '<span class="rfa-lazy-comment-count">'.$commentsCount.'</span>' : '';
         $symlinkLabel = ($file['isSymlink'] ?? false)
-            ? '<span class="size-3.5 shrink-0 text-gh-muted" aria-hidden="true">↗</span><span class="font-mono text-xs text-gh-muted">→ '.e((string) ($file['symlinkTarget'] ?? '')).'</span>'
+            ? $this->placeholderIcon('link', 'rfa-lazy-icon--link').'<span class="rfa-lazy-link-label">→ '.e((string) ($file['symlinkTarget'] ?? '')).'</span>'
             : '';
+        $pathButton = $this->placeholderButton('copy-path');
+        $contentButton = $showContentCopy
+            ? $this->placeholderButton('copy-content')
+            : '';
+        $discardButton = $showDiscard
+            ? $this->placeholderButton('discard')
+            : '';
+        $commentButton = $this->placeholderButton('comment');
 
-        return <<<HTML
-<div data-rfa-diff-file-placeholder class="group">
-    <div data-testid="file-header" data-rfa-static-file-header class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
-        <div class="flex items-center gap-2.5 flex-1 min-w-0">
-            <span class="inline-flex size-4 shrink-0 items-center justify-center text-gh-muted" aria-hidden="true">{$chevron}</span>
-            <span class="font-mono block truncate min-w-0 max-w-full text-left text-gh-text text-sm" title="{$title}">{$oldPathLabel}{$pathLabel}</span>
+        $body = <<<HTML
+<div data-rfa-static-file-header class="rfa-lazy-header">
+        <div class="rfa-lazy-main">
+            <span class="rfa-lazy-chevron" aria-hidden="true">{$chevron}</span>
+            <span class="rfa-lazy-path" title="{$title}">{$oldPathLabel}{$pathLabel}</span>
             {$symlinkLabel}
         </div>
-        <div class="flex items-center gap-2 text-xs shrink-0 font-mono">
-            <span class="block h-8 shrink-0" style="width: {$headerActionWidth}px" aria-hidden="true"></span>
+        <div class="rfa-lazy-meta">
+            <div class="rfa-lazy-actions">{$pathButton}{$contentButton}{$discardButton}</div>
             {$additionsLabel}
             {$deletionsLabel}
-            <span class="inline-flex size-8 shrink-0" aria-hidden="true"></span>
-            {$commentsLabel}
-            <span class="inline-flex size-4 shrink-0 rounded border border-gh-border {$reviewedClass}" aria-hidden="true"></span>
+            <div class="rfa-lazy-comments">{$commentButton}{$commentsLabel}</div>
+            <span class="rfa-lazy-checkbox{$reviewedClass}" aria-hidden="true"></span>
         </div>
-    </div>
 </div>
 HTML;
+
+        ViewFacade::share('__rfaDiffFilePlaceholderBody', $body);
+
+        return self::PLACEHOLDER_TEMPLATE;
+    }
+
+    private function placeholderButton(string $name): string
+    {
+        return '<span class="rfa-lazy-button rfa-lazy-icon--'.$name.'" data-rfa-static-icon="'.$name.'" aria-hidden="true"></span>';
+    }
+
+    private function placeholderIcon(string $name, string $class = 'size-5'): string
+    {
+        return '<span class="rfa-lazy-icon rfa-lazy-icon--'.$name.' '.$class.'" data-rfa-static-icon="'.$name.'" aria-hidden="true"></span>';
     }
 
     public function hydrate(): void
