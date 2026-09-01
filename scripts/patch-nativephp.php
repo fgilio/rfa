@@ -134,6 +134,8 @@ JS;
  * The renderer and splash both use RFA's light and dark background tokens.
  * NativePHP otherwise uses the value sent by PHP, which can disagree with the
  * persisted renderer appearance during the frame before HTML is presented.
+ * The main window starts transparent because `electron-window-state` restores
+ * maximization with `maximize()`, which implicitly shows a hidden window.
  *
  * @return string|null the patched content, or null when the expected source
  *                     shape is gone
@@ -143,7 +145,8 @@ function rfaPatchWindowTheme(string $content): ?string
     $importFind = "import { BrowserWindow } from 'electron';";
     $importReplace = "import { BrowserWindow, nativeTheme } from 'electron'; // [rfa window theme]";
     $backgroundFind = '        backgroundColor, transparent: transparency, alwaysOnTop,';
-    $backgroundReplace = "        backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff', transparent: transparency, alwaysOnTop,";
+    $previousBackgroundReplace = "        backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff', transparent: transparency, alwaysOnTop,";
+    $backgroundReplace = "        backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff', opacity: id === 'main' ? 0 : 1, transparent: transparency, alwaysOnTop,";
 
     if (str_contains($content, $importFind)) {
         $content = str_replace($importFind, $importReplace, $content);
@@ -153,20 +156,27 @@ function rfaPatchWindowTheme(string $content): ?string
         $content = str_replace($backgroundFind, $backgroundReplace, $content);
     }
 
+    if (str_contains($content, $previousBackgroundReplace)) {
+        $content = str_replace($previousBackgroundReplace, $backgroundReplace, $content);
+    }
+
     $fullyPatched = str_contains($content, '[rfa window theme]')
         && str_contains($content, $backgroundReplace)
+        && str_contains($content, "opacity: id === 'main' ? 0 : 1")
         && ! str_contains($content, $backgroundFind);
 
     return $fullyPatched ? $content : null;
 }
 
 /**
- * Keep the main window hidden until Electron and the renderer are both ready.
+ * Keep the main window invisible until Electron and the renderer are both ready.
  *
  * `ready-to-show` confirms Electron's first frame. The renderer signal confirms
- * Livewire, Alpine, visible lazy shells, and fonts have settled. Either signal
- * may arrive first. A timeout releases only the renderer side of the barrier,
- * so Electron still never shows a window before its own first paint.
+ * Livewire, Alpine, visible lazy shells, and fonts have settled. A presentation
+ * event after that signal confirms Chromium has submitted the settled frame.
+ * A timeout releases the renderer and presentation sides of the barrier, so
+ * Electron still never shows a window before its own first paint. Repeat open
+ * and explicit show requests use the same per-window barrier.
  *
  * @return string|null the patched content, or null when the expected source
  *                     shape is gone
@@ -187,10 +197,15 @@ JS;
     $replace = <<<'JS'
     // [rfa window readiness] Electron first paint and renderer stability form
     // one barrier for the main window. Other windows need first paint only.
-    let rfaPaintReady = false;
+    // electron-window-state can implicitly show the main window while restoring
+    // maximization. Its opacity barrier replaces ready-to-show for that window.
+    let rfaPaintReady = id === 'main';
     let rfaRendererReady = id !== 'main';
+    let rfaPresentationReady = id !== 'main';
+    let rfaFocusWhenReady = false;
     let rfaReadinessTimer = null;
     let rfaRendererMessageListener = null;
+    let rfaFrameSubscriptionActive = false;
     const rfaCleanupReadiness = () => {
         if (rfaReadinessTimer !== null) {
             clearTimeout(rfaReadinessTimer);
@@ -200,16 +215,56 @@ JS;
             window.webContents.removeListener('ipc-message', rfaRendererMessageListener);
             rfaRendererMessageListener = null;
         }
+        if (rfaFrameSubscriptionActive) {
+            window.webContents.endFrameSubscription();
+            rfaFrameSubscriptionActive = false;
+        }
     };
     const rfaShowWhenReady = () => {
-        if (!rfaPaintReady || !rfaRendererReady) {
+        if (!rfaPaintReady || !rfaRendererReady || !rfaPresentationReady) {
             return;
         }
         rfaCleanupReadiness();
+        if (id === 'main') {
+            window.setOpacity(1);
+        }
         if (state.noFocusOnRestart && window.isVisible()) {
+            if (id === 'main') {
+                window.emit('rfa:presented');
+            }
             return;
         }
         window.show();
+        if (rfaFocusWhenReady) {
+            window.focus();
+        }
+        if (id === 'main') {
+            window.emit('rfa:presented');
+        }
+    };
+    const rfaWaitForPresentedFrame = () => {
+        try {
+            rfaFrameSubscriptionActive = true;
+            window.webContents.beginFrameSubscription(false, () => {
+                if (!rfaFrameSubscriptionActive) {
+                    return;
+                }
+                window.webContents.endFrameSubscription();
+                rfaFrameSubscriptionActive = false;
+                rfaPresentationReady = true;
+                rfaShowWhenReady();
+            });
+            window.webContents.invalidate();
+        }
+        catch (rfaError) {
+            rfaFrameSubscriptionActive = false;
+            rfaPresentationReady = true;
+            rfaShowWhenReady();
+        }
+    };
+    window.rfaRequestShow = (focus = false) => {
+        rfaFocusWhenReady = rfaFocusWhenReady || focus;
+        rfaShowWhenReady();
     };
     window.once('ready-to-show', () => {
         rfaPaintReady = true;
@@ -221,11 +276,12 @@ JS;
                 return;
             }
             rfaRendererReady = true;
-            rfaShowWhenReady();
+            rfaWaitForPresentedFrame();
         };
         window.webContents.on('ipc-message', rfaRendererMessageListener);
         rfaReadinessTimer = setTimeout(() => {
             rfaRendererReady = true;
+            rfaPresentationReady = true;
             rfaShowWhenReady();
         }, 5000);
         window.once('closed', rfaCleanupReadiness);
@@ -234,13 +290,242 @@ JS;
 
     if (str_contains($content, $find)) {
         $content = str_replace($find, $replace, $content);
+    } elseif (str_contains($content, 'Electron first paint and renderer stability')
+        && ! str_contains($content, 'window.rfaRequestShow = (focus = false)')) {
+        $stateFind = "    let rfaRendererReady = id !== 'main';\n    let rfaReadinessTimer = null;";
+        $stateReplace = "    let rfaRendererReady = id !== 'main';\n    let rfaFocusWhenReady = false;\n    let rfaReadinessTimer = null;";
+        $showBarrierFind = <<<'JS'
+        window.show();
+    };
+    window.once('ready-to-show', () => {
+JS;
+        $showBarrierReplace = <<<'JS'
+        window.show();
+        if (rfaFocusWhenReady) {
+            window.focus();
+        }
+    };
+    window.rfaRequestShow = (focus = false) => {
+        rfaFocusWhenReady = rfaFocusWhenReady || focus;
+        rfaShowWhenReady();
+    };
+    window.once('ready-to-show', () => {
+JS;
+
+        $content = str_replace($stateFind, $stateReplace, $content);
+        $content = str_replace($showBarrierFind, $showBarrierReplace, $content);
+    }
+
+    if (str_contains($content, 'Electron first paint and renderer stability')
+        && ! str_contains($content, 'rfaPresentationReady')) {
+        $presentationStateFind = <<<'JS'
+    let rfaRendererReady = id !== 'main';
+    let rfaFocusWhenReady = false;
+    let rfaReadinessTimer = null;
+    let rfaRendererMessageListener = null;
+JS;
+        $presentationStateReplace = <<<'JS'
+    let rfaRendererReady = id !== 'main';
+    let rfaPresentationReady = id !== 'main';
+    let rfaFocusWhenReady = false;
+    let rfaReadinessTimer = null;
+    let rfaRendererMessageListener = null;
+    let rfaFrameSubscriptionActive = false;
+JS;
+        $cleanupFind = <<<'JS'
+        if (rfaRendererMessageListener !== null) {
+            window.webContents.removeListener('ipc-message', rfaRendererMessageListener);
+            rfaRendererMessageListener = null;
+        }
+    };
+JS;
+        $cleanupReplace = <<<'JS'
+        if (rfaRendererMessageListener !== null) {
+            window.webContents.removeListener('ipc-message', rfaRendererMessageListener);
+            rfaRendererMessageListener = null;
+        }
+        if (rfaFrameSubscriptionActive) {
+            window.webContents.endFrameSubscription();
+            rfaFrameSubscriptionActive = false;
+        }
+    };
+JS;
+        $requestShowFind = <<<'JS'
+    window.rfaRequestShow = (focus = false) => {
+JS;
+        $requestShowReplace = <<<'JS'
+    const rfaWaitForPresentedFrame = () => {
+        try {
+            rfaFrameSubscriptionActive = true;
+            window.webContents.beginFrameSubscription(false, () => {
+                if (!rfaFrameSubscriptionActive) {
+                    return;
+                }
+                window.webContents.endFrameSubscription();
+                rfaFrameSubscriptionActive = false;
+                rfaPresentationReady = true;
+                rfaShowWhenReady();
+            });
+            window.webContents.invalidate();
+        }
+        catch (rfaError) {
+            rfaFrameSubscriptionActive = false;
+            rfaPresentationReady = true;
+            rfaShowWhenReady();
+        }
+    };
+    window.rfaRequestShow = (focus = false) => {
+JS;
+        $rendererMessageFind = <<<'JS'
+            rfaRendererReady = true;
+            rfaShowWhenReady();
+        };
+        window.webContents.on('ipc-message', rfaRendererMessageListener);
+JS;
+        $rendererMessageReplace = <<<'JS'
+            rfaRendererReady = true;
+            rfaWaitForPresentedFrame();
+        };
+        window.webContents.on('ipc-message', rfaRendererMessageListener);
+JS;
+        $timeoutFind = <<<'JS'
+        rfaReadinessTimer = setTimeout(() => {
+            rfaRendererReady = true;
+            rfaShowWhenReady();
+        }, 5000);
+JS;
+        $timeoutReplace = <<<'JS'
+        rfaReadinessTimer = setTimeout(() => {
+            rfaRendererReady = true;
+            rfaPresentationReady = true;
+            rfaShowWhenReady();
+        }, 5000);
+JS;
+
+        $content = str_replace($presentationStateFind, $presentationStateReplace, $content);
+        $content = str_replace($cleanupFind, $cleanupReplace, $content);
+        $content = str_replace(
+            'if (!rfaPaintReady || !rfaRendererReady) {',
+            'if (!rfaPaintReady || !rfaRendererReady || !rfaPresentationReady) {',
+            $content,
+        );
+        $content = str_replace($requestShowFind, $requestShowReplace, $content);
+        $content = str_replace($rendererMessageFind, $rendererMessageReplace, $content);
+        $content = str_replace($timeoutFind, $timeoutReplace, $content);
+    }
+
+    if (str_contains($content, 'Electron first paint and renderer stability')
+        && ! str_contains($content, "window.emit('rfa:presented')")) {
+        $showFind = <<<'JS'
+        rfaCleanupReadiness();
+        if (state.noFocusOnRestart && window.isVisible()) {
+            return;
+        }
+        window.show();
+        if (rfaFocusWhenReady) {
+            window.focus();
+        }
+JS;
+        $showReplace = <<<'JS'
+        rfaCleanupReadiness();
+        if (id === 'main') {
+            window.setOpacity(1);
+        }
+        if (state.noFocusOnRestart && window.isVisible()) {
+            if (id === 'main') {
+                window.emit('rfa:presented');
+            }
+            return;
+        }
+        window.show();
+        if (rfaFocusWhenReady) {
+            window.focus();
+        }
+        if (id === 'main') {
+            window.emit('rfa:presented');
+        }
+JS;
+
+        $content = str_replace(
+            '    let rfaPaintReady = false;',
+            "    // electron-window-state can implicitly show the main window while restoring\n    // maximization. Its opacity barrier replaces ready-to-show for that window.\n    let rfaPaintReady = id === 'main';",
+            $content,
+        );
+        $content = str_replace($showFind, $showReplace, $content);
+    }
+
+    $showFind = <<<'JS'
+router.post('/show', (req, res) => {
+    const { id } = req.body;
+    if (state.windows[id]) {
+        state.windows[id].show();
+    }
+    res.sendStatus(200);
+});
+JS;
+
+    $showReplace = <<<'JS'
+router.post('/show', (req, res) => {
+    const { id } = req.body;
+    const window = state.windows[id];
+    if (window) {
+        if (typeof window.rfaRequestShow === 'function') {
+            window.rfaRequestShow();
+        } else {
+            window.show();
+        }
+    }
+    res.sendStatus(200);
+});
+JS;
+
+    if (str_contains($content, $showFind)) {
+        $content = str_replace($showFind, $showReplace, $content);
+    }
+
+    $existingFind = <<<'JS'
+    if (state.windows[id]) {
+        state.windows[id].show();
+        state.windows[id].focus();
+        res.sendStatus(200);
+        return;
+    }
+JS;
+
+    $existingReplace = <<<'JS'
+    const existingWindow = state.windows[id];
+    if (existingWindow) {
+        if (typeof existingWindow.rfaRequestShow === 'function') {
+            existingWindow.rfaRequestShow(true);
+        } else {
+            existingWindow.show();
+            existingWindow.focus();
+        }
+        res.sendStatus(200);
+        return;
+    }
+JS;
+
+    if (str_contains($content, $existingFind)) {
+        $content = str_replace($existingFind, $existingReplace, $content);
     }
 
     $fullyPatched = str_contains($content, 'Electron first paint and renderer stability')
         && str_contains($content, "channel !== 'rfa:renderer-ready'")
+        && str_contains($content, 'window.webContents.beginFrameSubscription(false')
+        && str_contains($content, 'window.webContents.invalidate();')
+        && str_contains($content, '!rfaPresentationReady')
+        && str_contains($content, "let rfaPaintReady = id === 'main'")
+        && str_contains($content, 'window.setOpacity(1);')
+        && str_contains($content, "window.emit('rfa:presented')")
+        && str_contains($content, 'window.rfaRequestShow = (focus = false)')
+        && str_contains($content, 'existingWindow.rfaRequestShow(true)')
+        && str_contains($content, 'window.rfaRequestShow();')
         && str_contains($content, 'rfaReadinessTimer = setTimeout(')
         && str_contains($content, 'window.once(\'closed\', rfaCleanupReadiness)')
-        && ! str_contains($content, $find);
+        && ! str_contains($content, $find)
+        && ! str_contains($content, $showFind)
+        && ! str_contains($content, $existingFind);
 
     return $fullyPatched ? $content : null;
 }
@@ -613,9 +898,9 @@ JS;
  *
  * This opens a lightweight, frameless splash the instant `app.whenReady()`
  * resolves — before the PHP server boots — giving immediate visual feedback, and
- * hands off seamlessly: the splash closes the moment the real window is shown
- * after paint and renderer readiness (the first non-splash window created, via
- * Window::open). The splash is
+ * hands off seamlessly: the splash closes when the opaque main window presents
+ * its settled frame (the first non-splash window created, via Window::open).
+ * The splash is
  * a self-contained `data:` URL so there is nothing extra to bundle, and the
  * whole thing is fail-open — any error just means no splash, i.e. today's
  * behaviour. On macOS (RFA's only desktop target) closing the splash while it is
@@ -683,18 +968,19 @@ JS;
             splash.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(RFA_SPLASH_HTML));
             // Seamless handoff: the first non-splash window created is the main
             // window (opened via Window::open once PHP has booted). Close the
-            // splash on that window's `show` — which RFA fires only after Electron
-            // paint and renderer readiness — so no incomplete frame is exposed.
+            // splash on RFA's explicit presentation event. A remembered maximize
+            // can show the main window implicitly, but it remains transparent
+            // until Electron paint and renderer readiness have both settled.
             const rfaOnCreated = (_, window) => {
                 if (window === this.rfaSplash) {
                     return;
                 }
                 app.removeListener('browser-window-created', rfaOnCreated);
                 this.rfaSplashListener = null;
-                // Close on `show` (painted — the seamless handoff) and on `closed`
-                // (a window torn down before it ever shows — e.g. a failed load —
-                // must not strand the splash until the 60s timer).
-                window.once('show', () => this.rfaCloseSplash());
+                // Close on the opaque presentation handoff and on `closed` (a
+                // window torn down before it presents must not strand the splash
+                // until the 60s timer).
+                window.once('rfa:presented', () => this.rfaCloseSplash());
                 window.once('closed', () => this.rfaCloseSplash());
             };
             this.rfaSplashListener = rfaOnCreated;
@@ -827,6 +1113,36 @@ JS;
         $patched = str_replace($oldHandoffComment, $newHandoffComment, $patched);
     }
 
+    $previousPresentationComment = <<<'JS'
+            // splash on that window's `show` — which RFA fires only after Electron
+            // paint and renderer readiness — so no incomplete frame is exposed.
+JS;
+    $presentationComment = <<<'JS'
+            // splash on RFA's explicit presentation event. A remembered maximize
+            // can show the main window implicitly, but it remains transparent
+            // until Electron paint and renderer readiness have both settled.
+JS;
+    $previousPresentationListener = <<<'JS'
+                // Close on `show` (painted — the seamless handoff) and on `closed`
+                // (a window torn down before it ever shows — e.g. a failed load —
+                // must not strand the splash until the 60s timer).
+                window.once('show', () => this.rfaCloseSplash());
+JS;
+    $presentationListener = <<<'JS'
+                // Close on the opaque presentation handoff and on `closed` (a
+                // window torn down before it presents must not strand the splash
+                // until the 60s timer).
+                window.once('rfa:presented', () => this.rfaCloseSplash());
+JS;
+
+    if (str_contains($patched, $previousPresentationComment)) {
+        $patched = str_replace($previousPresentationComment, $presentationComment, $patched);
+    }
+
+    if (str_contains($patched, $previousPresentationListener)) {
+        $patched = str_replace($previousPresentationListener, $presentationListener, $patched);
+    }
+
     // Only success when every edit is present, so a NativePHP bump that reshapes
     // one anchor can't half-apply (e.g. a splash that is created but never shown,
     // or themed markup without the nativeTheme import that tints the window).
@@ -834,6 +1150,7 @@ JS;
         && str_contains($patched, 'const RFA_SPLASH_HTML')
         && str_contains($patched, 'nativeTheme.shouldUseDarkColors')
         && str_contains($patched, 'rfaShowSplash() {')
+        && str_contains($patched, "window.once('rfa:presented'")
         && str_contains($patched, 'this.rfaShowSplash()');
 
     return $fullyPatched ? $patched : null;

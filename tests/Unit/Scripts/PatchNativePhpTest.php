@@ -138,6 +138,7 @@ test('window theme: uses the resolved native appearance for every BrowserWindow 
     expect($content)
         ->toContain("import { BrowserWindow, nativeTheme } from 'electron'; // [rfa window theme]")
         ->toContain("backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff'")
+        ->toContain("opacity: id === 'main' ? 0 : 1")
         ->not->toContain('        backgroundColor, transparent: transparency, alwaysOnTop,');
 });
 
@@ -159,16 +160,41 @@ test('renderer readiness window: reports a shape change without the first-paint 
     expect(rfaPatchRendererReadyWindow(stockWindowApi()))->toBeNull();
 });
 
-test('renderer readiness window: waits for paint and the main renderer in either order', function () {
+test('renderer readiness window: waits for the settled main renderer presentation', function () {
     $content = rfaPatchRendererReadyWindow(rfaPatchWindowReadyToShow(stockWindowApi()));
 
     expect($content)
-        ->toContain('let rfaPaintReady = false')
+        ->toContain("let rfaPaintReady = id === 'main'")
         ->toContain("let rfaRendererReady = id !== 'main'")
+        ->toContain("let rfaPresentationReady = id !== 'main'")
         ->toContain("window.once('ready-to-show'")
         ->toContain("channel !== 'rfa:renderer-ready'")
-        ->toContain('if (!rfaPaintReady || !rfaRendererReady)')
+        ->toContain('window.webContents.beginFrameSubscription(false')
+        ->toContain('window.webContents.invalidate()')
+        ->toContain('if (!rfaPaintReady || !rfaRendererReady || !rfaPresentationReady)')
+        ->toContain('window.setOpacity(1)')
+        ->toContain("window.emit('rfa:presented')")
+        ->toContain('window.rfaRequestShow = (focus = false)')
         ->toContain('rfaShowWhenReady()');
+});
+
+test('renderer readiness window: repeat opens cannot bypass the barrier', function () {
+    $content = rfaPatchRendererReadyWindow(rfaPatchWindowReadyToShow(stockWindowApi()));
+
+    expect($content)
+        ->toContain('const existingWindow = state.windows[id]')
+        ->toContain("typeof existingWindow.rfaRequestShow === 'function'")
+        ->toContain('existingWindow.rfaRequestShow(true)')
+        ->not->toContain("if (state.windows[id]) {\n        state.windows[id].show();\n        state.windows[id].focus();");
+});
+
+test('renderer readiness window: explicit show requests cannot bypass the barrier', function () {
+    $content = rfaPatchRendererReadyWindow(rfaPatchWindowReadyToShow(stockWindowApi()));
+
+    expect($content)
+        ->toContain("typeof window.rfaRequestShow === 'function'")
+        ->toContain('window.rfaRequestShow();')
+        ->not->toContain("if (state.windows[id]) {\n        state.windows[id].show();\n    }");
 });
 
 test('renderer readiness window: fails open and cleans up its listener', function () {
@@ -526,9 +552,10 @@ test('splash: opens an early window before PHP boots, hands off, and is fail-ope
         ->toContain("loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(RFA_SPLASH_HTML))")
         // Fired the instant Electron is ready, before any PHP boot.
         ->toContain('this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots')
-        // Seamless handoff: the splash closes once the real window is shown.
-        ->toContain("window.once('show', () => this.rfaCloseSplash())")
-        ->toContain('paint and renderer readiness')
+        // Seamless handoff: an implicit maximize cannot close the splash early.
+        ->toContain("window.once('rfa:presented', () => this.rfaCloseSplash())")
+        ->toContain('remains transparent')
+        ->not->toContain("window.once('show', () => this.rfaCloseSplash())")
         ->not->toContain('`did-finish-load`')
         // Fail-open: splash creation is wrapped so any error just means no splash.
         ->toContain('catch (rfaError)');

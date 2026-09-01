@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import rendererReady from '../../public/js/renderer-ready.js';
 
 const {
-    hasPendingFileShells,
-    hasVisibleFilePlaceholders,
+    hasPendingRenderShells,
+    hasVisibleRenderBlockers,
     loadRequiredFonts,
     signalWhenSettled,
     install,
@@ -16,7 +16,6 @@ describe('renderer readiness', () => {
         delete window.Livewire;
         delete window.__rfaRendererReadyAttached;
         delete window.__rfaRendererReadySent;
-        delete document.documentElement.dataset.rfaRendererReady;
         window.nativeRendererReady = vi.fn();
         window.requestAnimationFrame = (callback) => window.setTimeout(callback, 16);
         Object.defineProperty(document, 'fonts', {
@@ -38,7 +37,6 @@ describe('renderer readiness', () => {
         delete window.requestAnimationFrame;
         delete window.__rfaRendererReadyAttached;
         delete window.__rfaRendererReadySent;
-        delete document.documentElement.dataset.rfaRendererReady;
         delete document.fonts;
         delete document.readyState;
         document.body.innerHTML = '';
@@ -46,7 +44,7 @@ describe('renderer readiness', () => {
 
     function addPlaceholder(bounds) {
         const placeholder = document.createElement('div');
-        placeholder.dataset.rfaDiffFilePlaceholder = '';
+        placeholder.dataset.rfaRenderBlocker = '';
         placeholder.getBoundingClientRect = vi.fn(() => bounds);
         document.body.appendChild(placeholder);
 
@@ -55,7 +53,7 @@ describe('renderer readiness', () => {
 
     function addReview(expectedShells) {
         const review = document.createElement('div');
-        review.dataset.rfaExpectedFileShells = String(expectedShells);
+        review.dataset.rfaRenderShells = String(expectedShells);
         document.body.appendChild(review);
 
         return review;
@@ -103,7 +101,6 @@ describe('renderer readiness', () => {
         await readiness;
 
         expect(window.nativeRendererReady).toHaveBeenCalledOnce();
-        expect(document.documentElement.dataset.rfaRendererReady).toBe('true');
     });
 
     it('waits for first layout before it assesses placeholder visibility', async () => {
@@ -127,7 +124,7 @@ describe('renderer readiness', () => {
     it('ignores lazy placeholders outside the viewport', async () => {
         addPlaceholder({ top: -80, bottom: -40, left: 0, right: 400 });
 
-        expect(hasVisibleFilePlaceholders(window)).toBe(false);
+        expect(hasVisibleRenderBlockers(window)).toBe(false);
 
         const readiness = signalWhenSettled(window, 1000);
         await vi.runAllTimersAsync();
@@ -139,36 +136,36 @@ describe('renderer readiness', () => {
     it('uses source shell geometry while its placeholder has no layout', () => {
         const review = addReview(1);
         const shell = document.createElement('div');
-        shell.dataset.rfaFileShell = '';
+        shell.dataset.rfaRenderShell = '';
         shell.getBoundingClientRect = vi.fn(() => ({ top: 0, bottom: 40, left: 0, right: 400, width: 400, height: 40 }));
         review.appendChild(shell);
 
         const placeholder = document.createElement('div');
-        placeholder.dataset.rfaDiffFilePlaceholder = '';
+        placeholder.dataset.rfaRenderBlocker = '';
         placeholder.getBoundingClientRect = vi.fn(() => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 }));
         shell.appendChild(placeholder);
 
-        expect(hasVisibleFilePlaceholders(window)).toBe(true);
+        expect(hasVisibleRenderBlockers(window)).toBe(true);
     });
 
     it('waits until every expected file shell has layout geometry', async () => {
         const review = addReview(1);
 
-        expect(hasPendingFileShells(window)).toBe(true);
+        expect(hasPendingRenderShells(window)).toBe(true);
 
         const readiness = signalWhenSettled(window, 1000);
         await vi.advanceTimersByTimeAsync(400);
         expect(window.nativeRendererReady).not.toHaveBeenCalled();
 
         const shell = document.createElement('div');
-        shell.dataset.rfaFileShell = '';
+        shell.dataset.rfaRenderShell = '';
         shell.getBoundingClientRect = vi.fn(() => ({ width: 400, height: 40 }));
         review.appendChild(shell);
 
         await vi.runAllTimersAsync();
         await readiness;
 
-        expect(hasPendingFileShells(window)).toBe(false);
+        expect(hasPendingRenderShells(window)).toBe(false);
         expect(window.nativeRendererReady).toHaveBeenCalledOnce();
     });
 
@@ -184,11 +181,8 @@ describe('renderer readiness', () => {
     });
 
     it('starts once after Livewire finishes initialization', async () => {
-        document.documentElement.dataset.rfaRendererReady = 'true';
-
         expect(install(window, { timeoutMs: 1000 })).toBe(true);
         expect(install(window, { timeoutMs: 1000 })).toBe(false);
-        expect(document.documentElement.dataset.rfaRendererReady).toBeUndefined();
 
         document.dispatchEvent(new Event('livewire:initialized'));
         await vi.runAllTimersAsync();

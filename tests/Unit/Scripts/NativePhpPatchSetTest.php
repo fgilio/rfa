@@ -70,12 +70,35 @@ test('applies every patch in one run', function () {
     expect(file_get_contents($root.'/server/api/window.js'))
         ->toContain('[rfa window readiness]')
         ->toContain('[rfa window theme]')
-        ->toContain('rfaRendererReady');
+        ->toContain('rfaRendererReady')
+        ->toContain('rfaPresentationReady')
+        ->toContain("opacity: id === 'main' ? 0 : 1")
+        ->toContain('window.setOpacity(1);')
+        ->toContain("window.emit('rfa:presented')")
+        ->toContain('window.webContents.beginFrameSubscription(false')
+        ->toContain('window.webContents.invalidate();')
+        ->toContain('window.webContents.endFrameSubscription();');
     expect(file_get_contents($root.'/server/php.js'))->toContain('rfaNeedsFullOptimize');
     expect(file_get_contents($root.'/index.js'))
         ->toContain("'preflight_config_'")
         ->toContain('const RFA_SPLASH_HTML')
+        ->toContain("window.once('rfa:presented'")
         ->toContain('rfaResolveAppearance()');
+});
+
+test('a remembered maximize stays transparent until the settled frame is presented', function () {
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'));
+
+    applyRfaNativePhpPatchSet($root);
+
+    expect(file_get_contents($root.'/server/api/window.js'))
+        ->toContain("opacity: id === 'main' ? 0 : 1")
+        ->toContain("let rfaPaintReady = id === 'main'")
+        ->toContain('window.setOpacity(1);')
+        ->toContain("window.emit('rfa:presented')")
+        ->and(file_get_contents($root.'/index.js'))
+        ->toContain("window.once('rfa:presented', () => this.rfaCloseSplash())")
+        ->not->toContain("window.once('show', () => this.rfaCloseSplash())");
 });
 
 test('all edits to the shared index.js survive each other', function () {

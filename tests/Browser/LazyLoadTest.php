@@ -19,25 +19,32 @@ test('file list loads immediately and diffs load lazily', function () {
 });
 
 test('renderer readiness waits for visible file shells to settle', function () {
-    $page = $this->visit($this->projectUrl());
+    $page = $this->visitAndLoad($this->projectUrl());
 
     $settled = $page->script('window.rfaRendererReady.settleRenderer(window)');
 
     expect($settled)->toBeTrue();
     $page->assertNoJavaScriptErrors();
 
-    $visiblePlaceholders = $page->script(<<<'JS'
-        [...document.querySelectorAll('[data-rfa-diff-file-placeholder]')].filter((element) => {
-            const bounds = element.getBoundingClientRect();
+    $hasVisibleBlockers = $page->script(
+        'window.rfaRendererReady.hasVisibleRenderBlockers(window)',
+    );
 
-            return bounds.top < innerHeight
-                && bounds.bottom > 0
-                && bounds.left < innerWidth
-                && bounds.right > 0;
-        }).length
-        JS);
+    expect($hasVisibleBlockers)->toBeFalse();
+});
 
-    expect($visiblePlaceholders)->toBe(0);
+test('reviews larger than the Livewire request limit still hydrate on demand', function () {
+    collect(range(1, 105))->each(function (int $index): void {
+        $name = sprintf('bulk-%03d.php', $index);
+        File::put($this->testRepoPath.'/'.$name, "<?php\nreturn {$index};\n");
+    });
+
+    $page = $this->visitAndLoad($this->projectUrl());
+    $shellCount = $page->script("document.querySelectorAll('[data-rfa-render-shell]').length");
+
+    expect($shellCount)->toBeGreaterThan(100);
+    $page->assertSee('return 1;');
+    $page->assertNoJavaScriptErrors();
 });
 
 test('expanding collapsed file triggers diff load', function () {

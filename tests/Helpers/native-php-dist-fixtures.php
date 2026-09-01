@@ -38,7 +38,21 @@ import express from 'express';
 import { BrowserWindow } from 'electron';
 import state from '../state.js';
 const router = express.Router();
+router.post('/show', (req, res) => {
+    const { id } = req.body;
+    if (state.windows[id]) {
+        state.windows[id].show();
+    }
+    res.sendStatus(200);
+});
 router.post('/open', (req, res) => {
+    const { id } = req.body;
+    if (state.windows[id]) {
+        state.windows[id].show();
+        state.windows[id].focus();
+        res.sendStatus(200);
+        return;
+    }
     const window = new BrowserWindow({ show: false,
         backgroundColor, transparent: transparency, alwaysOnTop,
     });

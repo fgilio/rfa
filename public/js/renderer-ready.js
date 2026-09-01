@@ -10,6 +10,8 @@
     }
 })(typeof window !== 'undefined' ? window : null, function () {
     const DEFAULT_TIMEOUT_MS = 4000;
+    const POLL_INTERVAL_MS = 100;
+    const REQUIRED_STABLE_FRAMES = 3;
     const REQUIRED_FONTS = [
         '400 1em "Space Grotesk"',
         '700 1em "Space Grotesk"',
@@ -58,25 +60,25 @@
             && bounds.right > 0;
     }
 
-    function hasVisibleFilePlaceholders(root) {
-        return Array.from(root.document.querySelectorAll('[data-rfa-diff-file-placeholder]'))
-            .some((placeholder) => {
-                const fileShell = placeholder.closest('[data-rfa-file-shell]');
+    function hasVisibleRenderBlockers(root) {
+        return Array.from(root.document.querySelectorAll('[data-rfa-render-blocker]'))
+            .some((blocker) => {
+                const renderShell = blocker.closest('[data-rfa-render-shell]');
 
-                return isInViewport(fileShell || placeholder, root);
+                return isInViewport(renderShell || blocker, root);
             });
     }
 
-    function hasPendingFileShells(root) {
-        const review = root.document.querySelector('[data-rfa-expected-file-shells]');
+    function hasPendingRenderShells(root) {
+        const renderRoot = root.document.querySelector('[data-rfa-render-shells]');
 
-        if (!review) return false;
+        if (!renderRoot) return false;
 
-        const expected = Number(review.dataset.rfaExpectedFileShells || 0);
+        const expected = Number(renderRoot.dataset.rfaRenderShells || 0);
 
         if (expected === 0) return false;
 
-        const shells = Array.from(review.querySelectorAll('[data-rfa-file-shell]'));
+        const shells = Array.from(renderRoot.querySelectorAll('[data-rfa-render-shell]'));
 
         return shells.length < expected || shells.some((shell) => {
             const bounds = shell.getBoundingClientRect();
@@ -86,18 +88,12 @@
     }
 
     async function settleRenderer(root, timeoutMs = DEFAULT_TIMEOUT_MS) {
+        const startedAt = Date.now();
         const fonts = loadRequiredFonts(root);
+        const fontReadiness = fonts
+            ? Promise.resolve(fonts).then(() => true, () => true)
+            : null;
         let fontsReady = !fonts;
-        let timedOut = false;
-
-        Promise.resolve(fonts).then(
-            () => { fontsReady = true; },
-            () => { fontsReady = true; },
-        );
-
-        const timeoutId = root.setTimeout(() => {
-            timedOut = true;
-        }, timeoutMs);
 
         // Livewire initializes while its script is still executing. Window load
         // is the first point where Chromium can expose final shell geometry.
@@ -107,34 +103,76 @@
         await nextFrame(root);
         await nextFrame(root);
 
-        let stableFrames = 0;
+        return new Promise((resolve) => {
+            let stableFrames = 0;
+            let checkScheduled = false;
+            let finished = false;
+            let pollId = null;
+            const observer = typeof root.MutationObserver === 'function'
+                ? new root.MutationObserver(() => {
+                    stableFrames = 0;
+                    scheduleCheck();
+                })
+                : null;
+            const isSettled = () => fontsReady
+                && !hasPendingRenderShells(root)
+                && !hasVisibleRenderBlockers(root);
+            const finish = (result) => {
+                if (finished) return;
 
-        while (!timedOut && stableFrames < 3) {
-            stableFrames = fontsReady
-                && !hasPendingFileShells(root)
-                && !hasVisibleFilePlaceholders(root)
-                ? stableFrames + 1
-                : 0;
+                finished = true;
+                root.clearTimeout(timeoutId);
+                if (pollId !== null) root.clearTimeout(pollId);
+                observer?.disconnect();
+                resolve(result);
+            };
+            const schedulePoll = () => {
+                pollId = root.setTimeout(() => {
+                    scheduleCheck();
+                    schedulePoll();
+                }, POLL_INTERVAL_MS);
+            };
 
-            await nextFrame(root);
-        }
+            function scheduleCheck() {
+                if (finished || checkScheduled) return;
 
-        root.clearTimeout(timeoutId);
+                checkScheduled = true;
+                nextFrame(root).then(() => {
+                    checkScheduled = false;
+                    if (finished) return;
 
-        return !timedOut
-            && fontsReady
-            && !hasPendingFileShells(root)
-            && !hasVisibleFilePlaceholders(root);
+                    stableFrames = isSettled() ? stableFrames + 1 : 0;
+
+                    if (stableFrames >= REQUIRED_STABLE_FRAMES) {
+                        finish(true);
+                    } else if (stableFrames > 0) {
+                        scheduleCheck();
+                    }
+                });
+            }
+
+            observer?.observe(root.document.body || root.document.documentElement, {
+                childList: true,
+                subtree: true,
+            });
+
+            Promise.resolve(fontReadiness).then(() => {
+                fontsReady = true;
+                scheduleCheck();
+            });
+
+            const remainingTimeout = Math.max(0, timeoutMs - (Date.now() - startedAt));
+            const timeoutId = root.setTimeout(() => finish(false), remainingTimeout);
+
+            scheduleCheck();
+            schedulePoll();
+        });
     }
 
-    function signalRendererReady(root) {
-        if (root.__rfaRendererReadySent
-            || hasPendingFileShells(root)
-            || hasVisibleFilePlaceholders(root)) return false;
+    function sendRendererReady(root) {
+        if (root.__rfaRendererReadySent) return false;
 
         root.__rfaRendererReadySent = true;
-        root.document.documentElement.dataset.rfaRendererReady = 'true';
-        root.dispatchEvent(new root.CustomEvent('rfa:renderer-ready'));
 
         try {
             root.nativeRendererReady?.();
@@ -145,28 +183,29 @@
         return true;
     }
 
+    function signalRendererReady(root) {
+        if (hasPendingRenderShells(root) || hasVisibleRenderBlockers(root)) return false;
+
+        return sendRendererReady(root);
+    }
+
     async function signalWhenSettled(root, timeoutMs = DEFAULT_TIMEOUT_MS) {
         const settled = await settleRenderer(root, timeoutMs);
 
         if (!settled) return false;
 
-        return signalRendererReady(root);
+        return sendRendererReady(root);
     }
 
     function install(root, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
         if (root.__rfaRendererReadyAttached) return false;
 
-        delete root.document.documentElement.dataset.rfaRendererReady;
         delete root.__rfaRendererReadySent;
         root.__rfaRendererReadyAttached = true;
 
         const start = () => signalWhenSettled(root, timeoutMs);
 
-        if (root.Livewire) {
-            start();
-        } else {
-            root.document.addEventListener('livewire:initialized', start, { once: true });
-        }
+        root.document.addEventListener('livewire:initialized', start, { once: true });
 
         return true;
     }
@@ -174,8 +213,8 @@
     return {
         isInViewport,
         loadRequiredFonts,
-        hasPendingFileShells,
-        hasVisibleFilePlaceholders,
+        hasPendingRenderShells,
+        hasVisibleRenderBlockers,
         settleRenderer,
         signalRendererReady,
         signalWhenSettled,
