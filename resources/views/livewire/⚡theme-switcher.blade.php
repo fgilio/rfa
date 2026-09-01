@@ -6,17 +6,9 @@ new class extends Component {};
 ?>
 
 <div
-    x-data="{
-        setRfaCookie(name, value) {
-            document.cookie = name + '=' + value + ';path=/;max-age=31536000;SameSite=Lax'
-        },
-    }"
-    {{-- Electron reads the selected mode before the renderer exists. Keep the
-         resolved cookie for other non-Livewire consumers. --}}
-    x-effect="
-        setRfaCookie('rfa_appearance', $flux.appearance);
-        setRfaCookie('rfa_theme', $flux.dark ? 'dark' : 'light');
-    "
+    x-data
+    {{-- Electron reads the selected mode before the renderer exists. --}}
+    x-effect="document.cookie = 'rfa_appearance=' + $flux.appearance + ';path=/;max-age=31536000;SameSite=Lax'"
 >
     <flux:dropdown position="bottom" align="end">
         {{-- Trigger mirrors the current appearance: the icon swaps to whichever
