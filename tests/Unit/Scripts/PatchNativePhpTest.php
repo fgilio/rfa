@@ -10,6 +10,24 @@ require_once dirname(__DIR__, 2).'/Helpers/native-php-dist-fixtures.php';
  * runner that applies them together.
  */
 
+test('startup palette reads and validates the theme config', function () {
+    $theme = require dirname(__DIR__, 3).'/config/theme.php';
+
+    expect(rfaThemeRgb('light', 'bg'))->toBe(array_map('intval', explode(' ', $theme['colors']['light']['bg'])))
+        ->and(rfaThemeRgb('dark', 'text'))->toBe(array_map('intval', explode(' ', $theme['colors']['dark']['text'])))
+        ->and(rfaThemeHex('light', 'link'))->toBe('#3b82f6')
+        ->and(rfaThemeRgba('dark', 'text', '.18'))->toBe('rgba(250,250,250,.18)');
+});
+
+test('startup palette rejects invalid RGB triples', function (mixed $value, string $message) {
+    expect(fn () => rfaParseThemeRgb($value, 'colors.light.bg'))
+        ->toThrow(RuntimeException::class, $message);
+})->with([
+    'wrong shape' => ['255 255', 'must be an RGB triple'],
+    'wrong type' => [null, 'must be an RGB triple'],
+    'channel out of range' => ['256 255 255', 'must contain channels from 0 to 255'],
+]);
+
 // ===== preload/index.mjs: the drag-and-drop file bridge =====
 
 // -- Shape changes --

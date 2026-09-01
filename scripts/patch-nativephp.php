@@ -13,12 +13,54 @@
  *
  * Runs automatically via composer post-autoload-dump and post-update-cmd.
  */
-const RFA_BACKGROUND_DARK = '#09090b';
-const RFA_BACKGROUND_LIGHT = '#ffffff';
+/** @return array{int, int, int} */
+function rfaParseThemeRgb(mixed $value, string $key): array
+{
+    if (! is_string($value)
+        || preg_match('/^(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})$/', trim($value), $matches) !== 1) {
+        throw new RuntimeException("Theme color [{$key}] must be an RGB triple.");
+    }
+
+    $channels = [(int) $matches[1], (int) $matches[2], (int) $matches[3]];
+
+    if (max($channels) > 255) {
+        throw new RuntimeException("Theme color [{$key}] must contain channels from 0 to 255.");
+    }
+
+    return $channels;
+}
+
+/** @return array{int, int, int} */
+function rfaThemeRgb(string $appearance, string $token): array
+{
+    /** @var array<string, mixed>|null $colors */
+    static $colors;
+
+    if ($colors === null) {
+        $theme = require __DIR__.'/../config/theme.php';
+        $colors = is_array($theme['colors'] ?? null) ? $theme['colors'] : [];
+    }
+
+    $key = "colors.{$appearance}.{$token}";
+    $appearanceColors = $colors[$appearance] ?? null;
+    $value = is_array($appearanceColors) ? ($appearanceColors[$token] ?? null) : null;
+
+    return rfaParseThemeRgb($value, $key);
+}
+
+function rfaThemeHex(string $appearance, string $token): string
+{
+    return sprintf('#%02x%02x%02x', ...rfaThemeRgb($appearance, $token));
+}
+
+function rfaThemeRgba(string $appearance, string $token, string $alpha): string
+{
+    return 'rgba('.implode(',', rfaThemeRgb($appearance, $token)).','.$alpha.')';
+}
 
 function rfaBackgroundExpression(): string
 {
-    return "nativeTheme.shouldUseDarkColors ? '".RFA_BACKGROUND_DARK."' : '".RFA_BACKGROUND_LIGHT."'";
+    return "nativeTheme.shouldUseDarkColors ? '".rfaThemeHex('dark', 'bg')."' : '".rfaThemeHex('light', 'bg')."'";
 }
 
 /**
@@ -723,14 +765,24 @@ function rfaPatchSplashWindow(string $content): ?string
     //    default. No JS in the page; the native window backgroundColor is tinted
     //    to the same appearance below so there is no wrong-color flash on open.
     $htmlAnchor = 'const { autoUpdater } = electronUpdater;';
+    $splashColors = [
+        '__RFA_BACKGROUND_LIGHT__' => rfaThemeHex('light', 'bg'),
+        '__RFA_BACKGROUND_DARK__' => rfaThemeHex('dark', 'bg'),
+        '__RFA_TEXT_LIGHT__' => rfaThemeHex('light', 'text'),
+        '__RFA_TEXT_DARK__' => rfaThemeHex('dark', 'text'),
+        '__RFA_TRACK_LIGHT__' => rfaThemeRgba('light', 'text', '.14'),
+        '__RFA_TRACK_DARK__' => rfaThemeRgba('dark', 'text', '.18'),
+        '__RFA_LINK_LIGHT__' => rfaThemeHex('light', 'link'),
+        '__RFA_LINK_DARK__' => rfaThemeHex('dark', 'link'),
+    ];
     $htmlConst = str_replace(
-        ['__RFA_BACKGROUND_LIGHT__', '__RFA_BACKGROUND_DARK__'],
-        [RFA_BACKGROUND_LIGHT, RFA_BACKGROUND_DARK],
+        array_keys($splashColors),
+        array_values($splashColors),
         <<<'JS'
 // [rfa splash] Self-contained splash markup — inline styles only, no external
 // resources, so it loads instantly from a data: URL with nothing to bundle. It
 // theme-matches the OS (and thus RFA's default appearance) via prefers-color-scheme.
-const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>:root{--rfa-bg:__RFA_BACKGROUND_LIGHT__;--rfa-fg:__RFA_BACKGROUND_DARK__;--rfa-track:rgba(9,9,11,.14);--rfa-accent:#3b82f6}@media (prefers-color-scheme:dark){:root{--rfa-bg:__RFA_BACKGROUND_DARK__;--rfa-fg:#fafafa;--rfa-track:rgba(250,250,250,.18);--rfa-accent:#60a5fa}}html,body{margin:0;height:100%;background:var(--rfa-bg);overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--rfa-fg);-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid var(--rfa-track);border-top-color:var(--rfa-accent);border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
+const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>:root{--rfa-bg:__RFA_BACKGROUND_LIGHT__;--rfa-fg:__RFA_TEXT_LIGHT__;--rfa-track:__RFA_TRACK_LIGHT__;--rfa-accent:__RFA_LINK_LIGHT__}@media (prefers-color-scheme:dark){:root{--rfa-bg:__RFA_BACKGROUND_DARK__;--rfa-fg:__RFA_TEXT_DARK__;--rfa-track:__RFA_TRACK_DARK__;--rfa-accent:__RFA_LINK_DARK__}}html,body{margin:0;height:100%;background:var(--rfa-bg);overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--rfa-fg);-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid var(--rfa-track);border-top-color:var(--rfa-accent);border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
 JS
     );
 
@@ -924,7 +976,7 @@ JS;
     // one anchor can't half-apply (e.g. a splash that is created but never shown,
     // or themed markup without the nativeTheme import that tints the window).
     $fullyPatched = str_contains($patched, 'BrowserWindow, nativeTheme')
-        && str_contains($patched, 'const RFA_SPLASH_HTML')
+        && str_contains($patched, $htmlConst)
         && str_contains($patched, 'nativeTheme.shouldUseDarkColors')
         && str_contains($patched, 'rfaShowSplash() {')
         && str_contains($patched, "window.once('rfa:presented'")
