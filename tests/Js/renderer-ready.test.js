@@ -4,6 +4,7 @@ import rendererReady from '../../public/js/renderer-ready.js';
 const {
     hasPendingFileShells,
     hasVisibleFilePlaceholders,
+    loadRequiredFonts,
     signalWhenSettled,
     install,
 } = rendererReady;
@@ -20,7 +21,10 @@ describe('renderer readiness', () => {
         window.requestAnimationFrame = (callback) => window.setTimeout(callback, 16);
         Object.defineProperty(document, 'fonts', {
             configurable: true,
-            value: { ready: Promise.resolve() },
+            value: {
+                ready: Promise.resolve(),
+                load: vi.fn(() => Promise.resolve()),
+            },
         });
         Object.defineProperty(document, 'readyState', {
             configurable: true,
@@ -56,6 +60,36 @@ describe('renderer readiness', () => {
 
         return review;
     }
+
+    it('requests every local font and weight before renderer readiness', async () => {
+        await loadRequiredFonts(window);
+
+        expect(document.fonts.load).toHaveBeenCalledTimes(4);
+        expect(document.fonts.load).toHaveBeenNthCalledWith(1, '400 1em "Space Grotesk"');
+        expect(document.fonts.load).toHaveBeenNthCalledWith(2, '700 1em "Space Grotesk"');
+        expect(document.fonts.load).toHaveBeenNthCalledWith(3, '400 1em "JetBrains Mono"');
+        expect(document.fonts.load).toHaveBeenNthCalledWith(4, '500 1em "JetBrains Mono"');
+    });
+
+    it('fails open when a required font cannot load', async () => {
+        document.fonts.load.mockRejectedValueOnce(new Error('font unavailable'));
+
+        const readiness = signalWhenSettled(window, 1000);
+        await vi.runAllTimersAsync();
+
+        expect(await readiness).toBe(true);
+        expect(window.nativeRendererReady).toHaveBeenCalledOnce();
+    });
+
+    it('does not signal when a required font exceeds the renderer timeout', async () => {
+        document.fonts.load.mockReturnValueOnce(new Promise(() => {}));
+
+        const readiness = signalWhenSettled(window, 40);
+        await vi.runAllTimersAsync();
+
+        expect(await readiness).toBe(false);
+        expect(window.nativeRendererReady).not.toHaveBeenCalled();
+    });
 
     it('waits until visible file placeholders are replaced', async () => {
         const placeholder = addPlaceholder({ top: 0, bottom: 40, left: 0, right: 400 });

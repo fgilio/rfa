@@ -7,6 +7,22 @@
     <title>rfa - Code Review</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png">
+    <link rel="preload" href="/fonts/SpaceGrotesk-Variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/JetBrainsMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
+    <style>
+        @font-face {
+            font-family: 'Space Grotesk';
+            src: url('/fonts/SpaceGrotesk-Variable.woff2') format('woff2');
+            font-weight: 400 700;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'JetBrains Mono';
+            src: url('/fonts/JetBrainsMono-Variable.woff2') format('woff2');
+            font-weight: 400 500;
+            font-display: swap;
+        }
+    </style>
     <link rel="stylesheet" href="/build/app.css">
     <script>
         window.rfaDiagnosticsConfig = {
@@ -35,19 +51,6 @@
     @localScript('js/smart-poll.js')
     @localScript('js/pending-saves.js')
     <style>
-        @font-face {
-            font-family: 'Space Grotesk';
-            src: url('/fonts/SpaceGrotesk-Variable.woff2') format('woff2');
-            font-weight: 400 700;
-            font-display: swap;
-        }
-        @font-face {
-            font-family: 'JetBrains Mono';
-            src: url('/fonts/JetBrainsMono-Variable.woff2') format('woff2');
-            font-weight: 400 500;
-            font-display: swap;
-        }
-
         @php
             $lightColors = config('theme.colors.light');
             $darkColors  = config('theme.colors.dark');

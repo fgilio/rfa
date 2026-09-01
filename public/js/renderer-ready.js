@@ -10,6 +10,12 @@
     }
 })(typeof window !== 'undefined' ? window : null, function () {
     const DEFAULT_TIMEOUT_MS = 4000;
+    const REQUIRED_FONTS = [
+        '400 1em "Space Grotesk"',
+        '700 1em "Space Grotesk"',
+        '400 1em "JetBrains Mono"',
+        '500 1em "JetBrains Mono"',
+    ];
 
     function waitForWindowLoad(root) {
         if (root.document.readyState === 'complete') return Promise.resolve();
@@ -29,6 +35,18 @@
 
             root.setTimeout(resolve, 16);
         });
+    }
+
+    function loadRequiredFonts(root) {
+        const fonts = root.document.fonts;
+
+        if (!fonts) return null;
+
+        const requests = typeof fonts.load === 'function'
+            ? REQUIRED_FONTS.map((font) => fonts.load(font))
+            : [];
+
+        return Promise.all(requests).then(() => fonts.ready);
     }
 
     function isInViewport(element, root) {
@@ -68,7 +86,7 @@
     }
 
     async function settleRenderer(root, timeoutMs = DEFAULT_TIMEOUT_MS) {
-        const fonts = root.document.fonts?.ready;
+        const fonts = loadRequiredFonts(root);
         let fontsReady = !fonts;
         let timedOut = false;
 
@@ -155,6 +173,7 @@
 
     return {
         isInViewport,
+        loadRequiredFonts,
         hasPendingFileShells,
         hasVisibleFilePlaceholders,
         settleRenderer,
