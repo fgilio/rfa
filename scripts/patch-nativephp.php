@@ -162,9 +162,7 @@ JS;
     // maximization. Its opacity barrier replaces ready-to-show for that window.
     // The renderer waits 4s; this outer timeout leaves 1s for the IPC/frame handoff.
     const rfaReadinessTimeoutMs = 5000;
-    let rfaPaintReady = id === 'main';
-    let rfaRendererReady = id !== 'main';
-    let rfaPresentationReady = id !== 'main';
+    let rfaPresentationPhase = id === 'main' ? 'waiting-renderer' : 'waiting-paint';
     let rfaFocusWhenReady = false;
     let rfaReadinessTimer = null;
     let rfaRendererMessageListener = null;
@@ -183,15 +181,17 @@ JS;
             rfaFrameSubscriptionActive = false;
         }
     };
-    const rfaShowWhenReady = () => {
-        if (!rfaPaintReady || !rfaRendererReady || !rfaPresentationReady) {
+    const rfaPresent = () => {
+        if (rfaPresentationPhase === 'presented' || rfaPresentationPhase === 'closed') {
             return;
         }
+        rfaPresentationPhase = 'presented';
         rfaCleanupReadiness();
         if (id === 'main') {
             window.setOpacity(1);
         }
         if (state.noFocusOnRestart && window.isVisible()) {
+            rfaFocusWhenReady = false;
             if (id === 'main') {
                 window.emit('rfa:presented');
             }
@@ -201,72 +201,65 @@ JS;
         if (rfaFocusWhenReady) {
             window.focus();
         }
+        rfaFocusWhenReady = false;
         if (id === 'main') {
             window.emit('rfa:presented');
         }
     };
     const rfaWaitForPresentedFrame = () => {
         try {
-            rfaFrameSubscriptionActive = true;
             window.webContents.beginFrameSubscription(false, () => {
-                if (!rfaFrameSubscriptionActive) {
+                if (rfaPresentationPhase !== 'waiting-frame') {
                     return;
                 }
                 window.webContents.endFrameSubscription();
                 rfaFrameSubscriptionActive = false;
-                rfaPresentationReady = true;
-                rfaShowWhenReady();
+                rfaPresent();
             });
+            rfaFrameSubscriptionActive = true;
             window.webContents.invalidate();
         }
         catch (rfaError) {
-            rfaFrameSubscriptionActive = false;
-            rfaPresentationReady = true;
-            rfaShowWhenReady();
+            rfaPresent();
         }
     };
     window.rfaRequestShow = (focus = false) => {
-        rfaFocusWhenReady = rfaFocusWhenReady || focus;
-        rfaShowWhenReady();
-    };
-    window.once('ready-to-show', () => {
-        rfaPaintReady = true;
-        rfaShowWhenReady();
-    });
-    if (id === 'main') {
-        rfaRendererMessageListener = (_, channel) => {
-            if (channel !== 'rfa:renderer-ready') {
+        if (rfaPresentationPhase === 'closed') {
+            return;
+        }
+        if (rfaPresentationPhase === 'presented') {
+            if (state.noFocusOnRestart && window.isVisible()) {
                 return;
             }
-            rfaRendererReady = true;
+            window.show();
+            if (focus) {
+                window.focus();
+            }
+            return;
+        }
+        rfaFocusWhenReady = rfaFocusWhenReady || focus;
+    };
+    if (id === 'main') {
+        rfaRendererMessageListener = (_, channel) => {
+            if (channel !== 'rfa:renderer-ready' || rfaPresentationPhase !== 'waiting-renderer') {
+                return;
+            }
+            rfaPresentationPhase = 'waiting-frame';
             rfaWaitForPresentedFrame();
         };
         window.webContents.on('ipc-message', rfaRendererMessageListener);
-        rfaReadinessTimer = setTimeout(() => {
-            rfaRendererReady = true;
-            rfaPresentationReady = true;
-            rfaShowWhenReady();
-        }, rfaReadinessTimeoutMs);
-        window.once('closed', rfaCleanupReadiness);
+        rfaReadinessTimer = setTimeout(rfaPresent, rfaReadinessTimeoutMs);
+    } else {
+        window.once('ready-to-show', rfaPresent);
     }
+    window.once('closed', () => {
+        rfaPresentationPhase = 'closed';
+        rfaCleanupReadiness();
+    });
 JS;
 
     if (str_contains($content, $find)) {
         $content = str_replace($find, $replace, $content);
-    }
-
-    if (str_contains($content, 'Electron first paint and renderer stability')
-        && ! str_contains($content, 'const rfaReadinessTimeoutMs = 5000;')) {
-        $content = str_replace(
-            "    // maximization. Its opacity barrier replaces ready-to-show for that window.\n    let rfaPaintReady = id === 'main';",
-            "    // maximization. Its opacity barrier replaces ready-to-show for that window.\n    // The renderer waits 4s; this outer timeout leaves 1s for the IPC/frame handoff.\n    const rfaReadinessTimeoutMs = 5000;\n    let rfaPaintReady = id === 'main';",
-            $content,
-        );
-        $content = str_replace(
-            "        }, 5000);\n        window.once('closed', rfaCleanupReadiness);",
-            "        }, rfaReadinessTimeoutMs);\n        window.once('closed', rfaCleanupReadiness);",
-            $content,
-        );
     }
 
     $showFind = <<<'JS'
@@ -325,20 +318,9 @@ JS;
         $content = str_replace($existingFind, $existingReplace, $content);
     }
 
-    $fullyPatched = str_contains($content, 'Electron first paint and renderer stability')
-        && str_contains($content, "channel !== 'rfa:renderer-ready'")
-        && str_contains($content, 'window.webContents.beginFrameSubscription(false')
-        && str_contains($content, 'window.webContents.invalidate();')
-        && str_contains($content, '!rfaPresentationReady')
-        && str_contains($content, "let rfaPaintReady = id === 'main'")
-        && str_contains($content, 'window.setOpacity(1);')
-        && str_contains($content, "window.emit('rfa:presented')")
-        && str_contains($content, 'window.rfaRequestShow = (focus = false)')
-        && str_contains($content, 'existingWindow.rfaRequestShow(true)')
-        && str_contains($content, 'window.rfaRequestShow();')
-        && str_contains($content, 'const rfaReadinessTimeoutMs = 5000;')
-        && str_contains($content, 'rfaReadinessTimer = setTimeout(')
-        && str_contains($content, 'window.once(\'closed\', rfaCleanupReadiness)')
+    $fullyPatched = str_contains($content, $replace)
+        && str_contains($content, $showReplace)
+        && str_contains($content, $existingReplace)
         && ! str_contains($content, $find)
         && ! str_contains($content, $showFind)
         && ! str_contains($content, $existingFind);

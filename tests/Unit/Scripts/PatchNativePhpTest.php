@@ -128,18 +128,16 @@ test('renderer readiness window: waits for the settled main renderer presentatio
     $content = rfaPatchRendererReadyWindow(stockWindowApi());
 
     expect($content)
-        ->toContain("let rfaPaintReady = id === 'main'")
-        ->toContain("let rfaRendererReady = id !== 'main'")
-        ->toContain("let rfaPresentationReady = id !== 'main'")
-        ->toContain("window.once('ready-to-show'")
+        ->toContain("let rfaPresentationPhase = id === 'main' ? 'waiting-renderer' : 'waiting-paint'")
+        ->toContain("rfaPresentationPhase = 'waiting-frame'")
+        ->toContain("rfaPresentationPhase = 'presented'")
         ->toContain("channel !== 'rfa:renderer-ready'")
         ->toContain('window.webContents.beginFrameSubscription(false')
         ->toContain('window.webContents.invalidate()')
-        ->toContain('if (!rfaPaintReady || !rfaRendererReady || !rfaPresentationReady)')
         ->toContain('window.setOpacity(1)')
         ->toContain("window.emit('rfa:presented')")
         ->toContain('window.rfaRequestShow = (focus = false)')
-        ->toContain('rfaShowWhenReady()');
+        ->toContain('rfaReadinessTimer = setTimeout(rfaPresent, rfaReadinessTimeoutMs)');
 });
 
 test('renderer readiness window: repeat opens cannot bypass the barrier', function () {
@@ -166,10 +164,9 @@ test('renderer readiness window: fails open and cleans up its listener', functio
 
     expect($content)
         ->toContain('const rfaReadinessTimeoutMs = 5000;')
-        ->toContain('rfaReadinessTimer = setTimeout(')
-        ->toContain('}, rfaReadinessTimeoutMs)')
+        ->toContain('rfaReadinessTimer = setTimeout(rfaPresent, rfaReadinessTimeoutMs)')
         ->toContain("removeListener('ipc-message', rfaRendererMessageListener)")
-        ->toContain("window.once('closed', rfaCleanupReadiness)");
+        ->toContain("rfaPresentationPhase = 'closed'");
 });
 
 test('renderer readiness window: is idempotent', function () {
@@ -183,8 +180,10 @@ test('the vendored NativePHP main window waits for renderer readiness', function
 
     expect(file_get_contents($windowPath))
         ->toContain('Electron first paint and renderer stability')
+        ->toContain('rfaPresentationPhase')
         ->toContain("channel !== 'rfa:renderer-ready'")
-        ->toContain('}, rfaReadinessTimeoutMs)');
+        ->toContain('setTimeout(rfaPresent, rfaReadinessTimeoutMs)')
+        ->not->toContain('rfaRendererReady');
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js'), 'NativePHP desktop electron plugin not installed');
 
 // -- Shape changes --
