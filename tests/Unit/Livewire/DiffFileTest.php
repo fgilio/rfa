@@ -268,6 +268,22 @@ test('lazy placeholder header escapes file metadata', function () {
         ->not->toContain('<img');
 });
 
+test('lazy placeholder header dims the directory and emphasizes the basename', function () {
+    $file = array_replace($this->file, [
+        'path' => 'app/Domains/Metadata/HasTaxonomies.php',
+        'oldPath' => 'app/Support/HasTaxonomies.php',
+    ]);
+
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+        'file' => $file,
+        'fileComments' => [],
+    ]);
+
+    expect($html)
+        ->toContain('<span class="text-gh-muted/50">app/Support/HasTaxonomies.php&nbsp;→&nbsp;</span>')
+        ->toContain('<span class="text-gh-muted/70">app/Domains/Metadata/</span>HasTaxonomies.php');
+});
+
 test('file header shows rename arrow when oldPath is set', function () {
     $file = DiffFixtureFactory::fileEntry('src/NewName.php');
     $file['oldPath'] = 'src/OldName.php';

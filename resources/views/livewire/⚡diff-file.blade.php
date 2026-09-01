@@ -81,7 +81,11 @@ new class extends Component {
         $path = (string) ($file['path'] ?? '');
         $oldPath = is_string($file['oldPath'] ?? null) ? $file['oldPath'] : null;
         $title = e($oldPath ? $oldPath.' → '.$path : $path);
-        $path = e($path);
+        $pathPosition = strrpos($path, '/');
+        [$directory, $basename] = $pathPosition === false
+            ? ['', $path]
+            : [substr($path, 0, $pathPosition + 1), substr($path, $pathPosition + 1)];
+        $pathLabel = '<span class="text-gh-muted/70">'.e($directory).'</span>'.e($basename);
         $oldPathLabel = $oldPath ? '<span class="text-gh-muted/50">'.e($oldPath).'&nbsp;→&nbsp;</span>' : '';
         $chevron = $isReviewed ? '›' : '⌄';
         $reviewedClass = $isReviewed ? 'bg-gh-accent' : 'bg-gh-bg';
@@ -100,7 +104,7 @@ new class extends Component {
     <div data-testid="file-header" data-rfa-static-file-header class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
         <div class="flex items-center gap-2.5 flex-1 min-w-0">
             <span class="inline-flex size-4 shrink-0 items-center justify-center text-gh-muted" aria-hidden="true">{$chevron}</span>
-            <span class="font-mono block truncate min-w-0 max-w-full text-left text-gh-text text-sm" title="{$title}">{$oldPathLabel}{$path}</span>
+            <span class="font-mono block truncate min-w-0 max-w-full text-left text-gh-text text-sm" title="{$title}">{$oldPathLabel}{$pathLabel}</span>
             {$symlinkLabel}
         </div>
         <div class="flex items-center gap-2 text-xs shrink-0 font-mono">
