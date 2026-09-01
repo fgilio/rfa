@@ -191,6 +191,34 @@ test('diff file lazy bundles support reviews larger than the request component l
         ->and($html)->toContain('lazyIsolated&quot;:false');
 });
 
+test('isolates comment-bearing diff files from bundled lazy payloads', function () {
+    app()->bind(SessionStateAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, array $currentFiles, ?int $projectId = null, ?DiffTarget $target = null): array
+        {
+            return [
+                'comments' => [['fileId' => 'abc123', 'body' => 'Saved review comment']],
+                'reviewedFiles' => [],
+                'globalComment' => '',
+                'orphanedPaths' => [],
+            ];
+        }
+
+        public function saveGlobalNote(string $repoPath, string $globalComment, ?int $projectId = null): void {}
+    });
+
+    $html = Livewire::test('pages::review-page', ['slug' => 'test-project'])->html();
+
+    preg_match_all('/<div[^>]*data-rfa-render-blocker[^>]*>/s', $html, $renderBlockers);
+    $commentedFile = collect($renderBlockers[0])->first(fn (string $blocker): bool => str_contains($blocker, 'src\/Foo.php'));
+    $commentFreeFile = collect($renderBlockers[0])->first(fn (string $blocker): bool => str_contains($blocker, 'src\/Bar.php'));
+
+    expect($commentedFile)
+        ->toContain('lazyIsolated&quot;:true')
+        ->and($commentFreeFile)
+        ->toContain('lazyIsolated&quot;:false');
+});
+
 test('diff file lazy placeholders render stable file headers', function () {
     $html = Livewire::test('pages::review-page', ['slug' => 'test-project'])->html();
 

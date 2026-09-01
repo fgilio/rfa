@@ -168,7 +168,7 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
    - Child listens via Alpine and calls its own Livewire method only when its ID matches: `@comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"`
    - This is a 1-to-1 update instead of 1-to-N re-render.
 
-4. **Bundle lazy diff-file shell hydration.** Use `lazy.bundle` so visible headers settle in one request. The local desktop app allows up to 100 components in that request while the payload byte limit remains active.
+4. **Bundle comment-free lazy diff-file shell hydration.** Use `lazy` with `:lazy.bundle="empty($fileComments)"` so visible headers without saved comment bodies settle in one request. Keep comment-bearing files isolated so their serialized bodies cannot combine past the payload byte limit. The local desktop app allows up to 100 components in a bundled request.
 
 5. **Stagger diff data loading** when many mounted children intersect. Use `setTimeout` with a delay based on index to prevent thundering herd: `x-intersect.once="setTimeout(() => $wire.loadFileDiff(), {{ $loadDelay }})"`
 

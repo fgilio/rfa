@@ -198,7 +198,7 @@ test('review-page diff-file keys include per-file refresh fingerprints', functio
     }
 });
 
-test('review-page bundles every lazy diff-file shell request', function () {
+test('bundles only comment-free lazy diff-file shell requests', function () {
     $page = dirname(__DIR__, 2).'/resources/views/pages/⚡review-page.blade.php';
 
     preg_match_all('/<livewire:diff-file\b.*?\/>/s', file_get_contents($page), $matches);
@@ -206,7 +206,9 @@ test('review-page bundles every lazy diff-file shell request', function () {
     expect($matches[0])->not->toBeEmpty();
 
     foreach ($matches[0] as $tag) {
-        expect($tag)->toContain('lazy.bundle');
+        expect($tag)
+            ->toContain('lazy')
+            ->toContain(':lazy.bundle="$fileComments === []"');
     }
 });
 
