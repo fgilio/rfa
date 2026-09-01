@@ -12,15 +12,21 @@
     const MIN_SIDEBAR_WIDTH = 200;
     const MAX_SIDEBAR_WIDTH = 600;
 
+    function normalizeSidebarWidth(value) {
+        if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+
+        return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, value));
+    }
+
     function parseSidebarWidth(value) {
         if (value === null) return null;
 
         try {
             const width = JSON.parse(value);
 
-            if (typeof width !== 'number' || !Number.isFinite(width) || width <= 0) return null;
+            if (typeof width !== 'number' || width <= 0) return null;
 
-            return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width));
+            return normalizeSidebarWidth(width);
         } catch (_) {
             return null;
         }
@@ -49,9 +55,10 @@
         // Migrate ad-hoc localStorage keys (one-time)
         const old = root.localStorage.getItem('rfa-sidebar-width');
         if (old !== null) {
-            const parsed = parseInt(old);
-            if (!isNaN(parsed) && parsed > 0) {
-                root.localStorage.setItem('rfa.sidebarWidth', JSON.stringify(parsed));
+            const parsed = parseInt(old, 10);
+            const width = parsed > 0 ? normalizeSidebarWidth(parsed) : null;
+            if (width !== null) {
+                root.localStorage.setItem('rfa.sidebarWidth', JSON.stringify(width));
             }
             root.localStorage.removeItem('rfa-sidebar-width');
         }
@@ -86,6 +93,22 @@
                 sidebarWidth: root.Alpine.$persist(DEFAULT_SIDEBAR_WIDTH).as('rfa.sidebarWidth'),
                 sidebarCollapsed: root.Alpine.$persist(false).as('rfa.sidebarCollapsed'),
                 diffViewMode: root.Alpine.$persist('unified').as('rfa.diffViewMode'),
+                constrainSidebarWidth(width) {
+                    return normalizeSidebarWidth(width) ?? this.sidebarWidth;
+                },
+                setSidebarWidth(width) {
+                    const normalized = normalizeSidebarWidth(width);
+
+                    if (normalized === null) return false;
+
+                    this.sidebarWidth = normalized;
+                    root.document.documentElement.style.setProperty('--sidebar-w', `${normalized}px`);
+
+                    return true;
+                },
+                resetSidebarWidth() {
+                    return this.setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
+                },
                 // The one mutation point for sidebar visibility: the shortcut
                 // (registered by resizable-sidebar-shell), the header button, and
                 // the native View-menu item all land here, so the three can't
@@ -102,6 +125,7 @@
     }
 
     return {
+        normalizeSidebarWidth,
         parseSidebarWidth,
         restoreSidebarWidth,
         install,
