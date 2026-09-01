@@ -99,9 +99,10 @@ test('applies every patch in one run', function () {
         ->toContain('export const phpInstallerReady = true;');
     expect(file_get_contents($root.'/../../electron-builder.mjs'))
         ->toContain('[rfa php build wait]')
-        ->toContain("import { join } from 'path';")
         ->toContain("execFileSync(process.execPath, ['php.js'")
-        ->toContain("chmodSync(join(process.env.NATIVEPHP_BUILD_PATH, 'php', 'php'), 0o755);");
+        ->not->toContain('[rfa php build permission]')
+        ->not->toContain('[rfa php build path]')
+        ->not->toContain('chmodSync(');
 });
 
 test('a remembered maximize stays transparent until the settled frame is presented', function () {

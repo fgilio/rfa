@@ -760,6 +760,45 @@ test('PHP extraction: leaves the complete patched block unchanged', function () 
     expect(rfaPatchPhpExtraction($patched))->toBe($patched);
 });
 
+// -- PHP build wait (electron-builder.mjs) --
+
+test('PHP build wait: waits for extraction without changing permissions', function () {
+    $content = rfaPatchPhpBuildWait(stockElectronBuilder());
+
+    expect($content)
+        ->toContain('[rfa php build wait]')
+        ->toContain("execFileSync(process.execPath, ['php.js'")
+        ->not->toContain('[rfa php build permission]')
+        ->not->toContain('[rfa php build path]')
+        ->not->toContain('chmodSync(');
+});
+
+test('PHP build wait: upgrades the exact permission-owning block', function () {
+    $previous = str_replace(
+        "import { exec } from 'child_process';",
+        "import { execFileSync } from 'child_process'; // [rfa php build wait]\nimport { chmodSync } from 'fs'; // [rfa php build permission]\nimport { join } from 'path'; // [rfa php build path]",
+        stockElectronBuilder(),
+    );
+    $previous = str_replace(
+        '        exec(`node php.js --${targetOs} --${arch}`);',
+        <<<'JS'
+        execFileSync(process.execPath, ['php.js', `--${targetOs}`, `--${arch}`], { stdio: 'inherit' });
+        if (targetOs !== 'win') {
+            chmodSync(join(process.env.NATIVEPHP_BUILD_PATH, 'php', 'php'), 0o755);
+        }
+JS,
+        $previous,
+    );
+
+    expect(rfaPatchPhpBuildWait($previous))->toBe(rfaPatchPhpBuildWait(stockElectronBuilder()));
+});
+
+test('PHP build wait: leaves the complete patched block unchanged', function () {
+    $patched = rfaPatchPhpBuildWait(stockElectronBuilder());
+
+    expect(rfaPatchPhpBuildWait($patched))->toBe($patched);
+});
+
 // -- Applied to the real vendored file --
 
 test('the vendored NativePHP server carries the optimize patch', function () {

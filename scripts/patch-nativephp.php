@@ -1185,41 +1185,45 @@ function rfaPatchPhpBuildWait(string $content): ?string
     $permissionImport = "import { chmodSync } from 'fs'; // [rfa php build permission]";
     $pathImport = "import { join } from 'path'; // [rfa php build path]";
     $callFind = '        exec(`node php.js --${targetOs} --${arch}`);';
-    $oldCallReplace = "        execFileSync(process.execPath, ['php.js', `--\${targetOs}`, `--\${arch}`], { stdio: 'inherit' });";
-    $callReplace = <<<'JS'
+    $callReplace = "        execFileSync(process.execPath, ['php.js', `--\${targetOs}`, `--\${arch}`], { stdio: 'inherit' });";
+    $previousCallReplace = <<<'JS'
         execFileSync(process.execPath, ['php.js', `--${targetOs}`, `--${arch}`], { stdio: 'inherit' });
         if (targetOs !== 'win') {
             chmodSync(join(process.env.NATIVEPHP_BUILD_PATH, 'php', 'php'), 0o755);
         }
 JS;
+    $isStock = str_contains($content, $importFind)
+        && str_contains($content, $callFind);
+    $isCurrent = str_contains($content, $importReplace)
+        && str_contains($content, $callReplace)
+        && ! str_contains($content, $permissionImport)
+        && ! str_contains($content, $pathImport)
+        && ! str_contains($content, $previousCallReplace);
+    $isPrevious = str_contains($content, $importReplace)
+        && str_contains($content, $permissionImport)
+        && str_contains($content, $previousCallReplace);
 
-    if (str_contains($content, $importFind)) {
+    if (! $isStock && ! $isCurrent && ! $isPrevious) {
+        return null;
+    }
+
+    if ($isStock) {
         $content = str_replace($importFind, $importReplace, $content);
-    }
-
-    if (str_contains($content, $importReplace) && ! str_contains($content, $permissionImport)) {
-        $content = str_replace($importReplace, $importReplace."\n".$permissionImport, $content);
-    }
-
-    $hasJoinImport = preg_match('/^import\s+\{[^}]*\bjoin\b[^}]*\}\s+from\s+[\'\"]path[\'\"];/m', $content) === 1;
-    if (str_contains($content, $permissionImport) && ! $hasJoinImport) {
-        $content = str_replace($permissionImport, $permissionImport."\n".$pathImport, $content);
-    }
-
-    if (str_contains($content, $callFind)) {
         $content = str_replace($callFind, $callReplace, $content);
     }
 
-    if (str_contains($content, $oldCallReplace) && ! str_contains($content, 'chmodSync(join(process.env.NATIVEPHP_BUILD_PATH')) {
-        $content = str_replace($oldCallReplace, $callReplace, $content);
+    if ($isPrevious) {
+        $content = str_replace($permissionImport."\n", '', $content);
+        $content = str_replace($pathImport."\n", '', $content);
+        $content = str_replace($previousCallReplace, $callReplace, $content);
     }
 
     $fullyPatched = str_contains($content, '[rfa php build wait]')
-        && str_contains($content, '[rfa php build permission]')
-        && preg_match('/^import\s+\{[^}]*\bjoin\b[^}]*\}\s+from\s+[\'\"]path[\'\"];/m', $content) === 1
         && str_contains($content, $callReplace)
-        && str_contains($content, "targetOs !== 'win'")
-        && ! str_contains($content, $callFind);
+        && ! str_contains($content, $callFind)
+        && ! str_contains($content, $permissionImport)
+        && ! str_contains($content, $pathImport)
+        && ! str_contains($content, $previousCallReplace);
 
     return $fullyPatched ? $content : null;
 }
