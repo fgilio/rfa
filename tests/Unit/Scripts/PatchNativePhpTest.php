@@ -92,42 +92,6 @@ test('the vendored NativePHP preload exposes renderer readiness', function () {
 
 // ===== server/php.js and index.js: boot-path edits =====
 
-// -- Window first-paint readiness (server/api/window.js) --
-
-test('window readiness: reports a shape change when the load listener is missing', function () {
-    expect(rfaPatchWindowReadyToShow('const x = 1;'))->toBeNull();
-});
-
-test('window readiness: waits for first paint instead of navigation completion', function () {
-    $content = rfaPatchWindowReadyToShow(stockWindowApi());
-
-    expect($content)
-        ->toContain('[rfa window readiness]')
-        ->toContain("window.once('ready-to-show'")
-        ->not->toContain("window.webContents.on('did-finish-load'");
-});
-
-test('window readiness: preserves the restart focus guard and load failure handling', function () {
-    expect(rfaPatchWindowReadyToShow(stockWindowApi()))
-        ->toContain('state.noFocusOnRestart && window.isVisible()')
-        ->toContain("window.webContents.on('did-fail-load'");
-});
-
-test('window readiness: is idempotent', function () {
-    $patched = rfaPatchWindowReadyToShow(stockWindowApi());
-
-    expect(rfaPatchWindowReadyToShow($patched))->toBe($patched);
-});
-
-test('the vendored NativePHP window API waits for first paint', function () {
-    $windowPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js';
-
-    expect(file_get_contents($windowPath))
-        ->toContain('[rfa window readiness]')
-        ->toContain("window.once('ready-to-show'")
-        ->not->toContain("window.webContents.on('did-finish-load'");
-})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js'), 'NativePHP desktop electron plugin not installed');
-
 test('window theme: reports a shape change when the BrowserWindow options are missing', function () {
     expect(rfaPatchWindowTheme("import { BrowserWindow } from 'electron';"))->toBeNull();
 });
@@ -156,12 +120,12 @@ test('the vendored NativePHP window API uses the resolved appearance', function 
         ->toContain("backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff'");
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js'), 'NativePHP desktop electron plugin not installed');
 
-test('renderer readiness window: reports a shape change without the first-paint barrier', function () {
-    expect(rfaPatchRendererReadyWindow(stockWindowApi()))->toBeNull();
+test('renderer readiness window: reports a shape change when the load listener is missing', function () {
+    expect(rfaPatchRendererReadyWindow('const x = 1;'))->toBeNull();
 });
 
 test('renderer readiness window: waits for the settled main renderer presentation', function () {
-    $content = rfaPatchRendererReadyWindow(rfaPatchWindowReadyToShow(stockWindowApi()));
+    $content = rfaPatchRendererReadyWindow(stockWindowApi());
 
     expect($content)
         ->toContain("let rfaPaintReady = id === 'main'")
@@ -179,7 +143,7 @@ test('renderer readiness window: waits for the settled main renderer presentatio
 });
 
 test('renderer readiness window: repeat opens cannot bypass the barrier', function () {
-    $content = rfaPatchRendererReadyWindow(rfaPatchWindowReadyToShow(stockWindowApi()));
+    $content = rfaPatchRendererReadyWindow(stockWindowApi());
 
     expect($content)
         ->toContain('const existingWindow = state.windows[id]')
@@ -189,7 +153,7 @@ test('renderer readiness window: repeat opens cannot bypass the barrier', functi
 });
 
 test('renderer readiness window: explicit show requests cannot bypass the barrier', function () {
-    $content = rfaPatchRendererReadyWindow(rfaPatchWindowReadyToShow(stockWindowApi()));
+    $content = rfaPatchRendererReadyWindow(stockWindowApi());
 
     expect($content)
         ->toContain("typeof window.rfaRequestShow === 'function'")
@@ -198,17 +162,18 @@ test('renderer readiness window: explicit show requests cannot bypass the barrie
 });
 
 test('renderer readiness window: fails open and cleans up its listener', function () {
-    $content = rfaPatchRendererReadyWindow(rfaPatchWindowReadyToShow(stockWindowApi()));
+    $content = rfaPatchRendererReadyWindow(stockWindowApi());
 
     expect($content)
+        ->toContain('const rfaReadinessTimeoutMs = 5000;')
         ->toContain('rfaReadinessTimer = setTimeout(')
-        ->toContain('}, 5000)')
+        ->toContain('}, rfaReadinessTimeoutMs)')
         ->toContain("removeListener('ipc-message', rfaRendererMessageListener)")
         ->toContain("window.once('closed', rfaCleanupReadiness)");
 });
 
 test('renderer readiness window: is idempotent', function () {
-    $patched = rfaPatchRendererReadyWindow(rfaPatchWindowReadyToShow(stockWindowApi()));
+    $patched = rfaPatchRendererReadyWindow(stockWindowApi());
 
     expect(rfaPatchRendererReadyWindow($patched))->toBe($patched);
 });
@@ -219,7 +184,7 @@ test('the vendored NativePHP main window waits for renderer readiness', function
     expect(file_get_contents($windowPath))
         ->toContain('Electron first paint and renderer stability')
         ->toContain("channel !== 'rfa:renderer-ready'")
-        ->toContain('}, 5000)');
+        ->toContain('}, rfaReadinessTimeoutMs)');
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js'), 'NativePHP desktop electron plugin not installed');
 
 // -- Shape changes --

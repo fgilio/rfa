@@ -15,6 +15,8 @@ uses(TestCase::class, InteractsWithTestRepositories::class);
  */
 function stubDistRoot(string $root, ?callable $mutate = null): string
 {
+    $root .= '/electron-plugin/dist';
+
     foreach (['preload', 'server', 'server/api'] as $subdirectory) {
         mkdir($root.'/'.$subdirectory, 0755, true);
     }
@@ -23,6 +25,8 @@ function stubDistRoot(string $root, ?callable $mutate = null): string
     file_put_contents($root.'/server/api/window.js', stockWindowApi());
     file_put_contents($root.'/server/php.js', stockServer());
     file_put_contents($root.'/index.js', stockIndexForSplash()."\n".stockIndex());
+    file_put_contents($root.'/../../php.js', stockPhpInstaller());
+    file_put_contents($root.'/../../electron-builder.mjs', stockElectronBuilder());
 
     if ($mutate !== null) {
         $mutate($root);
@@ -34,7 +38,7 @@ function stubDistRoot(string $root, ?callable $mutate = null): string
 /** @return array<string, string> */
 function distSnapshot(string $root): array
 {
-    return collect(['preload/index.mjs', 'server/api/window.js', 'server/php.js', 'index.js'])
+    return collect(['preload/index.mjs', 'server/api/window.js', 'server/php.js', 'index.js', '../../php.js', '../../electron-builder.mjs'])
         ->filter(fn (string $file) => is_file($root.'/'.$file))
         ->mapWithKeys(fn (string $file) => [$file => file_get_contents($root.'/'.$file)])
         ->all();
@@ -44,7 +48,7 @@ function distSnapshot(string $root): array
 
 test('the patch set covers every vendored file rfa depends on', function () {
     expect(collect(rfaNativePhpPatchSet())->pluck('name')->all())
-        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-ready-to-show', 'window-theme', 'renderer-ready-window', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance']);
+        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance', 'php-extraction', 'php-build-wait']);
 });
 
 test('the dist root points at the vendored electron plugin', function () {
@@ -59,7 +63,7 @@ test('applies every patch in one run', function () {
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-ready-to-show', 'window-theme', 'renderer-ready-window', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance'])
+    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance', 'php-extraction', 'php-build-wait'])
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['absent'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
@@ -84,6 +88,20 @@ test('applies every patch in one run', function () {
         ->toContain('const RFA_SPLASH_HTML')
         ->toContain("window.once('rfa:presented'")
         ->toContain('rfaResolveAppearance()');
+    expect(file_get_contents($root.'/../../php.js'))
+        ->toContain('[rfa php archive validation]')
+        ->toContain('removeSync(binaryDestDir);')
+        ->toContain('ensureDirSync(binaryDestDir);')
+        ->toContain('fs.chmodSync(binaryPath, 0o755);')
+        ->toContain('[rfa php extraction]')
+        ->toContain('inflateRawSync(compressed)')
+        ->toContain('binary.length !== uncompressedSize')
+        ->toContain('export const phpInstallerReady = true;');
+    expect(file_get_contents($root.'/../../electron-builder.mjs'))
+        ->toContain('[rfa php build wait]')
+        ->toContain("import { join } from 'path';")
+        ->toContain("execFileSync(process.execPath, ['php.js'")
+        ->toContain("chmodSync(join(process.env.NATIVEPHP_BUILD_PATH, 'php', 'php'), 0o755);");
 });
 
 test('a remembered maximize stays transparent until the settled frame is presented', function () {
@@ -123,7 +141,7 @@ test('a second run changes nothing', function () {
     $outcome = applyRfaNativePhpPatchSet($root);
 
     expect($outcome['applied'])->toBeEmpty()
-        ->and($outcome['unchanged'])->toHaveCount(9)
+        ->and($outcome['unchanged'])->toHaveCount(10)
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($afterFirst);
 });
@@ -222,7 +240,7 @@ test('an absent dist tree is reported, not failed', function () {
     // pruned copy where the plugin dist is not present.
     $outcome = applyRfaNativePhpPatchSet(sys_get_temp_dir().'/rfa_test_dist_nowhere_'.getmypid());
 
-    expect($outcome['absent'])->toHaveCount(9)
+    expect($outcome['absent'])->toHaveCount(10)
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 });

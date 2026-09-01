@@ -3,8 +3,8 @@
 /**
  * The NativePHP vendor changes RFA depends on, applied as one patch set.
  *
- * Nine edits across four compiled files in `nativephp/desktop`'s bundled
- * Electron plugin. They are not independent in practice: three of them rewrite
+ * The edits across `nativephp/desktop`'s bundled Electron app are not
+ * independent in practice: three of them rewrite
  * the same `dist/index.js`, and a build that ships some of them is a build
  * whose startup behaviour nobody has tested. So the set is all-or-nothing —
  * every expected source shape is checked, and every new file content computed,
@@ -13,6 +13,13 @@
  *
  * Runs automatically via composer post-autoload-dump and post-update-cmd.
  */
+const RFA_BACKGROUND_DARK = '#09090b';
+const RFA_BACKGROUND_LIGHT = '#ffffff';
+
+function rfaBackgroundExpression(): string
+{
+    return "nativeTheme.shouldUseDarkColors ? '".RFA_BACKGROUND_DARK."' : '".RFA_BACKGROUND_LIGHT."'";
+}
 
 /**
  * Expose webUtils.getPathForFile() from NativePHP's Electron preload.
@@ -85,50 +92,6 @@ JS;
 }
 
 /**
- * Show NativePHP windows only after Electron has rendered their first frame.
- *
- * NativePHP currently shows a hidden BrowserWindow from `did-finish-load`.
- * That event confirms navigation, but it does not confirm that Chromium has
- * rendered a frame. Electron's `ready-to-show` event is the paint barrier for
- * a BrowserWindow created with `show: false`.
- *
- * @return string|null the patched content, or null when the expected source
- *                     shape is gone
- */
-function rfaPatchWindowReadyToShow(string $content): ?string
-{
-    $find = <<<'JS'
-    window.webContents.on('did-finish-load', () => {
-        if (state.noFocusOnRestart && window.isVisible()) {
-            return;
-        }
-        window.show();
-    });
-JS;
-
-    $replace = <<<'JS'
-    // [rfa window readiness] Navigation can finish before Chromium presents a
-    // frame. Keep the BrowserWindow hidden until Electron confirms first paint.
-    window.once('ready-to-show', () => {
-        if (state.noFocusOnRestart && window.isVisible()) {
-            return;
-        }
-        window.show();
-    });
-JS;
-
-    if (str_contains($content, $find)) {
-        $content = str_replace($find, $replace, $content);
-    }
-
-    $fullyPatched = str_contains($content, '[rfa window readiness]')
-        && str_contains($content, "window.once('ready-to-show'")
-        && ! str_contains($content, $find);
-
-    return $fullyPatched ? $content : null;
-}
-
-/**
  * Give every NativePHP BrowserWindow the resolved RFA background color.
  *
  * The renderer and splash both use RFA's light and dark background tokens.
@@ -145,8 +108,8 @@ function rfaPatchWindowTheme(string $content): ?string
     $importFind = "import { BrowserWindow } from 'electron';";
     $importReplace = "import { BrowserWindow, nativeTheme } from 'electron'; // [rfa window theme]";
     $backgroundFind = '        backgroundColor, transparent: transparency, alwaysOnTop,';
-    $previousBackgroundReplace = "        backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff', transparent: transparency, alwaysOnTop,";
-    $backgroundReplace = "        backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff', opacity: id === 'main' ? 0 : 1, transparent: transparency, alwaysOnTop,";
+    $previousBackgroundReplace = '        backgroundColor: '.rfaBackgroundExpression().', transparent: transparency, alwaysOnTop,';
+    $backgroundReplace = '        backgroundColor: '.rfaBackgroundExpression().", opacity: id === 'main' ? 0 : 1, transparent: transparency, alwaysOnTop,";
 
     if (str_contains($content, $importFind)) {
         $content = str_replace($importFind, $importReplace, $content);
@@ -184,9 +147,7 @@ function rfaPatchWindowTheme(string $content): ?string
 function rfaPatchRendererReadyWindow(string $content): ?string
 {
     $find = <<<'JS'
-    // [rfa window readiness] Navigation can finish before Chromium presents a
-    // frame. Keep the BrowserWindow hidden until Electron confirms first paint.
-    window.once('ready-to-show', () => {
+    window.webContents.on('did-finish-load', () => {
         if (state.noFocusOnRestart && window.isVisible()) {
             return;
         }
@@ -199,6 +160,8 @@ JS;
     // one barrier for the main window. Other windows need first paint only.
     // electron-window-state can implicitly show the main window while restoring
     // maximization. Its opacity barrier replaces ready-to-show for that window.
+    // The renderer waits 4s; this outer timeout leaves 1s for the IPC/frame handoff.
+    const rfaReadinessTimeoutMs = 5000;
     let rfaPaintReady = id === 'main';
     let rfaRendererReady = id !== 'main';
     let rfaPresentationReady = id !== 'main';
@@ -283,175 +246,27 @@ JS;
             rfaRendererReady = true;
             rfaPresentationReady = true;
             rfaShowWhenReady();
-        }, 5000);
+        }, rfaReadinessTimeoutMs);
         window.once('closed', rfaCleanupReadiness);
     }
 JS;
 
     if (str_contains($content, $find)) {
         $content = str_replace($find, $replace, $content);
-    } elseif (str_contains($content, 'Electron first paint and renderer stability')
-        && ! str_contains($content, 'window.rfaRequestShow = (focus = false)')) {
-        $stateFind = "    let rfaRendererReady = id !== 'main';\n    let rfaReadinessTimer = null;";
-        $stateReplace = "    let rfaRendererReady = id !== 'main';\n    let rfaFocusWhenReady = false;\n    let rfaReadinessTimer = null;";
-        $showBarrierFind = <<<'JS'
-        window.show();
-    };
-    window.once('ready-to-show', () => {
-JS;
-        $showBarrierReplace = <<<'JS'
-        window.show();
-        if (rfaFocusWhenReady) {
-            window.focus();
-        }
-    };
-    window.rfaRequestShow = (focus = false) => {
-        rfaFocusWhenReady = rfaFocusWhenReady || focus;
-        rfaShowWhenReady();
-    };
-    window.once('ready-to-show', () => {
-JS;
-
-        $content = str_replace($stateFind, $stateReplace, $content);
-        $content = str_replace($showBarrierFind, $showBarrierReplace, $content);
     }
 
     if (str_contains($content, 'Electron first paint and renderer stability')
-        && ! str_contains($content, 'rfaPresentationReady')) {
-        $presentationStateFind = <<<'JS'
-    let rfaRendererReady = id !== 'main';
-    let rfaFocusWhenReady = false;
-    let rfaReadinessTimer = null;
-    let rfaRendererMessageListener = null;
-JS;
-        $presentationStateReplace = <<<'JS'
-    let rfaRendererReady = id !== 'main';
-    let rfaPresentationReady = id !== 'main';
-    let rfaFocusWhenReady = false;
-    let rfaReadinessTimer = null;
-    let rfaRendererMessageListener = null;
-    let rfaFrameSubscriptionActive = false;
-JS;
-        $cleanupFind = <<<'JS'
-        if (rfaRendererMessageListener !== null) {
-            window.webContents.removeListener('ipc-message', rfaRendererMessageListener);
-            rfaRendererMessageListener = null;
-        }
-    };
-JS;
-        $cleanupReplace = <<<'JS'
-        if (rfaRendererMessageListener !== null) {
-            window.webContents.removeListener('ipc-message', rfaRendererMessageListener);
-            rfaRendererMessageListener = null;
-        }
-        if (rfaFrameSubscriptionActive) {
-            window.webContents.endFrameSubscription();
-            rfaFrameSubscriptionActive = false;
-        }
-    };
-JS;
-        $requestShowFind = <<<'JS'
-    window.rfaRequestShow = (focus = false) => {
-JS;
-        $requestShowReplace = <<<'JS'
-    const rfaWaitForPresentedFrame = () => {
-        try {
-            rfaFrameSubscriptionActive = true;
-            window.webContents.beginFrameSubscription(false, () => {
-                if (!rfaFrameSubscriptionActive) {
-                    return;
-                }
-                window.webContents.endFrameSubscription();
-                rfaFrameSubscriptionActive = false;
-                rfaPresentationReady = true;
-                rfaShowWhenReady();
-            });
-            window.webContents.invalidate();
-        }
-        catch (rfaError) {
-            rfaFrameSubscriptionActive = false;
-            rfaPresentationReady = true;
-            rfaShowWhenReady();
-        }
-    };
-    window.rfaRequestShow = (focus = false) => {
-JS;
-        $rendererMessageFind = <<<'JS'
-            rfaRendererReady = true;
-            rfaShowWhenReady();
-        };
-        window.webContents.on('ipc-message', rfaRendererMessageListener);
-JS;
-        $rendererMessageReplace = <<<'JS'
-            rfaRendererReady = true;
-            rfaWaitForPresentedFrame();
-        };
-        window.webContents.on('ipc-message', rfaRendererMessageListener);
-JS;
-        $timeoutFind = <<<'JS'
-        rfaReadinessTimer = setTimeout(() => {
-            rfaRendererReady = true;
-            rfaShowWhenReady();
-        }, 5000);
-JS;
-        $timeoutReplace = <<<'JS'
-        rfaReadinessTimer = setTimeout(() => {
-            rfaRendererReady = true;
-            rfaPresentationReady = true;
-            rfaShowWhenReady();
-        }, 5000);
-JS;
-
-        $content = str_replace($presentationStateFind, $presentationStateReplace, $content);
-        $content = str_replace($cleanupFind, $cleanupReplace, $content);
+        && ! str_contains($content, 'const rfaReadinessTimeoutMs = 5000;')) {
         $content = str_replace(
-            'if (!rfaPaintReady || !rfaRendererReady) {',
-            'if (!rfaPaintReady || !rfaRendererReady || !rfaPresentationReady) {',
+            "    // maximization. Its opacity barrier replaces ready-to-show for that window.\n    let rfaPaintReady = id === 'main';",
+            "    // maximization. Its opacity barrier replaces ready-to-show for that window.\n    // The renderer waits 4s; this outer timeout leaves 1s for the IPC/frame handoff.\n    const rfaReadinessTimeoutMs = 5000;\n    let rfaPaintReady = id === 'main';",
             $content,
         );
-        $content = str_replace($requestShowFind, $requestShowReplace, $content);
-        $content = str_replace($rendererMessageFind, $rendererMessageReplace, $content);
-        $content = str_replace($timeoutFind, $timeoutReplace, $content);
-    }
-
-    if (str_contains($content, 'Electron first paint and renderer stability')
-        && ! str_contains($content, "window.emit('rfa:presented')")) {
-        $showFind = <<<'JS'
-        rfaCleanupReadiness();
-        if (state.noFocusOnRestart && window.isVisible()) {
-            return;
-        }
-        window.show();
-        if (rfaFocusWhenReady) {
-            window.focus();
-        }
-JS;
-        $showReplace = <<<'JS'
-        rfaCleanupReadiness();
-        if (id === 'main') {
-            window.setOpacity(1);
-        }
-        if (state.noFocusOnRestart && window.isVisible()) {
-            if (id === 'main') {
-                window.emit('rfa:presented');
-            }
-            return;
-        }
-        window.show();
-        if (rfaFocusWhenReady) {
-            window.focus();
-        }
-        if (id === 'main') {
-            window.emit('rfa:presented');
-        }
-JS;
-
         $content = str_replace(
-            '    let rfaPaintReady = false;',
-            "    // electron-window-state can implicitly show the main window while restoring\n    // maximization. Its opacity barrier replaces ready-to-show for that window.\n    let rfaPaintReady = id === 'main';",
+            "        }, 5000);\n        window.once('closed', rfaCleanupReadiness);",
+            "        }, rfaReadinessTimeoutMs);\n        window.once('closed', rfaCleanupReadiness);",
             $content,
         );
-        $content = str_replace($showFind, $showReplace, $content);
     }
 
     $showFind = <<<'JS'
@@ -521,6 +336,7 @@ JS;
         && str_contains($content, 'window.rfaRequestShow = (focus = false)')
         && str_contains($content, 'existingWindow.rfaRequestShow(true)')
         && str_contains($content, 'window.rfaRequestShow();')
+        && str_contains($content, 'const rfaReadinessTimeoutMs = 5000;')
         && str_contains($content, 'rfaReadinessTimer = setTimeout(')
         && str_contains($content, 'window.once(\'closed\', rfaCleanupReadiness)')
         && ! str_contains($content, $find)
@@ -925,16 +741,20 @@ function rfaPatchSplashWindow(string $content): ?string
     //    default. No JS in the page; the native window backgroundColor is tinted
     //    to the same appearance below so there is no wrong-color flash on open.
     $htmlAnchor = 'const { autoUpdater } = electronUpdater;';
-    $htmlConst = <<<'JS'
+    $htmlConst = str_replace(
+        ['__RFA_BACKGROUND_LIGHT__', '__RFA_BACKGROUND_DARK__'],
+        [RFA_BACKGROUND_LIGHT, RFA_BACKGROUND_DARK],
+        <<<'JS'
 // [rfa splash] Self-contained splash markup — inline styles only, no external
 // resources, so it loads instantly from a data: URL with nothing to bundle. It
 // theme-matches the OS (and thus RFA's default appearance) via prefers-color-scheme.
-const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>:root{--rfa-bg:#ffffff;--rfa-fg:#09090b;--rfa-track:rgba(9,9,11,.14);--rfa-accent:#3b82f6}@media (prefers-color-scheme:dark){:root{--rfa-bg:#09090b;--rfa-fg:#fafafa;--rfa-track:rgba(250,250,250,.18);--rfa-accent:#60a5fa}}html,body{margin:0;height:100%;background:var(--rfa-bg);overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--rfa-fg);-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid var(--rfa-track);border-top-color:var(--rfa-accent);border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
-JS;
+const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>:root{--rfa-bg:__RFA_BACKGROUND_LIGHT__;--rfa-fg:__RFA_BACKGROUND_DARK__;--rfa-track:rgba(9,9,11,.14);--rfa-accent:#3b82f6}@media (prefers-color-scheme:dark){:root{--rfa-bg:__RFA_BACKGROUND_DARK__;--rfa-fg:#fafafa;--rfa-track:rgba(250,250,250,.18);--rfa-accent:#60a5fa}}html,body{margin:0;height:100%;background:var(--rfa-bg);overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--rfa-fg);-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid var(--rfa-track);border-top-color:var(--rfa-accent);border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
+JS
+    );
 
     // 3. The splash lifecycle methods, injected as class members.
     $methodsAnchor = '    bootstrapApp(app) {';
-    $methods = <<<'JS'
+    $methods = str_replace('__RFA_BACKGROUND_EXPRESSION__', rfaBackgroundExpression(), <<<'JS'
     rfaShowSplash() {
         // [rfa splash] Open a lightweight window the instant Electron is ready —
         // before the PHP server boots and the real window is created — so the
@@ -953,7 +773,7 @@ JS;
                 // Tint the native window fill to the OS appearance so the frame
                 // shown before the data: URL paints matches the splash content
                 // (and RFA's default system-following theme) — no light/dark flash.
-                backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff',
+                backgroundColor: __RFA_BACKGROUND_EXPRESSION__,
                 title: 'rfa',
             });
             this.rfaSplash = splash;
@@ -1021,7 +841,8 @@ JS;
         catch (rfaError) { }
     }
     bootstrapApp(app) {
-JS;
+JS
+    );
 
     // 4. Fire the splash the instant Electron is ready, before any PHP boot.
     $callFind = <<<'JS'
@@ -1086,42 +907,20 @@ JS;
                 backgroundColor: '#0d1117',
                 title: 'rfa',
 JS;
-    $newSplashBgBlock = <<<'JS'
+    $newSplashBgBlock = str_replace('__RFA_BACKGROUND_EXPRESSION__', rfaBackgroundExpression(), <<<'JS'
                 show: false,
                 skipTaskbar: true,
                 // Tint the native window fill to the OS appearance so the frame
                 // shown before the data: URL paints matches the splash content
                 // (and RFA's default system-following theme) — no light/dark flash.
-                backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff',
+                backgroundColor: __RFA_BACKGROUND_EXPRESSION__,
                 title: 'rfa',
-JS;
+JS
+    );
     if (str_contains($patched, $oldSplashBgBlock)) {
         $patched = str_replace($oldSplashBgBlock, $newSplashBgBlock, $patched);
     }
 
-    // d) Keep the handoff description aligned with the two-part readiness gate.
-    $oldHandoffComment = <<<'JS'
-            // splash on that window's `show` — which NativePHP fires only after
-            // `did-finish-load` — so the real window is painted before the splash
-            // disappears, leaving no blank frame in between.
-JS;
-    $newHandoffComment = <<<'JS'
-            // splash on that window's `show` — which RFA fires only after Electron
-            // paint and renderer readiness — so no incomplete frame is exposed.
-JS;
-    if (str_contains($patched, $oldHandoffComment)) {
-        $patched = str_replace($oldHandoffComment, $newHandoffComment, $patched);
-    }
-
-    $previousPresentationComment = <<<'JS'
-            // splash on that window's `show` — which RFA fires only after Electron
-            // paint and renderer readiness — so no incomplete frame is exposed.
-JS;
-    $presentationComment = <<<'JS'
-            // splash on RFA's explicit presentation event. A remembered maximize
-            // can show the main window implicitly, but it remains transparent
-            // until Electron paint and renderer readiness have both settled.
-JS;
     $previousPresentationListener = <<<'JS'
                 // Close on `show` (painted — the seamless handoff) and on `closed`
                 // (a window torn down before it ever shows — e.g. a failed load —
@@ -1134,10 +933,6 @@ JS;
                 // until the 60s timer).
                 window.once('rfa:presented', () => this.rfaCloseSplash());
 JS;
-
-    if (str_contains($patched, $previousPresentationComment)) {
-        $patched = str_replace($previousPresentationComment, $presentationComment, $patched);
-    }
 
     if (str_contains($patched, $previousPresentationListener)) {
         $patched = str_replace($previousPresentationListener, $presentationListener, $patched);
@@ -1170,7 +965,7 @@ JS;
 function rfaPatchResolvedAppearance(string $content): ?string
 {
     $methodsAnchor = '    rfaShowSplash() {';
-    $methodsReplace = <<<'JS'
+    $methodsReplace = str_replace('__RFA_BACKGROUND_EXPRESSION__', rfaBackgroundExpression(), <<<'JS'
     rfaResolveAppearance() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
@@ -1189,12 +984,13 @@ function rfaPatchResolvedAppearance(string $content): ?string
         });
     }
     rfaBackgroundColor() {
-        return nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff';
+        return __RFA_BACKGROUND_EXPRESSION__;
     }
     rfaShowSplash() {
-JS;
+JS
+    );
 
-    $backgroundFind = "backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff',";
+    $backgroundFind = 'backgroundColor: '.rfaBackgroundExpression().',';
     $backgroundReplace = 'backgroundColor: this.rfaBackgroundColor(),';
 
     $callFind = <<<'JS'
@@ -1232,6 +1028,188 @@ JS;
 }
 
 /**
+ * Extract the bundled PHP binary before packaging continues.
+ *
+ * NativePHP streams its one-file archive through yauzl. On Node 26 that stream
+ * can stop before EOF while the process still exits successfully, which lets
+ * Electron Builder package a truncated executable. Read and inflate the small
+ * build archive synchronously, validate its shape and size, and only then make
+ * the binary executable.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchPhpExtraction(string $content): ?string
+{
+    $importFind = 'import unzip from "yauzl";';
+    $importReplace = 'import { inflateRawSync } from "zlib"; // [rfa php extraction]';
+    $blockFind = <<<'JS'
+if (platform.phpBinary) {
+    try {
+        console.log('Unzipping PHP binary from ' + binarySrcDir + ' to ' + binaryDestDir);
+        removeSync(binaryDestDir);
+
+        ensureDirSync(binaryDestDir);
+
+        // Unzip the files
+        unzip.open(binarySrcDir, {lazyEntries: true}, function (err, zipfile) {
+            if (err) throw err;
+            zipfile.readEntry();
+            zipfile.on("entry", function (entry) {
+                zipfile.openReadStream(entry, function (err, readStream) {
+                    if (err) throw err;
+
+                    const binaryPath = join(binaryDestDir, platform.phpBinary);
+                    const writeStream = fs.createWriteStream(binaryPath);
+
+                    readStream.pipe(writeStream);
+
+                    writeStream.on("close", function() {
+                        console.log('Copied PHP binary to ', binaryPath);
+
+                        // Add execute permissions
+                        fs.chmod(binaryPath, 0o755, (err) => {
+                            if (err) {
+                                console.log(`Error setting permissions: ${err}`);
+                            }
+                        });
+
+                        zipfile.readEntry();
+                    });
+                });
+            });
+        });
+    } catch (e) {
+        console.error('Error copying PHP binary', e);
+    }
+}
+JS;
+
+    if (str_contains($content, $blockFind)) {
+
+        $replacement = <<<'JS'
+if (platform.phpBinary) {
+    try {
+        console.log('Unzipping PHP binary from ' + binarySrcDir + ' to ' + binaryDestDir);
+        removeSync(binaryDestDir);
+        ensureDirSync(binaryDestDir);
+
+        // [rfa php archive validation] NativePHP ships one local file header.
+        const archive = fs.readFileSync(binarySrcDir);
+        if (archive.readUInt32LE(0) !== 0x04034b50) {
+            throw new Error('Invalid PHP zip local header');
+        }
+
+        const flags = archive.readUInt16LE(6);
+        const compressionMethod = archive.readUInt16LE(8);
+        const compressedSize = archive.readUInt32LE(18);
+        const uncompressedSize = archive.readUInt32LE(22);
+        const fileNameLength = archive.readUInt16LE(26);
+        const extraFieldLength = archive.readUInt16LE(28);
+        const dataOffset = 30 + fileNameLength + extraFieldLength;
+        const fileName = archive.toString('utf8', 30, 30 + fileNameLength);
+
+        if ((flags & 0x09) !== 0 || fileName !== platform.phpBinary) {
+            throw new Error('Unsupported PHP zip shape');
+        }
+
+        const compressed = archive.subarray(dataOffset, dataOffset + compressedSize);
+        const binary = compressionMethod === 0
+            ? Buffer.from(compressed)
+            : compressionMethod === 8
+                ? inflateRawSync(compressed)
+                : null;
+
+        if (binary === null || binary.length !== uncompressedSize) {
+            throw new Error('Incomplete PHP binary extraction');
+        }
+
+        const binaryPath = join(binaryDestDir, platform.phpBinary);
+        fs.writeFileSync(binaryPath, binary, {mode: 0o755});
+        fs.chmodSync(binaryPath, 0o755);
+        console.log('Copied PHP binary to ', binaryPath);
+    } catch (e) {
+        console.error('Error copying PHP binary', e);
+        process.exitCode = 1;
+    }
+}
+JS;
+
+        $content = str_replace($blockFind, $replacement, $content);
+    }
+
+    if (str_contains($content, $importFind)) {
+        $content = str_replace($importFind, $importReplace, $content);
+    }
+
+    $fullyPatched = str_contains($content, '[rfa php extraction]')
+        && str_contains($content, '[rfa php archive validation]')
+        && str_contains($content, 'inflateRawSync(compressed)')
+        && str_contains($content, 'binary.length !== uncompressedSize')
+        && str_contains($content, 'fs.writeFileSync(binaryPath, binary, {mode: 0o755});')
+        && ! str_contains($content, 'unzip.open(binarySrcDir');
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
+ * Wait for PHP extraction before Electron Builder copies the app resources.
+ *
+ * NativePHP's beforePack hook launches its extractor as an unawaited child
+ * process. Electron Builder can begin its copy while the binary still has the
+ * write stream's initial 0644 mode. A synchronous child process makes the hook
+ * a real packaging barrier and also propagates extractor failures.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchPhpBuildWait(string $content): ?string
+{
+    $importFind = "import { exec } from 'child_process';";
+    $importReplace = "import { execFileSync } from 'child_process'; // [rfa php build wait]";
+    $permissionImport = "import { chmodSync } from 'fs'; // [rfa php build permission]";
+    $pathImport = "import { join } from 'path'; // [rfa php build path]";
+    $callFind = '        exec(`node php.js --${targetOs} --${arch}`);';
+    $oldCallReplace = "        execFileSync(process.execPath, ['php.js', `--\${targetOs}`, `--\${arch}`], { stdio: 'inherit' });";
+    $callReplace = <<<'JS'
+        execFileSync(process.execPath, ['php.js', `--${targetOs}`, `--${arch}`], { stdio: 'inherit' });
+        if (targetOs !== 'win') {
+            chmodSync(join(process.env.NATIVEPHP_BUILD_PATH, 'php', 'php'), 0o755);
+        }
+JS;
+
+    if (str_contains($content, $importFind)) {
+        $content = str_replace($importFind, $importReplace, $content);
+    }
+
+    if (str_contains($content, $importReplace) && ! str_contains($content, $permissionImport)) {
+        $content = str_replace($importReplace, $importReplace."\n".$permissionImport, $content);
+    }
+
+    $hasJoinImport = preg_match('/^import\s+\{[^}]*\bjoin\b[^}]*\}\s+from\s+[\'\"]path[\'\"];/m', $content) === 1;
+    if (str_contains($content, $permissionImport) && ! $hasJoinImport) {
+        $content = str_replace($permissionImport, $permissionImport."\n".$pathImport, $content);
+    }
+
+    if (str_contains($content, $callFind)) {
+        $content = str_replace($callFind, $callReplace, $content);
+    }
+
+    if (str_contains($content, $oldCallReplace) && ! str_contains($content, 'chmodSync(join(process.env.NATIVEPHP_BUILD_PATH')) {
+        $content = str_replace($oldCallReplace, $callReplace, $content);
+    }
+
+    $fullyPatched = str_contains($content, '[rfa php build wait]')
+        && str_contains($content, '[rfa php build permission]')
+        && preg_match('/^import\s+\{[^}]*\bjoin\b[^}]*\}\s+from\s+[\'\"]path[\'\"];/m', $content) === 1
+        && str_contains($content, $callReplace)
+        && str_contains($content, "targetOs !== 'win'")
+        && ! str_contains($content, $callFind);
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
  * The patch set: what has to be true of the vendored Electron plugin.
  *
  * Order matters within a file. The pre-flight cache, splash window, and
@@ -1256,12 +1234,6 @@ function rfaNativePhpPatchSet(): array
             'summary' => 'preload exposes a fixed renderer-ready IPC signal',
         ],
         [
-            'name' => 'window-ready-to-show',
-            'file' => 'server/api/window.js',
-            'apply' => rfaPatchWindowReadyToShow(...),
-            'summary' => 'windows wait for Electron first paint before showing',
-        ],
-        [
             'name' => 'window-theme',
             'file' => 'server/api/window.js',
             'apply' => rfaPatchWindowTheme(...),
@@ -1271,7 +1243,7 @@ function rfaNativePhpPatchSet(): array
             'name' => 'renderer-ready-window',
             'file' => 'server/api/window.js',
             'apply' => rfaPatchRendererReadyWindow(...),
-            'summary' => 'main window waits for renderer stability with a timeout',
+            'summary' => 'windows wait for first paint and main waits for renderer stability',
         ],
         [
             'name' => 'server-optimize',
@@ -1296,6 +1268,18 @@ function rfaNativePhpPatchSet(): array
             'file' => 'index.js',
             'apply' => rfaPatchResolvedAppearance(...),
             'summary' => 'Electron resolves the persisted appearance before creating windows',
+        ],
+        [
+            'name' => 'php-extraction',
+            'file' => '../../php.js',
+            'apply' => rfaPatchPhpExtraction(...),
+            'summary' => 'PHP archive is fully validated and extracted before packaging',
+        ],
+        [
+            'name' => 'php-build-wait',
+            'file' => '../../electron-builder.mjs',
+            'apply' => rfaPatchPhpBuildWait(...),
+            'summary' => 'Electron Builder waits for PHP extraction before copying resources',
         ],
     ];
 }
