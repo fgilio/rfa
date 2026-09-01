@@ -18,6 +18,35 @@ test('file list loads immediately and diffs load lazily', function () {
     $page->assertSee('function greet');
 });
 
+test('renderer readiness waits for visible file shells to settle', function () {
+    $page = $this->visitAndLoad($this->projectUrl());
+
+    $settled = $page->script('window.rfaRendererReady.settleRenderer(window)');
+
+    expect($settled)->toBeTrue();
+    $page->assertNoJavaScriptErrors();
+
+    $hasVisibleBlockers = $page->script(
+        'window.rfaRendererReady.hasVisibleRenderBlockers(window)',
+    );
+
+    expect($hasVisibleBlockers)->toBeFalse();
+});
+
+test('reviews larger than the Livewire request limit still hydrate on demand', function () {
+    collect(range(1, 105))->each(function (int $index): void {
+        $name = sprintf('bulk-%03d.php', $index);
+        File::put($this->testRepoPath.'/'.$name, "<?php\nreturn {$index};\n");
+    });
+
+    $page = $this->visitAndLoad($this->projectUrl());
+    $shellCount = $page->script("document.querySelectorAll('[data-rfa-render-shell]').length");
+
+    expect($shellCount)->toBeGreaterThan(100);
+    $page->assertSee('return 1;');
+    $page->assertNoJavaScriptErrors();
+});
+
 test('expanding collapsed file triggers diff load', function () {
     $page = $this->visit($this->projectUrl());
 

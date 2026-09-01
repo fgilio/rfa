@@ -33,7 +33,7 @@
             document.body.classList.add('cursor-col-resize', 'select-none');
 
             const onMove = (e) => {
-                currentWidth = Math.min(600, Math.max(200, startWidth + e.clientX - startX));
+                currentWidth = $store.settings.constrainSidebarWidth(startWidth + e.clientX - startX);
                 if (raf) return;
                 raf = requestAnimationFrame(() => {
                     aside.style.width = currentWidth + 'px';
@@ -51,7 +51,7 @@
                 this.resizing = false;
                 document.body.classList.remove('cursor-col-resize', 'select-none');
                 if (currentWidth !== startWidth) {
-                    $store.settings.sidebarWidth = currentWidth;
+                    $store.settings.setSidebarWidth(currentWidth);
                 }
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup', finish);
@@ -103,7 +103,7 @@
         x-show="!$store.settings.sidebarCollapsed"
         data-sidebar-collapsible
         @mousedown="startResize($event)"
-        @dblclick="$store.settings.sidebarWidth = 288"
+        @dblclick="$store.settings.resetSidebarWidth()"
     >
         <div class="absolute inset-y-0 w-px bg-transparent group-hover/resize:bg-gh-muted/40 transition-colors"></div>
         <div class="absolute px-1 py-1.5 rounded-full bg-gh-surface border border-gh-border shadow-sm opacity-0 group-hover/resize:opacity-100 transition-opacity pointer-events-none flex flex-col items-center gap-[3px]">

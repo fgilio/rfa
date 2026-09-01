@@ -159,6 +159,12 @@ test('phpIni ensures the opcache file-cache directory exists', function () {
     expect(is_dir($cacheDir))->toBeTrue();
 });
 
+test('main window does not force a background that can disagree with the persisted appearance', function () {
+    $source = (string) file_get_contents((new ReflectionClass(NativeAppServiceProvider::class))->getFileName());
+
+    expect($source)->not->toContain('->backgroundColor(');
+});
+
 // -- Menu structure --
 
 test('the View submenu declares the review menu items with their accelerators', function () {

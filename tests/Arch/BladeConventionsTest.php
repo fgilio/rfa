@@ -73,6 +73,19 @@ test('app layout includes keepalive component', function () {
     expect($content)->toContain('<livewire:keepalive');
 });
 
+test('app stylesheet owns the lazy placeholder icon masks', function () {
+    $stylesheet = dirname(__DIR__, 2).'/resources/css/app.css';
+    $content = file_get_contents($stylesheet);
+
+    expect($content)
+        ->toContain('.rfa-lazy-icon--chevron-down')
+        ->toContain('.rfa-lazy-icon--copy-path')
+        ->toContain('.rfa-lazy-icon--copy-content')
+        ->toContain('.rfa-lazy-icon--discard')
+        ->toContain('.rfa-lazy-icon--comment')
+        ->toContain('mask: var(--rfa-lazy-icon)');
+});
+
 test('app layout owns the single update banner mount', function () {
     $layout = dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php';
     $mounts = collect(bladeFiles())
@@ -185,6 +198,20 @@ test('review-page diff-file keys include per-file refresh fingerprints', functio
     }
 });
 
+test('bundles only comment-free lazy diff-file shell requests', function () {
+    $page = dirname(__DIR__, 2).'/resources/views/pages/⚡review-page.blade.php';
+
+    preg_match_all('/<livewire:diff-file\b.*?\/>/s', file_get_contents($page), $matches);
+
+    expect($matches[0])->not->toBeEmpty();
+
+    foreach ($matches[0] as $tag) {
+        expect($tag)
+            ->toContain('lazy')
+            ->toContain(':lazy.bundle="$fileComments === []"');
+    }
+});
+
 test('branch explorer active commit state uses ref-aware matching', function () {
     $component = dirname(__DIR__, 2).'/resources/views/livewire/⚡branch-explorer.blade.php';
     $content = file_get_contents($component);
@@ -208,6 +235,30 @@ test('blade templates do not attach pending-save Livewire hooks inline', functio
     }
 
     expect($violations)->toBeEmpty();
+});
+
+test('the document surface uses the resolved theme background token', function () {
+    $layout = file_get_contents(dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php');
+
+    expect($layout)->toContain('html, body { background-color: rgb(var(--gh-bg)); }');
+});
+
+test('restores the selected appearance before Flux resolves the document theme', function () {
+    $layout = file_get_contents(dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php');
+
+    expect($layout)
+        ->toContain("@localScript('js/appearance-store.js')")
+        ->and(strpos($layout, "@localScript('js/appearance-store.js')"))
+        ->toBeLessThan(strpos($layout, '@fluxAppearance'));
+});
+
+test('the layout loads renderer readiness before Livewire initializes', function () {
+    $layout = file_get_contents(dirname(__DIR__, 2).'/resources/views/layouts/app.blade.php');
+
+    expect($layout)
+        ->toContain("@localScript('js/renderer-ready.js')")
+        ->and(strpos($layout, "@localScript('js/renderer-ready.js')"))
+        ->toBeLessThan(strpos($layout, '@fluxScripts'));
 });
 
 test('blade templates version first-party javascript assets', function () {

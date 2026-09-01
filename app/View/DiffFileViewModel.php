@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\View;
 
 use App\Enums\AnchorStatus;
+use App\Enums\DiffLoadOutcome;
 use App\Enums\DiffSide;
 use Illuminate\Support\Collection;
 
@@ -15,6 +16,27 @@ use Illuminate\Support\Collection;
  */
 final readonly class DiffFileViewModel
 {
+    /** @param array{isBinary?: bool, isSymlink?: bool} $file */
+    public static function supportsContentCopy(array $file): bool
+    {
+        return ! ($file['isBinary'] ?? false) && ! ($file['isSymlink'] ?? false);
+    }
+
+    /** @param array{isBinary?: bool, isSymlink?: bool} $file */
+    public static function showsContentCopy(array $file, ?DiffLoadOutcome $outcome = null): bool
+    {
+        return self::supportsContentCopy($file) && $outcome !== DiffLoadOutcome::TooLarge;
+    }
+
+    /** @param array{status?: string, isExternal?: bool} $file */
+    public static function showsDiscard(array $file, bool $allowDiscard, ?string $diffTo): bool
+    {
+        return $allowDiscard
+            && $diffTo === null
+            && ($file['status'] ?? '') !== 'commented'
+            && ! ($file['isExternal'] ?? false);
+    }
+
     /**
      * Index inline comments by `side:line` for O(1) lookup during line render.
      *

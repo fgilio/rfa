@@ -1195,6 +1195,7 @@ new #[Layout('layouts.app')] class extends Component
 <div
     data-testid="review-component"
     data-diff-refresh-token="{{ $diffRefreshToken }}"
+    data-rfa-render-shells="{{ count($this->reviewState->visibleFiles) }}"
     data-source-file-entries='@json($this->reviewState->sourceFileEntries)'
     data-visible-file-entries='@json($this->reviewState->visibleFileEntries)'
     @refresh-completed.window="
@@ -1778,6 +1779,7 @@ new #[Layout('layouts.app')] class extends Component
                 {{-- Review Pairs (working directory mode only) --}}
                 @if(! $this->isCommitMode())
                     @foreach($reviewPairs as $pair)
+                        @php($fileComments = $this->groupedComments[$pair['mdFile']['id']] ?? [])
                         <div id="{{ $pair['id'] }}" class="border-b border-gh-border" x-data="{ collapsed: true }">
                             <div class="sticky top-[var(--header-h)] z-10 bg-gh-surface/80 backdrop-blur-sm border-b border-gh-border px-5 py-2.5 flex items-center gap-2.5">
                                 <button @click="collapsed = !collapsed"
@@ -1803,10 +1805,11 @@ new #[Layout('layouts.app')] class extends Component
                             <div x-show="!collapsed" x-collapse.duration.150ms>
                                 <livewire:diff-file
                                     lazy
+                                    :lazy.bundle="$fileComments === []"
                                     :key="$pair['mdFile']['id'].'-'.$pair['mdFile']['refreshFingerprint']"
                                     :file="$pair['mdFile']"
                                     :load-delay="0"
-                                    :file-comments="$this->groupedComments[$pair['mdFile']['id']] ?? []"
+                                    :file-comments="$fileComments"
                                     :is-reviewed="array_key_exists($pair['mdFile']['path'], $reviewedFiles)"
                                     :repo-path="$repoPath"
                                     :project-id="$projectId"
@@ -1831,15 +1834,18 @@ new #[Layout('layouts.app')] class extends Component
                          total source count so the value is stable across filtering. --}}
                     @php $singleFile = $this->reviewState->totalFileCount === 1 && count($reviewPairs) === 0; @endphp
                     @forelse($this->reviewState->visibleFiles as $file)
+                        @php($fileComments = $this->groupedComments[$file['id']] ?? [])
                         <div id="{{ $file['id'] }}"
+                             data-rfa-render-shell
                              wire:key="source-file-shell-{{ $file['id'] }}-{{ $file['refreshFingerprint'] }}"
                              class="border-b border-gh-border transition-opacity duration-150 ease-out">
                             <livewire:diff-file
                                 lazy
+                                :lazy.bundle="$fileComments === []"
                                 :key="$file['id'].'-'.$file['refreshFingerprint']"
                                 :file="$file"
                                 :load-delay="(int) (floor($loop->index / 15) * 100)"
-                                :file-comments="$this->groupedComments[$file['id']] ?? []"
+                                :file-comments="$fileComments"
                                 :is-reviewed="array_key_exists($file['path'], $reviewedFiles)"
                                 :single-file="$singleFile"
                                 :repo-path="$repoPath"

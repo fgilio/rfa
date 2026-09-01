@@ -9,6 +9,7 @@ use App\DTOs\LoadedDiff;
 use App\Enums\DiffLoadOutcome;
 use App\Enums\LineType;
 use App\Support\DiffCacheKey;
+use App\View\DiffFilePlaceholderView;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -62,6 +63,15 @@ test('file comment form renders before diff content', function () {
     expect($formPos)->not->toBeFalse()
         ->and($tablePos)->not->toBeFalse()
         ->and($formPos)->toBeLessThan($tablePos);
+});
+
+test('file body stays cloaked until Alpine applies its collapsed state', function () {
+    $html = mountDiffFile($this->file, loadDiff: false)->html();
+
+    expect($html)
+        ->toContain('data-rfa-diff-body')
+        ->toContain('x-cloak')
+        ->toContain('x-show="!collapsed"');
 });
 
 test('file-level saved comments render at top of file body', function () {
@@ -216,6 +226,147 @@ test('opens a validated diff URL in the system browser', function () {
 });
 
 // -- File header rendering --
+
+test('lazy placeholder header is static before Livewire replaces it', function () {
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+        'file' => $this->file,
+        'fileComments' => [],
+        'isReviewed' => false,
+        'diffTo' => null,
+        'allowDiscard' => true,
+    ])->render();
+
+    expect($html)
+        ->toContain('data-rfa-static-file-header')
+        ->toContain('src/Test.php')
+        ->not->toContain('data-testid="file-header"')
+        ->not->toContain('x-data=')
+        ->not->toContain('x-show=')
+        ->not->toContain('@click=')
+        ->not->toContain('wire:')
+        ->not->toContain('data-flux-')
+        ->not->toContain('<ui-');
+});
+
+test('lazy placeholder headers keep data local to each view', function () {
+    $component = mountDiffFile($this->file, loadDiff: false)->instance();
+
+    $firstView = $component->placeholder([
+        'file' => array_replace($this->file, ['path' => 'src/First.php']),
+        'fileComments' => [],
+    ]);
+    $secondView = $component->placeholder([
+        'file' => array_replace($this->file, ['path' => 'src/Second.php']),
+        'fileComments' => [],
+    ]);
+    $secondHtml = $secondView->render();
+    $firstHtml = $firstView->render();
+
+    expect($firstView)->toBeInstanceOf(DiffFilePlaceholderView::class)
+        ->and($firstView->name())->toBe('livewire.placeholders.diff-file')
+        ->and($secondView->name())->toBe($firstView->name())
+        ->and($firstHtml)->toContain('src/First.php')
+        ->and($firstHtml)->not->toContain('src/Second.php')
+        ->and($secondHtml)->toContain('src/Second.php')
+        ->and($secondHtml)->not->toContain('src/First.php');
+});
+
+test('too-large diff keeps the placeholder content-action width after hydration', function () {
+    app()->bind(LoadFileDiffAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
+        {
+            return LoadedDiff::tooLarge($path);
+        }
+    });
+
+    $html = mountDiffFile($this->file)->html();
+
+    expect($html)
+        ->toContain('File diff too large to display')
+        ->toContain('<span class="size-8 shrink-0" aria-hidden="true"></span>')
+        ->not->toContain('aria-label="Copy content"');
+});
+
+test('lazy placeholder header escapes file metadata', function () {
+    $file = array_replace($this->file, [
+        'path' => 'src/<script>alert("path")</script>.php',
+        'oldPath' => 'src/<em>old</em>.php',
+        'isSymlink' => true,
+        'symlinkTarget' => '<img src=x onerror=alert("target")>',
+    ]);
+
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+        'file' => $file,
+        'fileComments' => [],
+    ])->render();
+
+    expect($html)
+        ->toContain('src/&lt;script&gt;alert(&quot;path&quot;)&lt;/script&gt;.php')
+        ->toContain('src/&lt;em&gt;old&lt;/em&gt;.php')
+        ->toContain('&lt;img src=x onerror=alert(&quot;target&quot;)&gt;')
+        ->not->toContain('<script>')
+        ->not->toContain('<em>')
+        ->not->toContain('<img');
+});
+
+test('lazy placeholder header dims the directory and emphasizes the basename', function () {
+    $file = array_replace($this->file, [
+        'path' => 'app/Domains/Metadata/HasTaxonomies.php',
+        'oldPath' => 'app/Support/HasTaxonomies.php',
+    ]);
+
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+        'file' => $file,
+        'fileComments' => [],
+    ])->render();
+
+    expect($html)
+        ->toContain('<span class="rfa-lazy-old-path">app/Support/HasTaxonomies.php&nbsp;→&nbsp;</span>')
+        ->toContain('<span class="rfa-lazy-directory">app/Domains/Metadata/</span>HasTaxonomies.php');
+});
+
+test('lazy placeholder header renders the final header icon shapes', function () {
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+        'file' => $this->file,
+        'fileComments' => [],
+        'isReviewed' => false,
+        'diffTo' => null,
+        'allowDiscard' => true,
+    ])->render();
+
+    expect($html)
+        ->toContain('data-rfa-static-icon="chevron-down"')
+        ->toContain('rfa-lazy-icon--chevron-down')
+        ->toContain('data-rfa-static-icon="copy-path"')
+        ->toContain('rfa-lazy-icon--copy-path')
+        ->toContain('data-rfa-static-icon="copy-content"')
+        ->toContain('data-rfa-static-icon="discard"')
+        ->toContain('data-rfa-static-icon="comment"')
+        ->not->toContain('data-rfa-static-icon="chevron-right"');
+});
+
+test('lazy placeholder header icons match reviewed and symlink state', function () {
+    $file = array_replace($this->file, [
+        'isSymlink' => true,
+        'symlinkTarget' => 'target.txt',
+    ]);
+
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+        'file' => $file,
+        'fileComments' => [],
+        'isReviewed' => true,
+        'diffTo' => 'abc123',
+    ])->render();
+
+    expect($html)
+        ->toContain('data-rfa-static-icon="chevron-right"')
+        ->toContain('data-rfa-static-icon="link"')
+        ->toContain('data-rfa-static-icon="copy-path"')
+        ->toContain('data-rfa-static-icon="comment"')
+        ->not->toContain('data-rfa-static-icon="copy-content"')
+        ->not->toContain('data-rfa-static-icon="discard"');
+});
 
 test('file header shows rename arrow when oldPath is set', function () {
     $file = DiffFixtureFactory::fileEntry('src/NewName.php');

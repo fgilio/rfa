@@ -31,6 +31,51 @@ contextBridge.exposeInMainWorld('Native', Native);
 JS;
 }
 
+function stockWindowApi(): string
+{
+    return <<<'JS'
+import express from 'express';
+import { BrowserWindow } from 'electron';
+import state from '../state.js';
+const router = express.Router();
+router.post('/show', (req, res) => {
+    const { id } = req.body;
+    if (state.windows[id]) {
+        state.windows[id].show();
+    }
+    res.sendStatus(200);
+});
+router.post('/open', (req, res) => {
+    const { id } = req.body;
+    if (state.windows[id]) {
+        state.windows[id].show();
+        state.windows[id].focus();
+        res.sendStatus(200);
+        return;
+    }
+    const window = new BrowserWindow({ show: false,
+        backgroundColor, transparent: transparency, alwaysOnTop,
+    });
+    window.loadURL(url);
+    window.webContents.on('dom-ready', () => {
+        window.webContents.setZoomFactor(parseFloat(zoomFactor));
+    });
+    window.webContents.on('did-finish-load', () => {
+        if (state.noFocusOnRestart && window.isVisible()) {
+            return;
+        }
+        window.show();
+    });
+    window.webContents.on('did-fail-load', (event) => {
+        console.error('failed to open window...', event);
+    });
+    state.windows[id] = window;
+    res.sendStatus(200);
+});
+export default router;
+JS;
+}
+
 function stockServer(): string
 {
     return <<<'JS'
@@ -46,6 +91,7 @@ function retrievePhpIniSettings() {
         return yield promisify(execFile)(state.php, command, phpOptions);
     });
 }
+
 function retrieveNativePHPConfig() {
     return __awaiter(this, void 0, void 0, function* () {
         let command = ['artisan', 'native:config'];
@@ -71,6 +117,73 @@ function retrieveNativePHPConfig() {
         if (shouldMigrateDatabase(store)) {
             console.log('Migrating database...');
         }
+JS;
+}
+
+function stockPhpInstaller(): string
+{
+    return <<<'JS'
+import unzip from "yauzl";
+
+if (platform.phpBinary) {
+    try {
+        console.log('Unzipping PHP binary from ' + binarySrcDir + ' to ' + binaryDestDir);
+        removeSync(binaryDestDir);
+
+        ensureDirSync(binaryDestDir);
+
+        // Unzip the files
+        unzip.open(binarySrcDir, {lazyEntries: true}, function (err, zipfile) {
+            if (err) throw err;
+            zipfile.readEntry();
+            zipfile.on("entry", function (entry) {
+                zipfile.openReadStream(entry, function (err, readStream) {
+                    if (err) throw err;
+
+                    const binaryPath = join(binaryDestDir, platform.phpBinary);
+                    const writeStream = fs.createWriteStream(binaryPath);
+
+                    readStream.pipe(writeStream);
+
+                    writeStream.on("close", function() {
+                        console.log('Copied PHP binary to ', binaryPath);
+
+                        // Add execute permissions
+                        fs.chmod(binaryPath, 0o755, (err) => {
+                            if (err) {
+                                console.log(`Error setting permissions: ${err}`);
+                            }
+                        });
+
+                        zipfile.readEntry();
+                    });
+                });
+            });
+        });
+    } catch (e) {
+        console.error('Error copying PHP binary', e);
+    }
+}
+
+export const phpInstallerReady = true;
+JS;
+}
+
+function stockElectronBuilder(): string
+{
+    return <<<'JS'
+import { exec } from 'child_process';
+export default {
+    beforePack: async (context) => {
+        let arch = {
+            1: 'x64',
+            3: 'arm64'
+        }[context.arch];
+
+        console.log(`  • building php binary - exec php.js --${targetOs} --${arch}`);
+        exec(`node php.js --${targetOs} --${arch}`);
+    },
+};
 JS;
 }
 

@@ -7,6 +7,22 @@
     <title>rfa - Code Review</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png">
+    <link rel="preload" href="/fonts/SpaceGrotesk-Variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/JetBrainsMono-Variable.woff2" as="font" type="font/woff2" crossorigin>
+    <style>
+        @font-face {
+            font-family: 'Space Grotesk';
+            src: url('/fonts/SpaceGrotesk-Variable.woff2') format('woff2');
+            font-weight: 400 700;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'JetBrains Mono';
+            src: url('/fonts/JetBrainsMono-Variable.woff2') format('woff2');
+            font-weight: 400 500;
+            font-display: swap;
+        }
+    </style>
     <link rel="stylesheet" href="/build/app.css">
     <script>
         window.rfaDiagnosticsConfig = {
@@ -24,8 +40,10 @@
         // shortcuts-store.js reads this to wire handlers and the cheat sheet.
         window.RFA_SHORTCUTS = @js(\App\Support\Shortcuts::all());
     </script>
+    @localScript('js/appearance-store.js')
     @localScript('js/runtime-diagnostics.js')
     @localScript('js/settings-store.js')
+    @localScript('js/renderer-ready.js')
     @localScript('js/overlays-store.js')
     @localScript('js/keymap-store.js')
     @localScript('js/shortcuts-store.js')
@@ -34,19 +52,6 @@
     @localScript('js/smart-poll.js')
     @localScript('js/pending-saves.js')
     <style>
-        @font-face {
-            font-family: 'Space Grotesk';
-            src: url('/fonts/SpaceGrotesk-Variable.woff2') format('woff2');
-            font-weight: 400 700;
-            font-display: swap;
-        }
-        @font-face {
-            font-family: 'JetBrains Mono';
-            src: url('/fonts/JetBrainsMono-Variable.woff2') format('woff2');
-            font-weight: 400 500;
-            font-display: swap;
-        }
-
         @php
             $lightColors = config('theme.colors.light');
             $darkColors  = config('theme.colors.dark');
@@ -243,6 +248,10 @@
             width: 3px;
             background: rgb(var(--gh-muted) / 0.5);
         }
+        /* Keep Chromium's document surface on the same resolved token as the
+           native window fill. */
+        html, body { background-color: rgb(var(--gh-bg)); }
+
         /* Prevent Flux menu scroll-lock from hiding scrollbar and causing layout shift */
         html { overflow-y: scroll !important; }
 

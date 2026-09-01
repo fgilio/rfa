@@ -15,13 +15,18 @@ uses(TestCase::class, InteractsWithTestRepositories::class);
  */
 function stubDistRoot(string $root, ?callable $mutate = null): string
 {
-    foreach (['preload', 'server'] as $subdirectory) {
+    $root .= '/electron-plugin/dist';
+
+    foreach (['preload', 'server', 'server/api'] as $subdirectory) {
         mkdir($root.'/'.$subdirectory, 0755, true);
     }
 
     file_put_contents($root.'/preload/index.mjs', stockPreload());
+    file_put_contents($root.'/server/api/window.js', stockWindowApi());
     file_put_contents($root.'/server/php.js', stockServer());
     file_put_contents($root.'/index.js', stockIndexForSplash()."\n".stockIndex());
+    file_put_contents($root.'/../../php.js', stockPhpInstaller());
+    file_put_contents($root.'/../../electron-builder.mjs', stockElectronBuilder());
 
     if ($mutate !== null) {
         $mutate($root);
@@ -33,7 +38,7 @@ function stubDistRoot(string $root, ?callable $mutate = null): string
 /** @return array<string, string> */
 function distSnapshot(string $root): array
 {
-    return collect(['preload/index.mjs', 'server/php.js', 'index.js'])
+    return collect(['preload/index.mjs', 'server/api/window.js', 'server/php.js', 'index.js', '../../php.js', '../../electron-builder.mjs'])
         ->filter(fn (string $file) => is_file($root.'/'.$file))
         ->mapWithKeys(fn (string $file) => [$file => file_get_contents($root.'/'.$file)])
         ->all();
@@ -43,7 +48,7 @@ function distSnapshot(string $root): array
 
 test('the patch set covers every vendored file rfa depends on', function () {
     expect(collect(rfaNativePhpPatchSet())->pluck('name')->all())
-        ->toBe(['preload-file-bridge', 'server-optimize', 'preflight-cache', 'splash-window']);
+        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance', 'php-extraction', 'php-build-wait']);
 });
 
 test('the dist root points at the vendored electron plugin', function () {
@@ -58,29 +63,74 @@ test('applies every patch in one run', function () {
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['applied'])->toBe(['preload-file-bridge', 'server-optimize', 'preflight-cache', 'splash-window'])
+    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance', 'php-extraction', 'php-build-wait'])
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['absent'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 
-    expect(file_get_contents($root.'/preload/index.mjs'))->toContain('nativeGetFilePath');
+    expect(file_get_contents($root.'/preload/index.mjs'))
+        ->toContain('nativeGetFilePath')
+        ->toContain('nativeRendererReady');
+    expect(file_get_contents($root.'/server/api/window.js'))
+        ->toContain('[rfa window readiness]')
+        ->toContain('[rfa window theme]')
+        ->toContain('rfaPresentationPhase')
+        ->toContain("rfaPresentationPhase = 'waiting-frame'")
+        ->toContain("opacity: id === 'main' ? 0 : 1")
+        ->toContain('window.setOpacity(1);')
+        ->toContain("window.emit('rfa:presented')")
+        ->toContain('window.webContents.beginFrameSubscription(false')
+        ->toContain('window.webContents.invalidate();')
+        ->toContain('window.webContents.endFrameSubscription();');
     expect(file_get_contents($root.'/server/php.js'))->toContain('rfaNeedsFullOptimize');
     expect(file_get_contents($root.'/index.js'))
         ->toContain("'preflight_config_'")
-        ->toContain('const RFA_SPLASH_HTML');
+        ->toContain('const RFA_SPLASH_HTML')
+        ->toContain("window.once('rfa:presented'")
+        ->toContain('rfaResolveAppearance()');
+    expect(file_get_contents($root.'/../../php.js'))
+        ->toContain('[rfa php archive validation]')
+        ->toContain('removeSync(binaryDestDir);')
+        ->toContain('ensureDirSync(binaryDestDir);')
+        ->toContain('fs.chmodSync(binaryPath, 0o755);')
+        ->toContain('[rfa php extraction]')
+        ->toContain('inflateRawSync(compressed)')
+        ->toContain('binary.length !== uncompressedSize')
+        ->toContain('export const phpInstallerReady = true;');
+    expect(file_get_contents($root.'/../../electron-builder.mjs'))
+        ->toContain('[rfa php build wait]')
+        ->toContain("execFileSync(process.execPath, ['php.js'")
+        ->not->toContain('[rfa php build permission]')
+        ->not->toContain('[rfa php build path]')
+        ->not->toContain('chmodSync(');
 });
 
-test('both edits to the shared index.js survive each other', function () {
-    // The pre-flight cache and the splash window rewrite the same file. Applying
-    // them in one pass is what keeps the second from being computed against a
-    // stale copy and silently dropping the first.
+test('a remembered maximize stays transparent until the settled frame is presented', function () {
+    $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'));
+
+    applyRfaNativePhpPatchSet($root);
+
+    expect(file_get_contents($root.'/server/api/window.js'))
+        ->toContain("opacity: id === 'main' ? 0 : 1")
+        ->toContain("let rfaPresentationPhase = id === 'main' ? 'waiting-renderer' : 'waiting-paint'")
+        ->toContain('window.setOpacity(1);')
+        ->toContain("window.emit('rfa:presented')")
+        ->and(file_get_contents($root.'/index.js'))
+        ->toContain("window.once('rfa:presented', () => this.rfaCloseSplash())")
+        ->not->toContain("window.once('show', () => this.rfaCloseSplash())");
+});
+
+test('all edits to the shared index.js survive each other', function () {
+    // These three patches rewrite the same file. Applying them in one pass keeps
+    // each edit based on the output of the previous edit.
     $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'));
 
     applyRfaNativePhpPatchSet($root);
 
     expect(file_get_contents($root.'/index.js'))
         ->toContain('import Store from "electron-store"; // [rfa preflight cache]')
-        ->toContain('powerMonitor, BrowserWindow, nativeTheme');
+        ->toContain('powerMonitor, BrowserWindow, nativeTheme')
+        ->toContain('rfaResolveAppearance()');
 });
 
 test('a second run changes nothing', function () {
@@ -92,7 +142,7 @@ test('a second run changes nothing', function () {
     $outcome = applyRfaNativePhpPatchSet($root);
 
     expect($outcome['applied'])->toBeEmpty()
-        ->and($outcome['unchanged'])->toHaveCount(4)
+        ->and($outcome['unchanged'])->toHaveCount(10)
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($afterFirst);
 });
@@ -114,7 +164,7 @@ test('one reshaped source block leaves every file untouched', function () {
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['blocked'])->toBe(['splash-window'])
+    expect($outcome['blocked'])->toBe(['splash-window', 'resolved-appearance'])
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($before);
 });
@@ -191,7 +241,7 @@ test('an absent dist tree is reported, not failed', function () {
     // pruned copy where the plugin dist is not present.
     $outcome = applyRfaNativePhpPatchSet(sys_get_temp_dir().'/rfa_test_dist_nowhere_'.getmypid());
 
-    expect($outcome['absent'])->toHaveCount(4)
+    expect($outcome['absent'])->toHaveCount(10)
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 });

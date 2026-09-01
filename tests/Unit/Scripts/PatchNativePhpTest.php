@@ -10,6 +10,24 @@ require_once dirname(__DIR__, 2).'/Helpers/native-php-dist-fixtures.php';
  * runner that applies them together.
  */
 
+test('startup palette reads and validates the theme config', function () {
+    $theme = require dirname(__DIR__, 3).'/config/theme.php';
+
+    expect(rfaThemeRgb('light', 'bg'))->toBe(array_map('intval', explode(' ', $theme['colors']['light']['bg'])))
+        ->and(rfaThemeRgb('dark', 'text'))->toBe(array_map('intval', explode(' ', $theme['colors']['dark']['text'])))
+        ->and(rfaThemeHex('light', 'link'))->toBe('#3b82f6')
+        ->and(rfaThemeRgba('dark', 'text', '.18'))->toBe('rgba(250,250,250,.18)');
+});
+
+test('startup palette rejects invalid RGB triples', function (mixed $value, string $message) {
+    expect(fn () => rfaParseThemeRgb($value, 'colors.light.bg'))
+        ->toThrow(RuntimeException::class, $message);
+})->with([
+    'wrong shape' => ['255 255', 'must be an RGB triple'],
+    'wrong type' => [null, 'must be an RGB triple'],
+    'channel out of range' => ['256 255 255', 'must contain channels from 0 to 255'],
+]);
+
 // ===== preload/index.mjs: the drag-and-drop file bridge =====
 
 // -- Shape changes --
@@ -63,7 +81,128 @@ test('preserves existing preload code', function () {
         ->toContain('contextMenu: (template)');
 });
 
+test('renderer readiness preload: reports a shape change when the Native bridge is missing', function () {
+    expect(rfaPatchPreloadRendererReady('const x = 1;'))->toBeNull();
+});
+
+test('renderer readiness preload: exposes one fixed payload-free IPC signal', function () {
+    $content = rfaPatchPreloadRendererReady(stockPreload());
+
+    expect($content)
+        ->toContain('[rfa renderer readiness]')
+        ->toContain("contextBridge.exposeInMainWorld('nativeRendererReady', () => ipcRenderer.send('rfa:renderer-ready'))")
+        ->not->toContain('ipcRenderer.send(channel');
+});
+
+test('renderer readiness preload: is idempotent', function () {
+    $patched = rfaPatchPreloadRendererReady(stockPreload());
+
+    expect(rfaPatchPreloadRendererReady($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP preload exposes renderer readiness', function () {
+    $preloadPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/preload/index.mjs';
+
+    expect(file_get_contents($preloadPath))
+        ->toContain("exposeInMainWorld('nativeRendererReady'")
+        ->toContain("ipcRenderer.send('rfa:renderer-ready')");
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/preload/index.mjs'), 'NativePHP desktop electron plugin not installed');
+
 // ===== server/php.js and index.js: boot-path edits =====
+
+test('window theme: reports a shape change when the BrowserWindow options are missing', function () {
+    expect(rfaPatchWindowTheme("import { BrowserWindow } from 'electron';"))->toBeNull();
+});
+
+test('window theme: uses the resolved native appearance for every BrowserWindow fill', function () {
+    $content = rfaPatchWindowTheme(stockWindowApi());
+
+    expect($content)
+        ->toContain("import { BrowserWindow, nativeTheme } from 'electron'; // [rfa window theme]")
+        ->toContain("backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff'")
+        ->toContain("opacity: id === 'main' ? 0 : 1")
+        ->not->toContain('        backgroundColor, transparent: transparency, alwaysOnTop,');
+});
+
+test('window theme: is idempotent', function () {
+    $patched = rfaPatchWindowTheme(stockWindowApi());
+
+    expect(rfaPatchWindowTheme($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP window API uses the resolved appearance', function () {
+    $windowPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js';
+
+    expect(file_get_contents($windowPath))
+        ->toContain('[rfa window theme]')
+        ->toContain("backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff'");
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js'), 'NativePHP desktop electron plugin not installed');
+
+test('renderer readiness window: reports a shape change when the load listener is missing', function () {
+    expect(rfaPatchRendererReadyWindow('const x = 1;'))->toBeNull();
+});
+
+test('renderer readiness window: waits for the settled main renderer presentation', function () {
+    $content = rfaPatchRendererReadyWindow(stockWindowApi());
+
+    expect($content)
+        ->toContain("let rfaPresentationPhase = id === 'main' ? 'waiting-renderer' : 'waiting-paint'")
+        ->toContain("rfaPresentationPhase = 'waiting-frame'")
+        ->toContain("rfaPresentationPhase = 'presented'")
+        ->toContain("channel !== 'rfa:renderer-ready'")
+        ->toContain('window.webContents.beginFrameSubscription(false')
+        ->toContain('window.webContents.invalidate()')
+        ->toContain('window.setOpacity(1)')
+        ->toContain("window.emit('rfa:presented')")
+        ->toContain('window.rfaRequestShow = (focus = false)')
+        ->toContain('rfaReadinessTimer = setTimeout(rfaPresent, rfaReadinessTimeoutMs)');
+});
+
+test('renderer readiness window: repeat opens cannot bypass the barrier', function () {
+    $content = rfaPatchRendererReadyWindow(stockWindowApi());
+
+    expect($content)
+        ->toContain('const existingWindow = state.windows[id]')
+        ->toContain("typeof existingWindow.rfaRequestShow === 'function'")
+        ->toContain('existingWindow.rfaRequestShow(true)')
+        ->not->toContain("if (state.windows[id]) {\n        state.windows[id].show();\n        state.windows[id].focus();");
+});
+
+test('renderer readiness window: explicit show requests cannot bypass the barrier', function () {
+    $content = rfaPatchRendererReadyWindow(stockWindowApi());
+
+    expect($content)
+        ->toContain("typeof window.rfaRequestShow === 'function'")
+        ->toContain('window.rfaRequestShow();')
+        ->not->toContain("if (state.windows[id]) {\n        state.windows[id].show();\n    }");
+});
+
+test('renderer readiness window: fails open and cleans up its listener', function () {
+    $content = rfaPatchRendererReadyWindow(stockWindowApi());
+
+    expect($content)
+        ->toContain('const rfaReadinessTimeoutMs = 5000;')
+        ->toContain('rfaReadinessTimer = setTimeout(rfaPresent, rfaReadinessTimeoutMs)')
+        ->toContain("removeListener('ipc-message', rfaRendererMessageListener)")
+        ->toContain("rfaPresentationPhase = 'closed'");
+});
+
+test('renderer readiness window: is idempotent', function () {
+    $patched = rfaPatchRendererReadyWindow(stockWindowApi());
+
+    expect(rfaPatchRendererReadyWindow($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP main window waits for renderer readiness', function () {
+    $windowPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js';
+
+    expect(file_get_contents($windowPath))
+        ->toContain('Electron first paint and renderer stability')
+        ->toContain('rfaPresentationPhase')
+        ->toContain("channel !== 'rfa:renderer-ready'")
+        ->toContain('setTimeout(rfaPresent, rfaReadinessTimeoutMs)')
+        ->not->toContain('rfaRendererReady');
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js'), 'NativePHP desktop electron plugin not installed');
 
 // -- Shape changes --
 
@@ -395,8 +534,11 @@ test('splash: opens an early window before PHP boots, hands off, and is fail-ope
         ->toContain("loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(RFA_SPLASH_HTML))")
         // Fired the instant Electron is ready, before any PHP boot.
         ->toContain('this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots')
-        // Seamless handoff: the splash closes once the real window is shown.
-        ->toContain("window.once('show', () => this.rfaCloseSplash())")
+        // Seamless handoff: an implicit maximize cannot close the splash early.
+        ->toContain("window.once('rfa:presented', () => this.rfaCloseSplash())")
+        ->toContain('remains transparent')
+        ->not->toContain("window.once('show', () => this.rfaCloseSplash())")
+        ->not->toContain('`did-finish-load`')
         // Fail-open: splash creation is wrapped so any error just means no splash.
         ->toContain('catch (rfaError)');
 
@@ -545,6 +687,181 @@ test('the vendored NativePHP main bootstrap carries the splash window', function
         ->toContain('const RFA_SPLASH_HTML')
         ->toContain('this.rfaShowSplash()');
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
+
+// -- Resolved appearance (dist/index.js) --
+
+test('appearance: reports a shape change when the splash methods are missing', function () {
+    expect(rfaPatchResolvedAppearance('const x = 1;'))->toBeNull();
+});
+
+test('appearance: resolves the persisted Flux mode before creating the splash', function () {
+    $content = rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash()));
+
+    expect($content)
+        ->toContain("name: 'rfa_appearance'")
+        ->toContain("name: 'rfa_theme'")
+        ->toContain("nativeTheme.themeSource = ['light', 'dark', 'system'].includes(rfaAppearance)")
+        ->toContain("nativeTheme.themeSource = 'system'")
+        ->toContain('backgroundColor: this.rfaBackgroundColor()')
+        ->toContain('yield this.rfaResolveAppearance(); // [rfa appearance]');
+
+    expect(strpos($content, 'yield this.rfaResolveAppearance()'))
+        ->toBeLessThan(strpos($content, 'this.rfaShowSplash()'));
+});
+
+test('appearance: falls back to the legacy resolved theme on the first upgraded launch', function () {
+    $content = rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash()));
+
+    expect(strpos($content, "name: 'rfa_appearance'"))
+        ->toBeLessThan(strpos($content, "name: 'rfa_theme'"))
+        ->and($content)
+        ->toContain('if (rfaAppearanceCookies.length > 0)')
+        ->toContain('if (rfaLegacyThemeCookies.length > 0)');
+});
+
+test('appearance: upgrades the exact appearance-only cookie lookup', function () {
+    $previous = str_replace(
+        <<<'JS'
+                const rfaAppearanceCookies = yield session.defaultSession.cookies.get({
+                    url: 'http://127.0.0.1',
+                    name: 'rfa_appearance',
+                });
+                let rfaAppearance = 'system';
+                if (rfaAppearanceCookies.length > 0) {
+                    rfaAppearance = rfaAppearanceCookies[0].value;
+                }
+                else {
+                    const rfaLegacyThemeCookies = yield session.defaultSession.cookies.get({
+                        url: 'http://127.0.0.1',
+                        name: 'rfa_theme',
+                    });
+                    if (rfaLegacyThemeCookies.length > 0) {
+                        rfaAppearance = rfaLegacyThemeCookies[0].value;
+                    }
+                }
+JS,
+        <<<'JS'
+                const rfaCookies = yield session.defaultSession.cookies.get({
+                    url: 'http://127.0.0.1',
+                    name: 'rfa_appearance',
+                });
+                const rfaAppearance = rfaCookies.length > 0 ? rfaCookies[0].value : 'system';
+JS,
+        rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash())),
+    );
+
+    expect(rfaPatchResolvedAppearance($previous))
+        ->toBe(rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash())));
+});
+
+test('appearance: shares the exact RFA light and dark background tokens', function () {
+    expect(rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash())))
+        ->toContain("return nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff'")
+        ->not->toContain('#0d1117');
+});
+
+test('appearance: is idempotent', function () {
+    $patched = rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash()));
+
+    expect(rfaPatchResolvedAppearance($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP main bootstrap resolves appearance before windows', function () {
+    $indexPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js';
+
+    expect(file_get_contents($indexPath))
+        ->toContain('rfaResolveAppearance()')
+        ->toContain("name: 'rfa_appearance'")
+        ->toContain("name: 'rfa_theme'")
+        ->toContain('backgroundColor: this.rfaBackgroundColor()');
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
+
+// -- PHP extraction (php.js) --
+
+test('PHP extraction: replaces the complete stock installer block', function () {
+    $content = rfaPatchPhpExtraction(stockPhpInstaller());
+
+    expect($content)
+        ->toContain('[rfa php extraction]')
+        ->toContain('removeSync(binaryDestDir);')
+        ->toContain('ensureDirSync(binaryDestDir);')
+        ->toContain('fileName !== platform.phpBinary')
+        ->toContain('fs.chmodSync(binaryPath, 0o755);')
+        ->toContain('process.exitCode = 1;')
+        ->not->toContain('unzip.open(binarySrcDir');
+});
+
+test('PHP extraction: upgrades the exact current-head partial block', function () {
+    $current = rfaPatchPhpExtraction(stockPhpInstaller());
+    $destinationPreparation = <<<'JS'
+        console.log('Unzipping PHP binary from ' + binarySrcDir + ' to ' + binaryDestDir);
+        removeSync(binaryDestDir);
+        ensureDirSync(binaryDestDir);
+
+JS;
+    $previous = str_replace($destinationPreparation, '', $current);
+
+    expect(rfaPatchPhpExtraction($previous))->toBe($current);
+});
+
+test('PHP extraction: rejects incomplete patched blocks', function (string $missingFragment) {
+    $current = rfaPatchPhpExtraction(stockPhpInstaller());
+    $partial = str_replace($missingFragment, '', $current);
+
+    expect($partial)->not->toBe($current)
+        ->and(rfaPatchPhpExtraction($partial))->toBeNull();
+})->with([
+    'destination cleanup' => '        removeSync(binaryDestDir);'.PHP_EOL,
+    'destination creation' => '        ensureDirSync(binaryDestDir);'.PHP_EOL,
+    'archive filename validation' => ' || fileName !== platform.phpBinary',
+    'executable mode' => '        fs.chmodSync(binaryPath, 0o755);'.PHP_EOL,
+    'failure status' => '        process.exitCode = 1;'.PHP_EOL,
+]);
+
+test('PHP extraction: leaves the complete patched block unchanged', function () {
+    $patched = rfaPatchPhpExtraction(stockPhpInstaller());
+
+    expect(rfaPatchPhpExtraction($patched))->toBe($patched);
+});
+
+// -- PHP build wait (electron-builder.mjs) --
+
+test('PHP build wait: waits for extraction without changing permissions', function () {
+    $content = rfaPatchPhpBuildWait(stockElectronBuilder());
+
+    expect($content)
+        ->toContain('[rfa php build wait]')
+        ->toContain("execFileSync(process.execPath, ['php.js'")
+        ->not->toContain('[rfa php build permission]')
+        ->not->toContain('[rfa php build path]')
+        ->not->toContain('chmodSync(');
+});
+
+test('PHP build wait: upgrades the exact permission-owning block', function () {
+    $previous = str_replace(
+        "import { exec } from 'child_process';",
+        "import { execFileSync } from 'child_process'; // [rfa php build wait]\nimport { chmodSync } from 'fs'; // [rfa php build permission]\nimport { join } from 'path'; // [rfa php build path]",
+        stockElectronBuilder(),
+    );
+    $previous = str_replace(
+        '        exec(`node php.js --${targetOs} --${arch}`);',
+        <<<'JS'
+        execFileSync(process.execPath, ['php.js', `--${targetOs}`, `--${arch}`], { stdio: 'inherit' });
+        if (targetOs !== 'win') {
+            chmodSync(join(process.env.NATIVEPHP_BUILD_PATH, 'php', 'php'), 0o755);
+        }
+JS,
+        $previous,
+    );
+
+    expect(rfaPatchPhpBuildWait($previous))->toBe(rfaPatchPhpBuildWait(stockElectronBuilder()));
+});
+
+test('PHP build wait: leaves the complete patched block unchanged', function () {
+    $patched = rfaPatchPhpBuildWait(stockElectronBuilder());
+
+    expect(rfaPatchPhpBuildWait($patched))->toBe($patched);
+});
 
 // -- Applied to the real vendored file --
 

@@ -11,9 +11,10 @@
 ])
 
 @php
-    $showContentCopy = ! ($file['isBinary'] ?? false)
-        && ! ($file['isSymlink'] ?? false)
-        && $outcome !== \App\Enums\DiffLoadOutcome::TooLarge;
+    $showContentCopy = \App\View\DiffFileViewModel::showsContentCopy($file, $outcome);
+    $reserveContentCopySpace = \App\View\DiffFileViewModel::supportsContentCopy($file)
+        && $outcome === \App\Enums\DiffLoadOutcome::TooLarge;
+    $showDiscard = \App\View\DiffFileViewModel::showsDiscard($file, $allowDiscard, $diffTo);
     $isAdded = ($file['status'] ?? '') === 'added' || ($file['isUntracked'] ?? false);
     $isDeleted = ($file['status'] ?? '') === 'deleted';
 @endphp
@@ -69,9 +70,14 @@
                         </flux:menu.item>
                     </flux:menu>
                 </flux:dropdown>
+            @elseif($reserveContentCopySpace)
+                {{-- The placeholder showed this action before the load outcome
+                     existed. Keep its 32px slot so TooLarge does not shift the
+                     remaining header controls during hydration. --}}
+                <span class="size-8 shrink-0" aria-hidden="true"></span>
             @endif
 
-            @if($allowDiscard && $diffTo === null && ($file['status'] ?? '') !== 'commented' && ! ($file['isExternal'] ?? false))
+            @if($showDiscard)
                 <flux:button
                     tooltip="Discard changes"
                     aria-label="Discard changes"

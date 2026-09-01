@@ -46,7 +46,7 @@ When a path's text content is set client-side (e.g. `x-text` from a JS object), 
 - Managed by Flux's `@fluxAppearance` + `$flux.appearance` (`'light' | 'dark' | 'system'`)
 - The `theme-switcher` SFC is a `flux:dropdown`: a square ghost trigger whose icon mirrors the current mode (sun/moon/computer-desktop, swapped via `x-show="$flux.appearance === …"`), opening a `flux:menu.radio.group` bound `x-model="$flux.appearance"` with the three states — light, dark, and system (follows the OS via `prefers-color-scheme`). The active state carries the menu check. `system` is the default when the user hasn't chosen.
 - Flux applies/removes the `dark` class on `<html>` and tracks the OS in system mode; read the resolved boolean via `$flux.dark` (reactive to both explicit picks and OS changes while in system mode).
-- The switcher mirrors that `$flux.dark` value into the persistent `rfa_theme` cookie (`dark`/`light`, 1-year) via a single `x-effect`, so non-Livewire consumers can read the resolved theme without JS.
+- The switcher mirrors `$flux.appearance` into the one-year `rfa_appearance` cookie (`light`/`dark`/`system`) so Electron can resolve the theme before it creates a window.
 
 ## Visual Style
 - Brutalist/raw aesthetic: bold type, dramatic scale contrast, generous whitespace in chrome
@@ -168,7 +168,9 @@ ReviewPage (`resources/views/pages/⚡review-page.blade.php`) renders N DiffFile
    - Child listens via Alpine and calls its own Livewire method only when its ID matches: `@comment-updated.window="if ($event.detail.fileId === fileId) $wire.updateComments($event.detail.comments)"`
    - This is a 1-to-1 update instead of 1-to-N re-render.
 
-4. **Stagger lazy loading** when many children load data on intersect. Use `setTimeout` with a delay based on index to prevent thundering herd: `x-intersect.once="setTimeout(() => $wire.loadFileDiff(), {{ $loadDelay }})"`
+4. **Bundle comment-free lazy diff-file shell hydration.** Use `lazy` with `:lazy.bundle="empty($fileComments)"` so visible headers without saved comment bodies settle in one request. Keep comment-bearing files isolated so their serialized bodies cannot combine past the payload byte limit. The local desktop app allows up to 100 components in a bundled request.
+
+5. **Stagger diff data loading** when many mounted children intersect. Use `setTimeout` with a delay based on index to prevent thundering herd: `x-intersect.once="setTimeout(() => $wire.loadFileDiff(), {{ $loadDelay }})"`
 
 ### Which actions skipRender
 
