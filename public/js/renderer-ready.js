@@ -91,9 +91,15 @@
         const startedAt = Date.now();
         const fonts = loadRequiredFonts(root);
         const fontReadiness = fonts
-            ? Promise.resolve(fonts).then(() => true, () => true)
+            ? (async () => {
+                try {
+                    await fonts;
+                } catch (_) {
+                    // Font errors must not strand the startup screen.
+                }
+            })()
             : null;
-        let fontsReady = !fonts;
+        let fontsReady = fonts === null;
 
         // Livewire initializes while its script is still executing. Window load
         // is the first point where Chromium can expose final shell geometry.
@@ -156,10 +162,13 @@
                 subtree: true,
             });
 
-            Promise.resolve(fontReadiness).then(() => {
-                fontsReady = true;
-                scheduleCheck();
-            });
+            if (fonts) {
+                void (async () => {
+                    await fontReadiness;
+                    fontsReady = true;
+                    scheduleCheck();
+                })();
+            }
 
             const remainingTimeout = Math.max(0, timeoutMs - (Date.now() - startedAt));
             const timeoutId = root.setTimeout(() => finish(false), remainingTimeout);
