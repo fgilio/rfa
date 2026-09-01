@@ -9,6 +9,7 @@ use App\DTOs\LoadedDiff;
 use App\Enums\DiffLoadOutcome;
 use App\Enums\LineType;
 use App\Support\DiffCacheKey;
+use App\View\DiffFilePlaceholderView;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -247,7 +248,7 @@ test('lazy placeholder header is static before Livewire replaces it', function (
         ->not->toContain('<ui-');
 });
 
-test('lazy placeholder headers reuse one compiled template', function () {
+test('lazy placeholder headers keep data local to each view', function () {
     $component = mountDiffFile($this->file, loadDiff: false)->instance();
 
     $firstView = $component->placeholder([
@@ -261,7 +262,8 @@ test('lazy placeholder headers reuse one compiled template', function () {
     $secondHtml = $secondView->render();
     $firstHtml = $firstView->render();
 
-    expect($firstView->name())->toBe('livewire.placeholders.diff-file')
+    expect($firstView)->toBeInstanceOf(DiffFilePlaceholderView::class)
+        ->and($firstView->name())->toBe('livewire.placeholders.diff-file')
         ->and($secondView->name())->toBe($firstView->name())
         ->and($firstHtml)->toContain('src/First.php')
         ->and($firstHtml)->not->toContain('src/Second.php')

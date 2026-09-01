@@ -13,9 +13,10 @@ use App\Enums\DiffLoadOutcome;
 use App\Enums\DiffSide;
 use App\Enums\GitRef;
 use App\Support\DiffCacheKey;
+use App\View\DiffFilePlaceholderView;
 use App\View\DiffFileViewModel;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -81,41 +82,7 @@ new class extends Component {
      */
     public function placeholder(array $params = []): View
     {
-        $file = is_array($params['file'] ?? null) ? $params['file'] : [];
-        $fileComments = is_array($params['fileComments'] ?? null) ? $params['fileComments'] : [];
-        $isReviewed = (bool) ($params['isReviewed'] ?? false);
-        $allowDiscard = (bool) ($params['allowDiscard'] ?? true);
-        $showContentCopy = DiffFileViewModel::showsContentCopy($file);
-        $showDiscard = DiffFileViewModel::showsDiscard(
-            $file,
-            $allowDiscard,
-            is_string($params['diffTo'] ?? null) ? $params['diffTo'] : null,
-        );
-        $path = (string) ($file['path'] ?? '');
-        $oldPath = is_string($file['oldPath'] ?? null) ? $file['oldPath'] : null;
-        $title = $oldPath ? $oldPath.' → '.$path : $path;
-        $pathPosition = strrpos($path, '/');
-        [$directory, $basename] = $pathPosition === false
-            ? ['', $path]
-            : [substr($path, 0, $pathPosition + 1), substr($path, $pathPosition + 1)];
-        $additions = (int) ($file['additions'] ?? 0);
-        $deletions = (int) ($file['deletions'] ?? 0);
-        $commentsCount = count($fileComments);
-
-        return view('livewire.placeholders.diff-file', [
-            'additions' => $additions,
-            'basename' => $basename,
-            'commentsCount' => $commentsCount,
-            'deletions' => $deletions,
-            'directory' => $directory,
-            'isReviewed' => $isReviewed,
-            'isSymlink' => (bool) ($file['isSymlink'] ?? false),
-            'oldPath' => $oldPath,
-            'showContentCopy' => $showContentCopy,
-            'showDiscard' => $showDiscard,
-            'symlinkTarget' => (string) ($file['symlinkTarget'] ?? ''),
-            'title' => $title,
-        ]);
+        return new DiffFilePlaceholderView(app(\Illuminate\View\Factory::class), $params);
     }
 
     public function hydrate(): void
