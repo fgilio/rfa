@@ -53,9 +53,9 @@
 
     function install(root) {
         // Migrate ad-hoc localStorage keys (one-time)
-        const old = root.localStorage.getItem('rfa-sidebar-width');
-        if (old !== null) {
-            const parsed = parseInt(old, 10);
+        const legacySidebarWidth = root.localStorage.getItem('rfa-sidebar-width');
+        if (legacySidebarWidth !== null) {
+            const parsed = parseInt(legacySidebarWidth, 10);
             const width = parsed > 0 ? normalizeSidebarWidth(parsed) : null;
             if (width !== null) {
                 root.localStorage.setItem('rfa.sidebarWidth', JSON.stringify(width));
