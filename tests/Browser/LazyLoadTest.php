@@ -18,6 +18,28 @@ test('file list loads immediately and diffs load lazily', function () {
     $page->assertSee('function greet');
 });
 
+test('renderer readiness waits for visible file shells to settle', function () {
+    $page = $this->visit($this->projectUrl());
+
+    $settled = $page->script('window.rfaRendererReady.settleRenderer(window)');
+
+    expect($settled)->toBeTrue();
+    $page->assertNoJavaScriptErrors();
+
+    $visiblePlaceholders = $page->script(<<<'JS'
+        [...document.querySelectorAll('[data-rfa-diff-file-placeholder]')].filter((element) => {
+            const bounds = element.getBoundingClientRect();
+
+            return bounds.top < innerHeight
+                && bounds.bottom > 0
+                && bounds.left < innerWidth
+                && bounds.right > 0;
+        }).length
+        JS);
+
+    expect($visiblePlaceholders)->toBe(0);
+});
+
 test('expanding collapsed file triggers diff load', function () {
     $page = $this->visit($this->projectUrl());
 

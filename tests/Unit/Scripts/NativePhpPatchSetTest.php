@@ -44,7 +44,7 @@ function distSnapshot(string $root): array
 
 test('the patch set covers every vendored file rfa depends on', function () {
     expect(collect(rfaNativePhpPatchSet())->pluck('name')->all())
-        ->toBe(['preload-file-bridge', 'window-ready-to-show', 'window-theme', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance']);
+        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-ready-to-show', 'window-theme', 'renderer-ready-window', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance']);
 });
 
 test('the dist root points at the vendored electron plugin', function () {
@@ -59,15 +59,18 @@ test('applies every patch in one run', function () {
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['applied'])->toBe(['preload-file-bridge', 'window-ready-to-show', 'window-theme', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance'])
+    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-ready-to-show', 'window-theme', 'renderer-ready-window', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance'])
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['absent'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 
-    expect(file_get_contents($root.'/preload/index.mjs'))->toContain('nativeGetFilePath');
+    expect(file_get_contents($root.'/preload/index.mjs'))
+        ->toContain('nativeGetFilePath')
+        ->toContain('nativeRendererReady');
     expect(file_get_contents($root.'/server/api/window.js'))
         ->toContain('[rfa window readiness]')
-        ->toContain('[rfa window theme]');
+        ->toContain('[rfa window theme]')
+        ->toContain('rfaRendererReady');
     expect(file_get_contents($root.'/server/php.js'))->toContain('rfaNeedsFullOptimize');
     expect(file_get_contents($root.'/index.js'))
         ->toContain("'preflight_config_'")
@@ -97,7 +100,7 @@ test('a second run changes nothing', function () {
     $outcome = applyRfaNativePhpPatchSet($root);
 
     expect($outcome['applied'])->toBeEmpty()
-        ->and($outcome['unchanged'])->toHaveCount(7)
+        ->and($outcome['unchanged'])->toHaveCount(9)
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($afterFirst);
 });
@@ -196,7 +199,7 @@ test('an absent dist tree is reported, not failed', function () {
     // pruned copy where the plugin dist is not present.
     $outcome = applyRfaNativePhpPatchSet(sys_get_temp_dir().'/rfa_test_dist_nowhere_'.getmypid());
 
-    expect($outcome['absent'])->toHaveCount(7)
+    expect($outcome['absent'])->toHaveCount(9)
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 });

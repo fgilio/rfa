@@ -1195,6 +1195,7 @@ new #[Layout('layouts.app')] class extends Component
 <div
     data-testid="review-component"
     data-diff-refresh-token="{{ $diffRefreshToken }}"
+    data-rfa-expected-file-shells="{{ count($this->reviewState->visibleFiles) }}"
     data-source-file-entries='@json($this->reviewState->sourceFileEntries)'
     data-visible-file-entries='@json($this->reviewState->visibleFileEntries)'
     @refresh-completed.window="
@@ -1832,6 +1833,7 @@ new #[Layout('layouts.app')] class extends Component
                     @php $singleFile = $this->reviewState->totalFileCount === 1 && count($reviewPairs) === 0; @endphp
                     @forelse($this->reviewState->visibleFiles as $file)
                         <div id="{{ $file['id'] }}"
+                             data-rfa-file-shell
                              wire:key="source-file-shell-{{ $file['id'] }}-{{ $file['refreshFingerprint'] }}"
                              class="border-b border-gh-border transition-opacity duration-150 ease-out">
                             <livewire:diff-file

@@ -3,7 +3,7 @@
 /**
  * The NativePHP vendor changes RFA depends on, applied as one patch set.
  *
- * Seven edits across four compiled files in `nativephp/desktop`'s bundled
+ * Nine edits across four compiled files in `nativephp/desktop`'s bundled
  * Electron plugin. They are not independent in practice: three of them rewrite
  * the same `dist/index.js`, and a build that ships some of them is a build
  * whose startup behaviour nobody has tested. So the set is all-or-nothing —
@@ -54,6 +54,34 @@ contextBridge.exposeInMainWorld('nativeGetFilePath', (file) => webUtils.getPathF
 JS;
 
     return $content."\n";
+}
+
+/**
+ * Expose one safe renderer-to-main readiness signal from the preload script.
+ *
+ * The renderer does not receive Electron's ipcRenderer directly. It can only
+ * send this fixed channel with no caller-controlled name or payload.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchPreloadRendererReady(string $content): ?string
+{
+    $anchor = "contextBridge.exposeInMainWorld('Native', Native);";
+    $marker = <<<'JS'
+
+// [rfa renderer readiness] Expose one fixed, payload-free readiness signal.
+contextBridge.exposeInMainWorld('nativeRendererReady', () => ipcRenderer.send('rfa:renderer-ready'));
+JS;
+
+    if (str_contains($content, $anchor) && ! str_contains($content, "exposeInMainWorld('nativeRendererReady'")) {
+        $content = str_replace($anchor, $anchor.$marker, $content);
+    }
+
+    $fullyPatched = str_contains($content, '[rfa renderer readiness]')
+        && str_contains($content, "ipcRenderer.send('rfa:renderer-ready')");
+
+    return $fullyPatched ? $content : null;
 }
 
 /**
@@ -128,6 +156,91 @@ function rfaPatchWindowTheme(string $content): ?string
     $fullyPatched = str_contains($content, '[rfa window theme]')
         && str_contains($content, $backgroundReplace)
         && ! str_contains($content, $backgroundFind);
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
+ * Keep the main window hidden until Electron and the renderer are both ready.
+ *
+ * `ready-to-show` confirms Electron's first frame. The renderer signal confirms
+ * Livewire, Alpine, visible lazy shells, and fonts have settled. Either signal
+ * may arrive first. A timeout releases only the renderer side of the barrier,
+ * so Electron still never shows a window before its own first paint.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchRendererReadyWindow(string $content): ?string
+{
+    $find = <<<'JS'
+    // [rfa window readiness] Navigation can finish before Chromium presents a
+    // frame. Keep the BrowserWindow hidden until Electron confirms first paint.
+    window.once('ready-to-show', () => {
+        if (state.noFocusOnRestart && window.isVisible()) {
+            return;
+        }
+        window.show();
+    });
+JS;
+
+    $replace = <<<'JS'
+    // [rfa window readiness] Electron first paint and renderer stability form
+    // one barrier for the main window. Other windows need first paint only.
+    let rfaPaintReady = false;
+    let rfaRendererReady = id !== 'main';
+    let rfaReadinessTimer = null;
+    let rfaRendererMessageListener = null;
+    const rfaCleanupReadiness = () => {
+        if (rfaReadinessTimer !== null) {
+            clearTimeout(rfaReadinessTimer);
+            rfaReadinessTimer = null;
+        }
+        if (rfaRendererMessageListener !== null) {
+            window.webContents.removeListener('ipc-message', rfaRendererMessageListener);
+            rfaRendererMessageListener = null;
+        }
+    };
+    const rfaShowWhenReady = () => {
+        if (!rfaPaintReady || !rfaRendererReady) {
+            return;
+        }
+        rfaCleanupReadiness();
+        if (state.noFocusOnRestart && window.isVisible()) {
+            return;
+        }
+        window.show();
+    };
+    window.once('ready-to-show', () => {
+        rfaPaintReady = true;
+        rfaShowWhenReady();
+    });
+    if (id === 'main') {
+        rfaRendererMessageListener = (_, channel) => {
+            if (channel !== 'rfa:renderer-ready') {
+                return;
+            }
+            rfaRendererReady = true;
+            rfaShowWhenReady();
+        };
+        window.webContents.on('ipc-message', rfaRendererMessageListener);
+        rfaReadinessTimer = setTimeout(() => {
+            rfaRendererReady = true;
+            rfaShowWhenReady();
+        }, 5000);
+        window.once('closed', rfaCleanupReadiness);
+    }
+JS;
+
+    if (str_contains($content, $find)) {
+        $content = str_replace($find, $replace, $content);
+    }
+
+    $fullyPatched = str_contains($content, 'Electron first paint and renderer stability')
+        && str_contains($content, "channel !== 'rfa:renderer-ready'")
+        && str_contains($content, 'rfaReadinessTimer = setTimeout(')
+        && str_contains($content, 'window.once(\'closed\', rfaCleanupReadiness)')
+        && ! str_contains($content, $find);
 
     return $fullyPatched ? $content : null;
 }
@@ -493,14 +606,16 @@ JS;
  * NativePHP creates no window until the very end of the launch chain: Electron
  * boots, the PHP server starts, the `_native/api/booted` round-trip fires,
  * NativeAppServiceProvider::boot() calls Window::open, Electron then creates the
- * real BrowserWindow (show:false) and only `.show()`s it on `did-finish-load`.
+ * real BrowserWindow (show:false) and only `.show()`s it after its readiness
+ * barrier.
  * So the user stares at a blank screen for the entire Electron-boot + PHP-boot +
  * first-render duration — the screen is dark until everything is ready.
  *
  * This opens a lightweight, frameless splash the instant `app.whenReady()`
  * resolves — before the PHP server boots — giving immediate visual feedback, and
- * hands off seamlessly: the splash closes the moment the real window finishes
- * loading (the first non-splash window created, via Window::open). The splash is
+ * hands off seamlessly: the splash closes the moment the real window is shown
+ * after paint and renderer readiness (the first non-splash window created, via
+ * Window::open). The splash is
  * a self-contained `data:` URL so there is nothing extra to bundle, and the
  * whole thing is fail-open — any error just means no splash, i.e. today's
  * behaviour. On macOS (RFA's only desktop target) closing the splash while it is
@@ -568,9 +683,8 @@ JS;
             splash.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(RFA_SPLASH_HTML));
             // Seamless handoff: the first non-splash window created is the main
             // window (opened via Window::open once PHP has booted). Close the
-            // splash on that window's `show` — which NativePHP fires only after
-            // `did-finish-load` — so the real window is painted before the splash
-            // disappears, leaving no blank frame in between.
+            // splash on that window's `show` — which RFA fires only after Electron
+            // paint and renderer readiness — so no incomplete frame is exposed.
             const rfaOnCreated = (_, window) => {
                 if (window === this.rfaSplash) {
                     return;
@@ -699,6 +813,20 @@ JS;
         $patched = str_replace($oldSplashBgBlock, $newSplashBgBlock, $patched);
     }
 
+    // d) Keep the handoff description aligned with the two-part readiness gate.
+    $oldHandoffComment = <<<'JS'
+            // splash on that window's `show` — which NativePHP fires only after
+            // `did-finish-load` — so the real window is painted before the splash
+            // disappears, leaving no blank frame in between.
+JS;
+    $newHandoffComment = <<<'JS'
+            // splash on that window's `show` — which RFA fires only after Electron
+            // paint and renderer readiness — so no incomplete frame is exposed.
+JS;
+    if (str_contains($patched, $oldHandoffComment)) {
+        $patched = str_replace($oldHandoffComment, $newHandoffComment, $patched);
+    }
+
     // Only success when every edit is present, so a NativePHP bump that reshapes
     // one anchor can't half-apply (e.g. a splash that is created but never shown,
     // or themed markup without the nativeTheme import that tints the window).
@@ -805,6 +933,12 @@ function rfaNativePhpPatchSet(): array
             'summary' => 'preload exposes webUtils.getPathForFile for drag-and-drop',
         ],
         [
+            'name' => 'preload-renderer-ready',
+            'file' => 'preload/index.mjs',
+            'apply' => rfaPatchPreloadRendererReady(...),
+            'summary' => 'preload exposes a fixed renderer-ready IPC signal',
+        ],
+        [
             'name' => 'window-ready-to-show',
             'file' => 'server/api/window.js',
             'apply' => rfaPatchWindowReadyToShow(...),
@@ -815,6 +949,12 @@ function rfaNativePhpPatchSet(): array
             'file' => 'server/api/window.js',
             'apply' => rfaPatchWindowTheme(...),
             'summary' => 'window fills use the resolved RFA appearance',
+        ],
+        [
+            'name' => 'renderer-ready-window',
+            'file' => 'server/api/window.js',
+            'apply' => rfaPatchRendererReadyWindow(...),
+            'summary' => 'main window waits for renderer stability with a timeout',
         ],
         [
             'name' => 'server-optimize',

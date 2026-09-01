@@ -63,6 +63,33 @@ test('preserves existing preload code', function () {
         ->toContain('contextMenu: (template)');
 });
 
+test('renderer readiness preload: reports a shape change when the Native bridge is missing', function () {
+    expect(rfaPatchPreloadRendererReady('const x = 1;'))->toBeNull();
+});
+
+test('renderer readiness preload: exposes one fixed payload-free IPC signal', function () {
+    $content = rfaPatchPreloadRendererReady(stockPreload());
+
+    expect($content)
+        ->toContain('[rfa renderer readiness]')
+        ->toContain("contextBridge.exposeInMainWorld('nativeRendererReady', () => ipcRenderer.send('rfa:renderer-ready'))")
+        ->not->toContain('ipcRenderer.send(channel');
+});
+
+test('renderer readiness preload: is idempotent', function () {
+    $patched = rfaPatchPreloadRendererReady(stockPreload());
+
+    expect(rfaPatchPreloadRendererReady($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP preload exposes renderer readiness', function () {
+    $preloadPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/preload/index.mjs';
+
+    expect(file_get_contents($preloadPath))
+        ->toContain("exposeInMainWorld('nativeRendererReady'")
+        ->toContain("ipcRenderer.send('rfa:renderer-ready')");
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/preload/index.mjs'), 'NativePHP desktop electron plugin not installed');
+
 // ===== server/php.js and index.js: boot-path edits =====
 
 // -- Window first-paint readiness (server/api/window.js) --
@@ -126,6 +153,47 @@ test('the vendored NativePHP window API uses the resolved appearance', function 
     expect(file_get_contents($windowPath))
         ->toContain('[rfa window theme]')
         ->toContain("backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff'");
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js'), 'NativePHP desktop electron plugin not installed');
+
+test('renderer readiness window: reports a shape change without the first-paint barrier', function () {
+    expect(rfaPatchRendererReadyWindow(stockWindowApi()))->toBeNull();
+});
+
+test('renderer readiness window: waits for paint and the main renderer in either order', function () {
+    $content = rfaPatchRendererReadyWindow(rfaPatchWindowReadyToShow(stockWindowApi()));
+
+    expect($content)
+        ->toContain('let rfaPaintReady = false')
+        ->toContain("let rfaRendererReady = id !== 'main'")
+        ->toContain("window.once('ready-to-show'")
+        ->toContain("channel !== 'rfa:renderer-ready'")
+        ->toContain('if (!rfaPaintReady || !rfaRendererReady)')
+        ->toContain('rfaShowWhenReady()');
+});
+
+test('renderer readiness window: fails open and cleans up its listener', function () {
+    $content = rfaPatchRendererReadyWindow(rfaPatchWindowReadyToShow(stockWindowApi()));
+
+    expect($content)
+        ->toContain('rfaReadinessTimer = setTimeout(')
+        ->toContain('}, 5000)')
+        ->toContain("removeListener('ipc-message', rfaRendererMessageListener)")
+        ->toContain("window.once('closed', rfaCleanupReadiness)");
+});
+
+test('renderer readiness window: is idempotent', function () {
+    $patched = rfaPatchRendererReadyWindow(rfaPatchWindowReadyToShow(stockWindowApi()));
+
+    expect(rfaPatchRendererReadyWindow($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP main window waits for renderer readiness', function () {
+    $windowPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js';
+
+    expect(file_get_contents($windowPath))
+        ->toContain('Electron first paint and renderer stability')
+        ->toContain("channel !== 'rfa:renderer-ready'")
+        ->toContain('}, 5000)');
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js'), 'NativePHP desktop electron plugin not installed');
 
 // -- Shape changes --
@@ -460,6 +528,8 @@ test('splash: opens an early window before PHP boots, hands off, and is fail-ope
         ->toContain('this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots')
         // Seamless handoff: the splash closes once the real window is shown.
         ->toContain("window.once('show', () => this.rfaCloseSplash())")
+        ->toContain('paint and renderer readiness')
+        ->not->toContain('`did-finish-load`')
         // Fail-open: splash creation is wrapped so any error just means no splash.
         ->toContain('catch (rfaError)');
 
