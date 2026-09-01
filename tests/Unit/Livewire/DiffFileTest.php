@@ -9,7 +9,6 @@ use App\DTOs\LoadedDiff;
 use App\Enums\DiffLoadOutcome;
 use App\Enums\LineType;
 use App\Support\DiffCacheKey;
-use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -228,13 +227,13 @@ test('opens a validated diff URL in the system browser', function () {
 // -- File header rendering --
 
 test('lazy placeholder header is static before Livewire replaces it', function () {
-    $html = Blade::render(mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
         'file' => $this->file,
         'fileComments' => [],
         'isReviewed' => false,
         'diffTo' => null,
         'allowDiscard' => true,
-    ]));
+    ])->render();
 
     expect($html)
         ->toContain('data-rfa-static-file-header')
@@ -251,20 +250,21 @@ test('lazy placeholder header is static before Livewire replaces it', function (
 test('lazy placeholder headers reuse one compiled template', function () {
     $component = mountDiffFile($this->file, loadDiff: false)->instance();
 
-    $firstTemplate = $component->placeholder([
+    $firstView = $component->placeholder([
         'file' => array_replace($this->file, ['path' => 'src/First.php']),
         'fileComments' => [],
     ]);
-    $firstHtml = Blade::render($firstTemplate);
-
-    $secondTemplate = $component->placeholder([
+    $secondView = $component->placeholder([
         'file' => array_replace($this->file, ['path' => 'src/Second.php']),
         'fileComments' => [],
     ]);
-    $secondHtml = Blade::render($secondTemplate);
+    $secondHtml = $secondView->render();
+    $firstHtml = $firstView->render();
 
-    expect($firstTemplate)->toBe($secondTemplate)
+    expect($firstView->name())->toBe('livewire.placeholders.diff-file')
+        ->and($secondView->name())->toBe($firstView->name())
         ->and($firstHtml)->toContain('src/First.php')
+        ->and($firstHtml)->not->toContain('src/Second.php')
         ->and($secondHtml)->toContain('src/Second.php')
         ->and($secondHtml)->not->toContain('src/First.php');
 });
@@ -294,10 +294,10 @@ test('lazy placeholder header escapes file metadata', function () {
         'symlinkTarget' => '<img src=x onerror=alert("target")>',
     ]);
 
-    $html = Blade::render(mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
         'file' => $file,
         'fileComments' => [],
-    ]));
+    ])->render();
 
     expect($html)
         ->toContain('src/&lt;script&gt;alert(&quot;path&quot;)&lt;/script&gt;.php')
@@ -314,10 +314,10 @@ test('lazy placeholder header dims the directory and emphasizes the basename', f
         'oldPath' => 'app/Support/HasTaxonomies.php',
     ]);
 
-    $html = Blade::render(mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
         'file' => $file,
         'fileComments' => [],
-    ]));
+    ])->render();
 
     expect($html)
         ->toContain('<span class="rfa-lazy-old-path">app/Support/HasTaxonomies.php&nbsp;→&nbsp;</span>')
@@ -325,13 +325,13 @@ test('lazy placeholder header dims the directory and emphasizes the basename', f
 });
 
 test('lazy placeholder header renders the final header icon shapes', function () {
-    $html = Blade::render(mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
         'file' => $this->file,
         'fileComments' => [],
         'isReviewed' => false,
         'diffTo' => null,
         'allowDiscard' => true,
-    ]));
+    ])->render();
 
     expect($html)
         ->toContain('data-rfa-static-icon="chevron-down"')
@@ -350,12 +350,12 @@ test('lazy placeholder header icons match reviewed and symlink state', function 
         'symlinkTarget' => 'target.txt',
     ]);
 
-    $html = Blade::render(mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
+    $html = mountDiffFile($this->file, loadDiff: false)->instance()->placeholder([
         'file' => $file,
         'fileComments' => [],
         'isReviewed' => true,
         'diffTo' => 'abc123',
-    ]));
+    ])->render();
 
     expect($html)
         ->toContain('data-rfa-static-icon="chevron-right"')

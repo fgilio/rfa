@@ -15,7 +15,7 @@ use App\Enums\GitRef;
 use App\Support\DiffCacheKey;
 use App\View\DiffFileViewModel;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\View as ViewFacade;
+use Illuminate\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -60,15 +60,7 @@ new class extends Component {
 
     private ?DiffTarget $cachedTarget = null;
 
-    private const string PLACEHOLDER_TEMPLATE = <<<'BLADE'
-<div data-rfa-render-blocker class="group">{!! $__rfaDiffFilePlaceholderBody !!}</div>
-BLADE;
-
     /**
-     * Keep the returned template stable: Livewire compiles each distinct raw
-     * string as a Blade view. The request-scoped shared body supplies escaped
-     * file data without creating one compiled template per file.
-     *
      * @param  array{
      *     file?: array{
      *         path?: string,
@@ -87,7 +79,7 @@ BLADE;
      *     diffTo?: string|null
      * }  $params
      */
-    public function placeholder(array $params = []): string
+    public function placeholder(array $params = []): View
     {
         $file = is_array($params['file'] ?? null) ? $params['file'] : [];
         $fileComments = is_array($params['fileComments'] ?? null) ? $params['fileComments'] : [];
@@ -101,65 +93,29 @@ BLADE;
         );
         $path = (string) ($file['path'] ?? '');
         $oldPath = is_string($file['oldPath'] ?? null) ? $file['oldPath'] : null;
-        $title = e($oldPath ? $oldPath.' → '.$path : $path);
+        $title = $oldPath ? $oldPath.' → '.$path : $path;
         $pathPosition = strrpos($path, '/');
         [$directory, $basename] = $pathPosition === false
             ? ['', $path]
             : [substr($path, 0, $pathPosition + 1), substr($path, $pathPosition + 1)];
-        $pathLabel = '<span class="rfa-lazy-directory">'.e($directory).'</span>'.e($basename);
-        $oldPathLabel = $oldPath ? '<span class="rfa-lazy-old-path">'.e($oldPath).'&nbsp;→&nbsp;</span>' : '';
-        $chevron = $isReviewed
-            ? $this->placeholderIcon('chevron-right', 'size-4')
-            : $this->placeholderIcon('chevron-down', 'size-4');
-        $reviewedClass = $isReviewed ? ' rfa-lazy-checkbox--reviewed' : '';
         $additions = (int) ($file['additions'] ?? 0);
         $deletions = (int) ($file['deletions'] ?? 0);
-        $additionsLabel = $additions > 0 ? '<span class="text-gh-green">+'.$additions.'</span>' : '';
-        $deletionsLabel = $deletions > 0 ? '<span class="text-gh-red">-'.$deletions.'</span>' : '';
         $commentsCount = count($fileComments);
-        $commentsLabel = $commentsCount > 0 ? '<span class="rfa-lazy-comment-count">'.$commentsCount.'</span>' : '';
-        $symlinkLabel = ($file['isSymlink'] ?? false)
-            ? $this->placeholderIcon('link', 'rfa-lazy-icon--link').'<span class="rfa-lazy-link-label">→ '.e((string) ($file['symlinkTarget'] ?? '')).'</span>'
-            : '';
-        $pathButton = $this->placeholderButton('copy-path');
-        $contentButton = $showContentCopy
-            ? $this->placeholderButton('copy-content')
-            : '';
-        $discardButton = $showDiscard
-            ? $this->placeholderButton('discard')
-            : '';
-        $commentButton = $this->placeholderButton('comment');
 
-        $body = <<<HTML
-<div data-rfa-static-file-header class="rfa-lazy-header">
-        <div class="rfa-lazy-main">
-            <span class="rfa-lazy-chevron" aria-hidden="true">{$chevron}</span>
-            <span class="rfa-lazy-path" title="{$title}">{$oldPathLabel}{$pathLabel}</span>
-            {$symlinkLabel}
-        </div>
-        <div class="rfa-lazy-meta">
-            <div class="rfa-lazy-actions">{$pathButton}{$contentButton}{$discardButton}</div>
-            {$additionsLabel}
-            {$deletionsLabel}
-            <div class="rfa-lazy-comments">{$commentButton}{$commentsLabel}</div>
-            <span class="rfa-lazy-checkbox{$reviewedClass}" aria-hidden="true"></span>
-        </div>
-</div>
-HTML;
-
-        ViewFacade::share('__rfaDiffFilePlaceholderBody', $body);
-
-        return self::PLACEHOLDER_TEMPLATE;
-    }
-
-    private function placeholderButton(string $name): string
-    {
-        return '<span class="rfa-lazy-button rfa-lazy-icon--'.$name.'" data-rfa-static-icon="'.$name.'" aria-hidden="true"></span>';
-    }
-
-    private function placeholderIcon(string $name, string $class = 'size-5'): string
-    {
-        return '<span class="rfa-lazy-icon rfa-lazy-icon--'.$name.' '.$class.'" data-rfa-static-icon="'.$name.'" aria-hidden="true"></span>';
+        return view('livewire.placeholders.diff-file', [
+            'additions' => $additions,
+            'basename' => $basename,
+            'commentsCount' => $commentsCount,
+            'deletions' => $deletions,
+            'directory' => $directory,
+            'isReviewed' => $isReviewed,
+            'isSymlink' => (bool) ($file['isSymlink'] ?? false),
+            'oldPath' => $oldPath,
+            'showContentCopy' => $showContentCopy,
+            'showDiscard' => $showDiscard,
+            'symlinkTarget' => (string) ($file['symlinkTarget'] ?? ''),
+            'title' => $title,
+        ]);
     }
 
     public function hydrate(): void
