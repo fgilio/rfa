@@ -16,19 +16,19 @@ use Illuminate\Support\Collection;
  */
 final readonly class DiffFileViewModel
 {
-    /** @param array<string, mixed> $file */
+    /** @param array{isBinary?: bool, isSymlink?: bool} $file */
     public static function supportsContentCopy(array $file): bool
     {
         return ! ($file['isBinary'] ?? false) && ! ($file['isSymlink'] ?? false);
     }
 
-    /** @param array<string, mixed> $file */
+    /** @param array{isBinary?: bool, isSymlink?: bool} $file */
     public static function showsContentCopy(array $file, ?DiffLoadOutcome $outcome = null): bool
     {
         return self::supportsContentCopy($file) && $outcome !== DiffLoadOutcome::TooLarge;
     }
 
-    /** @param array<string, mixed> $file */
+    /** @param array{status?: string, isExternal?: bool} $file */
     public static function showsDiscard(array $file, bool $allowDiscard, ?string $diffTo): bool
     {
         return $allowDiscard
