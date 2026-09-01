@@ -712,6 +712,54 @@ test('the vendored NativePHP main bootstrap resolves appearance before windows',
         ->toContain('backgroundColor: this.rfaBackgroundColor()');
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
 
+// -- PHP extraction (php.js) --
+
+test('PHP extraction: replaces the complete stock installer block', function () {
+    $content = rfaPatchPhpExtraction(stockPhpInstaller());
+
+    expect($content)
+        ->toContain('[rfa php extraction]')
+        ->toContain('removeSync(binaryDestDir);')
+        ->toContain('ensureDirSync(binaryDestDir);')
+        ->toContain('fileName !== platform.phpBinary')
+        ->toContain('fs.chmodSync(binaryPath, 0o755);')
+        ->toContain('process.exitCode = 1;')
+        ->not->toContain('unzip.open(binarySrcDir');
+});
+
+test('PHP extraction: upgrades the exact current-head partial block', function () {
+    $current = rfaPatchPhpExtraction(stockPhpInstaller());
+    $destinationPreparation = <<<'JS'
+        console.log('Unzipping PHP binary from ' + binarySrcDir + ' to ' + binaryDestDir);
+        removeSync(binaryDestDir);
+        ensureDirSync(binaryDestDir);
+
+JS;
+    $previous = str_replace($destinationPreparation, '', $current);
+
+    expect(rfaPatchPhpExtraction($previous))->toBe($current);
+});
+
+test('PHP extraction: rejects incomplete patched blocks', function (string $missingFragment) {
+    $current = rfaPatchPhpExtraction(stockPhpInstaller());
+    $partial = str_replace($missingFragment, '', $current);
+
+    expect($partial)->not->toBe($current)
+        ->and(rfaPatchPhpExtraction($partial))->toBeNull();
+})->with([
+    'destination cleanup' => '        removeSync(binaryDestDir);'.PHP_EOL,
+    'destination creation' => '        ensureDirSync(binaryDestDir);'.PHP_EOL,
+    'archive filename validation' => ' || fileName !== platform.phpBinary',
+    'executable mode' => '        fs.chmodSync(binaryPath, 0o755);'.PHP_EOL,
+    'failure status' => '        process.exitCode = 1;'.PHP_EOL,
+]);
+
+test('PHP extraction: leaves the complete patched block unchanged', function () {
+    $patched = rfaPatchPhpExtraction(stockPhpInstaller());
+
+    expect(rfaPatchPhpExtraction($patched))->toBe($patched);
+});
+
 // -- Applied to the real vendored file --
 
 test('the vendored NativePHP server carries the optimize patch', function () {

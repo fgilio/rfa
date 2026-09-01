@@ -1084,10 +1084,7 @@ if (platform.phpBinary) {
     }
 }
 JS;
-
-    if (str_contains($content, $blockFind)) {
-
-        $replacement = <<<'JS'
+    $replacement = <<<'JS'
 if (platform.phpBinary) {
     try {
         console.log('Unzipping PHP binary from ' + binarySrcDir + ' to ' + binaryDestDir);
@@ -1134,20 +1131,38 @@ if (platform.phpBinary) {
     }
 }
 JS;
+    $destinationPreparation = <<<'JS'
+        console.log('Unzipping PHP binary from ' + binarySrcDir + ' to ' + binaryDestDir);
+        removeSync(binaryDestDir);
+        ensureDirSync(binaryDestDir);
 
-        $content = str_replace($blockFind, $replacement, $content);
+JS;
+    $previousReplacement = str_replace($destinationPreparation, '', $replacement);
+    $isStock = str_contains($content, $importFind)
+        && str_contains($content, $blockFind);
+    $isCurrent = str_contains($content, $importReplace)
+        && str_contains($content, $replacement);
+    $isPrevious = str_contains($content, $importReplace)
+        && str_contains($content, $previousReplacement);
+
+    if (! $isStock && ! $isCurrent && ! $isPrevious) {
+        return null;
     }
 
-    if (str_contains($content, $importFind)) {
+    if ($isStock) {
+        $content = str_replace($blockFind, $replacement, $content);
         $content = str_replace($importFind, $importReplace, $content);
     }
 
-    $fullyPatched = str_contains($content, '[rfa php extraction]')
-        && str_contains($content, '[rfa php archive validation]')
-        && str_contains($content, 'inflateRawSync(compressed)')
-        && str_contains($content, 'binary.length !== uncompressedSize')
-        && str_contains($content, 'fs.writeFileSync(binaryPath, binary, {mode: 0o755});')
-        && ! str_contains($content, 'unzip.open(binarySrcDir');
+    if ($isPrevious) {
+        $content = str_replace($previousReplacement, $replacement, $content);
+    }
+
+    $fullyPatched = str_contains($content, $importReplace)
+        && str_contains($content, $replacement)
+        && ! str_contains($content, $importFind)
+        && ! str_contains($content, $blockFind)
+        && ! str_contains($content, $previousReplacement);
 
     return $fullyPatched ? $content : null;
 }
