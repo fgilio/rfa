@@ -331,6 +331,7 @@ final class PerfScenarioRunner
                 ?int $projectId = null,
                 ?string $globalGitignorePath = null,
                 ?DiffTarget $target = null,
+                ?string $onlyPath = null,
             ): array {
                 return $this->files;
             }

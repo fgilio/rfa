@@ -37,6 +37,60 @@ test('returns files as arrays with id field', function () {
     expect($files[0]['path'])->toBe('file.txt');
 });
 
+test('scopes Git discovery to one requested file', function () {
+    File::put($this->tmpDir.'/file.txt', "changed\n");
+    File::put($this->tmpDir.'/other.txt', "other\n");
+
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class), app(ReviewConfigService::class));
+    $files = $action->handle($this->tmpDir, onlyPath: 'file.txt');
+
+    expect($files)->toHaveCount(1)
+        ->and($files[0]['path'])->toBe('file.txt')
+        ->and($files[0]['isExternal'])->toBeFalse();
+});
+
+test('surfaces an unchanged requested file as a whole-file review', function () {
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class), app(ReviewConfigService::class));
+    $files = $action->handle($this->tmpDir, onlyPath: 'file.txt');
+
+    expect($files)->toHaveCount(1)
+        ->and($files[0]['path'])->toBe('file.txt')
+        ->and($files[0]['status'])->toBe('added')
+        ->and($files[0]['isExternal'])->toBeTrue()
+        ->and($files[0]['externalAbsolutePath'])->toBe(realpath($this->tmpDir.'/file.txt'));
+});
+
+test('loads only the requested configured external file', function () {
+    $externalDirectory = $this->createTempDirectory('rfa_focused_external_');
+    File::put($externalDirectory.'/first.md', "first\n");
+    File::put($externalDirectory.'/second.md', "second\n");
+
+    $project = Project::factory()->create([
+        'path' => $this->tmpDir,
+        'git_common_dir' => $this->tmpDir.'/.git',
+        'external_paths' => [['label' => 'notes', 'path' => $externalDirectory]],
+    ]);
+
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class), app(ReviewConfigService::class));
+    $files = $action->handle(
+        $this->tmpDir,
+        projectId: $project->id,
+        onlyPath: 'external/notes/second.md',
+    );
+
+    expect($files)->toHaveCount(1)
+        ->and($files[0]['path'])->toBe('external/notes/second.md')
+        ->and($files[0]['externalAbsolutePath'])->toBe(realpath($externalDirectory.'/second.md'));
+});
+
+test('rejects an unsafe requested path without broadening to the repository', function () {
+    File::put($this->tmpDir.'/file.txt', "changed\n");
+
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class), app(ReviewConfigService::class));
+
+    expect($action->handle($this->tmpDir, onlyPath: '../file.txt'))->toBe([]);
+});
+
 test('loads typed changeset using existing file entries', function () {
     File::put($this->tmpDir.'/file.txt', "changed\n");
 

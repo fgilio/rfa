@@ -58,6 +58,42 @@ class ExternalFilesService
     }
 
     /**
+     * Resolve one configured mount without walking unrelated external paths.
+     *
+     * @param  array<int, mixed>  $rawConfigs
+     */
+    public function getEntry(array $rawConfigs, string $mountPath): ?FileListEntry
+    {
+        $absolutePath = $this->resolveAbsolutePath($rawConfigs, $mountPath);
+
+        return $absolutePath === null
+            ? null
+            : $this->entryForAbsolutePath($absolutePath, $mountPath);
+    }
+
+    public function entryForAbsolutePath(string $absolutePath, string $displayPath): ?FileListEntry
+    {
+        $realPath = realpath($absolutePath);
+
+        if ($realPath === false || ! File::isFile($realPath)) {
+            return null;
+        }
+
+        $additions = $this->streamCountLines($realPath);
+        $isBinary = $additions === null;
+        $info = new SplFileInfo($realPath);
+
+        return $this->buildFileListEntry(
+            mountPath: $displayPath,
+            absolutePath: $realPath,
+            additions: $isBinary ? 0 : $additions,
+            isBinary: $isBinary,
+            size: $info->getSize(),
+            mtime: $info->getMTime(),
+        );
+    }
+
+    /**
      * Resolve the absolute on-disk path for a given mount path under the supplied
      * configs, or null if the mount doesn't match a configured external directory.
      *
@@ -251,12 +287,8 @@ class ExternalFilesService
     private function entryForFile(array $config): FileListEntry
     {
         $absolutePath = $config['root'];
-
-        // Single-file mounts are explicit user choices. Surface binaries with a
-        // header-only diff rather than silently dropping them the way folder walks do.
         $additions = $this->streamCountLines($absolutePath);
         $isBinary = $additions === null;
-
         $info = new SplFileInfo($absolutePath);
 
         return $this->buildFileListEntry(

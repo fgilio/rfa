@@ -79,6 +79,25 @@ test('getFileList returns added file for untracked', function () {
     expect($entry->additions)->toBe(2);
 });
 
+test('getFileList limits tracked and untracked discovery to one path', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/first.txt', "one\n");
+    File::put($this->tmpDir.'/second.txt', "two\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/first.txt', "changed\n");
+    File::put($this->tmpDir.'/second.txt', "changed\n");
+    File::put($this->tmpDir.'/third.txt', "new\n");
+
+    $modified = $this->service->getFileList($this->tmpDir, onlyPath: 'second.txt');
+    $untracked = $this->service->getFileList($this->tmpDir, onlyPath: 'third.txt');
+
+    expect($modified)->toHaveCount(1)
+        ->and($modified[0]->path)->toBe('second.txt')
+        ->and($untracked)->toHaveCount(1)
+        ->and($untracked[0]->path)->toBe('third.txt');
+});
+
 test('getFileList returns deleted file', function () {
     $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/doomed.txt', "bye\n");

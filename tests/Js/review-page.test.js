@@ -364,6 +364,35 @@ describe('createReviewPage path helpers', () => {
         expect(createReviewPage({}).activeFile).toBeNull();
     });
 
+    it('focuses the requested file without persisting the selection again', () => {
+        const page = createReviewPage({ initialFocusFileId: 'file-7' });
+        page.$nextTick = (callback) => callback();
+        page.scrollToFile = vi.fn();
+
+        page.focusInitialFile();
+
+        expect(page.scrollToFile).toHaveBeenCalledWith('file-7', false);
+    });
+
+    it('does not focus a file during normal project entry', () => {
+        const page = createReviewPage({});
+        page.$nextTick = vi.fn();
+
+        page.focusInitialFile();
+
+        expect(page.$nextTick).not.toHaveBeenCalled();
+    });
+
+    it('removes the focused file from the current URL', () => {
+        window.history.replaceState({}, '', '/p/my-project?file=src%2FFoo.php&keep=yes');
+        const page = createReviewPage({});
+
+        page.clearFocusedFileUrl();
+
+        expect(window.location.pathname).toBe('/p/my-project');
+        expect(window.location.search).toBe('?keep=yes');
+    });
+
     it('serializes reviewed actions so rapid toggles use settled Livewire state', async () => {
         let releaseFirst;
         const first = new Promise(resolve => {

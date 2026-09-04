@@ -61,7 +61,7 @@ beforeEach(function () {
     {
         public function __construct(private array $files) {}
 
-        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
         {
             return $this->files;
         }
@@ -394,7 +394,7 @@ test('marking a review artifact does not consume a "Recently reviewed" slot', fu
     {
         public function __construct(private array $files) {}
 
-        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
         {
             return $this->files;
         }

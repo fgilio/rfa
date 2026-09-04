@@ -110,6 +110,12 @@ new #[Layout('layouts.app')] class extends Component
 
     public string $fileFilter = '';
 
+    #[Locked]
+    public ?string $focusedFilePath = null;
+
+    #[Locked]
+    public ?string $initialFocusFileId = null;
+
     public bool $hideReviewed = false;
 
     /** @var array<int, array<string, mixed>> */
@@ -193,6 +199,11 @@ new #[Layout('layouts.app')] class extends Component
 
     public function mount(string $slug, ?string $hash = null, ?string $ref = null, ?string $baseRef = null, ?string $from = null, ?string $to = null, ?string $rangeFromWorking = null): void
     {
+        $requestedFile = request()->query('file');
+        $this->focusedFilePath = is_string($requestedFile) && $requestedFile !== ''
+            ? $requestedFile
+            : null;
+
         $project = app(ResolveProjectAction::class)->handle($slug, touch: true) ?? abort(404);
         $this->repoPath = $project['path'];
         $this->projectId = $project['id'];
@@ -253,6 +264,7 @@ new #[Layout('layouts.app')] class extends Component
         $this->isSinceBeginningView = $this->diffTo === null && $this->diffFrom === DiffTarget::EMPTY_TREE_HASH;
 
         $this->rehydrateForTarget();
+        $this->applyInitialFileFocus();
         // Initial resolve: a stored target that has since vanished auto-follows
         // the checked-out branch instead of greeting a fresh open (e.g. the
         // `rfa` CLI deep-link) with the missing-target banner.
@@ -377,6 +389,7 @@ new #[Layout('layouts.app')] class extends Component
                 projectId: $this->projectId,
                 globalGitignorePath: $this->diffTo !== null ? null : ($this->respectGlobalGitignore ? $this->globalGitignorePath : null),
                 target: $target,
+                onlyPath: $this->focusedFilePath,
             );
         } catch (GitCommandException $e) {
             $this->gitError = $e->stderr ?: $e->getMessage();
@@ -892,7 +905,17 @@ new #[Layout('layouts.app')] class extends Component
     public function clearFileFilter(): void
     {
         $this->fileFilter = '';
+        $this->leaveFocusedFileMode();
         $this->forgetReviewState();
+    }
+
+    public function updatedFileFilter(): void
+    {
+        if ($this->focusedFilePath === null || trim($this->fileFilter) === $this->focusedFilePath) {
+            return;
+        }
+
+        $this->leaveFocusedFileMode();
     }
 
     public function selectFile(string $fileId): void
@@ -1123,6 +1146,39 @@ new #[Layout('layouts.app')] class extends Component
         );
     }
 
+    private function applyInitialFileFocus(): void
+    {
+        if ($this->focusedFilePath === null) {
+            return;
+        }
+
+        $file = collect($this->sourceFiles)->firstWhere('path', $this->focusedFilePath);
+
+        if ($file === null) {
+            $this->focusedFilePath = null;
+
+            return;
+        }
+
+        $this->activeFileId = (string) $file['id'];
+        $this->initialFocusFileId = $this->activeFileId;
+        $this->fileFilter = $this->focusedFilePath;
+        $this->hideReviewed = false;
+        $this->forgetReviewState();
+    }
+
+    private function leaveFocusedFileMode(): void
+    {
+        if ($this->focusedFilePath === null) {
+            return;
+        }
+
+        $this->focusedFilePath = null;
+        $this->initialFocusFileId = null;
+        $this->reloadSessionAfterFileListChange();
+        $this->dispatch('focused-file-mode-cleared');
+    }
+
     private function scanReviewFiles(): void
     {
         $this->reviewPairs = collect(app(ScanReviewFilesAction::class)->handle($this->repoPath))
@@ -1207,6 +1263,7 @@ new #[Layout('layouts.app')] class extends Component
     "
     x-data="reviewPage({
         activeFile: @js($this->reviewState->selectedFileId),
+        initialFocusFileId: @js($initialFocusFileId),
         projectSlug: @js($projectSlug),
         projectBranch: @js($projectBranch),
         diffFrom: @js($diffFrom),
@@ -1216,6 +1273,7 @@ new #[Layout('layouts.app')] class extends Component
         nextCommitHash: @js($commitInfo['nextHash'] ?? null),
     })"
     @scroll-to-comment.window="scrollToComment($event.detail.commentId, $event.detail.filePath)"
+    @focused-file-mode-cleared.window="clearFocusedFileUrl()"
     @open-remote-menu.window="showRemoteMenu($event)"
     x-on:rfa-toggle-reviewed.window="toggleReviewed($event.detail?.filePath)"
     x-on:rfa-hide-reviewed.window="hideReviewedFiles()"

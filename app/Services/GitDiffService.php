@@ -35,15 +35,21 @@ class GitDiffService
     private readonly ReviewConfigService $reviewConfigService;
 
     /** @return FileListEntry[] */
-    public function getFileList(string $repoPath, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+    public function getFileList(string $repoPath, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
     {
         $target ??= DiffTarget::workingDirectory();
+
+        if ($onlyPath !== null && ! PathGuard::isRelative($onlyPath)) {
+            return [];
+        }
+
         $ignoreRules = $this->ignoreService->rules($repoPath);
+        $pathspecs = [$onlyPath ?? '.'];
 
         // Get status (M/A/D/R) for tracked changes
         $nameStatus = $this->git->run($repoPath, [
             ...$this->diffArgs($target, ['--name-status']),
-            '--', '.',
+            '--', ...$pathspecs,
         ]);
 
         // Get +/- line counts for tracked changes. Lockfiles are excluded via
@@ -53,7 +59,7 @@ class GitDiffService
         // goes here, so this cannot disagree with isPathExcluded().
         $numstat = $this->git->run($repoPath, [
             ...$this->diffArgs($target, ['--numstat']),
-            '--', '.', ...$this->ignoreService->alwaysExcludePathspecs(),
+            '--', ...$pathspecs, ...($onlyPath === null ? $this->ignoreService->alwaysExcludePathspecs() : []),
         ]);
 
         // Parse name-status into [path => [status, oldPath]]
@@ -149,6 +155,8 @@ class GitDiffService
             if ($globalGitignorePath !== null && File::isFile($globalGitignorePath)) {
                 $lsFilesArgs[] = '--exclude-from='.$globalGitignorePath;
             }
+            $lsFilesArgs[] = '--';
+            array_push($lsFilesArgs, ...$pathspecs);
             $untrackedOutput = $this->git->run($repoPath, $lsFilesArgs);
 
             if (trim($untrackedOutput) !== '') {

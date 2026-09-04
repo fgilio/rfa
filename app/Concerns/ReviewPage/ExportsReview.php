@@ -99,21 +99,22 @@ trait ExportsReview
     {
         $this->skipRender();
 
-        $paths = collect($this->reviewState->visibleFileEntries)
-            ->pluck('path')
-            ->filter()
+        $files = collect($this->reviewState->visibleFiles)
+            ->filter(fn (array $file): bool => ! empty($file['path']))
             ->values();
 
-        if ($paths->isEmpty()) {
+        if ($files->isEmpty()) {
             return;
         }
 
         $repoPath = rtrim($this->repoPath, '/');
 
-        $lines = $paths->map(fn (string $path): string => match ($kind) {
-            'name' => basename($path),
-            'full' => $repoPath === '' ? $path : $repoPath.'/'.$path,
-            default => $path,
+        $lines = $files->map(fn (array $file): string => match ($kind) {
+            'name' => basename($file['path']),
+            'full' => ($file['isExternal'] ?? false) && ! empty($file['externalAbsolutePath'])
+                ? (string) $file['externalAbsolutePath']
+                : ($repoPath === '' ? $file['path'] : $repoPath.'/'.$file['path']),
+            default => $file['path'],
         });
 
         $noun = match ($kind) {

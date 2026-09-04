@@ -77,7 +77,7 @@ beforeEach(function () {
     {
         public function __construct(private array $files) {}
 
-        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
         {
             return $this->files;
         }
@@ -474,7 +474,7 @@ test('a transition with no files renders the page so the divergence empty state 
     // diff-file children the full morph is the cheap and correct path.
     app()->bind(GetFileListAction::class, fn () => new class
     {
-        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
         {
             return [];
         }

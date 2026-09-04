@@ -134,6 +134,14 @@ test('resolveAbsolutePath round-trips a mount path back to its on-disk file', fu
     expect($absolute)->toBe(realpath($this->extDir.'/note.md'));
 });
 
+test('loads one configured mount without returning its siblings', function () {
+    $entry = $this->service->getEntry($this->configs, 'external/notes/sub/inner.md');
+
+    expect($entry)->not->toBeNull()
+        ->and($entry->path)->toBe('external/notes/sub/inner.md')
+        ->and($entry->externalAbsolutePath)->toBe(realpath($this->extDir.'/sub/inner.md'));
+});
+
 test('resolveAbsolutePath returns null for unknown mounts', function () {
     expect($this->service->resolveAbsolutePath($this->configs, 'external/notes/missing.md'))->toBeNull();
     expect($this->service->resolveAbsolutePath($this->configs, 'src/anything.php'))->toBeNull();
