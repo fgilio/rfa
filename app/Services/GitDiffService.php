@@ -410,11 +410,15 @@ class GitDiffService
             return '';
         }
 
+        if ($isWholeFile && $target->isWorkingDirectory()) {
+            return $this->buildUntrackedDiff($repoPath, $path, $maxBytes);
+        }
+
         if ($this->ignoreService->isPathExcluded($path, $this->ignoreService->rules($repoPath))) {
             return '';
         }
 
-        if (($isUntracked || $isWholeFile) && $target->isWorkingDirectory()) {
+        if ($isUntracked && $target->isWorkingDirectory()) {
             return $this->buildUntrackedDiff($repoPath, $path, $maxBytes);
         }
 
