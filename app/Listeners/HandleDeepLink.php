@@ -6,7 +6,9 @@ namespace App\Listeners;
 
 use App\Actions\OpenTerminalRequestAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
+use App\Providers\NativeAppServiceProvider;
 use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Native\Desktop\Events\App\OpenedFromURL;
 use Throwable;
@@ -69,6 +71,10 @@ final readonly class HandleDeepLink
                 Context::addIf('rfa.reason', 'not_a_project');
 
                 return;
+            }
+
+            if ($requestId !== null) {
+                File::delete(NativeAppServiceProvider::inboxDir().DIRECTORY_SEPARATOR.$requestId.'.path');
             }
 
             Context::add('rfa.project_id', $project->id);
