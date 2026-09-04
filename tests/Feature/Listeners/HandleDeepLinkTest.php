@@ -7,9 +7,10 @@ use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
 use Native\Desktop\Events\App\OpenedFromURL;
+use Tests\Helpers\InteractsWithTestRepositories;
 use Tests\TestCase;
 
-uses(TestCase::class, LazilyRefreshDatabase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class, InteractsWithTestRepositories::class);
 
 /**
  * Stand in for the shared open action. Claiming, opening and navigating are
@@ -46,9 +47,20 @@ function fakeOpenTerminalRequestAction(object $test, ?Project $project, ?string 
 }
 
 beforeEach(function () {
+    $this->originalHome = $_SERVER['HOME'] ?? null;
+    $_SERVER['HOME'] = $this->createTempDirectory('rfa_deeplink_home_');
+
     $this->project = Project::factory()->create(['slug' => 'rfa']);
 
     fakeOpenTerminalRequestAction($this, $this->project);
+});
+
+afterEach(function () {
+    if ($this->originalHome === null) {
+        unset($_SERVER['HOME']);
+    } else {
+        $_SERVER['HOME'] = $this->originalHome;
+    }
 });
 
 // -- URL parsing and delegation --
