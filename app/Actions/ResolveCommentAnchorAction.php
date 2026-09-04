@@ -93,6 +93,24 @@ final readonly class ResolveCommentAnchorAction
                         }
                     }
                 }
+            } elseif ($storedHash !== null && $storedHash !== '' && ! isset($fileIdByPath[$filePath]) && $storedOriginRef === GitRef::Working->value && $target->isWorkingDirectory()) {
+                $workingSource = FileSourceSpec::working($filePath);
+                $workingHash = $this->gitFileContentService->hashForSource($repoPath, $workingSource);
+
+                if ($storedHash === $workingHash) {
+                    $anchorStatus = AnchorStatus::Placed;
+                } elseif ($lineSnippet !== null && $startLine !== null) {
+                    $shifted = $this->snippetMatcher->shiftedLines(
+                        (string) $this->gitFileContentService->contentForSource($repoPath, $workingSource),
+                        $lineSnippet,
+                        $startLine,
+                    );
+
+                    if ($shifted !== null) {
+                        $anchorStatus = AnchorStatus::Placed;
+                        [$startLine, $endLine] = $shifted;
+                    }
+                }
             } elseif ($storedHash !== null && $storedHash !== '' && isset($fileIdByPath[$filePath])) {
                 // forSide() resolves the rename: left-side content lives at the
                 // pre-rename `oldPath`, the right side stays at `path`. Without it,

@@ -35,16 +35,35 @@ class GitDiffService
     private readonly ReviewConfigService $reviewConfigService;
 
     /** @return FileListEntry[] */
-    public function getFileList(string $repoPath, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+    public function getFileList(string $repoPath, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
     {
         $target ??= DiffTarget::workingDirectory();
+
+        if ($onlyPath !== null && ! PathGuard::isRelative($onlyPath)) {
+            return [];
+        }
+
         $ignoreRules = $this->ignoreService->rules($repoPath);
+        $pathspecs = $onlyPath === null ? ['.'] : [$this->literalPathspec($onlyPath)];
 
         // Get status (M/A/D/R) for tracked changes
         $nameStatus = $this->git->run($repoPath, [
             ...$this->diffArgs($target, ['--name-status']),
-            '--', '.',
+            '--', ...$pathspecs,
         ]);
+
+        if ($onlyPath !== null && $this->isFocusedAddition($nameStatus, $onlyPath)) {
+            $renameLine = $this->findFocusedRename($repoPath, $target, $onlyPath);
+
+            if ($renameLine !== null) {
+                $nameStatus = $renameLine;
+                $oldPath = preg_split('/\t/', $renameLine)[1] ?? null;
+
+                if (is_string($oldPath)) {
+                    $pathspecs[] = $this->literalPathspec($oldPath);
+                }
+            }
+        }
 
         // Get +/- line counts for tracked changes. Lockfiles are excluded via
         // pathspec so git never diffs them: `--numstat` computes real line
@@ -53,7 +72,7 @@ class GitDiffService
         // goes here, so this cannot disagree with isPathExcluded().
         $numstat = $this->git->run($repoPath, [
             ...$this->diffArgs($target, ['--numstat']),
-            '--', '.', ...$this->ignoreService->alwaysExcludePathspecs(),
+            '--', ...$pathspecs, ...($onlyPath === null ? $this->ignoreService->alwaysExcludePathspecs() : []),
         ]);
 
         // Parse name-status into [path => [status, oldPath]]
@@ -149,6 +168,8 @@ class GitDiffService
             if ($globalGitignorePath !== null && File::isFile($globalGitignorePath)) {
                 $lsFilesArgs[] = '--exclude-from='.$globalGitignorePath;
             }
+            $lsFilesArgs[] = '--';
+            array_push($lsFilesArgs, ...$pathspecs);
             $untrackedOutput = $this->git->run($repoPath, $lsFilesArgs);
 
             if (trim($untrackedOutput) !== '') {
@@ -223,6 +244,52 @@ class GitDiffService
         }
 
         return $entries;
+    }
+
+    public function getWholeFileEntry(string $repoPath, string $path): ?FileListEntry
+    {
+        if (! PathGuard::isRelative($path)) {
+            return null;
+        }
+
+        $symlinkTarget = $this->symlinkTarget($repoPath, $path);
+        if ($symlinkTarget !== null) {
+            return new FileListEntry(
+                path: $path,
+                status: 'modified',
+                oldPath: null,
+                additions: 1,
+                deletions: 0,
+                isBinary: false,
+                isUntracked: false,
+                isSymlink: true,
+                symlinkTarget: $symlinkTarget,
+                isWholeFile: true,
+            );
+        }
+
+        $fullPath = PathGuard::tryResolveWithinRepo($repoPath, $path);
+        if ($fullPath === null || ! File::isFile($fullPath)) {
+            return null;
+        }
+
+        $isBinary = $this->isBinary($fullPath);
+        $content = $isBinary ? '' : File::get($fullPath);
+
+        return new FileListEntry(
+            path: $path,
+            status: 'modified',
+            oldPath: null,
+            additions: $isBinary ? 0 : $this->countLinesInString($content),
+            deletions: 0,
+            isBinary: $isBinary,
+            isUntracked: false,
+            lastModified: $this->getLastModified($repoPath, $path),
+            fileSize: $this->getHumanFileSize($repoPath, $path),
+            isWholeFile: true,
+            mtime: $this->getRawMtime($repoPath, $path),
+            byteSize: $this->getRawByteSize($repoPath, $path),
+        );
     }
 
     public function getWorkingDirectoryFingerprint(string $repoPath, ?string $globalGitignorePath = null): string
@@ -324,7 +391,7 @@ class GitDiffService
             : ($parts[1] ?? null);
     }
 
-    public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, ?int $contextLines = null, ?DiffTarget $target = null, ?string $oldPath = null, bool $detectMovedLines = true): ?string
+    public function getFileDiff(string $repoPath, string $path, bool $isUntracked = false, ?int $maxBytes = null, ?int $contextLines = null, ?DiffTarget $target = null, ?string $oldPath = null, bool $detectMovedLines = true, bool $isWholeFile = false): ?string
     {
         $target ??= DiffTarget::workingDirectory();
         $reviewConfig = $this->reviewConfigService->resolve();
@@ -347,17 +414,17 @@ class GitDiffService
             return '';
         }
 
-        if ($isUntracked && $target->isWorkingDirectory()) {
+        if (($isUntracked || $isWholeFile) && $target->isWorkingDirectory()) {
             return $this->buildUntrackedDiff($repoPath, $path, $maxBytes);
         }
 
         // Rename-detection only fires when both sides of the rename are within
         // the pathspec; pass the old path alongside so git can pair them.
-        $renamePaths = $oldPath !== null && $oldPath !== $path ? [$oldPath] : [];
+        $renamePaths = $oldPath !== null && $oldPath !== $path ? [$this->literalPathspec($oldPath)] : [];
 
         $raw = $this->git->run($repoPath, [
             ...$this->diffArgs($target, ["--unified={$contextLines}", '--text'], detectMovedLines: $detectMovedLines, reviewConfig: $reviewConfig),
-            '--', $path, ...$renamePaths,
+            '--', $this->literalPathspec($path), ...$renamePaths,
         ]);
 
         // The size cap protects the parser and renderer from oversized diffs,
@@ -515,6 +582,32 @@ class GitDiffService
         }
 
         return is_link($fullPath) ? readlink($fullPath) : null;
+    }
+
+    private function literalPathspec(string $path): string
+    {
+        return ':(top,literal)'.$path;
+    }
+
+    private function isFocusedAddition(string $nameStatus, string $path): bool
+    {
+        return collect(explode("\n", trim($nameStatus)))
+            ->contains(fn (string $line): bool => $line === "A\t{$path}");
+    }
+
+    private function findFocusedRename(string $repoPath, DiffTarget $target, string $path): ?string
+    {
+        $renames = $this->git->run($repoPath, [
+            ...$this->diffArgs($target, ['--name-status', '--diff-filter=R']),
+            '--', '.',
+        ]);
+
+        return collect(explode("\n", trim($renames)))
+            ->first(function (string $line) use ($path): bool {
+                $parts = preg_split('/\t/', $line);
+
+                return str_starts_with($parts[0] ?? '', 'R') && ($parts[2] ?? null) === $path;
+            });
     }
 
     private function isBinary(string $path): bool

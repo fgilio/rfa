@@ -186,6 +186,20 @@ test('hashes external-file comments off disk and stamps origin_ref=external', fu
     expect($row->file_path)->toBe('external/notes/note.md');
 });
 
+test('whole-file repository comments stay on the working source', function () {
+    $files = [[
+        'id' => 'file-whole',
+        'path' => 'README.md',
+        'isExternal' => false,
+        'isWholeFile' => true,
+    ]];
+
+    $result = $this->action->handle('/tmp/repo', null, DiffTarget::workingDirectory(), $files, 'file-whole', 'right', 1, 1, 'body');
+
+    expect($result['originRef'])->toBe('working')
+        ->and(Comment::find($result['id'])->origin_ref)->toBe('working');
+});
+
 test('file-level comments on renamed files hash the post-rename path at `to`', function () {
     $gitFileContent = Mockery::mock(GitFileContentService::class);
     $gitFileContent->shouldReceive('hashForSource')

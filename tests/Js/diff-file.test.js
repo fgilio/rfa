@@ -649,6 +649,7 @@ describe('diff file lifecycle', () => {
     afterEach(() => {
         vi.useRealTimers();
         delete globalThis.Alpine;
+        delete window.__rfaPendingExpandFiles;
     });
 
     it('clears the escape hint timer on destroy', () => {
@@ -672,6 +673,20 @@ describe('diff file lifecycle', () => {
         vi.advanceTimersByTime(1500);
 
         expect(component.escHint).toBe(false);
+    });
+
+    it('consumes a pending expansion after lazy hydration', () => {
+        window.__rfaPendingExpandFiles = new Set(['file-1']);
+        globalThis.Alpine = { store: () => ({ collapseAll: true }) };
+
+        const component = createDiffFile({
+            fileId: 'file-1',
+            filePath: 'README.md',
+            isReviewed: true,
+        });
+
+        expect(component.collapsed).toBe(false);
+        expect(window.__rfaPendingExpandFiles.has('file-1')).toBe(false);
     });
 });
 

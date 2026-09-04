@@ -15,12 +15,13 @@ final class DiffCacheKey
     /**
      * Suffixes appended to a file's context key to cache distinct shapes of the
      * same diff. The empty string is the base diff; `:full-context` is the
-     * fully-expanded diff ExpandDiffGapAction pulls gap lines from. Every cache
-     * variant a file can hold MUST be listed here so {@see self::forget()}
+     * fully-expanded diff ExpandDiffGapAction pulls gap lines from. Whole-file
+     * variants keep an unchanged focused file distinct from its normal Git diff.
+     * Every cache variant a file can hold MUST be listed here so {@see self::forget()}
      * invalidates all of them together. A variant missing from this list
      * survives invalidation and serves stale content.
      */
-    public const VARIANTS = ['', ':full-context'];
+    public const VARIANTS = ['', ':full-context', ':whole-file', ':whole-file:full-context'];
 
     /**
      * @param  string  $reviewFingerprint  Effective review settings that shape the cached

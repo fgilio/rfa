@@ -129,6 +129,7 @@ new class extends Component {
             target: $this->buildDiffTarget(),
             oldPath: $this->file['oldPath'] ?? null,
             externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
+            isWholeFile: $this->file['isWholeFile'] ?? false,
         )->toArray();
 
         $durationMs = $this->durationSince($startedAt);
@@ -154,6 +155,7 @@ new class extends Component {
             status: $this->file['status'] ?? 'modified',
             isExternal: $this->file['isExternal'] ?? false,
             externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
+            isWholeFile: $this->file['isWholeFile'] ?? false,
         );
 
         if ($result->isOk()) {
@@ -209,6 +211,7 @@ new class extends Component {
             target: $this->buildDiffTarget(),
             oldPath: $this->file['oldPath'] ?? null,
             externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
+            isWholeFile: $this->file['isWholeFile'] ?? false,
         )->toArray();
 
         $durationMs = $this->durationSince($startedAt);
@@ -244,6 +247,7 @@ new class extends Component {
             target: $this->buildDiffTarget(),
             oldPath: $this->file['oldPath'] ?? null,
             externalAbsolutePath: $this->file['externalAbsolutePath'] ?? null,
+            isWholeFile: $this->file['isWholeFile'] ?? false,
         );
 
         if ($fullDiff->hunks() === []) {
@@ -439,7 +443,7 @@ new class extends Component {
             $projectKey,
             $this->file['id'],
             $this->reviewConfig()->cacheFingerprint(),
-            $this->buildDiffTarget()->contextKey().$variant,
+            $this->buildDiffTarget()->contextKey().(($this->file['isWholeFile'] ?? false) ? ':whole-file' : '').$variant,
         );
     }
 

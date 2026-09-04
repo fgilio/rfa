@@ -46,7 +46,7 @@ beforeEach(function () {
     {
         public function __construct(private array $files) {}
 
-        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
         {
             return $this->files;
         }

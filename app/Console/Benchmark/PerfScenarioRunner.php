@@ -241,6 +241,7 @@ final class PerfScenarioRunner
                 ?DiffTarget $target = null,
                 ?string $oldPath = null,
                 ?string $externalAbsolutePath = null,
+                bool $isWholeFile = false,
             ): LoadedDiff {
                 return LoadedDiff::tryFrom($this->diffData) ?? LoadedDiff::empty($path);
             }
@@ -331,6 +332,7 @@ final class PerfScenarioRunner
                 ?int $projectId = null,
                 ?string $globalGitignorePath = null,
                 ?DiffTarget $target = null,
+                ?string $onlyPath = null,
             ): array {
                 return $this->files;
             }

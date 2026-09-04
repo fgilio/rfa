@@ -79,6 +79,49 @@ test('getFileList returns added file for untracked', function () {
     expect($entry->additions)->toBe(2);
 });
 
+test('getFileList limits tracked and untracked discovery to one path', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/first.txt', "one\n");
+    File::put($this->tmpDir.'/second.txt', "two\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    File::put($this->tmpDir.'/first.txt', "changed\n");
+    File::put($this->tmpDir.'/second.txt', "changed\n");
+    File::put($this->tmpDir.'/third.txt', "new\n");
+
+    $modified = $this->service->getFileList($this->tmpDir, onlyPath: 'second.txt');
+    $untracked = $this->service->getFileList($this->tmpDir, onlyPath: 'third.txt');
+
+    expect($modified)->toHaveCount(1)
+        ->and($modified[0]->path)->toBe('second.txt')
+        ->and($untracked)->toHaveCount(1)
+        ->and($untracked[0]->path)->toBe('third.txt');
+});
+
+test('focused paths are literal Git pathspecs', function () {
+    $this->initTestRepo($this->tmpDir);
+    $paths = ['report[1].md', 'report1.md', 'report*.md', 'report?.md', ':report.md'];
+
+    foreach ($paths as $index => $path) {
+        File::put($this->tmpDir.'/'.$path, "before {$index}\n");
+    }
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    foreach ($paths as $index => $path) {
+        File::put($this->tmpDir.'/'.$path, "after {$index}\n");
+    }
+
+    foreach ($paths as $index => $path) {
+        $entries = $this->service->getFileList($this->tmpDir, onlyPath: $path);
+        $diff = $this->service->getFileDiff($this->tmpDir, $path);
+
+        expect($entries)->toHaveCount(1)
+            ->and($entries[0]->path)->toBe($path)
+            ->and($diff)->toContain("+after {$index}")
+            ->and($diff)->not->toContain('+after '.(($index + 1) % count($paths)));
+    }
+});
+
 test('getFileList returns deleted file', function () {
     $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/doomed.txt', "bye\n");
@@ -106,6 +149,27 @@ test('getFileList returns renamed file with oldPath', function () {
     expect($entries[0]->status)->toBe('renamed');
     expect($entries[0]->path)->toBe('new_name.txt');
     expect($entries[0]->oldPath)->toBe('old_name.txt');
+});
+
+test('focused staged rename keeps its source path and stats', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/old.txt', "one\ntwo\nthree\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    $this->runTestRepoCommand($this->tmpDir, 'git mv old.txt new.txt');
+    File::put($this->tmpDir.'/new.txt', "one\ntwo\nthree\nfour\n");
+
+    $entries = $this->service->getFileList($this->tmpDir, onlyPath: 'new.txt');
+    $diff = $this->service->getFileDiff($this->tmpDir, 'new.txt', oldPath: 'old.txt');
+
+    expect($entries)->toHaveCount(1)
+        ->and($entries[0]->status)->toBe('renamed')
+        ->and($entries[0]->path)->toBe('new.txt')
+        ->and($entries[0]->oldPath)->toBe('old.txt')
+        ->and($entries[0]->additions)->toBe(1)
+        ->and($diff)->toContain('rename from old.txt')
+        ->and($diff)->toContain('rename to new.txt')
+        ->and($diff)->toContain('+four');
 });
 
 test('getFileList reports additions for a renamed-and-modified repo-root file', function () {
@@ -511,6 +575,23 @@ test('getFileDiff returns synthetic diff for untracked file', function () {
 
     expect($diff)->toContain('new file mode');
     expect($diff)->toContain('+hello');
+});
+
+test('whole-file repository diff uses the working file without external semantics', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/notes.md', "# Notes\n\nbody\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+
+    $entry = $this->service->getWholeFileEntry($this->tmpDir, 'notes.md');
+    $diff = $this->service->getFileDiff($this->tmpDir, 'notes.md', isWholeFile: true);
+
+    expect($entry)->not->toBeNull()
+        ->and($entry->status)->toBe('modified')
+        ->and($entry->isExternal)->toBeFalse()
+        ->and($entry->isWholeFile)->toBeTrue()
+        ->and($diff)->toContain('--- /dev/null')
+        ->and($diff)->toContain('+# Notes')
+        ->and($diff)->toContain('+body');
 });
 
 test('getFileDiff returns null when diff exceeds max bytes', function () {

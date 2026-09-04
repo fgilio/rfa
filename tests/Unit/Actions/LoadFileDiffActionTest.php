@@ -117,6 +117,16 @@ test('external file diffs expose absolute source metadata', function () {
         ->and($result)->not->toHaveKeys(['oldSource', 'newSource']);
 });
 
+test('loads an unchanged repository file as a whole-file diff', function () {
+    $action = new LoadFileDiffAction(new GitDiffService(new GitProcessService, new IgnoreService), new DiffParser, new SyntaxHighlightService, new MarkdownTableAlignerService, new CsvAlignerService, new MarkdownRegionService, app(ExternalFilesService::class));
+    $result = $action->handle($this->tmpDir, 'hello.txt', isWholeFile: true)->toArray();
+
+    expect($result['outcome'])->toBe(DiffLoadOutcome::Loaded->value)
+        ->and($result['status'])->toBe('added')
+        ->and($result['hunks'])->toHaveCount(1)
+        ->and($result['hunks'][0]['lines'][0]['content'])->toBe('line1');
+});
+
 test('without oldPath the rename diff degrades to all additions', function () {
     // Same setup as above; this guards against a regression where the caller
     // forgets to pass oldPath and git silently treats the new path as unrelated.

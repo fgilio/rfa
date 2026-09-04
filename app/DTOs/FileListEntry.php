@@ -23,6 +23,7 @@ class FileListEntry
         public readonly ?string $fileSize = null,
         public readonly bool $isExternal = false,
         public readonly ?string $externalAbsolutePath = null,
+        public readonly bool $isWholeFile = false,
         // Raw mtime + byte size used by the review page's softRefresh
         // change-detection. Kept separate from the human-readable
         // `lastModified` / `fileSize` because those bucket aggressively
@@ -67,6 +68,7 @@ class FileListEntry
             'fileSize' => $this->fileSize,
             'isExternal' => $this->isExternal,
             'externalAbsolutePath' => $this->externalAbsolutePath,
+            'isWholeFile' => $this->isWholeFile,
             'mtime' => $this->mtime,
             'byteSize' => $this->byteSize,
         ];

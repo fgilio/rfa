@@ -3,27 +3,50 @@ set -e
 
 # Parse args: optional path positional, optional --context flag (any order)
 MODE=""
-RFA_REPO_PATH=""
+RFA_INPUT_PATH=""
 for arg in "$@"; do
     case "$arg" in
         --context) MODE="context" ;;
-        *) RFA_REPO_PATH="$arg" ;;
+        -h|--help)
+            echo "Usage: rfa [--context] [path]"
+            echo "Open a Git repository or a single file in RFA."
+            exit 0
+            ;;
+        -*)
+            echo "Error: unknown option: $arg" >&2
+            exit 1
+            ;;
+        *)
+            if [ -n "$RFA_INPUT_PATH" ]; then
+                echo "Error: expected one path, received more than one." >&2
+                exit 1
+            fi
+
+            RFA_INPUT_PATH="$arg"
+            ;;
     esac
 done
-RFA_REPO_PATH="${RFA_REPO_PATH:-$(pwd)}"
+RFA_INPUT_PATH="${RFA_INPUT_PATH:-$(pwd)}"
 
-# Validate git repo
-git -C "$RFA_REPO_PATH" rev-parse --show-toplevel >/dev/null 2>&1 || {
-    echo "Error: not a git repository" >&2
+# Resolve directories to their Git root. Files stay files so the app can focus
+# them and choose a managed workspace when they do not belong to a repository.
+if [ -d "$RFA_INPUT_PATH" ] && [ ! -L "$RFA_INPUT_PATH" ]; then
+    git -C "$RFA_INPUT_PATH" rev-parse --show-toplevel >/dev/null 2>&1 || {
+        echo "Error: not a git repository: $RFA_INPUT_PATH" >&2
+        exit 1
+    }
+
+    RFA_OPEN_PATH="$(git -C "$RFA_INPUT_PATH" rev-parse --show-toplevel)"
+elif [ -f "$RFA_INPUT_PATH" ] || [ -L "$RFA_INPUT_PATH" ]; then
+    RFA_OPEN_PATH="$(python3 -c 'import os,sys; p=os.path.abspath(sys.argv[1]); print(os.path.join(os.path.realpath(os.path.dirname(p)), os.path.basename(p)))' "$RFA_INPUT_PATH")"
+else
+    echo "Error: path does not exist or is not a regular file or directory: $RFA_INPUT_PATH" >&2
     exit 1
-}
-
-# Resolve to repo root
-RFA_REPO_PATH="$(git -C "$RFA_REPO_PATH" rev-parse --show-toplevel)"
+fi
 
 # Write inbox file (cold-start safety: deep links can be lost if app isn't running yet)
 # Uses unique filenames to avoid races between concurrent invocations.
-# Two-line format when --context: <repo-path>\n<mode>. The inbox parser splits
+# Two-line format when --context: <path>\n<mode>. The inbox parser splits
 # then trims each line independently, so the trailing newline doesn't drop
 # the mode line.
 if [ "$(uname)" = "Darwin" ]; then
@@ -76,14 +99,14 @@ REQUEST_ID="$(date +%s%N)-$$"
 INBOX_FILE="$INBOX_DIR/$REQUEST_ID.path"
 INBOX_TMP="$INBOX_FILE.tmp"
 if [ -n "$MODE" ]; then
-    printf '%s\n%s\n' "$RFA_REPO_PATH" "$MODE" > "$INBOX_TMP"
+    printf '%s\n%s\n' "$RFA_OPEN_PATH" "$MODE" > "$INBOX_TMP"
 else
-    echo "$RFA_REPO_PATH" > "$INBOX_TMP"
+    echo "$RFA_OPEN_PATH" > "$INBOX_TMP"
 fi
 mv "$INBOX_TMP" "$INBOX_FILE"
 
 # URL-encode the path
-ENCODED_PATH=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$RFA_REPO_PATH")
+ENCODED_PATH=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' "$RFA_OPEN_PATH")
 
 # Open via deep link (launches app if not running, or sends to running instance).
 # The id is the inbox filename stem, so the two transports announce the same

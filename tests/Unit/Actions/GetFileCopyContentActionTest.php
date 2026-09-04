@@ -33,7 +33,7 @@ test('diff kind delegates to GitDiffService::getFileDiff with the target', funct
     $diff->shouldReceive('getFileDiff')
         // contextLines is null here: the caller omits it so getFileDiff resolves
         // the configured default itself, rather than passing a hardcoded 3.
-        ->with('/tmp/repo', 'src/foo.php', true, null, null, Mockery::on(fn ($t) => $t === $target), null, false)
+        ->with('/tmp/repo', 'src/foo.php', true, null, null, Mockery::on(fn ($t) => $t === $target), null, false, false)
         ->once()
         ->andReturn('diff body');
 
@@ -64,6 +64,22 @@ test('diff kind routes an external file through the external diff builder', func
 
     expect($result->isOk())->toBeTrue()
         ->and($result->content)->toBe('external diff body');
+});
+
+test('diff kind requests a whole-file repository diff', function () {
+    $target = DiffTarget::workingDirectory();
+    $diff = Mockery::mock(GitDiffService::class);
+    $diff->shouldReceive('getFileDiff')
+        ->with('/tmp/repo', 'README.md', false, null, null, Mockery::on(fn ($value) => $value === $target), null, false, true)
+        ->once()
+        ->andReturn('whole-file diff');
+
+    $fileSource = Mockery::mock(FileSourceService::class);
+    $result = makeCopyAction($diff, $fileSource)
+        ->handle('diff', '/tmp/repo', 'README.md', false, $target, isWholeFile: true);
+
+    expect($result->isOk())->toBeTrue()
+        ->and($result->content)->toBe('whole-file diff');
 });
 
 test('diff kind reports unavailable when the diff is empty', function () {

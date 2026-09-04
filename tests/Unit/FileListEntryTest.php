@@ -54,6 +54,7 @@ test('toArray includes all properties and computed id', function () {
         'fileSize' => null,
         'isExternal' => false,
         'externalAbsolutePath' => null,
+        'isWholeFile' => false,
         'mtime' => null,
         'byteSize' => null,
     ]);

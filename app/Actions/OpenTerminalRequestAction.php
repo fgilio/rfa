@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Context;
 use Native\Desktop\Facades\Window;
 
 /**
- * Open the repository a `./rfa` invocation asked for, once.
+ * Open the path a `./rfa` invocation asked for, once.
  *
  * One invocation announces itself twice: it writes an inbox file (cold-start
  * safety, drained during boot) and opens an `rfa://open` deep link (which
@@ -36,14 +36,14 @@ final readonly class OpenTerminalRequestAction
     private const string REQUEST_ID_PATTERN = '/^[A-Za-z0-9._-]{1,128}$/';
 
     public function __construct(
-        private OpenProjectFromPathAction $openProject,
+        private OpenPathForReviewAction $openPath,
     ) {}
 
     /**
      * Claim `$requestId`, open `$path`, and navigate the main window.
      *
      * Returns null when another transport already claimed this request, or
-     * when the path could not be opened as a project. The reason lands in
+     * when the path could not be opened for review. The reason lands in
      * `rfa.reason` for the calling owner's canonical event.
      */
     public function handle(string $path, ?string $mode = null, ?string $requestId = null): ?Project
@@ -54,15 +54,22 @@ final readonly class OpenTerminalRequestAction
             return null;
         }
 
-        $project = $this->openProject->handle($path);
+        $target = $this->openPath->handle($path);
 
-        if (! $project) {
+        if ($target === null) {
             return null;
         }
 
-        Window::get('main')->url(route(self::routeName($mode), ['slug' => $project->slug]));
+        $routeName = self::routeName($mode);
+        $routeParameters = ['slug' => $target['project']->slug];
 
-        return $project;
+        if ($routeName === 'review-page' && $target['filePath'] !== null) {
+            $routeParameters['file'] = $target['filePath'];
+        }
+
+        Window::get('main')->url(route($routeName, $routeParameters));
+
+        return $target['project'];
     }
 
     /**
@@ -76,7 +83,7 @@ final readonly class OpenTerminalRequestAction
     {
         return match (Context::get('rfa.reason')) {
             'request_already_claimed' => 'skipped',
-            'project_registration_failed' => 'error',
+            'file_workspace_failed', 'project_registration_failed' => 'error',
             default => 'rejected',
         };
     }
@@ -102,7 +109,7 @@ final readonly class OpenTerminalRequestAction
     }
 
     /**
-     * Parse the two-line inbox file format: `<repo-path>\n<mode>`. The path
+     * Parse the two-line inbox file format: `<path>\n<mode>`. The path
      * lives on line 1, the optional mode on line 2. Splitting on newline
      * first and trimming each line independently keeps a trailing newline
      * (added by every `printf` / `echo`) from silently dropping the mode.

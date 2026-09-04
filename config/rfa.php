@@ -5,6 +5,7 @@ return [
     'source_max_bytes' => env('RFA_SOURCE_MAX_BYTES', 1_048_576),
     'cache_ttl_hours' => env('RFA_CACHE_TTL_HOURS', 24),
     'default_context_lines' => env('RFA_DEFAULT_CONTEXT_LINES', 3),
+    'file_workspace_path' => env('RFA_FILE_WORKSPACE_PATH', storage_path('app/private/Files')),
     'moved_lines' => [
         'enabled' => env('RFA_MOVED_LINES_ENABLED', false),
         'mode' => env('RFA_MOVED_LINES_MODE', 'zebra'),

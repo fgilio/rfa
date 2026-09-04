@@ -107,6 +107,15 @@
 
                 this.pendingSavesGuard?.attach();
                 this.registerShortcuts();
+                this.focusInitialFile();
+            },
+            async focusInitialFile() {
+                const fileId = this.config.initialFocusFileId;
+                if (!fileId) return;
+
+                (window.__rfaPendingExpandFiles ??= new Set()).add(fileId);
+                await this.$nextTick();
+                this.scrollToFile(fileId, false);
             },
             // Page-scoped review shortcuts, registered by catalog id (combos live
             // in config/shortcuts.php). The keymap store clears them on navigate
@@ -216,6 +225,11 @@
                 const repo = this.repoPath || '';
                 if (!repo) return path;
                 return repo.replace(/\/+$/, '') + '/' + path;
+            },
+            clearFocusedFileUrl() {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('file');
+                window.history.replaceState(window.history.state, '', url);
             },
             scrollToFile(id, persist = true) {
                 this.activeFile = id;

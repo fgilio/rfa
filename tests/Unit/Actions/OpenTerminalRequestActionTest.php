@@ -4,6 +4,7 @@ use App\Actions\OpenTerminalRequestAction;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\File;
 use Tests\Helpers\InteractsWithTestRepositories;
 use Tests\Helpers\MainWindowNavigations;
 use Tests\TestCase;
@@ -20,6 +21,8 @@ beforeEach(function () {
     $this->commitTestRepo($this->repoPath, 'initial');
 
     $this->notARepoPath = $this->createTempDirectory('rfa_terminal_request_plain_');
+    $this->fileWorkspacePath = $this->createTempDirectory('rfa_terminal_request_workspace_').'/Files';
+    config(['rfa.file_workspace_path' => $this->fileWorkspacePath]);
 
     $this->navigations = MainWindowNavigations::capture();
 
@@ -75,10 +78,55 @@ test('an unknown mode falls open to the review page', function () {
     expect($this->navigations->latest())->toBe(route('review-page', ['slug' => $project->slug]));
 });
 
+test('a repository file opens its project with a focused file query', function () {
+    $file = $this->repoPath.'/reports/audit.md';
+    File::ensureDirectoryExists(dirname($file));
+    File::put($file, "# Audit\n");
+
+    $project = $this->action->handle($file);
+    $navigation = $this->navigations->latest();
+
+    expect($project)->not->toBeNull()
+        ->and($navigation)->not->toBeNull();
+
+    parse_str((string) parse_url($navigation, PHP_URL_QUERY), $query);
+
+    expect(parse_url($navigation, PHP_URL_PATH))->toBe('/p/'.$project->slug)
+        ->and($query)->toBe(['file' => 'reports/audit.md']);
+});
+
+test('a file outside Git opens in the managed Files project', function () {
+    $file = $this->notARepoPath.'/notes.md';
+    File::put($file, "# Notes\n");
+
+    $project = $this->action->handle($file);
+    $navigation = $this->navigations->latest();
+    parse_str((string) parse_url($navigation, PHP_URL_QUERY), $query);
+
+    expect($project)->not->toBeNull()
+        ->and($project->name)->toBe('Files')
+        ->and($query)->toBe(['file' => 'external/notes.md']);
+});
+
+test('context mode opens the containing project without a file query', function () {
+    $file = $this->repoPath.'/notes.md';
+    File::put($file, "# Notes\n");
+
+    $project = $this->action->handle($file, 'context');
+
+    expect($this->navigations->latest())->toBe(route('context-page', ['slug' => $project->slug]));
+});
+
 test('a path that is not a project neither navigates nor reports a claim conflict', function () {
     expect($this->action->handle($this->notARepoPath, null, '1755975000-4242'))->toBeNull()
         ->and($this->navigations->latest())->toBeNull()
         ->and(Context::get('rfa.reason'))->toBe('not_a_git_repository');
+});
+
+test('a file workspace failure is reported as an error', function () {
+    Context::add('rfa.reason', 'file_workspace_failed');
+
+    expect(OpenTerminalRequestAction::outcomeForNullProject())->toBe('error');
 });
 
 // -- request identity --

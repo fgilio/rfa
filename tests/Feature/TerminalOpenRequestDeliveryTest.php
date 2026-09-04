@@ -71,6 +71,22 @@ test('inbox and deep-link delivery of one request produce one open and one navig
     expect($this->navigations->all())->toHaveCount(1);
 });
 
+test('cold-start inbox delivery opens and focuses a repository file', function () {
+    $file = $this->repoPath.'/reports/audit.md';
+    File::ensureDirectoryExists(dirname($file));
+    File::put($file, "# Audit\n");
+    writeInboxRequest($this->inboxDir, '1755975000-4242', $file);
+
+    drainInbox();
+
+    $navigation = $this->navigations->latest();
+    parse_str((string) parse_url($navigation, PHP_URL_QUERY), $query);
+
+    expect($this->navigations->all())->toHaveCount(1)
+        ->and($query)->toBe(['file' => 'reports/audit.md'])
+        ->and(Context::get('rfa.outcome'))->toBe('completed');
+});
+
 test('the deep link wins the claim when it arrives before the inbox is drained', function () {
     writeInboxRequest($this->inboxDir, '1755975000-4242', $this->repoPath);
 

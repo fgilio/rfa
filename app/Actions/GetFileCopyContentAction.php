@@ -19,10 +19,10 @@ final readonly class GetFileCopyContentAction
         private ExternalFilesService $externalFilesService,
     ) {}
 
-    public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
+    public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null, bool $isWholeFile = false): CopyContentResult
     {
         return match ($kind) {
-            'diff' => $this->diffContent($repoPath, $path, $isUntracked, $target, $oldPath, $isExternal, $externalAbsolutePath),
+            'diff' => $this->diffContent($repoPath, $path, $isUntracked, $target, $oldPath, $isExternal, $externalAbsolutePath, $isWholeFile),
             'original', 'new' => $this->sideContent($kind, $repoPath, $target, $path, $status, $oldPath, $isUntracked, $isExternal, $externalAbsolutePath),
             default => CopyContentResult::unavailable(),
         };
@@ -35,11 +35,11 @@ final readonly class GetFileCopyContentAction
      * The moved-line colorization getFileDiff adds for the parser is skipped so
      * the clipboard gets a clean patch.
      */
-    private function diffContent(string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath, bool $isExternal, ?string $externalAbsolutePath): CopyContentResult
+    private function diffContent(string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath, bool $isExternal, ?string $externalAbsolutePath, bool $isWholeFile): CopyContentResult
     {
         $diff = $isExternal && $externalAbsolutePath !== null && $externalAbsolutePath !== ''
             ? $this->externalFilesService->buildDiff($externalAbsolutePath, $path)
-            : $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, target: $target, oldPath: $oldPath, detectMovedLines: false);
+            : $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, target: $target, oldPath: $oldPath, detectMovedLines: false, isWholeFile: $isWholeFile);
 
         return $diff === null || $diff === ''
             ? CopyContentResult::unavailable()

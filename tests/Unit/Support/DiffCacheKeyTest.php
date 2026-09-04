@@ -34,8 +34,8 @@ test('forget clears every variant of a file diff', function () {
     }
 });
 
-test('VARIANTS includes the base and full-context shapes', function () {
-    expect(DiffCacheKey::VARIANTS)->toContain('')->toContain(':full-context');
+test('VARIANTS includes normal and whole-file cache shapes', function () {
+    expect(DiffCacheKey::VARIANTS)->toBe(['', ':full-context', ':whole-file', ':whole-file:full-context']);
 });
 
 test('the fingerprint varies by the moved-line detection settings', function () {

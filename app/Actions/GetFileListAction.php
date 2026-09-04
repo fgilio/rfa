@@ -13,6 +13,7 @@ use App\Services\GitDiffService;
 use App\Services\ReviewConfigService;
 use App\Support\DiffCacheKey;
 use App\Support\FilePathSorter;
+use App\Support\PathGuard;
 
 final readonly class GetFileListAction
 {
@@ -25,7 +26,7 @@ final readonly class GetFileListAction
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+    public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
     {
         $target ??= DiffTarget::workingDirectory();
         $changeset = $this->changeset(
@@ -33,6 +34,7 @@ final readonly class GetFileListAction
             projectId: $projectId,
             globalGitignorePath: $globalGitignorePath,
             target: $target,
+            onlyPath: $onlyPath,
         );
 
         $files = $changeset->filesToArray();
@@ -49,20 +51,42 @@ final readonly class GetFileListAction
         return $files;
     }
 
-    public function changeset(string $repoPath, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): ReviewChangeset
+    public function changeset(string $repoPath, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): ReviewChangeset
     {
         $target ??= DiffTarget::workingDirectory();
 
-        $files = $this->gitDiffService->getFileList($repoPath, $globalGitignorePath, $target);
+        if ($onlyPath !== null && ! PathGuard::isRelative($onlyPath)) {
+            return new ReviewChangeset(
+                repoPath: $repoPath,
+                sourceLabel: $target->contextKey(),
+                target: $target,
+                files: [],
+            );
+        }
 
-        if ($target->isWorkingDirectory() && $projectId !== null) {
-            $project = Project::find($projectId);
+        $project = $projectId === null ? null : Project::find($projectId);
+        $externalFile = $target->isWorkingDirectory() && $project !== null && $onlyPath !== null
+            ? $this->externalFilesService->getEntry((array) ($project->external_paths ?? []), $onlyPath)
+            : null;
 
-            if ($project !== null) {
-                $files = [
-                    ...$files,
-                    ...$this->externalFilesService->getEntries((array) ($project->external_paths ?? [])),
-                ];
+        $files = $externalFile === null
+            ? $this->gitDiffService->getFileList($repoPath, $globalGitignorePath, $target, $onlyPath)
+            : [];
+
+        if ($externalFile !== null) {
+            $files[] = $externalFile;
+        } elseif ($target->isWorkingDirectory() && $project !== null && $onlyPath === null) {
+            $files = [
+                ...$files,
+                ...$this->externalFilesService->getEntries((array) ($project->external_paths ?? [])),
+            ];
+        }
+
+        if ($files === [] && $target->isWorkingDirectory() && $onlyPath !== null) {
+            $explicitFile = $this->gitDiffService->getWholeFileEntry($repoPath, $onlyPath);
+
+            if ($explicitFile !== null) {
+                $files[] = $explicitFile;
             }
         }
 

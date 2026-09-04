@@ -146,3 +146,96 @@ test('terminal helper emits the inbox filename stem as the deep link request id'
         ->toContain('&id='.$requestId)
         ->toContain('&mode=context');
 });
+
+test('terminal helper delivers a repository file instead of replacing it with the repo root', function () {
+    $file = $this->repoPath.'/reports/audit.md';
+    File::ensureDirectoryExists(dirname($file));
+    File::put($file, "# Audit\n");
+    $appSupportPath = rfaTerminalHelperDataPath($this->homePath);
+
+    $process = new Process([base_path('rfa'), $file], base_path(), [
+        'HOME' => $this->homePath,
+        'PATH' => $this->fakeBinPath.':'.getenv('PATH'),
+        'RFA_OPEN_CAPTURE' => $this->openCapturePath,
+    ]);
+    $process->mustRun();
+
+    $inboxFiles = File::glob($appSupportPath.'/inbox/*.path');
+
+    expect($inboxFiles)->toHaveCount(1)
+        ->and(File::get($inboxFiles[0]))->toBe(realpath($file)."\n")
+        ->and(rawurldecode(File::get($this->openCapturePath)))->toContain('path='.realpath($file));
+});
+
+test('terminal helper preserves a repository symlink leaf', function () {
+    $outside = $this->homePath.'/outside.md';
+    File::put($outside, "outside\n");
+    $link = $this->repoPath.'/linked.md';
+    symlink($outside, $link);
+
+    $process = new Process([base_path('rfa'), $link], base_path(), [
+        'HOME' => $this->homePath,
+        'PATH' => $this->fakeBinPath.':'.getenv('PATH'),
+        'RFA_OPEN_CAPTURE' => $this->openCapturePath,
+    ]);
+    $process->mustRun();
+
+    $inboxFiles = File::glob(rfaTerminalHelperDataPath($this->homePath).'/inbox/*.path');
+    $lexicalLink = realpath(dirname($link)).'/'.basename($link);
+
+    expect($inboxFiles)->toHaveCount(1)
+        ->and(File::get($inboxFiles[0]))->toBe($lexicalLink."\n")
+        ->and(rawurldecode(File::get($this->openCapturePath)))->toContain('path='.$lexicalLink)
+        ->not->toContain('path='.$outside);
+});
+
+test('terminal helper accepts a dangling repository symlink', function () {
+    $link = $this->repoPath.'/dangling.md';
+    symlink('missing.md', $link);
+
+    $process = new Process([base_path('rfa'), $link], base_path(), [
+        'HOME' => $this->homePath,
+        'PATH' => $this->fakeBinPath.':'.getenv('PATH'),
+        'RFA_OPEN_CAPTURE' => $this->openCapturePath,
+    ]);
+    $process->mustRun();
+
+    $inboxFiles = File::glob(rfaTerminalHelperDataPath($this->homePath).'/inbox/*.path');
+    $lexicalLink = realpath(dirname($link)).'/'.basename($link);
+
+    expect($inboxFiles)->toHaveCount(1)
+        ->and(File::get($inboxFiles[0]))->toBe($lexicalLink."\n")
+        ->and(rawurldecode(File::get($this->openCapturePath)))->toContain('path='.$lexicalLink);
+});
+
+test('terminal helper accepts a file outside a Git repository', function () {
+    $file = $this->homePath.'/standalone notes.md';
+    File::put($file, "# Notes\n");
+
+    $process = new Process([base_path('rfa'), $file], base_path(), [
+        'HOME' => $this->homePath,
+        'PATH' => $this->fakeBinPath.':'.getenv('PATH'),
+        'RFA_OPEN_CAPTURE' => $this->openCapturePath,
+    ]);
+    $process->mustRun();
+
+    $inboxFiles = File::glob(rfaTerminalHelperDataPath($this->homePath).'/inbox/*.path');
+
+    expect($inboxFiles)->toHaveCount(1)
+        ->and(File::get($inboxFiles[0]))->toBe(realpath($file)."\n")
+        ->and(rawurldecode(File::get($this->openCapturePath)))->toContain('path='.realpath($file));
+});
+
+test('terminal helper rejects a missing file before opening the app', function () {
+    $missing = $this->homePath.'/missing.md';
+    $process = new Process([base_path('rfa'), $missing], base_path(), [
+        'HOME' => $this->homePath,
+        'PATH' => $this->fakeBinPath.':'.getenv('PATH'),
+        'RFA_OPEN_CAPTURE' => $this->openCapturePath,
+    ]);
+    $process->run();
+
+    expect($process->isSuccessful())->toBeFalse()
+        ->and($process->getErrorOutput())->toContain('path does not exist')
+        ->and(File::exists($this->openCapturePath))->toBeFalse();
+});

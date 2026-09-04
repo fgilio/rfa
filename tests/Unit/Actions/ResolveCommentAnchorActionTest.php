@@ -157,6 +157,10 @@ test('marks legacy comments without stored hash as placed when the file is in th
 });
 
 test('marks comment as unplaced when the file is not in the current diff', function () {
+    $this->gitFileContent->shouldReceive('hashForSource')
+        ->with('/tmp/repo', gitSourceSpec(GitRef::Working->value, 'gone.php'))
+        ->andReturn('different-hash');
+
     $result = $this->action->handle(
         '/tmp/repo',
         [[
@@ -172,6 +176,30 @@ test('marks comment as unplaced when the file is not in the current diff', funct
     );
 
     expect($result[0]['anchorStatus'])->toBe('unplaced');
+});
+
+test('keeps a working comment placed after its unchanged file leaves the diff', function () {
+    $this->gitFileContent->shouldReceive('hashForSource')
+        ->with('/tmp/repo', gitSourceSpec(GitRef::Working->value, 'README.md'))
+        ->andReturn('whole-file-hash');
+
+    $result = $this->action->handle(
+        '/tmp/repo',
+        [[
+            'id' => 'c-whole',
+            'file_path' => 'README.md',
+            'side' => 'right',
+            'start_line' => 1,
+            'file_content_hash' => 'whole-file-hash',
+            'body' => 'body',
+            'origin_ref' => GitRef::Working->value,
+        ]],
+        [['id' => 'file-other', 'path' => 'other.php']],
+        DiffTarget::workingDirectory(),
+    );
+
+    expect($result[0]['anchorStatus'])->toBe('placed')
+        ->and($result[0]['fileId'])->toBe('file-'.hash('xxh128', 'README.md'));
 });
 
 test('flips side to right when a left-side comment now matches the right-side hash', function () {

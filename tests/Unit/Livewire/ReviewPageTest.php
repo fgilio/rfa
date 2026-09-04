@@ -44,6 +44,7 @@ beforeEach(function () {
     $files = $this->files;
 
     app()->instance('test.captured_gitignore_paths', collect());
+    app()->instance('test.captured_only_paths', collect());
 
     app()->bind(ResolveProjectAction::class, fn () => new class($project)
     {
@@ -59,9 +60,10 @@ beforeEach(function () {
     {
         public function __construct(private array $files) {}
 
-        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
         {
             app('test.captured_gitignore_paths')->push($globalGitignorePath);
+            app('test.captured_only_paths')->push($onlyPath);
 
             return $this->files;
         }
@@ -176,7 +178,7 @@ test('diff file lazy bundles support reviews larger than the request component l
     {
         public function __construct(private array $files) {}
 
-        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
         {
             return $this->files;
         }
@@ -233,6 +235,64 @@ test('diff file lazy placeholders render stable file headers', function () {
         ->not->toContain('bg-gh-muted/20');
 });
 
+test('file query scopes the load, filters the page, and selects the requested file', function () {
+    $component = Livewire::withQueryParams(['file' => 'src/Bar.php'])
+        ->test('pages::review-page', ['slug' => 'test-project']);
+
+    expect(app('test.captured_only_paths')->first())->toBe('src/Bar.php')
+        ->and($component->get('focusedFilePath'))->toBe('src/Bar.php')
+        ->and($component->get('fileFilter'))->toBe('src/Bar.php')
+        ->and($component->get('activeFileId'))->toBe('def456')
+        ->and($component->get('initialFocusFileId'))->toBe('def456')
+        ->and($component->instance()->reviewState()->visibleFileEntries)->toBe([
+            ['id' => 'def456', 'path' => 'src/Bar.php'],
+        ]);
+});
+
+test('missing file query restores the full repository list', function () {
+    $files = $this->files;
+
+    app()->bind(GetFileListAction::class, fn () => new class($files)
+    {
+        public function __construct(private array $files) {}
+
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
+        {
+            app('test.captured_only_paths')->push($onlyPath);
+
+            return $onlyPath === null ? $this->files : [];
+        }
+    });
+
+    $component = Livewire::withQueryParams(['file' => 'src/Missing.php'])
+        ->test('pages::review-page', ['slug' => 'test-project']);
+
+    expect(app('test.captured_only_paths')->all())->toBe(['src/Missing.php', null])
+        ->and($component->get('focusedFilePath'))->toBeNull()
+        ->and($component->get('initialFocusFileId'))->toBeNull()
+        ->and($component->instance()->reviewState()->visibleFileEntries)->toBe([
+            ['id' => 'abc123', 'path' => 'src/Foo.php'],
+            ['id' => 'def456', 'path' => 'src/Bar.php'],
+        ]);
+
+    $component->assertDispatched('focused-file-mode-cleared');
+});
+
+test('editing the focused-file filter returns to the full project', function () {
+    $component = Livewire::withQueryParams(['file' => 'src/Bar.php'])
+        ->test('pages::review-page', ['slug' => 'test-project'])
+        ->set('fileFilter', 'Foo');
+
+    expect($component->get('focusedFilePath'))->toBeNull()
+        ->and($component->get('initialFocusFileId'))->toBeNull()
+        ->and(app('test.captured_only_paths')->all())->toBe(['src/Bar.php', null])
+        ->and($component->instance()->reviewState()->visibleFileEntries)->toBe([
+            ['id' => 'abc123', 'path' => 'src/Foo.php'],
+        ]);
+
+    $component->assertDispatched('focused-file-mode-cleared');
+});
+
 // -- File navigation shortcut hint --
 
 test('shows the j/k navigation keycaps when more than one file is visible', function () {
@@ -243,7 +303,7 @@ test('shows the j/k navigation keycaps when more than one file is visible', func
 test('hides the j/k navigation keycaps when only one file is visible', function () {
     app()->bind(GetFileListAction::class, fn () => new class
     {
-        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
         {
             return [
                 ['id' => 'abc123', 'path' => 'src/Foo.php', 'status' => 'modified', 'oldPath' => null, 'additions' => 5, 'deletions' => 2, 'isBinary' => false, 'isUntracked' => false],
@@ -278,7 +338,7 @@ test('server file filter renders only matching diff-file children', function () 
     {
         public function __construct(private array $files) {}
 
-        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
         {
             return $this->files;
         }
@@ -311,6 +371,37 @@ test('copyVisiblePaths formats bare names and absolute paths', function () {
     Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->call('copyVisiblePaths', 'full')
         ->assertDispatched('copy-to-clipboard', text: "/tmp/repo/src/Foo.php\n/tmp/repo/src/Bar.php", toast: 'Copied 2 full paths');
+});
+
+test('copyVisiblePaths uses the source path for an external file', function () {
+    $externalFiles = [
+        [
+            'id' => 'ext789',
+            'path' => 'external/notes/draft.md',
+            'status' => 'added',
+            'oldPath' => null,
+            'additions' => 10,
+            'deletions' => 0,
+            'isBinary' => false,
+            'isUntracked' => false,
+            'isExternal' => true,
+            'externalAbsolutePath' => '/tmp/notes/draft.md',
+        ],
+    ];
+
+    app()->bind(GetFileListAction::class, fn () => new class($externalFiles)
+    {
+        public function __construct(private array $files) {}
+
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
+        {
+            return $this->files;
+        }
+    });
+
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->call('copyVisiblePaths', 'full')
+        ->assertDispatched('copy-to-clipboard', text: '/tmp/notes/draft.md', toast: 'Copied full path');
 });
 
 test('mount backfills null gitignore path from git config', function () {
@@ -827,7 +918,7 @@ test('discardFileChanges is a no-op for external files', function () {
     {
         public function __construct(private array $files) {}
 
-        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null): array
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
         {
             return $this->files;
         }
@@ -844,6 +935,35 @@ test('discardFileChanges is a no-op for external files', function () {
     Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->dispatch('discard-file', fileId: 'ext789')
         ->assertNotDispatched('undo-available');
+});
+
+test('discardFileChanges is a no-op for repository whole-file reviews', function () {
+    $wholeFile = [
+        ['id' => 'whole789', 'path' => 'README.md', 'status' => 'modified', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false, 'isExternal' => false, 'isWholeFile' => true],
+    ];
+
+    app()->bind(GetFileListAction::class, fn () => new class($wholeFile)
+    {
+        public function __construct(private array $files) {}
+
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
+        {
+            return $this->files;
+        }
+    });
+
+    app()->bind(DiscardFileChangesAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, string $path, string $status, int $projectId, ?string $oldPath = null, bool $isUntracked = false, bool $isSymlink = false, array $comments = []): TrashedFile
+        {
+            throw new RuntimeException('DiscardFileChangesAction should not be called for whole-file reviews');
+        }
+    });
+
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('discard-file', fileId: 'whole789')
+        ->assertNotDispatched('undo-available')
+        ->assertDontSee('Discard changes');
 });
 
 test('discardFileChanges is a no-op in the entire-repo (since the beginning) view', function () {
