@@ -61,6 +61,17 @@ test('surfaces an unchanged requested file as a whole-file review', function () 
         ->and($files[0]['isWholeFile'])->toBeTrue();
 });
 
+test('surfaces an ignored unchanged requested file as a whole-file review', function () {
+    File::put($this->tmpDir.'/.rfaignore', "file.txt\n");
+
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class), app(ReviewConfigService::class));
+    $files = $action->handle($this->tmpDir, onlyPath: 'file.txt');
+
+    expect($files)->toHaveCount(1)
+        ->and($files[0]['path'])->toBe('file.txt')
+        ->and($files[0]['isWholeFile'])->toBeTrue();
+});
+
 test('surfaces a dangling requested repository symlink as a whole-file review', function () {
     symlink('missing.md', $this->tmpDir.'/link.md');
     $this->commitTestRepo($this->tmpDir, 'add link');

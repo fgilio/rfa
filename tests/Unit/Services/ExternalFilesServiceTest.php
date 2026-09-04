@@ -1,7 +1,10 @@
 <?php
 
 use App\Services\ExternalFilesService;
+use App\Support\NonBlockingLocalFilesystemAdapter;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -125,6 +128,52 @@ test('drops configs with non-existent paths', function () {
     expect($paths)->toContain('external/good/note.md');
     foreach ($paths as $p) {
         expect($p)->not->toStartWith('external/gone');
+    }
+});
+
+test('rejects named pipes without opening them', function () {
+    if (! function_exists('posix_mkfifo')) {
+        $this->markTestSkipped('POSIX FIFO support is unavailable.');
+    }
+
+    $pipe = $this->extDir.'/events.pipe';
+
+    expect(posix_mkfifo($pipe, 0600))->toBeTrue();
+
+    expect($this->service->canonicalFilePath($pipe))->toBeNull();
+});
+
+test('rejects a file replaced by a named pipe between validation and opening', function () {
+    if (! function_exists('posix_mkfifo') || ! function_exists('pcntl_alarm')) {
+        $this->markTestSkipped('POSIX FIFO and alarm support is unavailable.');
+    }
+
+    $path = $this->extDir.'/race.md';
+    File::put($path, "safe\n");
+
+    $adapter = new NonBlockingLocalFilesystemAdapter($this->extDir);
+    $disk = Mockery::mock(FilesystemAdapter::class);
+    $disk->shouldReceive('fileExists')->once()->with('race.md')->andReturnUsing(function () use ($path): bool {
+        unlink($path);
+        posix_mkfifo($path, 0600);
+
+        return true;
+    });
+    $disk->shouldReceive('readStream')->once()->with('race.md')->andReturnUsing(
+        fn () => $adapter->readStream('race.md'),
+    );
+    Storage::shouldReceive('build')->once()->andReturn($disk);
+
+    $previousAlarmHandler = pcntl_signal_get_handler(SIGALRM);
+    pcntl_async_signals(true);
+    pcntl_signal(SIGALRM, fn () => throw new RuntimeException('External file open blocked.'));
+    pcntl_alarm(1);
+
+    try {
+        expect($this->service->canonicalFilePath($path))->toBeNull();
+    } finally {
+        pcntl_alarm(0);
+        pcntl_signal(SIGALRM, $previousAlarmHandler);
     }
 });
 

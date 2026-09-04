@@ -7,7 +7,7 @@ namespace App\Services;
 use App\DTOs\FileListEntry;
 use Carbon\Carbon;
 use FilesystemIterator;
-use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Number;
@@ -114,7 +114,14 @@ class ExternalFilesService
         }
 
         try {
-            $stream = $this->diskForFile($canonicalPath)->readStream(basename($canonicalPath));
+            $disk = $this->diskForFile($canonicalPath);
+            $filename = basename($canonicalPath);
+
+            if (! $disk->fileExists($filename)) {
+                return null;
+            }
+
+            $stream = $disk->readStream($filename);
             if (! is_resource($stream)) {
                 return null;
             }
@@ -427,13 +434,16 @@ class ExternalFilesService
         return $lastByte !== '' && $lastByte !== "\n" ? $count + 1 : $count;
     }
 
-    private function diskForFile(string $absolutePath): Filesystem
+    private function diskForFile(string $absolutePath): FilesystemAdapter
     {
-        return Storage::build([
-            'driver' => 'local',
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::build([
+            'driver' => 'non-blocking-local',
             'root' => dirname($absolutePath),
             'links' => 'skip',
             'throw' => false,
         ]);
+
+        return $disk;
     }
 }

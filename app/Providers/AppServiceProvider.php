@@ -7,9 +7,15 @@ namespace App\Providers;
 use App\Services\GitFileContentService;
 use App\Services\ReviewConfigService;
 use App\Support\LocalAsset;
+use App\Support\NonBlockingLocalFilesystemAdapter;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
+use League\Flysystem\Filesystem as Flysystem;
+use League\Flysystem\Local\LocalFilesystemAdapter;
 use Livewire\Blaze\Blaze;
 
 class AppServiceProvider extends ServiceProvider
@@ -34,6 +40,17 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Model::preventLazyLoading(! app()->isProduction());
+
+        Storage::extend('non-blocking-local', function (Application $_, array $config): FilesystemAdapter {
+            $adapter = new NonBlockingLocalFilesystemAdapter(
+                $config['root'],
+                ($config['links'] ?? null) === 'skip'
+                    ? LocalFilesystemAdapter::SKIP_LINKS
+                    : LocalFilesystemAdapter::DISALLOW_LINKS,
+            );
+
+            return new FilesystemAdapter(new Flysystem($adapter), $adapter, $config);
+        });
 
         Blade::if('native', fn () => (bool) config('nativephp-internal.running'));
         Blade::if('browser', fn () => ! config('nativephp-internal.running'));

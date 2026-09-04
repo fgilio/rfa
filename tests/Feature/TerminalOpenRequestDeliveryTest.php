@@ -88,18 +88,31 @@ test('cold-start inbox delivery opens and focuses a repository file', function (
 });
 
 test('the deep link wins the claim when it arrives before the inbox is drained', function () {
-    writeInboxRequest($this->inboxDir, '1755975000-4242', $this->repoPath);
+    $inboxFile = writeInboxRequest($this->inboxDir, '1755975000-4242', $this->repoPath);
 
     app(HandleDeepLink::class)->handle(new OpenedFromURL(
         'rfa://open?path='.rawurlencode($this->repoPath).'&id=1755975000-4242'
     ));
 
-    expect($this->navigations->all())->toHaveCount(1);
+    expect($this->navigations->all())->toHaveCount(1)
+        ->and(File::exists($inboxFile))->toBeFalse();
 
     drainInbox();
 
     expect($this->navigations->all())->toHaveCount(1)
         ->and(File::glob($this->inboxDir.'/*.path'))->toBeEmpty();
+});
+
+test('successful deep-link delivery removes only its matching inbox request', function () {
+    $matchingInboxFile = writeInboxRequest($this->inboxDir, '1755975000-1', $this->repoPath);
+    $otherInboxFile = writeInboxRequest($this->inboxDir, '1755975000-2', $this->repoPath);
+
+    app(HandleDeepLink::class)->handle(new OpenedFromURL(
+        'rfa://open?path='.rawurlencode($this->repoPath).'&id=1755975000-1'
+    ));
+
+    expect(File::exists($matchingInboxFile))->toBeFalse()
+        ->and(File::exists($otherInboxFile))->toBeTrue();
 });
 
 test('two different requests each open once', function () {
@@ -157,12 +170,14 @@ test('draining a queued request emits a canonical inbox.opened event', function 
         ->and(Context::get('rfa.duration_ms'))->toBeInt();
 });
 
-test('a request the deep link already claimed drains as skipped', function () {
+test('a duplicate request the deep link already claimed drains as skipped', function () {
     writeInboxRequest($this->inboxDir, '1755975000-4242', $this->repoPath);
 
     app(HandleDeepLink::class)->handle(new OpenedFromURL(
         'rfa://open?path='.rawurlencode($this->repoPath).'&id=1755975000-4242'
     ));
+
+    writeInboxRequest($this->inboxDir, '1755975000-4242', $this->repoPath);
 
     Log::spy();
 

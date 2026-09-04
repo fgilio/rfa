@@ -594,6 +594,21 @@ test('whole-file repository diff uses the working file without external semantic
         ->and($diff)->toContain('+body');
 });
 
+test('whole-file repository diff includes an explicitly focused ignored file', function () {
+    $this->initTestRepo($this->tmpDir);
+    File::put($this->tmpDir.'/notes.md', "# Notes\n\nbody\n");
+    $this->commitTestRepo($this->tmpDir, 'initial');
+    File::put($this->tmpDir.'/.rfaignore', "notes.md\n");
+
+    $regularDiff = $this->service->getFileDiff($this->tmpDir, 'notes.md');
+    $wholeFileDiff = $this->service->getFileDiff($this->tmpDir, 'notes.md', isWholeFile: true);
+
+    expect($regularDiff)->toBe('')
+        ->and($wholeFileDiff)->toContain('--- /dev/null')
+        ->and($wholeFileDiff)->toContain('+# Notes')
+        ->and($wholeFileDiff)->toContain('+body');
+});
+
 test('getFileDiff returns null when diff exceeds max bytes', function () {
     $this->initTestRepo($this->tmpDir);
     File::put($this->tmpDir.'/big.txt', "small\n");
