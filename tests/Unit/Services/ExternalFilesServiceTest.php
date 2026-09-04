@@ -1,7 +1,9 @@
 <?php
 
 use App\Services\ExternalFilesService;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -126,6 +128,23 @@ test('drops configs with non-existent paths', function () {
     foreach ($paths as $p) {
         expect($p)->not->toStartWith('external/gone');
     }
+});
+
+test('rejects named pipes without opening them', function () {
+    if (! function_exists('posix_mkfifo')) {
+        $this->markTestSkipped('POSIX FIFO support is unavailable.');
+    }
+
+    $pipe = $this->extDir.'/events.pipe';
+
+    expect(posix_mkfifo($pipe, 0600))->toBeTrue();
+
+    $disk = Mockery::mock(FilesystemAdapter::class);
+    $disk->shouldReceive('fileExists')->once()->with('events.pipe')->andReturn(false);
+    $disk->shouldNotReceive('readStream');
+    Storage::shouldReceive('build')->once()->andReturn($disk);
+
+    expect($this->service->canonicalFilePath($pipe))->toBeNull();
 });
 
 test('resolveAbsolutePath round-trips a mount path back to its on-disk file', function () {
