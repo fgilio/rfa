@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions;
 
 use App\Models\Project;
+use App\Services\ExternalFilesService;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\File;
 use Throwable;
@@ -15,38 +16,41 @@ final readonly class OpenPathForReviewAction
         private OpenProjectFromPathAction $openProject,
         private EnsureFileWorkspaceAction $ensureFileWorkspace,
         private LinkExternalPathAction $linkExternalPath,
+        private ExternalFilesService $externalFilesService,
     ) {}
 
     /** @return array{project: Project, filePath: ?string}|null */
     public function handle(string $path): ?array
     {
-        $realPath = realpath($path);
+        $parentPath = realpath(dirname($path));
 
-        if ($realPath === false) {
+        if ($parentPath === false) {
             Context::add('rfa.reason', 'path_not_found');
 
             return null;
         }
 
-        if (File::isDirectory($realPath)) {
-            $project = $this->openProject->handle($realPath);
+        $lexicalPath = $parentPath.DIRECTORY_SEPARATOR.basename($path);
+
+        if (! is_link($lexicalPath) && File::isDirectory($lexicalPath)) {
+            $project = $this->openProject->handle($lexicalPath);
 
             return $project === null ? null : $this->target($project);
         }
 
-        if (! File::isFile($realPath)) {
-            Context::add('rfa.reason', 'unsupported_path_type');
-
-            return null;
-        }
-
-        $project = $this->openProject->handle(dirname($realPath));
+        $project = $this->openProject->handle($parentPath);
 
         if ($project !== null) {
+            if (! is_link($lexicalPath) && ! File::isFile($lexicalPath)) {
+                Context::add('rfa.reason', 'path_not_found');
+
+                return null;
+            }
+
             $relativePath = str_replace(
                 DIRECTORY_SEPARATOR,
                 '/',
-                substr($realPath, strlen(rtrim($project->path, DIRECTORY_SEPARATOR)) + 1),
+                substr($lexicalPath, strlen(rtrim($project->path, DIRECTORY_SEPARATOR)) + 1),
             );
 
             return $this->target($project, $relativePath);
@@ -58,9 +62,16 @@ final readonly class OpenPathForReviewAction
 
         Context::forget(['rfa.reason', 'rfa.error_class']);
 
+        $externalPath = $this->externalFilesService->canonicalFilePath($lexicalPath);
+        if ($externalPath === null) {
+            Context::add('rfa.reason', 'path_not_found');
+
+            return null;
+        }
+
         try {
             $workspace = $this->ensureFileWorkspace->handle();
-            $externalPaths = $this->linkExternalPath->handle($workspace->id, $realPath);
+            $externalPaths = $this->linkExternalPath->handle($workspace->id, $externalPath);
         } catch (Throwable $exception) {
             Context::add('rfa.reason', 'file_workspace_failed');
             Context::add('rfa.error_class', $exception::class);
@@ -69,7 +80,7 @@ final readonly class OpenPathForReviewAction
         }
 
         $linkedFile = collect($externalPaths)
-            ->first(fn (array $row): bool => realpath($row['path']) === $realPath);
+            ->first(fn (array $row): bool => realpath($row['path']) === $externalPath);
 
         if ($linkedFile === null) {
             Context::add('rfa.reason', 'external_file_link_failed');

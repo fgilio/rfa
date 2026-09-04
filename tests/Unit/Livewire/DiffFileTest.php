@@ -29,7 +29,7 @@ beforeEach(function () {
     // Mock LoadFileDiffAction so it never touches git
     app()->bind(LoadFileDiffAction::class, fn () => new class
     {
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null, bool $isWholeFile = false): LoadedDiff
         {
             return DiffFixtureFactory::loadedDiff(path: $path);
         }
@@ -274,7 +274,7 @@ test('lazy placeholder headers keep data local to each view', function () {
 test('too-large diff keeps the placeholder content-action width after hydration', function () {
     app()->bind(LoadFileDiffAction::class, fn () => new class
     {
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null, bool $isWholeFile = false): LoadedDiff
         {
             return LoadedDiff::tooLarge($path);
         }
@@ -493,7 +493,7 @@ function mountMultiHunkDiffFile(array $diffData, array $file): Testable
     {
         public function __construct(private array $diffData) {}
 
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null, bool $isWholeFile = false): LoadedDiff
         {
             return LoadedDiff::tryFrom($this->diffData) ?? LoadedDiff::empty($path);
         }
@@ -682,7 +682,7 @@ test('expandGap settles the action when the full-context reload finds no diff', 
     // the completion event itself or the spinner stays stuck until a refresh.
     app()->bind(LoadFileDiffAction::class, fn () => new class
     {
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null, bool $isWholeFile = false): LoadedDiff
         {
             return $contextLines >= 99999
                 ? LoadedDiff::empty($path)
@@ -706,7 +706,7 @@ test('expandGap settles a tiered-chip expand when the reload finds no diff', fun
     // stuck. Guards a regression that only settles when $lineCount is null.
     app()->bind(LoadFileDiffAction::class, fn () => new class
     {
-        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
+        public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, int $contextLines = 3, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null, bool $isWholeFile = false): LoadedDiff
         {
             return $contextLines >= 99999
                 ? LoadedDiff::empty($path)
@@ -743,7 +743,7 @@ test('copyContent forwards the file status to GetFileCopyContentAction', functio
     {
         public function __construct(private object $captured) {}
 
-        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
+        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null, bool $isWholeFile = false): CopyContentResult
         {
             $this->captured->kind = $kind;
             $this->captured->status = $status;
@@ -763,7 +763,7 @@ test('copyContent forwards the file status to GetFileCopyContentAction', functio
 test('copyContent copies the content and toasts success when the result is ok', function () {
     app()->bind(GetFileCopyContentAction::class, fn () => new class
     {
-        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
+        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null, bool $isWholeFile = false): CopyContentResult
         {
             return CopyContentResult::ok('the new body');
         }
@@ -777,7 +777,7 @@ test('copyContent copies the content and toasts success when the result is ok', 
 test('copyContent surfaces a feedback toast and no clipboard event when nothing is available', function () {
     app()->bind(GetFileCopyContentAction::class, fn () => new class
     {
-        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
+        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null, bool $isWholeFile = false): CopyContentResult
         {
             return CopyContentResult::unavailable();
         }
@@ -794,7 +794,7 @@ test('copyContent surfaces a feedback toast and no clipboard event when nothing 
 test('copyContent reports a too-large source with its size', function () {
     app()->bind(GetFileCopyContentAction::class, fn () => new class
     {
-        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null): CopyContentResult
+        public function handle(string $kind, string $repoPath, string $path, bool $isUntracked, DiffTarget $target, ?string $oldPath = null, string $status = 'modified', bool $isExternal = false, ?string $externalAbsolutePath = null, bool $isWholeFile = false): CopyContentResult
         {
             return CopyContentResult::tooLarge(2_000_000);
         }

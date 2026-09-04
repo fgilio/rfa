@@ -249,6 +249,35 @@ test('file query scopes the load, filters the page, and selects the requested fi
         ]);
 });
 
+test('missing file query restores the full repository list', function () {
+    $files = $this->files;
+
+    app()->bind(GetFileListAction::class, fn () => new class($files)
+    {
+        public function __construct(private array $files) {}
+
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
+        {
+            app('test.captured_only_paths')->push($onlyPath);
+
+            return $onlyPath === null ? $this->files : [];
+        }
+    });
+
+    $component = Livewire::withQueryParams(['file' => 'src/Missing.php'])
+        ->test('pages::review-page', ['slug' => 'test-project']);
+
+    expect(app('test.captured_only_paths')->all())->toBe(['src/Missing.php', null])
+        ->and($component->get('focusedFilePath'))->toBeNull()
+        ->and($component->get('initialFocusFileId'))->toBeNull()
+        ->and($component->instance()->reviewState()->visibleFileEntries)->toBe([
+            ['id' => 'abc123', 'path' => 'src/Foo.php'],
+            ['id' => 'def456', 'path' => 'src/Bar.php'],
+        ]);
+
+    $component->assertDispatched('focused-file-mode-cleared');
+});
+
 test('editing the focused-file filter returns to the full project', function () {
     $component = Livewire::withQueryParams(['file' => 'src/Bar.php'])
         ->test('pages::review-page', ['slug' => 'test-project'])
@@ -906,6 +935,35 @@ test('discardFileChanges is a no-op for external files', function () {
     Livewire::test('pages::review-page', ['slug' => 'test-project'])
         ->dispatch('discard-file', fileId: 'ext789')
         ->assertNotDispatched('undo-available');
+});
+
+test('discardFileChanges is a no-op for repository whole-file reviews', function () {
+    $wholeFile = [
+        ['id' => 'whole789', 'path' => 'README.md', 'status' => 'modified', 'oldPath' => null, 'additions' => 10, 'deletions' => 0, 'isBinary' => false, 'isUntracked' => false, 'isExternal' => false, 'isWholeFile' => true],
+    ];
+
+    app()->bind(GetFileListAction::class, fn () => new class($wholeFile)
+    {
+        public function __construct(private array $files) {}
+
+        public function handle(string $repoPath, bool $clearCache = true, ?int $projectId = null, ?string $globalGitignorePath = null, ?DiffTarget $target = null, ?string $onlyPath = null): array
+        {
+            return $this->files;
+        }
+    });
+
+    app()->bind(DiscardFileChangesAction::class, fn () => new class
+    {
+        public function handle(string $repoPath, string $path, string $status, int $projectId, ?string $oldPath = null, bool $isUntracked = false, bool $isSymlink = false, array $comments = []): TrashedFile
+        {
+            throw new RuntimeException('DiscardFileChangesAction should not be called for whole-file reviews');
+        }
+    });
+
+    Livewire::test('pages::review-page', ['slug' => 'test-project'])
+        ->dispatch('discard-file', fileId: 'whole789')
+        ->assertNotDispatched('undo-available')
+        ->assertDontSee('Discard changes');
 });
 
 test('discardFileChanges is a no-op in the entire-repo (since the beginning) view', function () {

@@ -83,10 +83,7 @@ final readonly class GetFileListAction
         }
 
         if ($files === [] && $target->isWorkingDirectory() && $onlyPath !== null) {
-            $absolutePath = PathGuard::tryResolveWithinRepo($repoPath, $onlyPath);
-            $explicitFile = $absolutePath === null
-                ? null
-                : $this->externalFilesService->entryForAbsolutePath($absolutePath, $onlyPath);
+            $explicitFile = $this->gitDiffService->getWholeFileEntry($repoPath, $onlyPath);
 
             if ($explicitFile !== null) {
                 $files[] = $explicitFile;

@@ -28,13 +28,14 @@ final readonly class DiffFileViewModel
         return self::supportsContentCopy($file) && $outcome !== DiffLoadOutcome::TooLarge;
     }
 
-    /** @param array{status?: string, isExternal?: bool} $file */
+    /** @param array{status?: string, isExternal?: bool, isWholeFile?: bool} $file */
     public static function showsDiscard(array $file, bool $allowDiscard, ?string $diffTo): bool
     {
         return $allowDiscard
             && $diffTo === null
             && ($file['status'] ?? '') !== 'commented'
-            && ! ($file['isExternal'] ?? false);
+            && ! ($file['isExternal'] ?? false)
+            && ! ($file['isWholeFile'] ?? false);
     }
 
     /**

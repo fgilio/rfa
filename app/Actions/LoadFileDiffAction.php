@@ -36,16 +36,16 @@ final readonly class LoadFileDiffAction
 
     private readonly ReviewConfigService $reviewConfigService;
 
-    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, ?int $contextLines = null, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null): LoadedDiff
+    public function handle(string $repoPath, string $path, bool $isUntracked = false, ?string $cacheKey = null, ?int $contextLines = null, ?DiffTarget $target = null, ?string $oldPath = null, ?string $externalAbsolutePath = null, bool $isWholeFile = false): LoadedDiff
     {
         $target ??= DiffTarget::workingDirectory();
         $reviewConfig = $this->reviewConfigService->resolve();
 
-        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target, $oldPath, $externalAbsolutePath, $reviewConfig): LoadedDiff {
+        $compute = function () use ($repoPath, $path, $isUntracked, $contextLines, $target, $oldPath, $externalAbsolutePath, $isWholeFile, $reviewConfig): LoadedDiff {
             try {
                 $rawDiff = $externalAbsolutePath !== null
                     ? $this->externalFilesService->buildDiff($externalAbsolutePath, $path)
-                    : $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, contextLines: $contextLines, target: $target, oldPath: $oldPath);
+                    : $this->gitDiffService->getFileDiff($repoPath, $path, $isUntracked, contextLines: $contextLines, target: $target, oldPath: $oldPath, isWholeFile: $isWholeFile);
             } catch (GitCommandException $e) {
                 Log::warning('git.diff.failed', [
                     'reason' => 'diff_process_failed',
@@ -65,11 +65,11 @@ final readonly class LoadFileDiffAction
                 return LoadedDiff::empty($path);
             }
 
-            // Untracked and external diffs are hand-built (never git-colorized),
+            // Untracked, whole-file, and external diffs are hand-built (never git-colorized),
             // so their content can hold literal ANSI escapes. Moved-line detection
             // strips ANSI from the whole patch, which would corrupt that content;
             // only enable it for real git-colorized diffs.
-            $isHandBuiltDiff = $externalAbsolutePath !== null || ($isUntracked && $target->isWorkingDirectory());
+            $isHandBuiltDiff = $externalAbsolutePath !== null || (($isUntracked || $isWholeFile) && $target->isWorkingDirectory());
 
             $fileDiff = $this->diffParser->parseSingle($rawDiff, detectMovedLines: $reviewConfig->movedLineDetection && ! $isHandBuiltDiff);
 

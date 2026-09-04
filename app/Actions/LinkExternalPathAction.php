@@ -54,7 +54,15 @@ final readonly class LinkExternalPathAction
         }
 
         $real = realpath($path);
-        if ($real === false || (! is_dir($real) && ! is_file($real))) {
+        if ($real === false) {
+            return null;
+        }
+
+        if (! is_dir($real)) {
+            $real = $this->externalFilesService->canonicalFilePath($path);
+        }
+
+        if ($real === null) {
             return null;
         }
 

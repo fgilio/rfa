@@ -30,15 +30,15 @@ RFA_INPUT_PATH="${RFA_INPUT_PATH:-$(pwd)}"
 
 # Resolve directories to their Git root. Files stay files so the app can focus
 # them and choose a managed workspace when they do not belong to a repository.
-if [ -d "$RFA_INPUT_PATH" ]; then
+if [ -d "$RFA_INPUT_PATH" ] && [ ! -L "$RFA_INPUT_PATH" ]; then
     git -C "$RFA_INPUT_PATH" rev-parse --show-toplevel >/dev/null 2>&1 || {
         echo "Error: not a git repository: $RFA_INPUT_PATH" >&2
         exit 1
     }
 
     RFA_OPEN_PATH="$(git -C "$RFA_INPUT_PATH" rev-parse --show-toplevel)"
-elif [ -f "$RFA_INPUT_PATH" ]; then
-    RFA_OPEN_PATH="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$RFA_INPUT_PATH")"
+elif [ -f "$RFA_INPUT_PATH" ] || [ -L "$RFA_INPUT_PATH" ]; then
+    RFA_OPEN_PATH="$(python3 -c 'import os,sys; p=os.path.abspath(sys.argv[1]); print(os.path.join(os.path.realpath(os.path.dirname(p)), os.path.basename(p)))' "$RFA_INPUT_PATH")"
 else
     echo "Error: path does not exist or is not a regular file or directory: $RFA_INPUT_PATH" >&2
     exit 1

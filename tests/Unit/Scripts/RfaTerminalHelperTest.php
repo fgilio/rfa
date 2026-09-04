@@ -167,6 +167,47 @@ test('terminal helper delivers a repository file instead of replacing it with th
         ->and(rawurldecode(File::get($this->openCapturePath)))->toContain('path='.realpath($file));
 });
 
+test('terminal helper preserves a repository symlink leaf', function () {
+    $outside = $this->homePath.'/outside.md';
+    File::put($outside, "outside\n");
+    $link = $this->repoPath.'/linked.md';
+    symlink($outside, $link);
+
+    $process = new Process([base_path('rfa'), $link], base_path(), [
+        'HOME' => $this->homePath,
+        'PATH' => $this->fakeBinPath.':'.getenv('PATH'),
+        'RFA_OPEN_CAPTURE' => $this->openCapturePath,
+    ]);
+    $process->mustRun();
+
+    $inboxFiles = File::glob(rfaTerminalHelperDataPath($this->homePath).'/inbox/*.path');
+    $lexicalLink = realpath(dirname($link)).'/'.basename($link);
+
+    expect($inboxFiles)->toHaveCount(1)
+        ->and(File::get($inboxFiles[0]))->toBe($lexicalLink."\n")
+        ->and(rawurldecode(File::get($this->openCapturePath)))->toContain('path='.$lexicalLink)
+        ->not->toContain('path='.$outside);
+});
+
+test('terminal helper accepts a dangling repository symlink', function () {
+    $link = $this->repoPath.'/dangling.md';
+    symlink('missing.md', $link);
+
+    $process = new Process([base_path('rfa'), $link], base_path(), [
+        'HOME' => $this->homePath,
+        'PATH' => $this->fakeBinPath.':'.getenv('PATH'),
+        'RFA_OPEN_CAPTURE' => $this->openCapturePath,
+    ]);
+    $process->mustRun();
+
+    $inboxFiles = File::glob(rfaTerminalHelperDataPath($this->homePath).'/inbox/*.path');
+    $lexicalLink = realpath(dirname($link)).'/'.basename($link);
+
+    expect($inboxFiles)->toHaveCount(1)
+        ->and(File::get($inboxFiles[0]))->toBe($lexicalLink."\n")
+        ->and(rawurldecode(File::get($this->openCapturePath)))->toContain('path='.$lexicalLink);
+});
+
 test('terminal helper accepts a file outside a Git repository', function () {
     $file = $this->homePath.'/standalone notes.md';
     File::put($file, "# Notes\n");

@@ -342,6 +342,7 @@ describe('install', () => {
 describe('createReviewPage path helpers', () => {
     afterEach(() => {
         delete window.__rfaReviewedActionQueue;
+        delete window.__rfaPendingExpandFiles;
     });
 
     it('splits a path into directory and basename', () => {
@@ -364,21 +365,23 @@ describe('createReviewPage path helpers', () => {
         expect(createReviewPage({}).activeFile).toBeNull();
     });
 
-    it('focuses the requested file without persisting the selection again', () => {
+    it('focuses the requested file without persisting the selection again', async () => {
         const page = createReviewPage({ initialFocusFileId: 'file-7' });
-        page.$nextTick = (callback) => callback();
+        page.$nextTick = vi.fn().mockResolvedValue();
         page.scrollToFile = vi.fn();
 
-        page.focusInitialFile();
+        await page.focusInitialFile();
 
+        expect(page.$nextTick).toHaveBeenCalledOnce();
         expect(page.scrollToFile).toHaveBeenCalledWith('file-7', false);
+        expect(window.__rfaPendingExpandFiles.has('file-7')).toBe(true);
     });
 
-    it('does not focus a file during normal project entry', () => {
+    it('does not focus a file during normal project entry', async () => {
         const page = createReviewPage({});
-        page.$nextTick = vi.fn();
+        page.$nextTick = vi.fn().mockResolvedValue();
 
-        page.focusInitialFile();
+        await page.focusInitialFile();
 
         expect(page.$nextTick).not.toHaveBeenCalled();
     });

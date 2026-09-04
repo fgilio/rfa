@@ -55,9 +55,25 @@ test('surfaces an unchanged requested file as a whole-file review', function () 
 
     expect($files)->toHaveCount(1)
         ->and($files[0]['path'])->toBe('file.txt')
-        ->and($files[0]['status'])->toBe('added')
-        ->and($files[0]['isExternal'])->toBeTrue()
-        ->and($files[0]['externalAbsolutePath'])->toBe(realpath($this->tmpDir.'/file.txt'));
+        ->and($files[0]['status'])->toBe('modified')
+        ->and($files[0]['isExternal'])->toBeFalse()
+        ->and($files[0]['externalAbsolutePath'])->toBeNull()
+        ->and($files[0]['isWholeFile'])->toBeTrue();
+});
+
+test('surfaces a dangling requested repository symlink as a whole-file review', function () {
+    symlink('missing.md', $this->tmpDir.'/link.md');
+    $this->commitTestRepo($this->tmpDir, 'add link');
+
+    $action = new GetFileListAction(new GitDiffService(new GitProcessService, new IgnoreService), app(ExternalFilesService::class), app(ReviewConfigService::class));
+    $files = $action->handle($this->tmpDir, onlyPath: 'link.md');
+
+    expect($files)->toHaveCount(1)
+        ->and($files[0]['path'])->toBe('link.md')
+        ->and($files[0]['isWholeFile'])->toBeTrue()
+        ->and($files[0]['isExternal'])->toBeFalse()
+        ->and($files[0]['isSymlink'])->toBeTrue()
+        ->and($files[0]['symlinkTarget'])->toBe('missing.md');
 });
 
 test('loads only the requested configured external file', function () {

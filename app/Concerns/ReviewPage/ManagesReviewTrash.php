@@ -46,7 +46,7 @@ trait ManagesReviewTrash
         }
 
         $file = collect($this->files)->firstWhere('id', $fileId);
-        if (! $file || $file['status'] === 'commented' || ($file['isExternal'] ?? false)) {
+        if (! $file || $file['status'] === 'commented' || ($file['isExternal'] ?? false) || ($file['isWholeFile'] ?? false)) {
             return;
         }
 

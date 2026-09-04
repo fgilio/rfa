@@ -241,6 +241,7 @@ final class PerfScenarioRunner
                 ?DiffTarget $target = null,
                 ?string $oldPath = null,
                 ?string $externalAbsolutePath = null,
+                bool $isWholeFile = false,
             ): LoadedDiff {
                 return LoadedDiff::tryFrom($this->diffData) ?? LoadedDiff::empty($path);
             }

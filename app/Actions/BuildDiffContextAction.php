@@ -58,9 +58,10 @@ final readonly class BuildDiffContextAction
                     $repoPath,
                     $file['path'],
                     $file['isUntracked'] ?? false,
-                    cacheKey: DiffCacheKey::for($repoPath, $fileId, $reviewFingerprint, $contextKey),
+                    cacheKey: DiffCacheKey::for($repoPath, $fileId, $reviewFingerprint, $contextKey.(($file['isWholeFile'] ?? false) ? ':whole-file' : '')),
                     oldPath: $file['oldPath'] ?? null,
                     target: $target,
+                    isWholeFile: $file['isWholeFile'] ?? false,
                 );
             }
 

@@ -44,6 +44,29 @@ test('registers the containing repository and resolves a file relative to its ro
         ->and(Project::count())->toBe(1);
 });
 
+test('preserves a repository symlink instead of opening its outside target', function () {
+    $outside = dirname($this->externalPath).'/outside.md';
+    File::put($outside, "outside\n");
+    symlink($outside, $this->repoPath.'/linked.md');
+
+    $target = $this->action->handle($this->repoPath.'/linked.md');
+
+    expect($target)->not->toBeNull()
+        ->and($target['project']->path)->toBe(realpath($this->repoPath))
+        ->and($target['filePath'])->toBe('linked.md')
+        ->and($target['project']->external_paths)->toBeNull();
+});
+
+test('opens a dangling repository symlink by its lexical path', function () {
+    symlink('missing.md', $this->repoPath.'/dangling.md');
+
+    $target = $this->action->handle($this->repoPath.'/dangling.md');
+
+    expect($target)->not->toBeNull()
+        ->and($target['project']->path)->toBe(realpath($this->repoPath))
+        ->and($target['filePath'])->toBe('dangling.md');
+});
+
 test('links a file outside Git to the managed Files workspace', function () {
     $target = $this->action->handle($this->externalPath);
 

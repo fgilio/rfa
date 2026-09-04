@@ -7,7 +7,9 @@ namespace App\Services;
 use App\DTOs\FileListEntry;
 use Carbon\Carbon;
 use FilesystemIterator;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Number;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -73,24 +75,56 @@ class ExternalFilesService
 
     public function entryForAbsolutePath(string $absolutePath, string $displayPath): ?FileListEntry
     {
-        $realPath = realpath($absolutePath);
+        $realPath = $this->canonicalFilePath($absolutePath);
 
-        if ($realPath === false || ! File::isFile($realPath)) {
+        if ($realPath === null) {
             return null;
         }
 
-        $additions = $this->streamCountLines($realPath);
-        $isBinary = $additions === null;
-        $info = new SplFileInfo($realPath);
+        $disk = $this->diskForFile($realPath);
+        $filename = basename($realPath);
 
-        return $this->buildFileListEntry(
-            mountPath: $displayPath,
-            absolutePath: $realPath,
-            additions: $isBinary ? 0 : $additions,
-            isBinary: $isBinary,
-            size: $info->getSize(),
-            mtime: $info->getMTime(),
-        );
+        try {
+            $stream = $disk->readStream($filename);
+            if (! is_resource($stream)) {
+                return null;
+            }
+
+            $additions = $this->countLinesInStream($stream);
+            $isBinary = $additions === null;
+
+            return $this->buildFileListEntry(
+                mountPath: $displayPath,
+                absolutePath: $realPath,
+                additions: $isBinary ? 0 : $additions,
+                isBinary: $isBinary,
+                size: $disk->size($filename),
+                mtime: $disk->lastModified($filename),
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    public function canonicalFilePath(string $path): ?string
+    {
+        $canonicalPath = realpath($path);
+        if ($canonicalPath === false) {
+            return null;
+        }
+
+        try {
+            $stream = $this->diskForFile($canonicalPath)->readStream(basename($canonicalPath));
+            if (! is_resource($stream)) {
+                return null;
+            }
+
+            fclose($stream);
+
+            return $canonicalPath;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -182,7 +216,9 @@ class ExternalFilesService
     private function entriesForConfig(array $config): array
     {
         if ($config['is_file']) {
-            return [$this->entryForFile($config)];
+            $entry = $this->entryForFile($config);
+
+            return $entry === null ? [] : [$entry];
         }
 
         $root = $config['root'];
@@ -284,20 +320,11 @@ class ExternalFilesService
     /**
      * @param  array{label: string, root: string, is_file: bool}  $config
      */
-    private function entryForFile(array $config): FileListEntry
+    private function entryForFile(array $config): ?FileListEntry
     {
-        $absolutePath = $config['root'];
-        $additions = $this->streamCountLines($absolutePath);
-        $isBinary = $additions === null;
-        $info = new SplFileInfo($absolutePath);
-
-        return $this->buildFileListEntry(
-            mountPath: self::MOUNT_PREFIX.'/'.$config['label'],
-            absolutePath: $absolutePath,
-            additions: $isBinary ? 0 : $additions,
-            isBinary: $isBinary,
-            size: $info->getSize(),
-            mtime: $info->getMTime(),
+        return $this->entryForAbsolutePath(
+            $config['root'],
+            self::MOUNT_PREFIX.'/'.$config['label'],
         );
     }
 
@@ -372,6 +399,12 @@ class ExternalFilesService
             return 0;
         }
 
+        return $this->countLinesInStream($handle);
+    }
+
+    /** @param resource $handle */
+    private function countLinesInStream($handle): ?int
+    {
         $count = 0;
         $lastByte = '';
         $firstChunk = true;
@@ -392,5 +425,15 @@ class ExternalFilesService
         fclose($handle);
 
         return $lastByte !== '' && $lastByte !== "\n" ? $count + 1 : $count;
+    }
+
+    private function diskForFile(string $absolutePath): Filesystem
+    {
+        return Storage::build([
+            'driver' => 'local',
+            'root' => dirname($absolutePath),
+            'links' => 'skip',
+            'throw' => false,
+        ]);
     }
 }
