@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\ExternalFilesService;
+use App\Support\NonBlockingLocalFilesystemAdapter;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
@@ -139,12 +140,41 @@ test('rejects named pipes without opening them', function () {
 
     expect(posix_mkfifo($pipe, 0600))->toBeTrue();
 
+    expect($this->service->canonicalFilePath($pipe))->toBeNull();
+});
+
+test('rejects a file replaced by a named pipe between validation and opening', function () {
+    if (! function_exists('posix_mkfifo') || ! function_exists('pcntl_alarm')) {
+        $this->markTestSkipped('POSIX FIFO and alarm support is unavailable.');
+    }
+
+    $path = $this->extDir.'/race.md';
+    File::put($path, "safe\n");
+
+    $adapter = new NonBlockingLocalFilesystemAdapter($this->extDir);
     $disk = Mockery::mock(FilesystemAdapter::class);
-    $disk->shouldReceive('fileExists')->once()->with('events.pipe')->andReturn(false);
-    $disk->shouldNotReceive('readStream');
+    $disk->shouldReceive('fileExists')->once()->with('race.md')->andReturnUsing(function () use ($path): bool {
+        unlink($path);
+        posix_mkfifo($path, 0600);
+
+        return true;
+    });
+    $disk->shouldReceive('readStream')->once()->with('race.md')->andReturnUsing(
+        fn () => $adapter->readStream('race.md'),
+    );
     Storage::shouldReceive('build')->once()->andReturn($disk);
 
-    expect($this->service->canonicalFilePath($pipe))->toBeNull();
+    $previousAlarmHandler = pcntl_signal_get_handler(SIGALRM);
+    pcntl_async_signals(true);
+    pcntl_signal(SIGALRM, fn () => throw new RuntimeException('External file open blocked.'));
+    pcntl_alarm(1);
+
+    try {
+        expect($this->service->canonicalFilePath($path))->toBeNull();
+    } finally {
+        pcntl_alarm(0);
+        pcntl_signal(SIGALRM, $previousAlarmHandler);
+    }
 });
 
 test('resolveAbsolutePath round-trips a mount path back to its on-disk file', function () {

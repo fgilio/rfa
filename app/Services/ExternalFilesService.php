@@ -438,7 +438,7 @@ class ExternalFilesService
     {
         /** @var FilesystemAdapter $disk */
         $disk = Storage::build([
-            'driver' => 'local',
+            'driver' => 'non-blocking-local',
             'root' => dirname($absolutePath),
             'links' => 'skip',
             'throw' => false,
