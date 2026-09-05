@@ -975,6 +975,7 @@ test('early php boot: spawns PHP first, warms it, then waits for Electron and th
         ->toContain('rfaWarmPhp() {')
         ->toContain('/_rfa/warm`')
         ->toContain("headers: { 'X-NativePHP-Secret': state.randomSecret }")
+        ->toContain('proxy: false')
         ->toContain('timeout: 4000')
         ->toContain('}).then(() => undefined, () => undefined);')
         ->toContain('const rfaConfig = this.loadConfig();')

@@ -63,6 +63,15 @@ test('record serialises manifest writes through a lock file next to the manifest
     expect(File::exists($service->manifestPath().'.lock'))->toBeTrue();
 });
 
+test('record fails loudly when the manifest lock cannot be opened', function () {
+    File::ensureDirectoryExists($this->manifestDir);
+    File::ensureDirectoryExists($this->manifestDir.'/manifest.json.lock');
+
+    $service = new OpcacheWarmService(new FakeOpcacheService(included: [base_path('app/a.php')]));
+
+    expect(fn () => $service->record())->toThrow(RuntimeException::class);
+});
+
 test('record reports opcache as unavailable without touching the manifest', function () {
     $service = new OpcacheWarmService(new FakeOpcacheService(enabled: false, included: [base_path('app/a.php')]));
 

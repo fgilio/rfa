@@ -122,14 +122,16 @@ final readonly class OpcacheWarmService
     {
         File::ensureDirectoryExists(dirname($this->manifestPath()));
 
-        $lock = fopen($this->manifestPath().'.lock', 'c');
+        $lock = @fopen($this->manifestPath().'.lock', 'c');
 
         if ($lock === false) {
             throw new RuntimeException('Unable to open the opcache manifest lock file.');
         }
 
         try {
-            flock($lock, LOCK_EX);
+            if (! flock($lock, LOCK_EX)) {
+                throw new RuntimeException('Unable to lock the opcache manifest for writing.');
+            }
 
             return $callback();
         } finally {

@@ -1475,6 +1475,7 @@ JS;
         // nothing either way: the boot chain treats any value as a failure.
         return axios.get(`http://127.0.0.1:${state.phpPort}/_rfa/warm`, {
             headers: { 'X-NativePHP-Secret': state.randomSecret },
+            proxy: false,
             timeout: 4000,
         }).then(() => undefined, () => undefined);
     }
