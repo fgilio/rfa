@@ -194,6 +194,10 @@ jobs:
             if [ -f src/composer.json ] && [ ! -f composer.json ]; then
               cd src
             fi
+            # vendor/ carries the head commit's NativePHP patches. Each commit's
+            # patch script only recognises stock files or its own output, so
+            # reinstall the plugin from the download cache before it runs.
+            rm -rf vendor/nativephp
             composer install --no-interaction --prefer-dist --no-progress
           fi
           # Resolve app root (src/ on old commits, . on new)
@@ -215,6 +219,7 @@ jobs:
         name: Compare PR benchmark to baseline
         run: |
           git checkout --force ${{ github.event.pull_request.head.sha }}
+          rm -rf vendor/nativephp
           composer install --no-interaction --prefer-dist --no-progress
           cp .env.example .env
           php artisan key:generate
