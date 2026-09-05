@@ -1447,7 +1447,7 @@ JS;
             const rfaConfig = this.loadConfig();
             yield this.startElectronApi();
             state.phpIni = yield this.loadPhpIni();
-            const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).catch((rfaError) => rfaError);
+            const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).then(() => null, (rfaError) => rfaError);
             yield app.whenReady();
             yield this.rfaResolveAppearance(); // [rfa appearance] resolve before either window exists
             this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots
@@ -1471,11 +1471,12 @@ JS;
     rfaWarmPhp() {
         // [rfa early php] Ask the server to compile the scripts earlier page
         // loads needed into opcache shared memory. Best effort: an error or a
-        // slow answer never holds the window back for long.
+        // slow answer never holds the window back for long. Resolves to
+        // nothing either way: the boot chain treats any value as a failure.
         return axios.get(`http://127.0.0.1:${state.phpPort}/_rfa/warm`, {
             headers: { 'X-NativePHP-Secret': state.randomSecret },
             timeout: 4000,
-        }).catch(() => undefined);
+        }).then(() => undefined, () => undefined);
     }
     loadPhpIni() {
 JS;
@@ -1496,6 +1497,45 @@ JS;
         && str_contains($content, $bootReplace)
         && str_contains($content, $methodsReplace)
         && ! str_contains($content, $bootFind);
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
+ * Make the PHP secret cookie wait for Electron readiness.
+ *
+ * `startPhpApp()` stores the shared secret in the default session once the
+ * server is listening. With the server spawned before `app.whenReady()`
+ * (see rfaPatchEarlyPhpBoot), a fast server wins that race and
+ * `session.defaultSession` throws "Session can only be received when app
+ * is ready", which aborts the whole bootstrap behind the splash.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchCookieAfterReady(string $content): ?string
+{
+    $importFind = "import { session } from 'electron';";
+    $importReplace = "import { app, session } from 'electron'; // [rfa cookie after ready]";
+
+    $find = <<<'JS'
+        yield session.defaultSession.cookies.set(cookie);
+JS;
+
+    $replace = <<<'JS'
+        yield app.whenReady(); // [rfa cookie after ready] the server may be up first
+        yield session.defaultSession.cookies.set(cookie);
+JS;
+
+    if (str_contains($content, $importFind)) {
+        $content = str_replace($importFind, $importReplace, $content);
+    }
+
+    if (str_contains($content, $find) && ! str_contains($content, $replace)) {
+        $content = str_replace($find, $replace, $content);
+    }
+
+    $fullyPatched = str_contains($content, $importReplace) && str_contains($content, $replace);
 
     return $fullyPatched ? $content : null;
 }
@@ -1583,6 +1623,12 @@ function rfaNativePhpPatchSet(): array
             'file' => 'server/php.js',
             'apply' => rfaPatchServerWorkers(...),
             'summary' => 'PHP built-in server runs forked workers',
+        ],
+        [
+            'name' => 'cookie-after-ready',
+            'file' => 'server/utils.js',
+            'apply' => rfaPatchCookieAfterReady(...),
+            'summary' => 'PHP secret cookie waits for Electron readiness',
         ],
         [
             'name' => 'preflight-cache',

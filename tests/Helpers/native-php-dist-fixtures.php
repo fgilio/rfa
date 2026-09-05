@@ -76,6 +76,25 @@ export default router;
 JS;
 }
 
+function stockUtils(): string
+{
+    return <<<'JS'
+import { session } from 'electron';
+import state from './state.js';
+import axios from 'axios';
+export function appendCookie() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const cookie = {
+            url: `http://localhost:${state.phpPort}`,
+            name: "_php_native",
+            value: state.randomSecret,
+        };
+        yield session.defaultSession.cookies.set(cookie);
+    });
+}
+JS;
+}
+
 function stockServer(): string
 {
     return <<<'JS'

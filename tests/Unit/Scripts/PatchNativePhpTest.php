@@ -911,6 +911,35 @@ test('server workers: is idempotent', function () {
     expect(rfaPatchServerWorkers($patched))->toBe($patched);
 });
 
+// ===== server/utils.js: secret cookie after Electron readiness =====
+
+test('cookie after ready: reports a shape change when appendCookie is missing', function () {
+    expect(rfaPatchCookieAfterReady("import { session } from 'electron';"))->toBeNull();
+});
+
+test('cookie after ready: waits for readiness before touching the default session', function () {
+    $content = (string) rfaPatchCookieAfterReady(stockUtils());
+
+    expect($content)
+        ->toContain("import { app, session } from 'electron'; // [rfa cookie after ready]")
+        ->toContain('yield app.whenReady(); // [rfa cookie after ready]')
+        ->and(strpos($content, 'yield app.whenReady();'))->toBeLessThan(strpos($content, 'session.defaultSession.cookies.set(cookie)'))
+        ->and(substr_count($content, 'app.whenReady()'))->toBe(1);
+});
+
+test('cookie after ready: is idempotent', function () {
+    $patched = rfaPatchCookieAfterReady(stockUtils());
+
+    expect(rfaPatchCookieAfterReady($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP utils wait for readiness before setting the secret cookie', function () {
+    $utilsPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/utils.js';
+
+    expect(file_get_contents($utilsPath))
+        ->toContain('yield app.whenReady(); // [rfa cookie after ready]');
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/utils.js'), 'NativePHP desktop electron plugin not installed');
+
 // ===== index.js: PHP server before Electron readiness + opcache warm-up =====
 
 function indexReadyForEarlyPhpBoot(): string
@@ -940,13 +969,14 @@ test('early php boot: spawns PHP first, warms it, then waits for Electron and th
 
     expect($content)
         ->toContain('import axios from "axios"; // [rfa early php]')
-        ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).catch((rfaError) => rfaError);')
+        ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).then(() => null, (rfaError) => rfaError);')
         ->toContain('const rfaPhpFailure = yield rfaPhpBoot;')
         ->toContain('throw rfaPhpFailure;')
         ->toContain('rfaWarmPhp() {')
         ->toContain('/_rfa/warm`')
         ->toContain("headers: { 'X-NativePHP-Secret': state.randomSecret }")
         ->toContain('timeout: 4000')
+        ->toContain('}).then(() => undefined, () => undefined);')
         ->toContain('const rfaConfig = this.loadConfig();')
         ->toContain('const config = yield rfaConfig;')
         ->toContain('yield this.rfaResolveAppearance(); // [rfa appearance] resolve before either window exists')
