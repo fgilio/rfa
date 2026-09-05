@@ -4,7 +4,7 @@
  * The NativePHP vendor changes RFA depends on, applied as one patch set.
  *
  * The edits across `nativephp/desktop`'s bundled Electron app are not
- * independent in practice: three of them rewrite
+ * independent in practice: four of them rewrite
  * the same `dist/index.js`, and a build that ships some of them is a build
  * whose startup behaviour nobody has tested. So the set is all-or-nothing —
  * every expected source shape is checked, and every new file content computed,
@@ -202,6 +202,94 @@ JS;
     // one barrier for the main window. Other windows need first paint only.
     // electron-window-state can implicitly show the main window while restoring
     // maximization. Its opacity barrier replaces ready-to-show for that window.
+    // The renderer waits 4s; this outer timeout leaves 1s for the IPC handoff.
+    const rfaReadinessTimeoutMs = 5000;
+    let rfaPresentationPhase = id === 'main' ? 'waiting-renderer' : 'waiting-paint';
+    let rfaFocusWhenReady = false;
+    let rfaReadinessTimer = null;
+    let rfaRendererMessageListener = null;
+    const rfaCleanupReadiness = () => {
+        if (rfaReadinessTimer !== null) {
+            clearTimeout(rfaReadinessTimer);
+            rfaReadinessTimer = null;
+        }
+        // A window closed before it presented has already torn down its
+        // webContents; touching it throws "Object has been destroyed".
+        if (rfaRendererMessageListener !== null && !window.isDestroyed()) {
+            window.webContents.removeListener('ipc-message', rfaRendererMessageListener);
+        }
+        rfaRendererMessageListener = null;
+    };
+    const rfaPresent = () => {
+        if (rfaPresentationPhase === 'presented' || rfaPresentationPhase === 'closed') {
+            return;
+        }
+        rfaPresentationPhase = 'presented';
+        rfaCleanupReadiness();
+        if (id === 'main') {
+            window.setOpacity(1);
+        }
+        if (state.noFocusOnRestart && window.isVisible()) {
+            rfaFocusWhenReady = false;
+            if (id === 'main') {
+                window.emit('rfa:presented');
+            }
+            return;
+        }
+        window.show();
+        if (rfaFocusWhenReady) {
+            window.focus();
+        }
+        rfaFocusWhenReady = false;
+        if (id === 'main') {
+            window.emit('rfa:presented');
+        }
+    };
+    window.rfaRequestShow = (focus = false) => {
+        if (rfaPresentationPhase === 'closed') {
+            return;
+        }
+        if (rfaPresentationPhase === 'presented') {
+            if (state.noFocusOnRestart && window.isVisible()) {
+                return;
+            }
+            window.show();
+            if (focus) {
+                window.focus();
+            }
+            return;
+        }
+        rfaFocusWhenReady = rfaFocusWhenReady || focus;
+    };
+    if (id === 'main') {
+        // The renderer signals after its settled DOM has been painted for two
+        // further frames (renderer-ready.js), so the window is shown at once.
+        rfaRendererMessageListener = (_, channel) => {
+            if (channel !== 'rfa:renderer-ready' || rfaPresentationPhase !== 'waiting-renderer') {
+                return;
+            }
+            rfaPresent();
+        };
+        window.webContents.on('ipc-message', rfaRendererMessageListener);
+        rfaReadinessTimer = setTimeout(rfaPresent, rfaReadinessTimeoutMs);
+    } else {
+        window.once('ready-to-show', rfaPresent);
+    }
+    window.once('closed', () => {
+        rfaPresentationPhase = 'closed';
+        rfaCleanupReadiness();
+    });
+JS;
+
+    // The readiness block as the PREVIOUS RFA revision left it. It captured a
+    // full frame through beginFrameSubscription before presenting (a bitmap
+    // copy of the whole window, ~200ms on a Retina display) and touched a
+    // destroyed webContents when the window closed before presenting.
+    $previousReplace = <<<'JS'
+    // [rfa window readiness] Electron first paint and renderer stability form
+    // one barrier for the main window. Other windows need first paint only.
+    // electron-window-state can implicitly show the main window while restoring
+    // maximization. Its opacity barrier replaces ready-to-show for that window.
     // The renderer waits 4s; this outer timeout leaves 1s for the IPC/frame handoff.
     const rfaReadinessTimeoutMs = 5000;
     let rfaPresentationPhase = id === 'main' ? 'waiting-renderer' : 'waiting-paint';
@@ -302,6 +390,8 @@ JS;
 
     if (str_contains($content, $find)) {
         $content = str_replace($find, $replace, $content);
+    } elseif (str_contains($content, $previousReplace)) {
+        $content = str_replace($previousReplace, $replace, $content);
     }
 
     $showFind = <<<'JS'
@@ -364,6 +454,7 @@ JS;
         && str_contains($content, $showReplace)
         && str_contains($content, $existingReplace)
         && ! str_contains($content, $find)
+        && ! str_contains($content, $previousReplace)
         && ! str_contains($content, $showFind)
         && ! str_contains($content, $existingFind);
 
@@ -1307,11 +1398,191 @@ JS;
 }
 
 /**
+ * Start the PHP server before Electron is ready and warm its opcache.
+ *
+ * NativePHP waits for `app.whenReady()`, resolves the appearance, opens the
+ * splash, and only then spawns the PHP server, whose first request (the
+ * `booted` handshake) then compiles the whole framework from scratch. None
+ * of the PHP set-up depends on Electron being ready, so the server is spawned
+ * as soon as the main bundle runs and asked to pre-compile the scripts the
+ * previous launches needed (`/_rfa/warm`, see OpcacheWarmService) while
+ * Electron finishes starting. The `booted` handshake and the first page
+ * request then run against a warm opcache. Fail open: a warm-up error or
+ * timeout only costs the cold first request this patch exists to avoid.
+ *
+ * Applied after the splash and appearance patches, which own the lines it
+ * moves around `app.whenReady()`.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchEarlyPhpBoot(string $content): ?string
+{
+    $importFind = 'import Store from "electron-store"; // [rfa preflight cache]';
+    $importMarker = 'import axios from "axios"; // [rfa early php]';
+    $importReplace = $importFind."\n".$importMarker;
+
+    $bootFind = <<<'JS'
+            yield app.whenReady();
+            yield this.rfaResolveAppearance(); // [rfa appearance] resolve before either window exists
+            this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots
+            const config = yield this.loadConfig();
+            this.setDockIcon();
+            this.setAppUserModelId(config);
+            this.setDeepLinkHandler(config);
+            this.startAutoUpdater(config);
+            yield this.startElectronApi();
+            state.phpIni = yield this.loadPhpIni();
+            yield this.startPhpApp();
+            this.startScheduler();
+JS;
+
+    $bootReplace = <<<'JS'
+            // [rfa early php] Nothing the PHP server needs waits on Electron's
+            // readiness, so it is spawned first and pre-compiles its opcache
+            // while Electron finishes starting and the splash appears. The
+            // `booted` handshake below then reaches a warm server. The config
+            // is only needed after readiness, so its own PHP boot (on a
+            // pre-flight cache miss) overlaps with the server spawn.
+            const rfaConfig = this.loadConfig();
+            yield this.startElectronApi();
+            state.phpIni = yield this.loadPhpIni();
+            const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).then(() => null, (rfaError) => rfaError);
+            yield app.whenReady();
+            yield this.rfaResolveAppearance(); // [rfa appearance] resolve before either window exists
+            this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots
+            const config = yield rfaConfig;
+            this.setDockIcon();
+            this.setAppUserModelId(config);
+            this.setDeepLinkHandler(config);
+            this.startAutoUpdater(config);
+            const rfaPhpFailure = yield rfaPhpBoot;
+            if (rfaPhpFailure) {
+                throw rfaPhpFailure;
+            }
+            this.startScheduler();
+JS;
+
+    $methodsAnchor = <<<'JS'
+    loadPhpIni() {
+JS;
+
+    $methodsReplace = <<<'JS'
+    rfaWarmPhp() {
+        // [rfa early php] Ask the server to compile the scripts earlier page
+        // loads needed into opcache shared memory. Best effort: an error or a
+        // slow answer never holds the window back for long. Resolves to
+        // nothing either way: the boot chain treats any value as a failure.
+        return axios.get(`http://127.0.0.1:${state.phpPort}/_rfa/warm`, {
+            headers: { 'X-NativePHP-Secret': state.randomSecret },
+            proxy: false,
+            timeout: 4000,
+        }).then(() => undefined, () => undefined);
+    }
+    loadPhpIni() {
+JS;
+
+    if (str_contains($content, $importFind) && ! str_contains($content, $importMarker)) {
+        $content = str_replace($importFind, $importReplace, $content);
+    }
+
+    if (str_contains($content, $bootFind)) {
+        $content = str_replace($bootFind, $bootReplace, $content);
+    }
+
+    if (str_contains($content, $methodsAnchor) && ! str_contains($content, 'rfaWarmPhp() {')) {
+        $content = str_replace($methodsAnchor, $methodsReplace, $content);
+    }
+
+    $fullyPatched = str_contains($content, $importMarker)
+        && str_contains($content, $bootReplace)
+        && str_contains($content, $methodsReplace)
+        && ! str_contains($content, $bootFind);
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
+ * Make the PHP secret cookie wait for Electron readiness.
+ *
+ * `startPhpApp()` stores the shared secret in the default session once the
+ * server is listening. With the server spawned before `app.whenReady()`
+ * (see rfaPatchEarlyPhpBoot), a fast server wins that race and
+ * `session.defaultSession` throws "Session can only be received when app
+ * is ready", which aborts the whole bootstrap behind the splash.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchCookieAfterReady(string $content): ?string
+{
+    $importFind = "import { session } from 'electron';";
+    $importReplace = "import { app, session } from 'electron'; // [rfa cookie after ready]";
+
+    $find = <<<'JS'
+        yield session.defaultSession.cookies.set(cookie);
+JS;
+
+    $replace = <<<'JS'
+        yield app.whenReady(); // [rfa cookie after ready] the server may be up first
+        yield session.defaultSession.cookies.set(cookie);
+JS;
+
+    if (str_contains($content, $importFind)) {
+        $content = str_replace($importFind, $importReplace, $content);
+    }
+
+    if (str_contains($content, $find) && ! str_contains($content, $replace)) {
+        $content = str_replace($find, $replace, $content);
+    }
+
+    $fullyPatched = str_contains($content, $importReplace) && str_contains($content, $replace);
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
+ * Run PHP's built-in server with forked workers.
+ *
+ * The stock server answers one request at a time. During a launch the first
+ * page load, the Livewire lazy bundles, the change poll, and the native event
+ * callbacks all queue behind each other; while reviewing, a poll can stall a
+ * click. Workers let them overlap. opcache shared memory is mapped before the
+ * fork, so the opcode warmed by one worker serves every worker.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchServerWorkers(string $content): ?string
+{
+    $find = <<<'JS'
+        const phpServer = callPhp(['-S', `127.0.0.1:${phpPort}`, serverPath], {
+            cwd: cwd,
+            env
+        }, phpIniSettings);
+JS;
+
+    $replace = <<<'JS'
+        // [rfa php workers] see scripts/patch-nativephp.php
+        const phpServer = callPhp(['-S', `127.0.0.1:${phpPort}`, serverPath], {
+            cwd: cwd,
+            env: Object.assign({}, env, { PHP_CLI_SERVER_WORKERS: '4' })
+        }, phpIniSettings);
+JS;
+
+    if (str_contains($content, $find)) {
+        $content = str_replace($find, $replace, $content);
+    }
+
+    return str_contains($content, $replace) ? $content : null;
+}
+
+/**
  * The patch set: what has to be true of the vendored Electron plugin.
  *
- * Order matters within a file. The pre-flight cache, splash window, and
- * resolved appearance rewrite `dist/index.js`, and each is applied to the
- * result of the one before it.
+ * Order matters within a file. The pre-flight cache, splash window, resolved
+ * appearance, and early PHP boot rewrite `dist/index.js`, and each is applied
+ * to the result of the one before it.
  *
  * @return list<array{name: string, file: string, apply: callable(string): ?string, summary: string}>
  */
@@ -1349,6 +1620,18 @@ function rfaNativePhpPatchSet(): array
             'summary' => 'optimize once per version + opcache-warmed pre-flight boots',
         ],
         [
+            'name' => 'server-workers',
+            'file' => 'server/php.js',
+            'apply' => rfaPatchServerWorkers(...),
+            'summary' => 'PHP built-in server runs forked workers',
+        ],
+        [
+            'name' => 'cookie-after-ready',
+            'file' => 'server/utils.js',
+            'apply' => rfaPatchCookieAfterReady(...),
+            'summary' => 'PHP secret cookie waits for Electron readiness',
+        ],
+        [
             'name' => 'preflight-cache',
             'file' => 'index.js',
             'apply' => rfaPatchPreflightCache(...),
@@ -1365,6 +1648,12 @@ function rfaNativePhpPatchSet(): array
             'file' => 'index.js',
             'apply' => rfaPatchResolvedAppearance(...),
             'summary' => 'Electron resolves the persisted appearance before creating windows',
+        ],
+        [
+            'name' => 'early-php-boot',
+            'file' => 'index.js',
+            'apply' => rfaPatchEarlyPhpBoot(...),
+            'summary' => 'PHP server starts before Electron is ready and warms its opcache',
         ],
         [
             'name' => 'php-extraction',

@@ -5,8 +5,10 @@ use App\Actions\GetProjectStatusAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\ServeImageAction;
+use App\Actions\WarmOpcacheAction;
 use App\Http\Requests\BrowserDiagnosticSampleRequest;
 use App\Models\Project;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Route;
 
@@ -45,6 +47,11 @@ Route::post('/api/diagnostics/browser', function (BrowserDiagnosticSampleRequest
 
     return response()->noContent();
 })->name('api.diagnostics.browser');
+
+// Called by the Electron main process as soon as the PHP server is listening,
+// before the window exists, so the first real page request finds the framework
+// and compiled views already in opcache. See OpcacheWarmService.
+Route::get('/_rfa/warm', fn (WarmOpcacheAction $warm): JsonResponse => response()->json($warm->handle()))->name('rfa.warm');
 
 Route::get('/api/image/{project}/{ref}/{path}', function (Project $project, string $ref, string $path) {
     $result = app(ServeImageAction::class)->handle($project->id, $path, $ref);

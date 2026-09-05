@@ -2,6 +2,7 @@
 
 use App\Actions\EnforceLocalLogChannelsAction;
 use App\Actions\RehydrateNativeRuntimeConfigAction;
+use App\Http\Middleware\RecordOpcacheWarmManifest;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Foundation\Bootstrap\RegisterProviders;
@@ -13,7 +14,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->web(append: [RecordOpcacheWarmManifest::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

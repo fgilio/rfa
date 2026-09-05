@@ -20,24 +20,25 @@ const installReadiness = new Function(
     `${readinessBlock}\nreturn { phase: () => rfaPresentationPhase };`,
 );
 
-function createHarness({ id = 'main', visible = false, invalidateError = null } = {}) {
-    let frameCallback = null;
+function createHarness({ id = 'main', visible = false } = {}) {
     const webContents = new EventEmitter();
-    webContents.beginFrameSubscription = vi.fn((_, callback) => {
-        frameCallback = callback;
-    });
-    webContents.endFrameSubscription = vi.fn();
-    webContents.invalidate = invalidateError
-        ? vi.fn(() => { throw invalidateError; })
-        : vi.fn();
+    const removeListener = vi.spyOn(webContents, 'removeListener');
 
     const browserWindow = new EventEmitter();
     const emit = vi.spyOn(browserWindow, 'emit');
+    let destroyed = false;
     browserWindow.webContents = webContents;
     browserWindow.setOpacity = vi.fn();
     browserWindow.show = vi.fn(() => { visible = true; });
     browserWindow.focus = vi.fn();
     browserWindow.isVisible = vi.fn(() => visible);
+    browserWindow.isDestroyed = vi.fn(() => destroyed);
+    browserWindow.destroy = () => {
+        destroyed = true;
+        Object.defineProperty(browserWindow, 'webContents', {
+            get() { throw new TypeError('Object has been destroyed'); },
+        });
+    };
 
     const state = { noFocusOnRestart: false };
     const readiness = installReadiness(browserWindow, state, id, setTimeout, clearTimeout);
@@ -45,8 +46,8 @@ function createHarness({ id = 'main', visible = false, invalidateError = null } 
     return {
         browserWindow,
         emit,
-        frame: () => frameCallback?.(),
         readiness,
+        removeListener,
         state,
         webContents,
     };
@@ -65,25 +66,30 @@ describe('generated native window presentation', () => {
         vi.useRealTimers();
     });
 
-    it('presents the main window once after renderer IPC and one submitted frame', () => {
+    it('presents the main window once, as soon as the renderer reports readiness', () => {
         const harness = createHarness();
 
         expect(harness.readiness.phase()).toBe('waiting-renderer');
+        expect(harness.browserWindow.show).not.toHaveBeenCalled();
 
         harness.webContents.emit('ipc-message', {}, 'rfa:renderer-ready');
         harness.webContents.emit('ipc-message', {}, 'rfa:renderer-ready');
-
-        expect(harness.readiness.phase()).toBe('waiting-frame');
-        expect(harness.webContents.beginFrameSubscription).toHaveBeenCalledOnce();
-
-        harness.frame();
-        harness.frame();
 
         expect(harness.readiness.phase()).toBe('presented');
         expect(harness.browserWindow.setOpacity).toHaveBeenCalledOnce();
+        expect(harness.browserWindow.setOpacity).toHaveBeenCalledWith(1);
         expect(harness.browserWindow.show).toHaveBeenCalledOnce();
-        expect(harness.webContents.endFrameSubscription).toHaveBeenCalledOnce();
+        expect(harness.removeListener).toHaveBeenCalledWith('ipc-message', expect.any(Function));
         expect(presentationEvents(harness)).toHaveLength(1);
+    });
+
+    it('ignores unrelated renderer messages', () => {
+        const harness = createHarness();
+
+        harness.webContents.emit('ipc-message', {}, 'rfa:something-else');
+
+        expect(harness.readiness.phase()).toBe('waiting-renderer');
+        expect(harness.browserWindow.show).not.toHaveBeenCalled();
     });
 
     it('fails open once when renderer readiness times out', async () => {
@@ -93,18 +99,6 @@ describe('generated native window presentation', () => {
         harness.webContents.emit('ipc-message', {}, 'rfa:renderer-ready');
 
         expect(harness.readiness.phase()).toBe('presented');
-        expect(harness.browserWindow.show).toHaveBeenCalledOnce();
-        expect(harness.webContents.beginFrameSubscription).not.toHaveBeenCalled();
-        expect(presentationEvents(harness)).toHaveLength(1);
-    });
-
-    it('presents and cleans up when frame invalidation fails', () => {
-        const harness = createHarness({ invalidateError: new Error('frame unavailable') });
-
-        harness.webContents.emit('ipc-message', {}, 'rfa:renderer-ready');
-
-        expect(harness.readiness.phase()).toBe('presented');
-        expect(harness.webContents.endFrameSubscription).toHaveBeenCalledOnce();
         expect(harness.browserWindow.show).toHaveBeenCalledOnce();
         expect(presentationEvents(harness)).toHaveLength(1);
     });
@@ -118,9 +112,22 @@ describe('generated native window presentation', () => {
         await vi.advanceTimersByTimeAsync(5000);
 
         expect(harness.readiness.phase()).toBe('closed');
-        expect(harness.webContents.beginFrameSubscription).not.toHaveBeenCalled();
         expect(harness.browserWindow.show).not.toHaveBeenCalled();
         expect(presentationEvents(harness)).toHaveLength(0);
+    });
+
+    it('survives a window whose webContents is already destroyed when it closes', async () => {
+        const harness = createHarness();
+
+        harness.browserWindow.destroy();
+
+        expect(() => harness.browserWindow.emit('closed')).not.toThrow();
+        expect(harness.readiness.phase()).toBe('closed');
+        expect(harness.removeListener).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(5000);
+
+        expect(harness.browserWindow.show).not.toHaveBeenCalled();
     });
 
     it('keeps queued focus separate from later show requests', () => {
@@ -128,7 +135,6 @@ describe('generated native window presentation', () => {
         harness.browserWindow.rfaRequestShow(true);
 
         harness.webContents.emit('ipc-message', {}, 'rfa:renderer-ready');
-        harness.frame();
 
         expect(harness.browserWindow.focus).toHaveBeenCalledOnce();
         expect(presentationEvents(harness)).toHaveLength(1);
@@ -146,7 +152,6 @@ describe('generated native window presentation', () => {
         harness.state.noFocusOnRestart = true;
 
         harness.webContents.emit('ipc-message', {}, 'rfa:renderer-ready');
-        harness.frame();
 
         expect(harness.browserWindow.setOpacity).toHaveBeenCalledWith(1);
         expect(harness.browserWindow.show).not.toHaveBeenCalled();

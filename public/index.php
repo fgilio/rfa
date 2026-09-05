@@ -1,5 +1,7 @@
 <?php
 
+use App\Support\ContentLength;
+use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
 
@@ -17,4 +19,13 @@ require __DIR__.'/../vendor/autoload.php';
 /** @var Application $app */
 $app = require_once __DIR__.'/../bootstrap/app.php';
 
-$app->handleRequest(Request::capture());
+$request = Request::capture();
+$kernel = $app->make(Kernel::class);
+
+// The kernel has dispatched RequestHandled by now, so Livewire and Flux have
+// injected their assets and the content is final.
+$response = $kernel->handle($request);
+ContentLength::declare($response);
+$response->send();
+
+$kernel->terminate($request, $response);

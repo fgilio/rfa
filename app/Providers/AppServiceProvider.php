@@ -61,5 +61,6 @@ class AppServiceProvider extends ServiceProvider
         ));
 
         Blaze::optimize()->in(resource_path('views/components'));
+
     }
 }

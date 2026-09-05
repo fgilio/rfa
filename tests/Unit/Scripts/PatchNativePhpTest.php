@@ -147,11 +147,9 @@ test('renderer readiness window: waits for the settled main renderer presentatio
 
     expect($content)
         ->toContain("let rfaPresentationPhase = id === 'main' ? 'waiting-renderer' : 'waiting-paint'")
-        ->toContain("rfaPresentationPhase = 'waiting-frame'")
         ->toContain("rfaPresentationPhase = 'presented'")
         ->toContain("channel !== 'rfa:renderer-ready'")
-        ->toContain('window.webContents.beginFrameSubscription(false')
-        ->toContain('window.webContents.invalidate()')
+        ->not->toContain('beginFrameSubscription')
         ->toContain('window.setOpacity(1)')
         ->toContain("window.emit('rfa:presented')")
         ->toContain('window.rfaRequestShow = (focus = false)')
@@ -187,6 +185,32 @@ test('renderer readiness window: fails open and cleans up its listener', functio
         ->toContain("rfaPresentationPhase = 'closed'");
 });
 
+test('renderer readiness window: never touches a destroyed webContents during cleanup', function () {
+    $content = rfaPatchRendererReadyWindow(stockWindowApi());
+
+    expect($content)
+        ->toContain("if (rfaRendererMessageListener !== null && !window.isDestroyed()) {\n            window.webContents.removeListener('ipc-message', rfaRendererMessageListener);");
+});
+
+test('renderer readiness window: upgrades the previous frame-subscription revision', function () {
+    $source = file_get_contents(dirname(__DIR__, 3).'/scripts/patch-nativephp.php');
+    preg_match("/\\\$previousReplace = <<<'JS'\n(.*?)\nJS;/s", substr($source, strpos($source, 'function rfaPatchRendererReadyWindow')), $matches);
+    $previous = $matches[1];
+    $previousRevision = str_replace(
+        [
+            "    window.webContents.on('did-finish-load', () => {\n        if (state.noFocusOnRestart && window.isVisible()) {\n            return;\n        }\n        window.show();\n    });",
+        ],
+        [$previous],
+        stockWindowApi(),
+    );
+    $previousRevision = (string) rfaPatchRendererReadyWindow($previousRevision);
+
+    expect($previous)->toContain('beginFrameSubscription')
+        ->and($previousRevision)->not->toContain('beginFrameSubscription')
+        ->and($previousRevision)->toContain('!window.isDestroyed()')
+        ->and(rfaPatchRendererReadyWindow($previousRevision))->toBe($previousRevision);
+});
+
 test('renderer readiness window: is idempotent', function () {
     $patched = rfaPatchRendererReadyWindow(stockWindowApi());
 
@@ -201,6 +225,8 @@ test('the vendored NativePHP main window waits for renderer readiness', function
         ->toContain('rfaPresentationPhase')
         ->toContain("channel !== 'rfa:renderer-ready'")
         ->toContain('setTimeout(rfaPresent, rfaReadinessTimeoutMs)')
+        ->toContain('!window.isDestroyed()')
+        ->not->toContain('beginFrameSubscription')
         ->not->toContain('rfaRendererReady');
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/api/window.js'), 'NativePHP desktop electron plugin not installed');
 
@@ -863,6 +889,129 @@ test('PHP build wait: leaves the complete patched block unchanged', function () 
     expect(rfaPatchPhpBuildWait($patched))->toBe($patched);
 });
 
+// ===== server/php.js: forked built-in server workers =====
+
+test('server workers: reports a shape change when the server spawn is missing', function () {
+    expect(rfaPatchServerWorkers('const something = "no spawn here";'))->toBeNull();
+});
+
+test('server workers: forks the built-in server and leaves artisan calls alone', function () {
+    $content = rfaPatchServerWorkers(stockServer());
+
+    expect($content)
+        ->toContain("env: Object.assign({}, env, { PHP_CLI_SERVER_WORKERS: '4' })")
+        ->toContain('[rfa php workers]')
+        ->and(substr_count((string) $content, 'PHP_CLI_SERVER_WORKERS'))->toBe(1)
+        ->and($content)->toContain("callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings)");
+});
+
+test('server workers: is idempotent', function () {
+    $patched = rfaPatchServerWorkers(stockServer());
+
+    expect(rfaPatchServerWorkers($patched))->toBe($patched);
+});
+
+// ===== server/utils.js: secret cookie after Electron readiness =====
+
+test('cookie after ready: reports a shape change when appendCookie is missing', function () {
+    expect(rfaPatchCookieAfterReady("import { session } from 'electron';"))->toBeNull();
+});
+
+test('cookie after ready: waits for readiness before touching the default session', function () {
+    $content = (string) rfaPatchCookieAfterReady(stockUtils());
+
+    expect($content)
+        ->toContain("import { app, session } from 'electron'; // [rfa cookie after ready]")
+        ->toContain('yield app.whenReady(); // [rfa cookie after ready]')
+        ->and(strpos($content, 'yield app.whenReady();'))->toBeLessThan(strpos($content, 'session.defaultSession.cookies.set(cookie)'))
+        ->and(substr_count($content, 'app.whenReady()'))->toBe(1);
+});
+
+test('cookie after ready: is idempotent', function () {
+    $patched = rfaPatchCookieAfterReady(stockUtils());
+
+    expect(rfaPatchCookieAfterReady($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP utils wait for readiness before setting the secret cookie', function () {
+    $utilsPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/utils.js';
+
+    expect(file_get_contents($utilsPath))
+        ->toContain('yield app.whenReady(); // [rfa cookie after ready]');
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/utils.js'), 'NativePHP desktop electron plugin not installed');
+
+// ===== index.js: PHP server before Electron readiness + opcache warm-up =====
+
+function indexReadyForEarlyPhpBoot(): string
+{
+    $index = stockIndexForSplash()."\n".stockIndex();
+
+    foreach ([rfaPatchPreflightCache(...), rfaPatchSplashWindow(...), rfaPatchResolvedAppearance(...)] as $patch) {
+        $index = (string) $patch($index);
+    }
+
+    return $index;
+}
+
+test('early php boot: reports a shape change when the bootstrap sequence is missing', function () {
+    expect(rfaPatchEarlyPhpBoot(stockIndex()))->toBeNull();
+});
+
+test('early php boot: refuses a bootstrap that the splash and appearance patches have not shaped yet', function () {
+    // Applied out of order, the whenReady block still has the stock shape and
+    // the reorder would drop the splash and appearance lines. Refusing keeps
+    // the patch set from writing anything.
+    expect(rfaPatchEarlyPhpBoot(stockIndexForSplash()."\n".stockIndex()))->toBeNull();
+});
+
+test('early php boot: spawns PHP first, warms it, then waits for Electron and the splash', function () {
+    $content = (string) rfaPatchEarlyPhpBoot(indexReadyForEarlyPhpBoot());
+
+    expect($content)
+        ->toContain('import axios from "axios"; // [rfa early php]')
+        ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).then(() => null, (rfaError) => rfaError);')
+        ->toContain('const rfaPhpFailure = yield rfaPhpBoot;')
+        ->toContain('throw rfaPhpFailure;')
+        ->toContain('rfaWarmPhp() {')
+        ->toContain('/_rfa/warm`')
+        ->toContain("headers: { 'X-NativePHP-Secret': state.randomSecret }")
+        ->toContain('proxy: false')
+        ->toContain('timeout: 4000')
+        ->toContain('}).then(() => undefined, () => undefined);')
+        ->toContain('const rfaConfig = this.loadConfig();')
+        ->toContain('const config = yield rfaConfig;')
+        ->toContain('yield this.rfaResolveAppearance(); // [rfa appearance] resolve before either window exists')
+        ->toContain('this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots')
+        ->toContain('yield notifyLaravel("booted");')
+        ->and(substr_count($content, 'rfaWarmPhp() {'))->toBe(1)
+        ->and(strpos($content, 'const rfaPhpBoot'))->toBeLessThan(strpos($content, 'yield app.whenReady();'))
+        ->and(strpos($content, 'this.rfaShowSplash();'))->toBeLessThan(strpos($content, 'const rfaPhpFailure'))
+        ->and(strpos($content, 'const rfaPhpFailure'))->toBeLessThan(strpos($content, 'this.startScheduler();'));
+});
+
+test('early php boot: leaves the splash and appearance patches idempotent', function () {
+    $content = (string) rfaPatchEarlyPhpBoot(indexReadyForEarlyPhpBoot());
+
+    expect(rfaPatchSplashWindow($content))->toBe($content)
+        ->and(rfaPatchResolvedAppearance($content))->toBe($content)
+        ->and(rfaPatchPreflightCache($content))->toBe($content);
+});
+
+test('early php boot: is idempotent', function () {
+    $patched = rfaPatchEarlyPhpBoot(indexReadyForEarlyPhpBoot());
+
+    expect(rfaPatchEarlyPhpBoot($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP main bootstrap starts PHP before Electron is ready', function () {
+    $indexPath = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js';
+
+    expect(file_get_contents($indexPath))
+        ->toContain('[rfa early php]')
+        ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp())')
+        ->toContain('/_rfa/warm`');
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
+
 // -- Applied to the real vendored file --
 
 test('the vendored NativePHP server carries the optimize patch', function () {
@@ -875,5 +1024,6 @@ test('the vendored NativePHP server carries the optimize patch', function () {
     expect(file_get_contents($serverPath))
         ->toContain('rfaNeedsFullOptimize')
         ->toContain("mkdirpSync(join(storagePath, 'framework', 'opcache'))")
-        ->toContain("command.unshift('-d', 'opcache.enable_cli=1'");
+        ->toContain("command.unshift('-d', 'opcache.enable_cli=1'")
+        ->toContain("PHP_CLI_SERVER_WORKERS: '4'");
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/php.js'), 'NativePHP desktop electron plugin not installed');

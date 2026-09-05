@@ -27,7 +27,10 @@ The `rfa-dev` vs `rfa` suffix comes from Electron's `app.getPath('userData')`, w
 
 ```bash
 # PHP web server: php -S 127.0.0.1:<port> server.php (port chosen from 8100-9000).
-# The [b] trick keeps pgrep from matching its own command line.
+# The server runs with PHP_CLI_SERVER_WORKERS=4, so pgrep finds the parent plus
+# four forked workers; the parent owns the listening socket, the workers serve
+# requests and write the logs. The [b] trick keeps pgrep from matching its own
+# command line.
 SERVER_PID=$(pgrep -f '[b]uild/php/php.*-S 127\.0\.0\.1' | head -n1)
 lsof -p "$SERVER_PID" 2>/dev/null | rg 'sqlite|\.log|cwd'
 lsof -a -p "$SERVER_PID" -iTCP -sTCP:LISTEN -P 2>/dev/null   # the -a is required to AND the filters

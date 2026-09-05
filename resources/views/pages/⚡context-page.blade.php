@@ -573,7 +573,7 @@ new #[Layout('layouts.app')] class extends Component
                     <livewire:diff-file
                         :key="$file['id']"
                         :file="$file"
-                        :load-delay="(int) (floor($loop->index / 15) * 100)"
+                        :load-delay="(int) (floor($loop->index / 15) * 30)"
                         :file-comments="$this->groupedComments[$file['id']] ?? []"
                         :is-reviewed="false"
                         :repo-path="$repoPath"
