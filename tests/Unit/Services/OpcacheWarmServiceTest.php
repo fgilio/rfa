@@ -26,7 +26,7 @@ test('record writes the scripts of this install and ignores foreign paths', func
         '/usr/local/lib/php/pear.php',
     ]));
 
-    expect($service->record())->toBe(['available' => true, 'total' => 2, 'added' => 2, 'written' => true])
+    expect($service->record())->toBe(['total' => 2, 'added' => 2, 'written' => true])
         ->and($service->manifestScripts())->toBe([
             base_path('app/Actions/WarmOpcacheAction.php'),
             storage_path('framework/views/abc.php'),
@@ -40,15 +40,15 @@ test('record merges new scripts into an existing manifest and skips the write wh
 
     $second = new OpcacheWarmService(new FakeOpcacheService(included: [base_path('app/a.php'), base_path('app/b.php')]));
 
-    expect($second->record())->toBe(['available' => true, 'total' => 2, 'added' => 1, 'written' => true])
-        ->and($second->record())->toBe(['available' => true, 'total' => 2, 'added' => 0, 'written' => false])
+    expect($second->record())->toBe(['total' => 2, 'added' => 1, 'written' => true])
+        ->and($second->record())->toBe(['total' => 2, 'added' => 0, 'written' => false])
         ->and($second->manifestScripts())->toBe([base_path('app/a.php'), base_path('app/b.php')]);
 });
 
 test('record reports opcache as unavailable without touching the manifest', function () {
     $service = new OpcacheWarmService(new FakeOpcacheService(enabled: false, included: [base_path('app/a.php')]));
 
-    expect($service->record())->toBe(['available' => false, 'total' => 0, 'added' => 0, 'written' => false])
+    expect($service->record())->toBe(['total' => 0, 'added' => 0, 'written' => false])
         ->and(File::exists($service->manifestPath()))->toBeFalse();
 });
 
@@ -95,7 +95,7 @@ test('warm compiles manifest scripts that exist and are not already cached', fun
     try {
         (new OpcacheWarmService(new FakeOpcacheService(included: [$existing, $alreadyCached, $missing, $broken])))->record();
 
-        $opcache = new FakeOpcacheService(cached: [$alreadyCached]);
+        $opcache = new FakeOpcacheService(cached: [$alreadyCached], failing: [$broken]);
 
         expect((new OpcacheWarmService($opcache))->warm())
             ->toBe(['available' => true, 'compiled' => 1, 'cached' => 1, 'missing' => 1, 'failed' => 1])

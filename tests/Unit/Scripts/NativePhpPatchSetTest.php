@@ -88,9 +88,9 @@ test('applies every patch in one run', function () {
         ->toContain('const RFA_SPLASH_HTML')
         ->toContain("window.once('rfa:presented'")
         ->toContain('rfaResolveAppearance()')
-        ->toContain('import http from "http"; // [rfa early php]')
+        ->toContain('import axios from "axios"; // [rfa early php]')
         ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp())')
-        ->toContain("path: '/_rfa/warm'");
+        ->toContain('/_rfa/warm`');
     expect(file_get_contents($root.'/../../php.js'))
         ->toContain('[rfa php archive validation]')
         ->toContain('removeSync(binaryDestDir);')

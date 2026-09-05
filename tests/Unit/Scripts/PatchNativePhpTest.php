@@ -939,14 +939,16 @@ test('early php boot: spawns PHP first, warms it, then waits for Electron and th
     $content = (string) rfaPatchEarlyPhpBoot(indexReadyForEarlyPhpBoot());
 
     expect($content)
-        ->toContain('import http from "http"; // [rfa early php]')
+        ->toContain('import axios from "axios"; // [rfa early php]')
         ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).catch((rfaError) => rfaError);')
         ->toContain('const rfaPhpFailure = yield rfaPhpBoot;')
         ->toContain('throw rfaPhpFailure;')
         ->toContain('rfaWarmPhp() {')
-        ->toContain("path: '/_rfa/warm'")
+        ->toContain('/_rfa/warm`')
         ->toContain("headers: { 'X-NativePHP-Secret': state.randomSecret }")
-        ->toContain('rfaRequest.setTimeout(4000')
+        ->toContain('timeout: 4000')
+        ->toContain('const rfaConfig = this.loadConfig();')
+        ->toContain('const config = yield rfaConfig;')
         ->toContain('yield this.rfaResolveAppearance(); // [rfa appearance] resolve before either window exists')
         ->toContain('this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots')
         ->toContain('yield notifyLaravel("booted");')
@@ -976,7 +978,7 @@ test('the vendored NativePHP main bootstrap starts PHP before Electron is ready'
     expect(file_get_contents($indexPath))
         ->toContain('[rfa early php]')
         ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp())')
-        ->toContain("path: '/_rfa/warm'");
+        ->toContain('/_rfa/warm`');
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
 
 // -- Applied to the real vendored file --

@@ -18,11 +18,13 @@ final class FakeOpcacheService extends OpcacheService
     /**
      * @param  list<string>  $included  scripts reported as loaded by the request
      * @param  list<string>  $cached  scripts reported as already in shared memory
+     * @param  list<string>  $failing  scripts whose compile is reported as failed
      */
     public function __construct(
         private readonly bool $enabled = true,
         private readonly array $included = [],
         private readonly array $cached = [],
+        private readonly array $failing = [],
     ) {}
 
     public function isEnabled(): bool
@@ -44,6 +46,6 @@ final class FakeOpcacheService extends OpcacheService
     {
         $this->compiles[] = $path;
 
-        return ! str_contains($path, 'broken');
+        return ! in_array($path, $this->failing, true);
     }
 }

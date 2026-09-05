@@ -2,8 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Listeners\SetContentLength;
-use Illuminate\Foundation\Http\Events\RequestHandled;
+use App\Support\ContentLength;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
@@ -17,14 +16,14 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 
 test('declares the byte length of a buffered HTML response', function () {
     $response = new Response('<p>héllo</p>');
-    SetContentLength::declare($response);
+    ContentLength::declare($response);
 
     expect($response->headers->get('Content-Length'))->toBe((string) strlen('<p>héllo</p>'));
 });
 
 test('declares the length of JSON responses', function () {
     $response = new JsonResponse(['ok' => true]);
-    SetContentLength::declare($response);
+    ContentLength::declare($response);
 
     expect($response->headers->get('Content-Length'))->toBe((string) strlen('{"ok":true}'));
 });
@@ -32,7 +31,7 @@ test('declares the length of JSON responses', function () {
 test('leaves streamed, file, empty, and already-measured responses alone', function (BaseResponse $response) {
     $before = $response->headers->get('Content-Length');
 
-    SetContentLength::declare($response);
+    ContentLength::declare($response);
 
     expect($response->headers->get('Content-Length'))->toBe($before);
 })->with([
@@ -43,22 +42,23 @@ test('leaves streamed, file, empty, and already-measured responses alone', funct
     'explicit length' => [fn () => new Response('abc', 200, ['Content-Length' => '99'])],
 ]);
 
-test('a page response carries the length of its final content, Livewire assets included', function () {
+test('a handled page response carries the length of its final content, Livewire assets included', function () {
     // Livewire skips asset injection under unit tests unless forced.
     Livewire::forceAssetInjection();
 
     $response = $this->get('/select-repo');
 
     $response->assertOk();
+    ContentLength::declare($response->baseResponse);
 
     expect($response->getContent())->toContain('data-update-uri=')
         ->and($response->headers->get('Content-Length'))->toBe((string) strlen((string) $response->getContent()));
 });
 
-test('the listener runs after Livewire injects its assets', function () {
-    $listeners = collect(app('events')->getRawListeners()[RequestHandled::class] ?? [])
-        ->map(fn (mixed $listener): string => is_string($listener) ? $listener : 'closure');
+test('the front controller declares the length after the kernel handled the request', function () {
+    $source = (string) file_get_contents(public_path('index.php'));
 
-    expect($listeners->last())->toStartWith(SetContentLength::class)
-        ->and($listeners->filter(fn (string $listener): bool => $listener === 'closure'))->not->toBeEmpty();
+    expect($source)->toContain('$response = $kernel->handle($request);')
+        ->and($source)->toContain('ContentLength::declare($response);')
+        ->and(strpos($source, 'ContentLength::declare'))->toBeLessThan((int) strpos($source, '$response->send()'));
 });

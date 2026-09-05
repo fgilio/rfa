@@ -1703,12 +1703,10 @@ new #[Layout('layouts.app')] class extends Component
                         $remoteStatus = ($file['isUntracked'] ?? false) ? 'added' : ($file['status'] ?? 'modified');
                         $isReviewed = array_key_exists($file['path'], $reviewedFiles);
                     @endphp
-                    {{-- One row per file, so the markup stays compact: this loop is most
-                         of the page on large reviews. Highlight is Alpine-only: activeFile
-                         is seeded from the server's selectedFileId at init, and selectFile()
-                         skips render, so baking the server value into the else-branch would
-                         leave the previous row highlighted after every client-side
-                         selection change. --}}
+                    {{-- Highlight is Alpine-only: activeFile is seeded from the server's
+                         selectedFileId at init, and selectFile() skips render, so baking
+                         the server value into the else-branch would leave the previous
+                         row highlighted after every client-side selection change. --}}
                     <div
                         @if($hasRemote)
                             @contextmenu.prevent="$dispatch('open-remote-menu', { target: 'file', fileId: @js($file['id']), filePath: @js($file['path']), oldPath: @js($file['oldPath'] ?? null), status: @js($remoteStatus), clientX: $event.clientX, clientY: $event.clientY })"
@@ -1719,7 +1717,7 @@ new #[Layout('layouts.app')] class extends Component
                         <button @click="scrollToFile('{{ $file['id'] }}')" class="flex items-center gap-2.5 min-w-0 flex-1">
                             <span class="font-mono font-medium shrink-0 {{ $badgeClass }}">{{ $badgeLabel }}</span>
                             @if($file['isSymlink'] ?? false)
-                                <span class="rfa-lazy-icon rfa-lazy-icon--link shrink-0" aria-hidden="true"></span>
+                                <span class="rfa-lazy-icon rfa-lazy-icon--link size-3.5 shrink-0" aria-hidden="true"></span>
                             @endif
                             @php
                                 // Build the tooltip in PHP: a literal `"` inside a Blade `{{ }}` interpolation
@@ -1740,9 +1738,8 @@ new #[Layout('layouts.app')] class extends Component
                         {{-- Reviewed state is server-rendered inside the file-list island.
                              The click tells DiffFile's checkbox mirror the new state and
                              asks the parent to toggle, which refreshes affected islands.
-                             Row controls use the attribute tooltip and mask icons: this
-                             row repeats per file, so a Flux tooltip and inline SVG each
-                             would dominate the page weight on large reviews. --}}
+                             Row controls use data-rfa-tip and mask icons because this row
+                             repeats per file, see public/js/tooltip.js. --}}
                         <button type="button"
                             @click.stop="$dispatch('file-reviewed-changed', { id: '{{ $file['id'] }}', reviewed: {{ $isReviewed ? 'false' : 'true' }} }); $dispatch('rfa-toggle-reviewed', { filePath: @js($file['path']) })"
                             class="shrink-0 size-3.5 flex items-center justify-center transition-[opacity,colors] {{ $isReviewed ? 'text-gh-green hover:text-gh-text' : 'text-gh-muted/40 opacity-0 group-hover:opacity-100 hover:text-gh-text' }}"

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use Closure;
 use Illuminate\Support\Facades\File;
 
 /**
@@ -66,30 +67,32 @@ final readonly class OpcacheWarmService
             return [];
         }
 
+        $isWarmable = $this->warmableFilter();
+
         return array_values(array_filter(
             $scripts,
-            fn (mixed $script): bool => is_string($script) && $this->isWarmable($script),
+            fn (mixed $script): bool => is_string($script) && $isWarmable($script),
         ));
     }
 
     /**
      * Merge the scripts the current request loaded into the manifest.
      *
-     * @return array{available: bool, total: int, added: int, written: bool}
+     * @return array{total: int, added: int, written: bool}
      */
     public function record(): array
     {
         if (! $this->opcache->isEnabled()) {
-            return ['available' => false, 'total' => 0, 'added' => 0, 'written' => false];
+            return ['total' => 0, 'added' => 0, 'written' => false];
         }
 
         $known = $this->manifestScripts();
-        $current = array_values(array_filter($this->opcache->includedScripts(), $this->isWarmable(...)));
+        $current = array_values(array_filter($this->opcache->includedScripts(), $this->warmableFilter()));
         $merged = array_values(array_unique([...$known, ...$current]));
         $added = count($merged) - count($known);
 
-        if ($added === 0 && $known !== []) {
-            return ['available' => true, 'total' => count($known), 'added' => 0, 'written' => false];
+        if ($added === 0) {
+            return ['total' => count($known), 'added' => 0, 'written' => false];
         }
 
         $merged = array_slice($merged, 0, self::MAX_SCRIPTS);
@@ -100,7 +103,7 @@ final readonly class OpcacheWarmService
             'scripts' => $merged,
         ], JSON_UNESCAPED_SLASHES));
 
-        return ['available' => true, 'total' => count($merged), 'added' => $added, 'written' => true];
+        return ['total' => count($merged), 'added' => $added, 'written' => true];
     }
 
     /**
@@ -141,10 +144,17 @@ final readonly class OpcacheWarmService
      * install sharing the same user data directory (a development build next
      * to the released app) must not have its files compiled here: compiling a
      * second copy of a file that declares functions is a fatal redeclaration.
+     *
+     * The prefixes are resolved once per call rather than per script, since
+     * the filter runs over thousands of paths in the terminate phase.
+     *
+     * @return Closure(string): bool
      */
-    private function isWarmable(string $script): bool
+    private function warmableFilter(): Closure
     {
-        return str_starts_with($script, base_path().DIRECTORY_SEPARATOR)
-            || str_starts_with($script, storage_path().DIRECTORY_SEPARATOR);
+        $prefixes = [base_path().DIRECTORY_SEPARATOR, storage_path().DIRECTORY_SEPARATOR];
+
+        return fn (string $script): bool => str_starts_with($script, $prefixes[0])
+            || str_starts_with($script, $prefixes[1]);
     }
 }

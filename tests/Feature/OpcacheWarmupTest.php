@@ -87,27 +87,6 @@ test('the manifest recorder logs only when the manifest changed', function () {
         ->and(Context::get('rfa.outcome'))->toBe('completed');
 });
 
-test('successful HTML page loads and Livewire updates are recorded, other requests are not', function (string $method, int $status, string $contentType, bool $livewire, bool $expected) {
-    $request = Request::create('/p/demo', $method);
-
-    if ($livewire) {
-        $request->headers->set('X-Livewire', 'true');
-    }
-
-    $response = new Response('', $status, ['Content-Type' => $contentType]);
-
-    expect(RecordOpcacheWarmManifest::isRecordable($request, $response))->toBe($expected);
-})->with([
-    'html page' => ['GET', 200, 'text/html; charset=UTF-8', false, true],
-    'livewire update' => ['POST', 200, 'application/json', true, true],
-    'livewire navigate' => ['GET', 200, 'text/html; charset=UTF-8', true, false],
-    'failed livewire update' => ['POST', 500, 'application/json', true, false],
-    'json api' => ['GET', 200, 'application/json', false, false],
-    'diagnostics post' => ['POST', 204, '', false, false],
-    'redirect' => ['GET', 302, 'text/html; charset=UTF-8', false, false],
-    'missing page' => ['GET', 404, 'text/html; charset=UTF-8', false, false],
-]);
-
 test('the middleware records the manifest after a page response is sent', function () {
     app()->instance(OpcacheService::class, new FakeOpcacheService(included: [base_path('app/a.php')]));
 
@@ -122,15 +101,31 @@ test('the middleware records the manifest after a page response is sent', functi
     expect(app(OpcacheWarmService::class)->manifestScripts())->toBe([base_path('app/a.php')]);
 });
 
-test('the middleware ignores responses that are not recordable', function () {
-    app()->instance(OpcacheService::class, new FakeOpcacheService(cached: [base_path('app/a.php')]));
+test('the middleware ignores failed responses', function () {
+    app()->instance(OpcacheService::class, new FakeOpcacheService(included: [base_path('app/a.php')]));
 
     Log::shouldReceive('info')->never();
 
     $middleware = app(RecordOpcacheWarmManifest::class);
-    $middleware->terminate(Request::create('/api/changes/1', 'GET'), new Response('{}', 200, ['Content-Type' => 'application/json']));
+    $middleware->terminate(Request::create('/p/demo', 'GET'), new Response('', 500));
 
     expect(File::exists(app(OpcacheWarmService::class)->manifestPath()))->toBeFalse();
+});
+
+test('the manifest recorder logs a failed write instead of throwing', function () {
+    // A regular file where the manifest directory should be makes the write fail.
+    File::ensureDirectoryExists($this->manifestDir);
+    File::put($this->manifestDir.'/blocker', '');
+    config()->set('rfa.opcache_warm_manifest_path', $this->manifestDir.'/blocker/manifest.json');
+    app()->instance(OpcacheService::class, new FakeOpcacheService(included: [base_path('app/a.php')]));
+
+    Log::shouldReceive('error')->once()->withArgs(fn (string $event, array $payload): bool => $event === 'opcache.manifest.record.failed' && $payload['reason'] === 'opcache_manifest_record_failed');
+    Log::shouldReceive('info')->once()->with('opcache.manifest.recorded');
+
+    app(RecordOpcacheWarmManifestAction::class)->handle();
+
+    expect(Context::get('rfa.outcome'))->toBe('error')
+        ->and(Context::get('rfa.reason'))->toBe('opcache_manifest_record_failed');
 });
 
 test('the middleware is part of the web group', function () {

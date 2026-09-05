@@ -1419,7 +1419,7 @@ JS;
 function rfaPatchEarlyPhpBoot(string $content): ?string
 {
     $importFind = 'import Store from "electron-store"; // [rfa preflight cache]';
-    $importMarker = 'import http from "http"; // [rfa early php]';
+    $importMarker = 'import axios from "axios"; // [rfa early php]';
     $importReplace = $importFind."\n".$importMarker;
 
     $bootFind = <<<'JS'
@@ -1441,14 +1441,17 @@ JS;
             // [rfa early php] Nothing the PHP server needs waits on Electron's
             // readiness, so it is spawned first and pre-compiles its opcache
             // while Electron finishes starting and the splash appears. The
-            // `booted` handshake below then reaches a warm server.
-            const config = yield this.loadConfig();
+            // `booted` handshake below then reaches a warm server. The config
+            // is only needed after readiness, so its own PHP boot (on a
+            // pre-flight cache miss) overlaps with the server spawn.
+            const rfaConfig = this.loadConfig();
             yield this.startElectronApi();
             state.phpIni = yield this.loadPhpIni();
             const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).catch((rfaError) => rfaError);
             yield app.whenReady();
             yield this.rfaResolveAppearance(); // [rfa appearance] resolve before either window exists
             this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots
+            const config = yield rfaConfig;
             this.setDockIcon();
             this.setAppUserModelId(config);
             this.setDeepLinkHandler(config);
@@ -1469,47 +1472,32 @@ JS;
         // [rfa early php] Ask the server to compile the scripts earlier page
         // loads needed into opcache shared memory. Best effort: an error or a
         // slow answer never holds the window back for long.
-        return new Promise((resolve) => {
-            const rfaRequest = http.get({
-                host: '127.0.0.1',
-                port: state.phpPort,
-                path: '/_rfa/warm',
-                headers: { 'X-NativePHP-Secret': state.randomSecret },
-            }, (rfaResponse) => {
-                rfaResponse.resume();
-                rfaResponse.on('end', resolve);
-                rfaResponse.on('error', resolve);
-            });
-            rfaRequest.on('error', resolve);
-            rfaRequest.setTimeout(4000, () => {
-                rfaRequest.destroy();
-                resolve();
-            });
-        });
+        return axios.get(`http://127.0.0.1:${state.phpPort}/_rfa/warm`, {
+            headers: { 'X-NativePHP-Secret': state.randomSecret },
+            timeout: 4000,
+        }).catch(() => undefined);
     }
     loadPhpIni() {
 JS;
 
-    $patched = $content;
-
-    if (str_contains($patched, $importFind) && ! str_contains($patched, $importMarker)) {
-        $patched = str_replace($importFind, $importReplace, $patched);
+    if (str_contains($content, $importFind) && ! str_contains($content, $importMarker)) {
+        $content = str_replace($importFind, $importReplace, $content);
     }
 
-    if (str_contains($patched, $bootFind)) {
-        $patched = str_replace($bootFind, $bootReplace, $patched);
+    if (str_contains($content, $bootFind)) {
+        $content = str_replace($bootFind, $bootReplace, $content);
     }
 
-    if (str_contains($patched, $methodsAnchor) && ! str_contains($patched, 'rfaWarmPhp() {')) {
-        $patched = str_replace($methodsAnchor, $methodsReplace, $patched);
+    if (str_contains($content, $methodsAnchor) && ! str_contains($content, 'rfaWarmPhp() {')) {
+        $content = str_replace($methodsAnchor, $methodsReplace, $content);
     }
 
-    $fullyPatched = str_contains($patched, $importMarker)
-        && str_contains($patched, $bootReplace)
-        && str_contains($patched, $methodsReplace)
-        && ! str_contains($patched, $bootFind);
+    $fullyPatched = str_contains($content, $importMarker)
+        && str_contains($content, $bootReplace)
+        && str_contains($content, $methodsReplace)
+        && ! str_contains($content, $bootFind);
 
-    return $fullyPatched ? $patched : null;
+    return $fullyPatched ? $content : null;
 }
 
 /**

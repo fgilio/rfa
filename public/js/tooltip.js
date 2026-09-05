@@ -18,9 +18,10 @@
     const GAP_PX = 6;
     const SELECTOR = '[data-rfa-tip]';
 
-    function createTooltip(root, { delayMs = SHOW_DELAY_MS } = {}) {
+    function createTooltip(root) {
         const doc = root.document;
         let bubble = null;
+        let bubbleHeight = 0;
         let current = null;
         let timer = null;
 
@@ -39,32 +40,33 @@
         function place(target) {
             const el = ensureBubble();
             const rect = target.getBoundingClientRect();
-            const centerX = rect.left + rect.width / 2;
 
             el.textContent = target.getAttribute('data-rfa-tip') || '';
             el.hidden = false;
-            el.style.left = `${centerX}px`;
 
-            // Above the control, unless that would leave the viewport.
-            const height = el.offsetHeight || 0;
-            const above = rect.top - GAP_PX - height >= 0;
+            // The bubble is a single nowrap line, so its height is constant:
+            // measure it once rather than forcing a layout on every show.
+            if (bubbleHeight === 0) {
+                bubbleHeight = el.offsetHeight || 0;
+            }
+
+            const above = rect.top - GAP_PX - bubbleHeight >= 0;
 
             el.dataset.placement = above ? 'above' : 'below';
+            el.style.left = `${rect.left + rect.width / 2}px`;
             el.style.top = above ? `${rect.top - GAP_PX}px` : `${rect.bottom + GAP_PX}px`;
         }
 
         function show(target) {
-            if (!target.isConnected || target.getAttribute('data-rfa-tip') === null) {
-                hide();
-
-                return;
-            }
+            if (!target.isConnected || target.getAttribute('data-rfa-tip') === null) return;
 
             current = target;
             place(target);
         }
 
         function hide() {
+            if (current === null && timer === null) return;
+
             root.clearTimeout(timer);
             timer = null;
             current = null;
@@ -85,7 +87,7 @@
                 return;
             }
 
-            timer = root.setTimeout(() => show(target), delayMs);
+            timer = root.setTimeout(() => show(target), SHOW_DELAY_MS);
         }
 
         function targetOf(event) {
@@ -98,7 +100,7 @@
             const target = targetOf(event);
 
             if (!target) {
-                if (timer !== null) hide();
+                hide();
 
                 return;
             }
@@ -130,29 +132,23 @@
             if (targetOf(event)) hide();
         }
 
-        function onDismiss() {
-            hide();
-        }
+        const listeners = [
+            ['mouseover', onPointerOver, false],
+            ['mouseout', onPointerOut, false],
+            ['focusin', onFocusIn, false],
+            ['focusout', onFocusOut, false],
+            ['mousedown', hide, { capture: true }],
+            ['keydown', hide, { capture: true }],
+            ['scroll', hide, { capture: true, passive: true }],
+        ];
 
         function attach() {
-            doc.addEventListener('mouseover', onPointerOver);
-            doc.addEventListener('mouseout', onPointerOut);
-            doc.addEventListener('focusin', onFocusIn);
-            doc.addEventListener('focusout', onFocusOut);
-            doc.addEventListener('mousedown', onDismiss, true);
-            doc.addEventListener('keydown', onDismiss, true);
-            doc.addEventListener('scroll', onDismiss, true);
+            listeners.forEach(([type, handler, options]) => doc.addEventListener(type, handler, options));
         }
 
         function detach() {
             hide();
-            doc.removeEventListener('mouseover', onPointerOver);
-            doc.removeEventListener('mouseout', onPointerOut);
-            doc.removeEventListener('focusin', onFocusIn);
-            doc.removeEventListener('focusout', onFocusOut);
-            doc.removeEventListener('mousedown', onDismiss, true);
-            doc.removeEventListener('keydown', onDismiss, true);
-            doc.removeEventListener('scroll', onDismiss, true);
+            listeners.forEach(([type, handler, options]) => doc.removeEventListener(type, handler, options));
         }
 
         return {
@@ -168,12 +164,12 @@
         };
     }
 
-    function install(root, options = {}) {
+    function install(root) {
         if (root.__rfaTooltipAttached) return false;
 
         root.__rfaTooltipAttached = true;
 
-        const tooltip = createTooltip(root, options);
+        const tooltip = createTooltip(root);
 
         if (root.document.body) {
             tooltip.attach();

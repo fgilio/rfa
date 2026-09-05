@@ -160,7 +160,7 @@
 
 .rfa-lazy-icon.size-4 { width: 1rem; height: 1rem; }
 .rfa-lazy-icon.size-3\.5 { width: 0.875rem; height: 0.875rem; }
-.rfa-lazy-icon--link { width: 0.875rem; height: 0.875rem; color: rgb(var(--gh-muted)); }
+.rfa-lazy-icon--link { color: rgb(var(--gh-muted)); }
 .rfa-lazy-icon--chevron-right { --rfa-lazy-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='black' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m8.25 4.5 7.5 7.5-7.5 7.5'/%3E%3C/svg%3E"); }
 .rfa-lazy-icon--chevron-down { --rfa-lazy-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='black' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m19.5 8.25-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E"); }
 .rfa-lazy-icon--link { --rfa-lazy-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='black' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244'/%3E%3C/svg%3E"); }
@@ -189,9 +189,7 @@
 
 .rfa-lazy-checkbox--reviewed { background-color: rgb(var(--gh-accent)); }
 
-/* The shared hover tooltip (public/js/tooltip.js) for controls that carry a
-   data-rfa-tip label. One fixed bubble serves every control, so a row that
-   repeats per file adds an attribute rather than a popover and an SVG. */
+/* The shared hover tooltip bubble, see public/js/tooltip.js. */
 .rfa-tip-bubble {
     position: fixed;
     z-index: 60;
