@@ -47,8 +47,36 @@ test('the warm route compiles the manifest and reports the counts', function () 
         ->assertExactJson(['available' => true, 'compiled' => 1, 'cached' => 1, 'missing' => 1, 'failed' => 0]);
 
     expect($opcache->compiles)->toBe([base_path('app/Services/OpcacheWarmService.php')])
-        ->and(Context::get('rfa.outcome'))->toBe('completed')
-        ->and(Context::get('rfa.compiled_count'))->toBe(1);
+        ->and(Context::get('rfa.outcome'))->toBe('partial')
+        ->and(Context::get('rfa.reason'))->toBe('manifest_scripts_unusable')
+        ->and(Context::get('rfa.compiled_count'))->toBe(1)
+        ->and(Context::get('rfa.missing_count'))->toBe(1);
+});
+
+test('the warm action reports a completed outcome when every manifest script compiled', function () {
+    (new OpcacheWarmService(new FakeOpcacheService(included: [base_path('app/Services/OpcacheWarmService.php')])))->record();
+    app()->instance(OpcacheService::class, new FakeOpcacheService);
+
+    Log::shouldReceive('info')->once()->with('opcache.warmed');
+
+    app(WarmOpcacheAction::class)->handle();
+
+    expect(Context::get('rfa.outcome'))->toBe('completed')
+        ->and(Context::get('rfa.reason'))->toBeNull();
+});
+
+test('the warm action reports a partial outcome when a manifest script fails to compile', function () {
+    $script = base_path('app/Services/OpcacheWarmService.php');
+    (new OpcacheWarmService(new FakeOpcacheService(included: [$script])))->record();
+    app()->instance(OpcacheService::class, new FakeOpcacheService(failing: [$script]));
+
+    Log::shouldReceive('info')->once()->with('opcache.warmed');
+
+    app(WarmOpcacheAction::class)->handle();
+
+    expect(Context::get('rfa.outcome'))->toBe('partial')
+        ->and(Context::get('rfa.reason'))->toBe('manifest_scripts_unusable')
+        ->and(Context::get('rfa.failed_count'))->toBe(1);
 });
 
 test('the warm action reports a skipped outcome when opcache is unavailable', function () {

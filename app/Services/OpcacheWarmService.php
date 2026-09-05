@@ -6,6 +6,7 @@ namespace App\Services;
 
 use Closure;
 use Illuminate\Support\Facades\File;
+use RuntimeException;
 
 /**
  * Learns which scripts a real page load compiles and re-compiles them into
@@ -78,6 +79,11 @@ final readonly class OpcacheWarmService
     /**
      * Merge the scripts the current request loaded into the manifest.
      *
+     * Four server workers can finish requests at the same time, so the
+     * read, merge, and write run under one exclusive lock: without it two
+     * workers would read the same manifest and the later write would drop
+     * what the earlier one added.
+     *
      * @return array{total: int, added: int, written: bool}
      */
     public function record(): array
@@ -86,24 +92,50 @@ final readonly class OpcacheWarmService
             return ['total' => 0, 'added' => 0, 'written' => false];
         }
 
-        $known = $this->manifestScripts();
         $current = array_values(array_filter($this->opcache->includedScripts(), $this->warmableFilter()));
-        $merged = array_values(array_unique([...$known, ...$current]));
-        $added = count($merged) - count($known);
 
-        if ($added === 0) {
-            return ['total' => count($known), 'added' => 0, 'written' => false];
+        return $this->withManifestLock(function () use ($current): array {
+            $known = $this->manifestScripts();
+            $merged = array_slice(array_values(array_unique([...$known, ...$current])), 0, self::MAX_SCRIPTS);
+            $added = count($merged) - count($known);
+
+            if ($added === 0) {
+                return ['total' => count($known), 'added' => 0, 'written' => false];
+            }
+
+            File::replace($this->manifestPath(), (string) json_encode([
+                'version' => $this->version(),
+                'scripts' => $merged,
+            ], JSON_UNESCAPED_SLASHES));
+
+            return ['total' => count($merged), 'added' => $added, 'written' => true];
+        });
+    }
+
+    /**
+     * @template T
+     *
+     * @param  Closure(): T  $callback
+     * @return T
+     */
+    private function withManifestLock(Closure $callback): mixed
+    {
+        File::ensureDirectoryExists(dirname($this->manifestPath()));
+
+        $lock = fopen($this->manifestPath().'.lock', 'c');
+
+        if ($lock === false) {
+            throw new RuntimeException('Unable to open the opcache manifest lock file.');
         }
 
-        $merged = array_slice($merged, 0, self::MAX_SCRIPTS);
+        try {
+            flock($lock, LOCK_EX);
 
-        File::ensureDirectoryExists(dirname($this->manifestPath()));
-        File::replace($this->manifestPath(), (string) json_encode([
-            'version' => $this->version(),
-            'scripts' => $merged,
-        ], JSON_UNESCAPED_SLASHES));
-
-        return ['total' => count($merged), 'added' => $added, 'written' => true];
+            return $callback();
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
     /**

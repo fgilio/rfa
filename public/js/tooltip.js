@@ -140,6 +140,9 @@
             ['mousedown', hide, { capture: true }],
             ['keydown', hide, { capture: true }],
             ['scroll', hide, { capture: true, passive: true }],
+            // A navigation replaces the control under the pointer without a
+            // mouseout, which would leave the bubble floating on the new page.
+            ['livewire:navigating', hide, false],
         ];
 
         function attach() {

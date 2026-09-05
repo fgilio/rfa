@@ -45,6 +45,24 @@ test('record merges new scripts into an existing manifest and skips the write wh
         ->and($second->manifestScripts())->toBe([base_path('app/a.php'), base_path('app/b.php')]);
 });
 
+test('record counts only the additions the manifest cap lets through', function () {
+    $full = collect(range(1, OpcacheWarmService::MAX_SCRIPTS))->map(fn (int $i): string => base_path("app/full-{$i}.php"))->all();
+    (new OpcacheWarmService(new FakeOpcacheService(included: $full)))->record();
+
+    $service = new OpcacheWarmService(new FakeOpcacheService(included: [base_path('app/one-more.php')]));
+
+    expect($service->record())->toBe(['total' => OpcacheWarmService::MAX_SCRIPTS, 'added' => 0, 'written' => false])
+        ->and($service->manifestScripts())->not->toContain(base_path('app/one-more.php'));
+});
+
+test('record serialises manifest writes through a lock file next to the manifest', function () {
+    $service = new OpcacheWarmService(new FakeOpcacheService(included: [base_path('app/a.php')]));
+
+    $service->record();
+
+    expect(File::exists($service->manifestPath().'.lock'))->toBeTrue();
+});
+
 test('record reports opcache as unavailable without touching the manifest', function () {
     $service = new OpcacheWarmService(new FakeOpcacheService(enabled: false, included: [base_path('app/a.php')]));
 

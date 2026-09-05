@@ -36,9 +36,12 @@ final readonly class WarmOpcacheAction
             if (! $result['available']) {
                 $outcome = 'skipped';
                 Context::add('rfa.reason', 'opcache_unavailable');
-            } elseif ($result['compiled'] === 0 && $result['cached'] === 0) {
+            } elseif (array_sum([$result['compiled'], $result['cached'], $result['missing'], $result['failed']]) === 0) {
                 $outcome = 'skipped';
                 Context::add('rfa.reason', 'empty_manifest');
+            } elseif ($result['missing'] > 0 || $result['failed'] > 0) {
+                $outcome = 'partial';
+                Context::add('rfa.reason', 'manifest_scripts_unusable');
             }
         } catch (Throwable $e) {
             $outcome = 'error';

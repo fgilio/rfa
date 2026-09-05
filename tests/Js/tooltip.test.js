@@ -133,6 +133,19 @@ describe('shared hover tooltip', () => {
         }
     });
 
+    it('hides when Livewire starts navigating away', async () => {
+        const control = addControl('Mark as reviewed');
+
+        hover(control);
+        await vi.advanceTimersByTimeAsync(SHOW_DELAY_MS);
+        expect(tooltip.bubble.hidden).toBe(false);
+
+        document.dispatchEvent(new Event('livewire:navigating'));
+
+        expect(tooltip.bubble.hidden).toBe(true);
+        expect(tooltip.current).toBeNull();
+    });
+
     it('does not show for a control removed before the delay elapses', async () => {
         const control = addControl('Gone');
 
