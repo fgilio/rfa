@@ -117,6 +117,11 @@ function retrieveNativePHPConfig() {
         if (shouldMigrateDatabase(store)) {
             console.log('Migrating database...');
         }
+        const phpPort = yield getPhpPort();
+        const phpServer = callPhp(['-S', `127.0.0.1:${phpPort}`, serverPath], {
+            cwd: cwd,
+            env
+        }, phpIniSettings);
 JS;
 }
 
@@ -238,7 +243,14 @@ class NativePHP {
         return __awaiter(this, void 0, void 0, function* () {
             yield app.whenReady();
             const config = yield this.loadConfig();
+            this.setDockIcon();
+            this.setAppUserModelId(config);
+            this.setDeepLinkHandler(config);
+            this.startAutoUpdater(config);
+            yield this.startElectronApi();
+            state.phpIni = yield this.loadPhpIni();
             yield this.startPhpApp();
+            this.startScheduler();
             yield notifyLaravel("booted");
         });
     }

@@ -1683,14 +1683,11 @@ new #[Layout('layouts.app')] class extends Component
                                         :collapse="true"
                                     />
                                 </button>
-                                <flux:tooltip content="Un-mark as reviewed">
-                                    <button type="button"
-                                        @click.stop="$dispatch('rfa-toggle-reviewed', { filePath: @js($recentlyReviewedFile['path']) })"
-                                        class="shrink-0 size-3.5 flex items-center justify-center text-gh-green hover:text-gh-text transition-colors"
-                                        aria-label="Un-mark as reviewed">
-                                        <flux:icon icon="check" variant="outline" class="!size-3.5" />
-                                    </button>
-                                </flux:tooltip>
+                                <button type="button"
+                                    @click.stop="$dispatch('rfa-toggle-reviewed', { filePath: @js($recentlyReviewedFile['path']) })"
+                                    class="shrink-0 size-3.5 flex items-center justify-center text-gh-green hover:text-gh-text transition-colors"
+                                    data-rfa-tip="Un-mark as reviewed"
+                                    aria-label="Un-mark as reviewed"><span class="rfa-lazy-icon rfa-lazy-icon--check size-3.5" aria-hidden="true"></span></button>
                             </div>
                         @endforeach
                         <div class="border-b border-gh-border my-3"></div>
@@ -1706,31 +1703,23 @@ new #[Layout('layouts.app')] class extends Component
                         $remoteStatus = ($file['isUntracked'] ?? false) ? 'added' : ($file['status'] ?? 'modified');
                         $isReviewed = array_key_exists($file['path'], $reviewedFiles);
                     @endphp
+                    {{-- One row per file, so the markup stays compact: this loop is most
+                         of the page on large reviews. Highlight is Alpine-only: activeFile
+                         is seeded from the server's selectedFileId at init, and selectFile()
+                         skips render, so baking the server value into the else-branch would
+                         leave the previous row highlighted after every client-side
+                         selection change. --}}
                     <div
                         @if($hasRemote)
-                            @contextmenu.prevent="$dispatch('open-remote-menu', {
-                                target: 'file',
-                                fileId: @js($file['id']),
-                                filePath: @js($file['path']),
-                                oldPath: @js($file['oldPath'] ?? null),
-                                status: @js($remoteStatus),
-                                clientX: $event.clientX,
-                                clientY: $event.clientY,
-                            })"
+                            @contextmenu.prevent="$dispatch('open-remote-menu', { target: 'file', fileId: @js($file['id']), filePath: @js($file['path']), oldPath: @js($file['oldPath'] ?? null), status: @js($remoteStatus), clientX: $event.clientX, clientY: $event.clientY })"
                         @endif
                         class="w-full text-left px-2.5 py-2 rounded text-xs hover:bg-gh-border/30 flex items-center gap-2.5 group transition-[opacity,colors] duration-150 ease-out focus-within:outline focus-within:outline-1 focus-within:-outline-offset-1 focus-within:outline-gh-accent"
-                        {{-- Highlight is Alpine-only: activeFile is seeded from the server's
-                             selectedFileId at init, and selectFile() skips render, so baking
-                             the server value into the else-branch would leave the previous
-                             row highlighted after every client-side selection change. --}}
-                        :class="[
-                            activeFile === '{{ $file['id'] }}' ? 'bg-gh-text/10 text-gh-text' : 'text-gh-muted',
-                        ]"
+                        :class="activeFile === '{{ $file['id'] }}' ? 'bg-gh-text/10 text-gh-text' : 'text-gh-muted'"
                     >
                         <button @click="scrollToFile('{{ $file['id'] }}')" class="flex items-center gap-2.5 min-w-0 flex-1">
                             <span class="font-mono font-medium shrink-0 {{ $badgeClass }}">{{ $badgeLabel }}</span>
                             @if($file['isSymlink'] ?? false)
-                                <flux:icon icon="link" variant="outline" class="!size-3 text-gh-muted shrink-0" aria-hidden="true" />
+                                <span class="rfa-lazy-icon rfa-lazy-icon--link shrink-0" aria-hidden="true"></span>
                             @endif
                             @php
                                 // Build the tooltip in PHP: a literal `"` inside a Blade `{{ }}` interpolation
@@ -1748,33 +1737,26 @@ new #[Layout('layouts.app')] class extends Component
                                 :collapse="true"
                             />
                         </button>
-                        <flux:tooltip>
-                            {{-- Reviewed state is server-rendered inside the file-list island.
-                                 The click tells DiffFile's checkbox mirror the new state and
-                                 asks the parent to toggle, which refreshes affected islands. --}}
-                            <button type="button"
-                                @click.stop="
-                                    $dispatch('file-reviewed-changed', { id: '{{ $file['id'] }}', reviewed: {{ $isReviewed ? 'false' : 'true' }} });
-                                    $dispatch('rfa-toggle-reviewed', { filePath: @js($file['path']) });
-                                "
-                                class="shrink-0 size-3.5 flex items-center justify-center transition-[opacity,colors] {{ $isReviewed ? 'text-gh-green hover:text-gh-text' : 'text-gh-muted/40 opacity-0 group-hover:opacity-100 hover:text-gh-text' }}"
-                                aria-label="{{ $isReviewed ? 'Un-mark as reviewed' : 'Mark as reviewed' }}"
-                            >
-                                <flux:icon icon="check" variant="outline" class="!size-3.5" />
-                            </button>
-                            <flux:tooltip.content>{{ $isReviewed ? 'Un-mark as reviewed' : 'Mark as reviewed' }}</flux:tooltip.content>
-                        </flux:tooltip>
+                        {{-- Reviewed state is server-rendered inside the file-list island.
+                             The click tells DiffFile's checkbox mirror the new state and
+                             asks the parent to toggle, which refreshes affected islands.
+                             Row controls use the attribute tooltip and mask icons: this
+                             row repeats per file, so a Flux tooltip and inline SVG each
+                             would dominate the page weight on large reviews. --}}
+                        <button type="button"
+                            @click.stop="$dispatch('file-reviewed-changed', { id: '{{ $file['id'] }}', reviewed: {{ $isReviewed ? 'false' : 'true' }} }); $dispatch('rfa-toggle-reviewed', { filePath: @js($file['path']) })"
+                            class="shrink-0 size-3.5 flex items-center justify-center transition-[opacity,colors] {{ $isReviewed ? 'text-gh-green hover:text-gh-text' : 'text-gh-muted/40 opacity-0 group-hover:opacity-100 hover:text-gh-text' }}"
+                            data-rfa-tip="{{ $isReviewed ? 'Un-mark as reviewed' : 'Mark as reviewed' }}"
+                            aria-label="{{ $isReviewed ? 'Un-mark as reviewed' : 'Mark as reviewed' }}"
+                        ><span class="rfa-lazy-icon rfa-lazy-icon--check size-3.5" aria-hidden="true"></span></button>
                         <span class="shrink-0 size-3.5 flex items-center justify-center">
                             @if(! $this->isCommitMode() && ! $isSinceBeginningView && $file['status'] !== 'commented' && ! ($file['isExternal'] ?? false) && ! ($file['isWholeFile'] ?? false))
-                                <flux:tooltip content="Discard changes">
-                                    <button
-                                        class="opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text data-loading:pointer-events-none data-loading:opacity-50"
-                                        aria-label="Discard changes"
-                                        wire:click.stop="discardFileChanges('{{ $file['id'] }}')"
-                                    >
-                                        <flux:icon icon="arrow-uturn-left" variant="outline" class="!size-3.5" />
-                                    </button>
-                                </flux:tooltip>
+                                <button type="button"
+                                    class="flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-gh-muted hover:text-gh-text data-loading:pointer-events-none data-loading:opacity-50"
+                                    data-rfa-tip="Discard changes"
+                                    aria-label="Discard changes"
+                                    wire:click.stop="discardFileChanges('{{ $file['id'] }}')"
+                                ><span class="rfa-lazy-icon rfa-lazy-icon--discard size-3.5" aria-hidden="true"></span></button>
                             @endif
                         </span>
                         <span class="ml-auto flex gap-1.5 shrink-0 font-mono">
@@ -1902,7 +1884,7 @@ new #[Layout('layouts.app')] class extends Component
                                 :lazy.bundle="$fileComments === []"
                                 :key="$file['id'].'-'.$file['refreshFingerprint']"
                                 :file="$file"
-                                :load-delay="(int) (floor($loop->index / 15) * 100)"
+                                :load-delay="(int) (floor($loop->index / 15) * 30)"
                                 :file-comments="$fileComments"
                                 :is-reviewed="array_key_exists($file['path'], $reviewedFiles)"
                                 :single-file="$singleFile"

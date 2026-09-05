@@ -45,6 +45,7 @@
     @localScript('js/settings-store.js')
     @localScript('js/renderer-ready.js')
     @localScript('js/overlays-store.js')
+    @localScript('js/tooltip.js')
     @localScript('js/keymap-store.js')
     @localScript('js/shortcuts-store.js')
     @localScript('js/page-search.js')

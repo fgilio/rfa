@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Listeners\SetContentLength;
 use App\Services\GitFileContentService;
 use App\Services\ReviewConfigService;
 use App\Support\LocalAsset;
@@ -11,7 +12,9 @@ use App\Support\NonBlockingLocalFilesystemAdapter;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Foundation\Http\Events\RequestHandled;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
 use League\Flysystem\Filesystem as Flysystem;
@@ -61,5 +64,7 @@ class AppServiceProvider extends ServiceProvider
         ));
 
         Blaze::optimize()->in(resource_path('views/components'));
+
+        Event::listen(RequestHandled::class, SetContentLength::class);
     }
 }

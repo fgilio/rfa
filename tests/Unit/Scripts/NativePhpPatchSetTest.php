@@ -48,7 +48,7 @@ function distSnapshot(string $root): array
 
 test('the patch set covers every vendored file rfa depends on', function () {
     expect(collect(rfaNativePhpPatchSet())->pluck('name')->all())
-        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance', 'php-extraction', 'php-build-wait']);
+        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'server-optimize', 'server-workers', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'php-extraction', 'php-build-wait']);
 });
 
 test('the dist root points at the vendored electron plugin', function () {
@@ -63,7 +63,7 @@ test('applies every patch in one run', function () {
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'server-optimize', 'preflight-cache', 'splash-window', 'resolved-appearance', 'php-extraction', 'php-build-wait'])
+    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'server-optimize', 'server-workers', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'php-extraction', 'php-build-wait'])
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['absent'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
@@ -75,19 +75,22 @@ test('applies every patch in one run', function () {
         ->toContain('[rfa window readiness]')
         ->toContain('[rfa window theme]')
         ->toContain('rfaPresentationPhase')
-        ->toContain("rfaPresentationPhase = 'waiting-frame'")
         ->toContain("opacity: id === 'main' ? 0 : 1")
         ->toContain('window.setOpacity(1);')
         ->toContain("window.emit('rfa:presented')")
-        ->toContain('window.webContents.beginFrameSubscription(false')
-        ->toContain('window.webContents.invalidate();')
-        ->toContain('window.webContents.endFrameSubscription();');
-    expect(file_get_contents($root.'/server/php.js'))->toContain('rfaNeedsFullOptimize');
+        ->toContain('!window.isDestroyed()')
+        ->not->toContain('beginFrameSubscription');
+    expect(file_get_contents($root.'/server/php.js'))
+        ->toContain('rfaNeedsFullOptimize')
+        ->toContain("PHP_CLI_SERVER_WORKERS: '4'");
     expect(file_get_contents($root.'/index.js'))
         ->toContain("'preflight_config_'")
         ->toContain('const RFA_SPLASH_HTML')
         ->toContain("window.once('rfa:presented'")
-        ->toContain('rfaResolveAppearance()');
+        ->toContain('rfaResolveAppearance()')
+        ->toContain('import http from "http"; // [rfa early php]')
+        ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp())')
+        ->toContain("path: '/_rfa/warm'");
     expect(file_get_contents($root.'/../../php.js'))
         ->toContain('[rfa php archive validation]')
         ->toContain('removeSync(binaryDestDir);')
@@ -127,10 +130,19 @@ test('all edits to the shared index.js survive each other', function () {
 
     applyRfaNativePhpPatchSet($root);
 
-    expect(file_get_contents($root.'/index.js'))
+    $index = file_get_contents($root.'/index.js');
+
+    expect($index)
         ->toContain('import Store from "electron-store"; // [rfa preflight cache]')
         ->toContain('powerMonitor, BrowserWindow, nativeTheme')
-        ->toContain('rfaResolveAppearance()');
+        ->toContain('rfaResolveAppearance()')
+        ->toContain('const rfaPhpBoot = this.startPhpApp()')
+        // The early PHP boot moves the whenReady wait below the PHP spawn while
+        // keeping the appearance and splash lines the other two patches own.
+        ->and(strpos($index, 'const rfaPhpBoot = this.startPhpApp()'))->toBeLessThan(strpos($index, 'yield app.whenReady();'))
+        ->and(strpos($index, 'yield app.whenReady();'))->toBeLessThan(strpos($index, 'yield this.rfaResolveAppearance();'))
+        ->and(strpos($index, 'yield this.rfaResolveAppearance();'))->toBeLessThan(strpos($index, 'this.rfaShowSplash();'))
+        ->and(strpos($index, 'this.rfaShowSplash();'))->toBeLessThan(strpos($index, 'const rfaPhpFailure = yield rfaPhpBoot;'));
 });
 
 test('a second run changes nothing', function () {
@@ -142,7 +154,7 @@ test('a second run changes nothing', function () {
     $outcome = applyRfaNativePhpPatchSet($root);
 
     expect($outcome['applied'])->toBeEmpty()
-        ->and($outcome['unchanged'])->toHaveCount(10)
+        ->and($outcome['unchanged'])->toHaveCount(12)
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($afterFirst);
 });
@@ -164,7 +176,7 @@ test('one reshaped source block leaves every file untouched', function () {
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['blocked'])->toBe(['splash-window', 'resolved-appearance'])
+    expect($outcome['blocked'])->toBe(['splash-window', 'resolved-appearance', 'early-php-boot'])
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($before);
 });
@@ -177,7 +189,7 @@ test('a reshaped block in one file blocks the patches to the other files', funct
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['blocked'])->toBe(['server-optimize'])
+    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers'])
         ->and(distSnapshot($root))->toBe($before);
 });
 
@@ -193,7 +205,7 @@ test('an unreadable target blocks the run rather than half-patching', function (
 
     chmod($root.'/server/php.js', 0644);
 
-    expect($outcome['blocked'])->toBe(['server-optimize'])
+    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers'])
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($before);
 })->skip(fn () => posix_geteuid() === 0, 'root can read a 0000 file');
@@ -241,7 +253,7 @@ test('an absent dist tree is reported, not failed', function () {
     // pruned copy where the plugin dist is not present.
     $outcome = applyRfaNativePhpPatchSet(sys_get_temp_dir().'/rfa_test_dist_nowhere_'.getmypid());
 
-    expect($outcome['absent'])->toHaveCount(10)
+    expect($outcome['absent'])->toHaveCount(12)
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 });
@@ -319,8 +331,8 @@ test('a tree holding only some of the targets is refused, not half-patched', fun
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['absent'])->toBe(['server-optimize'])
-        ->and($outcome['blocked'])->toBe(['server-optimize'])
+    expect($outcome['absent'])->toBe(['server-optimize', 'server-workers'])
+        ->and($outcome['blocked'])->toBe(['server-optimize', 'server-workers'])
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($before);
 });

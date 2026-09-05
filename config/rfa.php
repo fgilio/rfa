@@ -11,6 +11,7 @@ return [
         'mode' => env('RFA_MOVED_LINES_MODE', 'zebra'),
     ],
     'github_repo' => env('RFA_GITHUB_REPO', 'fgilio/rfa'),
+    'opcache_warm_manifest_path' => env('RFA_OPCACHE_WARM_MANIFEST_PATH', storage_path('framework/cache/opcache-warm-manifest.json')),
     'diagnostics' => [
         'enabled' => env('RFA_DIAGNOSTICS_ENABLED', true),
         'path' => env('RFA_DIAGNOSTICS_PATH', storage_path('logs/rfa-diagnostics.jsonl')),

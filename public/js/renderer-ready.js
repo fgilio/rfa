@@ -203,6 +203,12 @@
 
         if (!settled) return false;
 
+        // The settled check resolves inside an animation frame callback, before
+        // that frame is painted. Two more frames guarantee the settled DOM has
+        // reached the screen, so the main process can show the window at once.
+        await nextFrame(root);
+        await nextFrame(root);
+
         return sendRendererReady(root);
     }
 
