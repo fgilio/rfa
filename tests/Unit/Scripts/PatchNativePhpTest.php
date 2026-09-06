@@ -875,7 +875,7 @@ test('early php boot: spawns PHP first, warms it, then waits for Electron and th
     $content = (string) rfaPatchEarlyPhpBoot(indexReadyForEarlyPhpBoot());
 
     expect($content)
-        ->toContain('import axios from "axios"; // [rfa early php]')
+        ->toContain('import { rfaAxios as axios } from "./server/utils.js"; // [rfa early php]')
         ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).then(() => null, (rfaError) => rfaError);')
         ->toContain('const rfaPhpFailure = yield rfaPhpBoot;')
         ->toContain('throw rfaPhpFailure;')
@@ -1048,4 +1048,164 @@ test('the vendored NativePHP plugin carries the launch timeline', function () {
     expect(file_get_contents($dist.'/index.js'))->toContain('globalThis.__rfaLaunchMark = rfaLaunchMark;')
         ->and(file_get_contents($dist.'/server/php.js'))->toContain("__rfaLaunchMark?.('php.listening')")
         ->and(file_get_contents($dist.'/server/api/window.js'))->toContain("rfaMark('window.presented')");
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
+
+// ===== lazy externals: index.js, server/api/autoUpdater.js, server/api/contextMenu.js, server/utils.js, server/php.js, src/main/index.js =====
+
+test('lazy updater: reports a shape change when the electron-updater import is missing', function () {
+    expect(rfaPatchLazyUpdater('const reshaped = true;'))->toBeNull();
+});
+
+test('lazy updater: replaces the import with a proxy over the router loader', function () {
+    $content = (string) rfaPatchLazyUpdater((string) rfaPatchLaunchTimeline(indexReadyForLaunchTimeline()));
+
+    expect($content)
+        ->not->toContain("import electronUpdater from 'electron-updater';")
+        ->toContain('import { rfaAutoUpdater } from "./server/api/autoUpdater.js"; // [rfa lazy externals]')
+        ->toContain('autoUpdater: new Proxy({}, {')
+        ->toContain("return typeof value === 'function' ? value.bind(updater) : value;")
+        // The binding the launch timeline anchors on survives.
+        ->toContain('const { autoUpdater } = electronUpdater;');
+});
+
+test('lazy updater: leaves the earlier index.js patches idempotent', function () {
+    $content = (string) rfaPatchLazyUpdater((string) rfaPatchLaunchTimeline(indexReadyForLaunchTimeline()));
+
+    foreach ([rfaPatchPreflightCache(...), rfaPatchSplashWindow(...), rfaPatchResolvedAppearance(...), rfaPatchEarlyPhpBoot(...), rfaPatchLaunchTimeline(...), rfaPatchLazyUpdater(...)] as $patch) {
+        expect($patch($content))->toBe($content);
+    }
+});
+
+test('lazy updater api: reports a shape change when the router head is missing', function () {
+    expect(rfaPatchLazyUpdaterApi('const reshaped = true;'))->toBeNull();
+});
+
+test('lazy updater api: requires electron-updater on first use and forwards events from then on', function () {
+    $content = (string) rfaPatchLazyUpdaterApi(stockAutoUpdaterApi());
+
+    expect($content)
+        ->not->toContain("import electronUpdater from 'electron-updater';")
+        ->toContain('import { createRequire } from "module"; // [rfa lazy externals]')
+        ->toContain("rfaUpdater = rfaRequire('electron-updater').autoUpdater;")
+        ->toContain('rfaForwardUpdaterEvents(rfaUpdater);')
+        ->toContain('rfaAutoUpdater().checkForUpdates();')
+        ->toContain('rfaAutoUpdater().downloadUpdate();')
+        ->toContain('rfaAutoUpdater().quitAndInstall();')
+        ->toContain("function rfaForwardUpdaterEvents(autoUpdater) {\n    autoUpdater.addListener(\"checking-for-update\", () => {")
+        ->toContain("            version: event.version,\n            },\n        });\n    });\n}\nexport default router;")
+        ->and(substr_count($content, 'autoUpdater.addListener('))->toBe(2);
+});
+
+test('lazy updater api: is idempotent', function () {
+    $patched = rfaPatchLazyUpdaterApi(stockAutoUpdaterApi());
+
+    expect(rfaPatchLazyUpdaterApi($patched))->toBe($patched);
+});
+
+test('lazy context menu: reports a shape change when the install block is missing', function () {
+    expect(rfaPatchLazyContextMenu('import contextMenu from "electron-context-menu";'))->toBeNull();
+});
+
+test('lazy context menu: imports the module with the first context menu', function () {
+    $content = (string) rfaPatchLazyContextMenu(stockContextMenuApi());
+
+    expect($content)
+        ->not->toContain('import contextMenu from "electron-context-menu";')
+        ->toContain('rfaContextMenuModule = import("electron-context-menu").then((loaded) => loaded.default);')
+        ->toContain('rfaContextMenu().then((contextMenu) => {')
+        ->toContain('        contextMenuDisposable = contextMenu({')
+        ->toContain('                return req.body.entries.map(compileMenu);')
+        // The response still goes out before the load.
+        ->and(strpos($content, 'res.sendStatus(200);', strpos($content, "router.post('/'")))->toBeLessThan(strpos($content, 'rfaContextMenu().then('));
+});
+
+test('lazy context menu: is idempotent', function () {
+    $patched = rfaPatchLazyContextMenu(stockContextMenuApi());
+
+    expect(rfaPatchLazyContextMenu($patched))->toBe($patched);
+});
+
+test('lazy axios: reports a shape change when the axios import is missing', function () {
+    expect(rfaPatchLazyAxios('const reshaped = true;'))->toBeNull();
+});
+
+test('lazy axios: requires axios on first use and publishes the preload hook', function () {
+    $content = (string) rfaPatchLazyAxios((string) rfaPatchCookieAfterReady(stockUtils()));
+
+    expect($content)
+        ->not->toContain("import axios from 'axios';")
+        ->toContain("rfaAxiosModule = rfaRequire('axios');")
+        ->toContain('export const rfaAxios = {')
+        ->toContain('post: (...args) => rfaLoadAxios().post(...args),')
+        ->toContain('globalThis.__rfaPreloadExternals = rfaLoadAxios;')
+        ->toContain('const axios = rfaAxios;');
+});
+
+test('lazy axios: leaves the cookie patch idempotent and is idempotent itself', function () {
+    $content = (string) rfaPatchLazyAxios((string) rfaPatchCookieAfterReady(stockUtils()));
+
+    expect(rfaPatchCookieAfterReady($content))->toBe($content)
+        ->and(rfaPatchLazyAxios($content))->toBe($content);
+});
+
+test('lazy axios preload: reports a shape change when the stderr handler is missing or ambiguous', function () {
+    expect(rfaPatchLazyAxiosPreload('const reshaped = true;'))->toBeNull()
+        ->and(rfaPatchLazyAxiosPreload(stockServer()."\n".stockServer()))->toBeNull();
+});
+
+test('lazy axios preload: asks for the externals right after the server spawns', function () {
+    $content = (string) rfaPatchLazyAxiosPreload((string) rfaPatchLaunchTimelineServer((string) rfaPatchServerWorkers((string) rfaPatchServerOptimize(stockServer()))));
+
+    expect($content)
+        ->toContain('globalThis.__rfaPreloadExternals?.(); // [rfa lazy externals] load axios while the server comes up')
+        ->and(substr_count($content, '__rfaPreloadExternals'))->toBe(1)
+        ->and(strpos($content, 'const phpServer = callPhp('))->toBeLessThan(strpos($content, '__rfaPreloadExternals'))
+        ->and(strpos($content, '__rfaPreloadExternals'))->toBeLessThan(strpos($content, "phpServer.stderr.on('data'"));
+});
+
+test('lazy axios preload: leaves the earlier php.js patches idempotent and is idempotent itself', function () {
+    $content = (string) rfaPatchLazyAxiosPreload((string) rfaPatchLaunchTimelineServer((string) rfaPatchServerWorkers((string) rfaPatchServerOptimize(stockServer()))));
+
+    foreach ([rfaPatchServerOptimize(...), rfaPatchServerWorkers(...), rfaPatchLaunchTimelineServer(...), rfaPatchLazyAxiosPreload(...)] as $patch) {
+        expect($patch($content))->toBe($content);
+    }
+});
+
+test('cached shell path: reports a shape change when the fix-path call is missing', function () {
+    expect(rfaPatchCachedShellPath("import {app} from 'electron'"))->toBeNull();
+});
+
+test('cached shell path: applies the cached PATH and refreshes it in the background', function () {
+    $content = (string) rfaPatchCachedShellPath(stockMainEntry());
+
+    expect($content)
+        ->not->toContain("import fixPath from 'fix-path';")
+        ->not->toContain('fixPath();')
+        ->toContain("const rfaShellPathFile = path.join(app.getPath('userData'), 'rfa-shell-path.json');")
+        ->toContain("const rfaShell = process.env.SHELL || '/bin/zsh';")
+        // First launch resolves synchronously before bootstrap...
+        ->toContain('resolved = rfaPathFromShellOutput(execFileSync(rfaShell, rfaShellArgs, rfaShellOptions));')
+        // ...a cached PATH is applied at once and refreshed off the launch path.
+        ->toContain('process.env.PATH = cached;')
+        ->toContain('execFile(rfaShell, rfaShellArgs, rfaShellOptions, (error, stdout) => {')
+        ->toContain('renameSync(`${rfaShellPathFile}.tmp`, rfaShellPathFile);')
+        ->and(strpos($content, 'rfaInheritShellPath();'))->toBeLessThan(strpos($content, 'NativePHP.bootstrap('));
+});
+
+test('cached shell path: is idempotent', function () {
+    $patched = rfaPatchCachedShellPath(stockMainEntry());
+
+    expect(rfaPatchCachedShellPath($patched))->toBe($patched);
+});
+
+test('the vendored NativePHP plugin loads its externals lazily', function () {
+    $electron = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron';
+    $dist = $electron.'/electron-plugin/dist';
+
+    expect(file_get_contents($dist.'/index.js'))->toContain('import { rfaAutoUpdater } from "./server/api/autoUpdater.js"; // [rfa lazy externals]')
+        ->and(file_get_contents($dist.'/server/api/autoUpdater.js'))->toContain('export function rfaAutoUpdater() {')
+        ->and(file_get_contents($dist.'/server/api/contextMenu.js'))->toContain('import("electron-context-menu")')
+        ->and(file_get_contents($dist.'/server/utils.js'))->toContain('globalThis.__rfaPreloadExternals = rfaLoadAxios;')
+        ->and(file_get_contents($dist.'/server/php.js'))->toContain('globalThis.__rfaPreloadExternals?.();')
+        ->and(file_get_contents($electron.'/src/main/index.js'))->toContain('rfaInheritShellPath();');
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');

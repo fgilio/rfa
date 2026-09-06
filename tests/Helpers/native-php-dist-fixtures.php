@@ -289,3 +289,96 @@ class NativePHP {
 export default new NativePHP();
 JS;
 }
+
+function stockAutoUpdaterApi(): string
+{
+    return <<<'JS'
+import express from "express";
+import electronUpdater from 'electron-updater';
+const { autoUpdater } = electronUpdater;
+import { notifyLaravel } from "../utils.js";
+const router = express.Router();
+router.post("/check-for-updates", (req, res) => {
+    autoUpdater.checkForUpdates();
+    res.sendStatus(200);
+});
+router.post("/download-update", (req, res) => {
+    autoUpdater.downloadUpdate();
+    res.sendStatus(200);
+});
+router.post("/quit-and-install", (req, res) => {
+    autoUpdater.quitAndInstall();
+    res.sendStatus(200);
+});
+autoUpdater.addListener("checking-for-update", () => {
+    notifyLaravel("events", {
+        event: `\\Native\\Desktop\\Events\\AutoUpdater\\CheckingForUpdate`,
+    });
+});
+autoUpdater.addListener("update-downloaded", (event) => {
+    notifyLaravel("events", {
+        event: `\\Native\\Desktop\\Events\\AutoUpdater\\UpdateDownloaded`,
+        payload: {
+            downloadedFile: event.downloadedFile,
+            version: event.version,
+        },
+    });
+});
+export default router;
+JS;
+}
+
+function stockContextMenuApi(): string
+{
+    return <<<'JS'
+import express from 'express';
+import { compileMenu } from "./helper/index.js";
+import contextMenu from "electron-context-menu";
+const router = express.Router();
+let contextMenuDisposable = null;
+router.delete('/', (req, res) => {
+    res.sendStatus(200);
+    if (contextMenuDisposable) {
+        contextMenuDisposable();
+        contextMenuDisposable = null;
+    }
+});
+router.post('/', (req, res) => {
+    res.sendStatus(200);
+    if (contextMenuDisposable) {
+        contextMenuDisposable();
+        contextMenuDisposable = null;
+    }
+    contextMenuDisposable = contextMenu({
+        showLookUpSelection: false,
+        showSearchWithGoogle: false,
+        showInspectElement: false,
+        prepend: (defaultActions, parameters, browserWindow) => {
+            return req.body.entries.map(compileMenu);
+        },
+    });
+});
+export default router;
+JS;
+}
+
+function stockMainEntry(): string
+{
+    return <<<'JS'
+import {app} from 'electron'
+import NativePHP from '#plugin'
+import path from 'path'
+
+// Inherit User's PATH in Process & ChildProcess
+import fixPath from 'fix-path';
+fixPath();
+
+const buildPath = path.resolve(import.meta.dirname, import.meta.env.MAIN_VITE_NATIVEPHP_BUILD_PATH);
+const appPath = path.join(buildPath, 'app')
+
+NativePHP.bootstrap(
+    app,
+    appPath
+);
+JS;
+}
