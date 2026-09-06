@@ -1192,6 +1192,19 @@ test('cached shell path: applies the cached PATH and refreshes it in the backgro
         ->and(strpos($content, 'rfaInheritShellPath();'))->toBeLessThan(strpos($content, 'NativePHP.bootstrap('));
 });
 
+test('cached shell path: a cached PATH that no longer reaches git is a miss', function () {
+    // PHP copies PATH at spawn, so the background refresh cannot reach a
+    // server already running. git is the one executable PHP resolves through
+    // PATH, and a cached PATH without one waits for the shell instead.
+    $content = (string) rfaPatchCachedShellPath(stockMainEntry());
+
+    expect($content)
+        ->toContain("import { accessSync, constants, readFileSync, renameSync, writeFileSync } from 'fs';")
+        ->toContain("accessSync(path.join(directory, 'git'), constants.X_OK);")
+        ->toContain("typeof cached.path === 'string' && rfaPathResolvesGit(cached.path) ? cached.path : null")
+        ->and(strpos($content, 'function rfaPathResolvesGit('))->toBeLessThan(strpos($content, 'function rfaCachedShellPath('));
+});
+
 test('cached shell path: is idempotent', function () {
     $patched = rfaPatchCachedShellPath(stockMainEntry());
 

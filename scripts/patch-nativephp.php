@@ -2182,7 +2182,7 @@ JS;
 // applied at once and refreshed in the background; only the first launch, or
 // a change of login shell, waits for the shell before bootstrap.
 import { execFile, execFileSync } from 'child_process';
-import { readFileSync, renameSync, writeFileSync } from 'fs';
+import { accessSync, constants, readFileSync, renameSync, writeFileSync } from 'fs';
 const rfaShellPathFile = path.join(app.getPath('userData'), 'rfa-shell-path.json');
 const rfaShell = process.env.SHELL || '/bin/zsh';
 const rfaPathMarker = '__RFA_PATH__';
@@ -2192,10 +2192,24 @@ function rfaPathFromShellOutput(output) {
     const match = String(output).match(new RegExp(`${rfaPathMarker}(.*?)${rfaPathMarker}`, 's'));
     return match ? match[1].trim() : '';
 }
+// PHP copies PATH when it spawns and never sees the background refresh, and
+// git is the one executable it resolves through PATH. A cached PATH that no
+// longer reaches a git is stale for the whole session, so it is not applied.
+function rfaPathResolvesGit(value) {
+    return String(value).split(path.delimiter).some((directory) => {
+        try {
+            accessSync(path.join(directory, 'git'), constants.X_OK);
+            return true;
+        }
+        catch (error) {
+            return false;
+        }
+    });
+}
 function rfaCachedShellPath() {
     try {
         const cached = JSON.parse(readFileSync(rfaShellPathFile, 'utf8'));
-        return cached.shell === rfaShell && typeof cached.path === 'string' && cached.path !== '' ? cached.path : null;
+        return cached.shell === rfaShell && typeof cached.path === 'string' && rfaPathResolvesGit(cached.path) ? cached.path : null;
     }
     catch (error) {
         return null;
