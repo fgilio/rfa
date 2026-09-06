@@ -65,6 +65,26 @@ test('the warm action reports a completed outcome when every manifest script com
         ->and(Context::get('rfa.reason'))->toBeNull();
 });
 
+test('the warm action leaves a diagnostics breadcrumb for the launch report', function () {
+    $diagnosticsPath = $this->manifestDir.'/diagnostics.jsonl';
+    config()->set('rfa.diagnostics.enabled', true);
+    config()->set('rfa.diagnostics.path', $diagnosticsPath);
+    (new OpcacheWarmService(new FakeOpcacheService(included: [base_path('app/Services/OpcacheWarmService.php')])))->record();
+    app()->instance(OpcacheService::class, new FakeOpcacheService);
+
+    Log::shouldReceive('info')->once()->with('opcache.warmed');
+
+    app(WarmOpcacheAction::class)->handle();
+
+    $entry = json_decode(trim((string) file_get_contents($diagnosticsPath)), true);
+
+    expect($entry['event'])->toBe('opcache.warmed')
+        ->and($entry['context']['compiled'])->toBe(1)
+        ->and($entry['context']['outcome'])->toBe('completed')
+        ->and($entry['context']['duration_ms'])->toBeInt()
+        ->and($entry['request']['started_at_ms'])->toBeInt();
+});
+
 test('the warm action reports a partial outcome when a manifest script fails to compile', function () {
     $script = base_path('app/Services/OpcacheWarmService.php');
     (new OpcacheWarmService(new FakeOpcacheService(included: [$script])))->record();

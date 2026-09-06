@@ -135,12 +135,21 @@ function retrieveNativePHPConfig() {
         }
         if (shouldMigrateDatabase(store)) {
             console.log('Migrating database...');
+            let result = callPhpSync(['artisan', 'migrate', '--force'], phpOptions, phpIniSettings);
         }
         const phpPort = yield getPhpPort();
         const phpServer = callPhp(['-S', `127.0.0.1:${phpPort}`, serverPath], {
             cwd: cwd,
             env
         }, phpIniSettings);
+        const portRegex = /Development Server \(.*:([0-9]+)\) started/gm;
+        phpServer.stderr.on('data', (data) => {
+            const match = portRegex.exec(data.toString());
+            if (match) {
+                const port = parseInt(match[1]);
+                console.log("PHP Server started on port: ", port);
+            }
+        });
 JS;
 }
 
@@ -250,6 +259,7 @@ function stockIndexForSplash(): string
 {
     return <<<'JS'
 import { app, session, powerMonitor } from "electron";
+import { resolve } from "path";
 import electronUpdater from 'electron-updater';
 const { autoUpdater } = electronUpdater;
 class NativePHP {
@@ -274,5 +284,6 @@ class NativePHP {
         });
     }
 }
+export default new NativePHP();
 JS;
 }

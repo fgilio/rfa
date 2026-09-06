@@ -37,6 +37,7 @@ describe('renderer readiness', () => {
         delete window.requestAnimationFrame;
         delete window.__rfaRendererReadyAttached;
         delete window.__rfaRendererReadySent;
+        delete window.__rfaRendererReadyTimeline;
         delete document.fonts;
         delete document.readyState;
         document.body.innerHTML = '';
@@ -188,5 +189,23 @@ describe('renderer readiness', () => {
         await vi.runAllTimersAsync();
 
         expect(window.nativeRendererReady).toHaveBeenCalledOnce();
+    });
+
+    it('announces the renderer-ready signal to the page once', async () => {
+        const announced = [];
+        document.addEventListener('rfa:renderer-ready', (event) => announced.push(event.detail));
+
+        const first = signalWhenSettled(window, 1000);
+        await vi.runAllTimersAsync();
+        await first;
+        const second = signalWhenSettled(window, 1000);
+        await vi.runAllTimersAsync();
+        await second;
+
+        expect(announced).toHaveLength(1);
+        expect(typeof announced[0].atMs).toBe('number');
+        expect(typeof announced[0].windowLoadMs).toBe('number');
+        expect(typeof announced[0].fontsReadyMs).toBe('number');
+        expect(typeof announced[0].stableMs).toBe('number');
     });
 });

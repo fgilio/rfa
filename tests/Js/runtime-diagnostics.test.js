@@ -11,6 +11,7 @@ describe('runtime diagnostics', () => {
         delete window.__rfaLastActivity;
         delete window.__rfaFocusState;
         delete window.__rfaLastSmartPollTick;
+        delete window.__rfaLivewireInitializedMs;
         delete window.rfaDiagnosticsConfig;
         delete window.Livewire;
         delete document.getAnimations;
@@ -131,6 +132,37 @@ describe('runtime diagnostics', () => {
 
     it('converts bytes to megabytes at three decimals', () => {
         expect(runtimeDiagnostics.bytesToMegabytes(1_572_864)).toBe(1.5);
+    });
+
+    it('posts a launch sample with the renderer half of the launch timeline', async () => {
+        vi.useFakeTimers();
+
+        const payloads = [];
+        window.fetch = vi.fn((url, options) => {
+            payloads.push(JSON.parse(options.body));
+
+            return Promise.resolve({});
+        });
+        window.rfaDiagnosticsConfig = { enabled: true };
+
+        runtimeDiagnostics.install(window);
+        document.dispatchEvent(new Event('livewire:initialized'));
+        document.dispatchEvent(new CustomEvent('rfa:renderer-ready', { detail: { atMs: 1234.6, fontsReadyMs: 900.2, stableMs: 1200 } }));
+        document.dispatchEvent(new CustomEvent('rfa:renderer-ready', { detail: { atMs: 9999 } }));
+
+        const launches = payloads.filter((payload) => payload.reason === 'launch');
+
+        expect(launches).toHaveLength(1);
+        expect(launches[0].timings.launch.rendererReadyMs).toBe(1235);
+        expect(launches[0].timings.launch.fontsReadyMs).toBe(900);
+        expect(launches[0].timings.launch.stableMs).toBe(1200);
+        expect(launches[0].timings.launch.windowLoadMs).toBeNull();
+        expect(typeof launches[0].timings.launch.livewireInitializedMs).toBe('number');
+        expect(launches[0].navigation).toHaveProperty('fetchStartMs');
+        expect(launches[0].navigation).toHaveProperty('responseEndMs');
+        expect(launches[0].navigation).toHaveProperty('timeOriginMs');
+
+        delete window.__rfaLivewireInitializedMs;
     });
 
     it('does not take a second process snapshot immediately after forced boot sample', async () => {

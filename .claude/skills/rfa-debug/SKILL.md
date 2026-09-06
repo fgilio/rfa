@@ -40,6 +40,20 @@ If `pgrep` finds nothing, the dev server isn't running — start it (`composer n
 
 When copying the SQLite file while the app is running, copy `database.sqlite`, `database.sqlite-wal`, and `database.sqlite-shm` together (NativePHP enables WAL mode in `rewriteDatabase`). Or use `sqlite3 "$LIVE_DB" '.dump'` to snapshot.
 
+## Cold-launch timeline
+
+Every launch writes one line to `<storage>/logs/rfa-launch.jsonl` from the Electron main process (marks in ms since process creation: PHP spawn, listening, warm, splash, booted handshake, window open, load, renderer-ready, presented). The PHP side stamps its breadcrumbs in `rfa-diagnostics.jsonl` with the request start (a `request` object holding `started_at_ms` and `elapsed_ms`), and the renderer posts a `launch` browser sample with navigation timing and the settle sub-marks. The file rotates at 1MB.
+
+Read the three as one timeline (defaults to the installed app's log directory, medians over the last launches):
+
+```bash
+php artisan rfa:launch-report --launches=6
+php artisan rfa:launch-report --logs ~/Library/Application\ Support/rfa-dev/storage/logs   # dev build
+php artisan rfa:launch-report --json
+```
+
+Marks are prefixed by their source: bare names come from the main process, `php.*.request`/`handled` from PHP breadcrumbs, `renderer.*` from the browser sample. Launches whose first PHP request never lands still leave a line via the 60s fallback flush.
+
 ## Reading the renderer console (Laravel Boost)
 
 Boost ships an `InjectBoost` middleware that injects a JS shim into HTML responses. The shim wraps `console.{log,info,warn,error,table}` plus uncaught errors and `unhandledrejection`, POSTing them to `route('boost.browser-logs')` (fallback: `/_boost/browser-logs`), which writes via `Log::channel('browser')` to `storage/logs/browser-<date>.log`.

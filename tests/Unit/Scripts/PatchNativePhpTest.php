@@ -1027,3 +1027,115 @@ test('the vendored NativePHP server carries the optimize patch', function () {
         ->toContain("command.unshift('-d', 'opcache.enable_cli=1'")
         ->toContain("PHP_CLI_SERVER_WORKERS: '4'");
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/server/php.js'), 'NativePHP desktop electron plugin not installed');
+
+// ===== launch timeline: index.js, server/php.js, server/api/window.js =====
+
+function indexReadyForLaunchTimeline(): string
+{
+    return (string) rfaPatchEarlyPhpBoot(indexReadyForEarlyPhpBoot());
+}
+
+test('launch timeline: reports a shape change when the bootstrap export is missing', function () {
+    expect(rfaPatchLaunchTimeline(stockIndex()))->toBeNull();
+});
+
+test('launch timeline: collects marks, flushes once, and wraps the bootstrap steps', function () {
+    $content = (string) rfaPatchLaunchTimeline(indexReadyForLaunchTimeline());
+
+    expect($content)
+        ->toContain('import { resolve, join } from "path"; // [rfa launch timeline]')
+        ->toContain('import { appendFileSync, mkdirSync, renameSync, statSync } from "fs"; // [rfa launch timeline]')
+        ->toContain('process.getCreationTime()')
+        ->toContain("event: 'launch.timeline'")
+        ->toContain("join(dir, 'rfa-launch.jsonl')")
+        ->toContain('renameSync(file, file + \'.1\')')
+        ->toContain('globalThis.__rfaLaunchMark = rfaLaunchMark;')
+        ->toContain("app.whenReady().then(() => rfaLaunchMark('app.ready'))")
+        ->toContain("rfaLaunchMark('booted.sent'); // [rfa launch timeline]")
+        ->toContain("rfaLaunchMark('booted.acked');")
+        ->toContain("['startPhpApp', 'php.started', 'after']")
+        ->toContain("['rfaWarmPhp', 'php.warmed', 'after']")
+        ->toContain("this.rfaSplash.once('show', () => rfaLaunchMark('splash.shown'))")
+        ->toContain('export default new NativePHP();')
+        // The bootstrap sequence the earlier patches verify by exact text is untouched.
+        ->toContain("            const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).then(() => null, (rfaError) => rfaError);\n            yield app.whenReady();\n            yield this.rfaResolveAppearance();")
+        ->and(strpos($content, "rfaLaunchMark('booted.sent')"))->toBeLessThan(strpos($content, 'yield notifyLaravel("booted");'))
+        ->and(strpos($content, 'yield notifyLaravel("booted");'))->toBeLessThan(strpos($content, "rfaLaunchMark('booted.acked')"));
+});
+
+test('launch timeline: leaves the earlier index.js patches idempotent', function () {
+    $content = (string) rfaPatchLaunchTimeline(indexReadyForLaunchTimeline());
+
+    foreach ([rfaPatchPreflightCache(...), rfaPatchSplashWindow(...), rfaPatchResolvedAppearance(...), rfaPatchEarlyPhpBoot(...)] as $patch) {
+        expect($patch($content))->toBe($content);
+    }
+});
+
+test('launch timeline: is idempotent', function () {
+    $patched = rfaPatchLaunchTimeline(indexReadyForLaunchTimeline());
+
+    expect(rfaPatchLaunchTimeline($patched))->toBe($patched);
+});
+
+test('launch timeline server: reports a shape change when the server start is missing', function () {
+    expect(rfaPatchLaunchTimelineServer('const reshaped = true;'))->toBeNull();
+});
+
+test('launch timeline server: stamps optimize, migrate, spawn, and listening', function () {
+    $content = (string) rfaPatchLaunchTimelineServer((string) rfaPatchServerWorkers((string) rfaPatchServerOptimize(stockServer())));
+
+    expect($content)
+        ->toContain("globalThis.__rfaLaunchMark?.('php.optimize.started'); // [rfa launch timeline]")
+        ->toContain("globalThis.__rfaLaunchMark?.('php.optimize.finished');")
+        ->toContain("globalThis.__rfaLaunchMark?.('php.migrate.started'); // [rfa launch timeline]")
+        ->toContain("globalThis.__rfaLaunchMark?.('php.spawning'); // [rfa launch timeline]")
+        ->toContain("globalThis.__rfaLaunchMark?.('php.port');")
+        ->toContain("globalThis.__rfaLaunchMark?.('php.spawned'); // [rfa launch timeline]")
+        ->toContain("globalThis.__rfaLaunchMark?.('php.listening'); // [rfa launch timeline]")
+        ->and(strpos($content, "'php.spawning'"))->toBeLessThan(strpos($content, 'const phpPort = yield getPhpPort();'))
+        ->and(strpos($content, "'php.spawned'"))->toBeLessThan(strpos($content, 'const portRegex'))
+        ->and(strpos($content, "'php.listening'"))->toBeLessThan(strpos($content, 'console.log("PHP Server started on port: ", port);'));
+});
+
+test('launch timeline server: leaves the optimize and worker patches idempotent', function () {
+    $content = (string) rfaPatchLaunchTimelineServer((string) rfaPatchServerWorkers((string) rfaPatchServerOptimize(stockServer())));
+
+    expect(rfaPatchServerOptimize($content))->toBe($content)
+        ->and(rfaPatchServerWorkers($content))->toBe($content)
+        ->and(rfaPatchLaunchTimelineServer($content))->toBe($content);
+});
+
+test('launch timeline window: reports a shape change when the open route is missing', function () {
+    expect(rfaPatchLaunchTimelineWindow('const reshaped = true;'))->toBeNull();
+});
+
+test('launch timeline window: stamps only the main window life cycle', function () {
+    $content = (string) rfaPatchLaunchTimelineWindow((string) rfaPatchRendererReadyWindow((string) rfaPatchWindowTheme(stockWindowApi())));
+
+    expect($content)
+        ->toContain("if (req.body.id === 'main') {")
+        ->toContain("rfaMark('window.open');")
+        ->toContain("rfaMark('window.created'); // [rfa launch timeline]")
+        ->toContain("window.once('ready-to-show', () => rfaMark('window.ready-to-show'));")
+        ->toContain("window.once('rfa:presented', () => rfaMark('window.presented'));")
+        ->toContain("window.webContents.once('did-finish-load', () => rfaMark('window.loaded'));")
+        ->toContain("rfaMark('window.renderer-ready');")
+        ->toContain("rfaMark('window.dom-ready');")
+        ->and(strpos($content, "rfaMark('window.created')"))->toBeLessThan(strpos($content, 'window.loadURL(url);'));
+});
+
+test('launch timeline window: leaves the theme and readiness patches idempotent', function () {
+    $content = (string) rfaPatchLaunchTimelineWindow((string) rfaPatchRendererReadyWindow((string) rfaPatchWindowTheme(stockWindowApi())));
+
+    expect(rfaPatchWindowTheme($content))->toBe($content)
+        ->and(rfaPatchRendererReadyWindow($content))->toBe($content)
+        ->and(rfaPatchLaunchTimelineWindow($content))->toBe($content);
+});
+
+test('the vendored NativePHP plugin carries the launch timeline', function () {
+    $dist = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist';
+
+    expect(file_get_contents($dist.'/index.js'))->toContain('globalThis.__rfaLaunchMark = rfaLaunchMark;')
+        ->and(file_get_contents($dist.'/server/php.js'))->toContain("__rfaLaunchMark?.('php.listening')")
+        ->and(file_get_contents($dist.'/server/api/window.js'))->toContain("rfaMark('window.presented')");
+})->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');

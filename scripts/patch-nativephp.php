@@ -1578,11 +1578,292 @@ JS;
 }
 
 /**
+ * Record the main-process launch timeline.
+ *
+ * Every phase of the boot gets a mark in milliseconds since process creation,
+ * and the set is appended as one JSON line to `storage/logs/rfa-launch.jsonl`
+ * under userData once the main window has presented (or after a fallback
+ * delay). The PHP side and the renderer stamp the diagnostics log with the
+ * same epoch base, so `rfa:launch-report` lays the three out on one timeline.
+ *
+ * The marks wrap the bootstrap methods on the prototype instead of editing
+ * the bootstrap sequence, which the pre-flight, splash, appearance, and early
+ * PHP boot patches own and verify by exact text.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchLaunchTimeline(string $content): ?string
+{
+    $importFind = 'import { resolve } from "path";';
+    $importReplace = <<<'JS'
+import { resolve, join } from "path"; // [rfa launch timeline]
+import { appendFileSync, mkdirSync, renameSync, statSync } from "fs"; // [rfa launch timeline]
+JS;
+
+    $helperFind = 'const { autoUpdater } = electronUpdater;';
+    $helperMarker = 'function rfaLaunchMark(name) {';
+    $helperReplace = <<<'JS'
+const { autoUpdater } = electronUpdater;
+// [rfa launch timeline] Marks are milliseconds since process creation. The
+// set is flushed once, shortly after the main window presents, so a launch
+// that never presents still leaves a line via the fallback timer.
+const rfaLaunch = {
+    t0: typeof process.getCreationTime === 'function' && process.getCreationTime()
+        ? process.getCreationTime()
+        : Date.now() - Math.round(process.uptime() * 1000),
+    marks: [],
+    flushed: false,
+    flushTimer: null,
+};
+function rfaLaunchMark(name) {
+    if (rfaLaunch.flushed) {
+        return;
+    }
+    rfaLaunch.marks.push({ name, at: Date.now() });
+    if (name === 'window.presented' && rfaLaunch.flushTimer !== null) {
+        clearTimeout(rfaLaunch.flushTimer);
+        rfaLaunch.flushTimer = setTimeout(rfaLaunchFlush, 1500);
+    }
+}
+function rfaLaunchFlush() {
+    if (rfaLaunch.flushed) {
+        return;
+    }
+    rfaLaunch.flushed = true;
+    try {
+        if (rfaLaunch.flushTimer !== null) {
+            clearTimeout(rfaLaunch.flushTimer);
+            rfaLaunch.flushTimer = null;
+        }
+        const marks = {};
+        rfaLaunch.marks.forEach((mark) => {
+            if (!(mark.name in marks)) {
+                marks[mark.name] = mark.at - rfaLaunch.t0;
+            }
+        });
+        const line = JSON.stringify({
+            ts: new Date().toISOString(),
+            event: 'launch.timeline',
+            pid: process.pid,
+            version: app.getVersion(),
+            packaged: app.isPackaged,
+            t0_ms: rfaLaunch.t0,
+            marks,
+        }) + '\n';
+        const dir = join(app.getPath('userData'), 'storage', 'logs');
+        const file = join(dir, 'rfa-launch.jsonl');
+        mkdirSync(dir, { recursive: true });
+        try {
+            if (statSync(file).size > 1024 * 1024) {
+                renameSync(file, file + '.1');
+            }
+        }
+        catch (rfaError) { }
+        appendFileSync(file, line);
+    }
+    catch (rfaError) { }
+}
+globalThis.__rfaLaunchMark = rfaLaunchMark;
+app.whenReady().then(() => rfaLaunchMark('app.ready'));
+JS;
+
+    $bootedFind = <<<'JS'
+            yield notifyLaravel("booted");
+JS;
+    $bootedReplace = <<<'JS'
+            rfaLaunchMark('booted.sent'); // [rfa launch timeline]
+            yield notifyLaravel("booted");
+            rfaLaunchMark('booted.acked');
+JS;
+
+    $exportFind = 'export default new NativePHP();';
+    $exportReplace = <<<'JS'
+// [rfa launch timeline] Each bootstrap step is marked when it settles. Wrapping
+// the prototype leaves the bootstrap sequence itself untouched.
+[
+    ['bootstrap', 'bootstrap', 'before'],
+    ['startElectronApi', 'api.started', 'after'],
+    ['loadPhpIni', 'phpini.loaded', 'after'],
+    ['loadConfig', 'config.loaded', 'after'],
+    ['startPhpApp', 'php.started', 'after'],
+    ['rfaWarmPhp', 'php.warmed', 'after'],
+    ['rfaResolveAppearance', 'appearance.resolved', 'after'],
+    ['rfaShowSplash', 'splash.requested', 'after'],
+    ['startAutoUpdater', 'updater.started', 'after'],
+].forEach(([method, mark, when]) => {
+    const original = NativePHP.prototype[method];
+    if (typeof original !== 'function') {
+        return;
+    }
+    NativePHP.prototype[method] = function (...args) {
+        if (when === 'before') {
+            rfaLaunchMark(mark);
+            rfaLaunch.flushTimer = setTimeout(rfaLaunchFlush, 60000);
+        }
+        const result = original.apply(this, args);
+        const settle = (value) => {
+            rfaLaunchMark(mark);
+            if (method === 'rfaShowSplash' && this.rfaSplash) {
+                this.rfaSplash.once('show', () => rfaLaunchMark('splash.shown'));
+                this.rfaSplash.once('closed', () => rfaLaunchMark('splash.closed'));
+            }
+            return value;
+        };
+        if (when === 'before') {
+            return result;
+        }
+        return result && typeof result.then === 'function' ? result.then(settle) : settle(result);
+    };
+});
+export default new NativePHP();
+JS;
+
+    if (str_contains($content, $importFind) && ! str_contains($content, $importReplace)) {
+        $content = str_replace($importFind, $importReplace, $content);
+    }
+
+    if (str_contains($content, $helperFind) && ! str_contains($content, $helperMarker)) {
+        $content = str_replace($helperFind, $helperReplace, $content);
+    }
+
+    if (str_contains($content, $bootedFind) && ! str_contains($content, $bootedReplace)) {
+        $content = str_replace($bootedFind, $bootedReplace, $content);
+    }
+
+    if (str_contains($content, $exportFind) && ! str_contains($content, $exportReplace)) {
+        $content = str_replace($exportFind, $exportReplace, $content);
+    }
+
+    $fullyPatched = str_contains($content, $importReplace)
+        && str_contains($content, $helperReplace)
+        && str_contains($content, $bootedReplace)
+        && str_contains($content, $exportReplace);
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
+ * Stamp the PHP server's start-up phases on the launch timeline.
+ *
+ * `index.js` owns the mark collector, so this file calls the global it
+ * publishes. The optional chaining keeps the server usable when the
+ * collector is absent (a test harness importing php.js alone).
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchLaunchTimelineServer(string $content): ?string
+{
+    $edits = [
+        [
+            "                let result = callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings);\n",
+            "                globalThis.__rfaLaunchMark?.('php.optimize.started'); // [rfa launch timeline]\n                let result = callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings);\n                globalThis.__rfaLaunchMark?.('php.optimize.finished');\n",
+        ],
+        [
+            "            let result = callPhpSync(['artisan', 'migrate', '--force'], phpOptions, phpIniSettings);\n",
+            "            globalThis.__rfaLaunchMark?.('php.migrate.started'); // [rfa launch timeline]\n            let result = callPhpSync(['artisan', 'migrate', '--force'], phpOptions, phpIniSettings);\n            globalThis.__rfaLaunchMark?.('php.migrate.finished');\n",
+        ],
+        [
+            "        const phpPort = yield getPhpPort();\n",
+            "        globalThis.__rfaLaunchMark?.('php.spawning'); // [rfa launch timeline]\n        const phpPort = yield getPhpPort();\n        globalThis.__rfaLaunchMark?.('php.port');\n",
+        ],
+        [
+            "        const portRegex = /Development Server \\(.*:([0-9]+)\\) started/gm;\n",
+            "        globalThis.__rfaLaunchMark?.('php.spawned'); // [rfa launch timeline]\n        const portRegex = /Development Server \\(.*:([0-9]+)\\) started/gm;\n",
+        ],
+        [
+            "                console.log(\"PHP Server started on port: \", port);\n",
+            "                globalThis.__rfaLaunchMark?.('php.listening'); // [rfa launch timeline]\n                console.log(\"PHP Server started on port: \", port);\n",
+        ],
+    ];
+
+    foreach ($edits as [$find, $replace]) {
+        if (str_contains($content, $find) && ! str_contains($content, $replace)) {
+            $content = str_replace($find, $replace, $content);
+        }
+    }
+
+    $fullyPatched = true;
+
+    foreach ($edits as [, $replace]) {
+        $fullyPatched = $fullyPatched && str_contains($content, $replace);
+    }
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
+ * Stamp the main window's life cycle on the launch timeline.
+ *
+ * Marks the open request, window creation, DOM readiness, load completion,
+ * Electron's first frame, the renderer-ready signal, and presentation. Only
+ * the main window is stamped: it is the one the launch waits for. The marks
+ * listen to window events next to the URL load, so the readiness block the
+ * renderer-ready patch owns stays untouched.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchLaunchTimelineWindow(string $content): ?string
+{
+    $openFind = <<<'JS'
+router.post('/open', (req, res) => {
+JS;
+    $openReplace = <<<'JS'
+router.post('/open', (req, res) => {
+    // [rfa launch timeline] index.js publishes the collector; only the main
+    // window is on the launch path.
+    const rfaMark = (name) => {
+        if (req.body.id === 'main') {
+            globalThis.__rfaLaunchMark?.(name);
+        }
+    };
+    rfaMark('window.open');
+JS;
+
+    $loadFind = <<<'JS'
+    window.loadURL(url);
+    window.webContents.on('dom-ready', () => {
+        window.webContents.setZoomFactor(parseFloat(zoomFactor));
+    });
+JS;
+    $loadReplace = <<<'JS'
+    rfaMark('window.created'); // [rfa launch timeline]
+    window.once('ready-to-show', () => rfaMark('window.ready-to-show'));
+    window.once('rfa:presented', () => rfaMark('window.presented'));
+    window.webContents.once('did-finish-load', () => rfaMark('window.loaded'));
+    window.webContents.on('ipc-message', (_, channel) => {
+        if (channel === 'rfa:renderer-ready') {
+            rfaMark('window.renderer-ready');
+        }
+    });
+    window.loadURL(url);
+    window.webContents.on('dom-ready', () => {
+        rfaMark('window.dom-ready');
+        window.webContents.setZoomFactor(parseFloat(zoomFactor));
+    });
+JS;
+
+    if (str_contains($content, $openFind) && ! str_contains($content, $openReplace)) {
+        $content = str_replace($openFind, $openReplace, $content);
+    }
+
+    if (str_contains($content, $loadFind) && ! str_contains($content, $loadReplace)) {
+        $content = str_replace($loadFind, $loadReplace, $content);
+    }
+
+    $fullyPatched = str_contains($content, $openReplace) && str_contains($content, $loadReplace);
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
  * The patch set: what has to be true of the vendored Electron plugin.
  *
  * Order matters within a file. The pre-flight cache, splash window, resolved
- * appearance, and early PHP boot rewrite `dist/index.js`, and each is applied
- * to the result of the one before it.
+ * appearance, early PHP boot, and launch timeline rewrite `dist/index.js`,
+ * and each is applied to the result of the one before it.
  *
  * @return list<array{name: string, file: string, apply: callable(string): ?string, summary: string}>
  */
@@ -1614,6 +1895,12 @@ function rfaNativePhpPatchSet(): array
             'summary' => 'windows wait for first paint and main waits for renderer stability',
         ],
         [
+            'name' => 'launch-timeline-window',
+            'file' => 'server/api/window.js',
+            'apply' => rfaPatchLaunchTimelineWindow(...),
+            'summary' => 'main window life cycle is stamped on the launch timeline',
+        ],
+        [
             'name' => 'server-optimize',
             'file' => 'server/php.js',
             'apply' => rfaPatchServerOptimize(...),
@@ -1624,6 +1911,12 @@ function rfaNativePhpPatchSet(): array
             'file' => 'server/php.js',
             'apply' => rfaPatchServerWorkers(...),
             'summary' => 'PHP built-in server runs forked workers',
+        ],
+        [
+            'name' => 'launch-timeline-server',
+            'file' => 'server/php.js',
+            'apply' => rfaPatchLaunchTimelineServer(...),
+            'summary' => 'PHP server start-up phases are stamped on the launch timeline',
         ],
         [
             'name' => 'cookie-after-ready',
@@ -1654,6 +1947,12 @@ function rfaNativePhpPatchSet(): array
             'file' => 'index.js',
             'apply' => rfaPatchEarlyPhpBoot(...),
             'summary' => 'PHP server starts before Electron is ready and warms its opcache',
+        ],
+        [
+            'name' => 'launch-timeline',
+            'file' => 'index.js',
+            'apply' => rfaPatchLaunchTimeline(...),
+            'summary' => 'main-process launch phases are written to storage/logs/rfa-launch.jsonl',
         ],
         [
             'name' => 'php-extraction',
