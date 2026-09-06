@@ -40,6 +40,7 @@ final class LaunchTimelineService
     public const PHASES = [
         'electron: process -> bootstrap' => [null, 'bootstrap'],
         'electron: bootstrap -> app ready' => ['bootstrap', 'app.ready'],
+        'php: optimize started -> finished (background)' => ['php.optimize.started', 'php.optimize.finished'],
         'php: spawn -> listening' => ['php.spawning', 'php.listening'],
         'php: listening -> warm request' => ['php.listening', 'php.warm.request'],
         'php: warm request -> warmed' => ['php.warm.request', 'php.warmed'],
