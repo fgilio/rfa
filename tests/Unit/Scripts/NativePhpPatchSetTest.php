@@ -49,7 +49,7 @@ function distSnapshot(string $root): array
 
 test('the patch set covers every vendored file rfa depends on', function () {
     expect(collect(rfaNativePhpPatchSet())->pluck('name')->all())
-        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'server-optimize', 'server-workers', 'cookie-after-ready', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'php-extraction', 'php-build-wait']);
+        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'cookie-after-ready', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'php-extraction', 'php-build-wait']);
 });
 
 test('the dist root points at the vendored electron plugin', function () {
@@ -64,7 +64,7 @@ test('applies every patch in one run', function () {
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'server-optimize', 'server-workers', 'cookie-after-ready', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'php-extraction', 'php-build-wait'])
+    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'cookie-after-ready', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'php-extraction', 'php-build-wait'])
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['absent'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
@@ -80,10 +80,13 @@ test('applies every patch in one run', function () {
         ->toContain('window.setOpacity(1);')
         ->toContain("window.emit('rfa:presented')")
         ->toContain('!window.isDestroyed()')
+        ->toContain("rfaMark('window.open')")
+        ->toContain("rfaMark('window.presented')")
         ->not->toContain('beginFrameSubscription');
     expect(file_get_contents($root.'/server/php.js'))
         ->toContain('rfaNeedsFullOptimize')
-        ->toContain("PHP_CLI_SERVER_WORKERS: '4'");
+        ->toContain("PHP_CLI_SERVER_WORKERS: '4'")
+        ->toContain("__rfaLaunchMark?.('php.listening')");
     expect(file_get_contents($root.'/server/utils.js'))
         ->toContain('yield app.whenReady(); // [rfa cookie after ready]');
     expect(file_get_contents($root.'/index.js'))
@@ -93,7 +96,9 @@ test('applies every patch in one run', function () {
         ->toContain('rfaResolveAppearance()')
         ->toContain('import axios from "axios"; // [rfa early php]')
         ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp())')
-        ->toContain('/_rfa/warm`');
+        ->toContain('/_rfa/warm`')
+        ->toContain('globalThis.__rfaLaunchMark = rfaLaunchMark;')
+        ->toContain("rfaLaunchMark('booted.sent')");
     expect(file_get_contents($root.'/../../php.js'))
         ->toContain('[rfa php archive validation]')
         ->toContain('removeSync(binaryDestDir);')
@@ -127,7 +132,7 @@ test('a remembered maximize stays transparent until the settled frame is present
 });
 
 test('all edits to the shared index.js survive each other', function () {
-    // These three patches rewrite the same file. Applying them in one pass keeps
+    // These patches rewrite the same file. Applying them in one pass keeps
     // each edit based on the output of the previous edit.
     $root = stubDistRoot($this->createTempDirectory('rfa_test_dist_'));
 
@@ -157,7 +162,7 @@ test('a second run changes nothing', function () {
     $outcome = applyRfaNativePhpPatchSet($root);
 
     expect($outcome['applied'])->toBeEmpty()
-        ->and($outcome['unchanged'])->toHaveCount(13)
+        ->and($outcome['unchanged'])->toHaveCount(16)
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($afterFirst);
 });
@@ -192,7 +197,7 @@ test('a reshaped block in one file blocks the patches to the other files', funct
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers'])
+    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server'])
         ->and(distSnapshot($root))->toBe($before);
 });
 
@@ -208,7 +213,7 @@ test('an unreadable target blocks the run rather than half-patching', function (
 
     chmod($root.'/server/php.js', 0644);
 
-    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers'])
+    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server'])
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($before);
 })->skip(fn () => posix_geteuid() === 0, 'root can read a 0000 file');
@@ -256,7 +261,7 @@ test('an absent dist tree is reported, not failed', function () {
     // pruned copy where the plugin dist is not present.
     $outcome = applyRfaNativePhpPatchSet(sys_get_temp_dir().'/rfa_test_dist_nowhere_'.getmypid());
 
-    expect($outcome['absent'])->toHaveCount(13)
+    expect($outcome['absent'])->toHaveCount(16)
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 });
@@ -334,8 +339,8 @@ test('a tree holding only some of the targets is refused, not half-patched', fun
 
     $outcome = applyRfaNativePhpPatchSet($root);
 
-    expect($outcome['absent'])->toBe(['server-optimize', 'server-workers'])
-        ->and($outcome['blocked'])->toBe(['server-optimize', 'server-workers'])
+    expect($outcome['absent'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server'])
+        ->and($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server'])
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($before);
 });
