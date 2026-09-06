@@ -150,7 +150,6 @@ function rfaPatchWindowTheme(string $content): ?string
     $importFind = "import { BrowserWindow } from 'electron';";
     $importReplace = "import { BrowserWindow, nativeTheme } from 'electron'; // [rfa window theme]";
     $backgroundFind = '        backgroundColor, transparent: transparency, alwaysOnTop,';
-    $previousBackgroundReplace = '        backgroundColor: '.rfaBackgroundExpression().', transparent: transparency, alwaysOnTop,';
     $backgroundReplace = '        backgroundColor: '.rfaBackgroundExpression().", opacity: id === 'main' ? 0 : 1, transparent: transparency, alwaysOnTop,";
 
     if (str_contains($content, $importFind)) {
@@ -159,10 +158,6 @@ function rfaPatchWindowTheme(string $content): ?string
 
     if (str_contains($content, $backgroundFind)) {
         $content = str_replace($backgroundFind, $backgroundReplace, $content);
-    }
-
-    if (str_contains($content, $previousBackgroundReplace)) {
-        $content = str_replace($previousBackgroundReplace, $backgroundReplace, $content);
     }
 
     $fullyPatched = str_contains($content, '[rfa window theme]')
@@ -281,117 +276,8 @@ JS;
     });
 JS;
 
-    // The readiness block as the PREVIOUS RFA revision left it. It captured a
-    // full frame through beginFrameSubscription before presenting (a bitmap
-    // copy of the whole window, ~200ms on a Retina display) and touched a
-    // destroyed webContents when the window closed before presenting.
-    $previousReplace = <<<'JS'
-    // [rfa window readiness] Electron first paint and renderer stability form
-    // one barrier for the main window. Other windows need first paint only.
-    // electron-window-state can implicitly show the main window while restoring
-    // maximization. Its opacity barrier replaces ready-to-show for that window.
-    // The renderer waits 4s; this outer timeout leaves 1s for the IPC/frame handoff.
-    const rfaReadinessTimeoutMs = 5000;
-    let rfaPresentationPhase = id === 'main' ? 'waiting-renderer' : 'waiting-paint';
-    let rfaFocusWhenReady = false;
-    let rfaReadinessTimer = null;
-    let rfaRendererMessageListener = null;
-    let rfaFrameSubscriptionActive = false;
-    const rfaCleanupReadiness = () => {
-        if (rfaReadinessTimer !== null) {
-            clearTimeout(rfaReadinessTimer);
-            rfaReadinessTimer = null;
-        }
-        if (rfaRendererMessageListener !== null) {
-            window.webContents.removeListener('ipc-message', rfaRendererMessageListener);
-            rfaRendererMessageListener = null;
-        }
-        if (rfaFrameSubscriptionActive) {
-            window.webContents.endFrameSubscription();
-            rfaFrameSubscriptionActive = false;
-        }
-    };
-    const rfaPresent = () => {
-        if (rfaPresentationPhase === 'presented' || rfaPresentationPhase === 'closed') {
-            return;
-        }
-        rfaPresentationPhase = 'presented';
-        rfaCleanupReadiness();
-        if (id === 'main') {
-            window.setOpacity(1);
-        }
-        if (state.noFocusOnRestart && window.isVisible()) {
-            rfaFocusWhenReady = false;
-            if (id === 'main') {
-                window.emit('rfa:presented');
-            }
-            return;
-        }
-        window.show();
-        if (rfaFocusWhenReady) {
-            window.focus();
-        }
-        rfaFocusWhenReady = false;
-        if (id === 'main') {
-            window.emit('rfa:presented');
-        }
-    };
-    const rfaWaitForPresentedFrame = () => {
-        try {
-            window.webContents.beginFrameSubscription(false, () => {
-                if (rfaPresentationPhase !== 'waiting-frame') {
-                    return;
-                }
-                window.webContents.endFrameSubscription();
-                rfaFrameSubscriptionActive = false;
-                rfaPresent();
-            });
-            rfaFrameSubscriptionActive = true;
-            window.webContents.invalidate();
-        }
-        catch (rfaError) {
-            rfaPresent();
-        }
-    };
-    window.rfaRequestShow = (focus = false) => {
-        if (rfaPresentationPhase === 'closed') {
-            return;
-        }
-        if (rfaPresentationPhase === 'presented') {
-            if (state.noFocusOnRestart && window.isVisible()) {
-                return;
-            }
-            window.show();
-            if (focus) {
-                window.focus();
-            }
-            return;
-        }
-        rfaFocusWhenReady = rfaFocusWhenReady || focus;
-    };
-    if (id === 'main') {
-        rfaRendererMessageListener = (_, channel) => {
-            if (channel !== 'rfa:renderer-ready' || rfaPresentationPhase !== 'waiting-renderer') {
-                return;
-            }
-            rfaPresentationPhase = 'waiting-frame';
-            rfaWaitForPresentedFrame();
-        };
-        window.webContents.on('ipc-message', rfaRendererMessageListener);
-        rfaReadinessTimer = setTimeout(rfaPresent, rfaReadinessTimeoutMs);
-    } else {
-        window.once('ready-to-show', rfaPresent);
-    }
-    window.once('closed', () => {
-        rfaPresentationPhase = 'closed';
-        rfaCleanupReadiness();
-    });
-JS;
-
     if (str_contains($content, $find)) {
         $content = str_replace($find, $replace, $content);
-    } elseif (str_contains($content, $previousReplace)) {
-        $content = str_replace($previousReplace, $replace, $content);
     }
 
     $showFind = <<<'JS'
@@ -454,7 +340,6 @@ JS;
         && str_contains($content, $showReplace)
         && str_contains($content, $existingReplace)
         && ! str_contains($content, $find)
-        && ! str_contains($content, $previousReplace)
         && ! str_contains($content, $showFind)
         && ! str_contains($content, $existingFind);
 
@@ -1035,71 +920,6 @@ JS;
         $patched = str_replace($callFind, $callReplace, $patched);
     }
 
-    // -- Upgrade a file left splash-patched by the PREVIOUS RFA revision in place --
-    // The earlier splash was dark-only (fixed #0d1117, no nativeTheme). A plain
-    // `composer install` re-runs this hook over such a vendor copy; the guards above
-    // skip when their markers exist, so the themed edits would never reach it AND
-    // the success gate below (which now requires nativeTheme) would reject it and
-    // fail the hook. These three finds are unique to the old shape — each is a no-op
-    // on stock (handled above) and on an already-themed file — so re-patching
-    // converges to a result byte-identical to a fresh stock patch.
-
-    // a) Add nativeTheme to an old BrowserWindow-only import.
-    $oldSplashImport = 'import { app, session, powerMonitor, BrowserWindow } from "electron";';
-    if (str_contains($patched, $oldSplashImport) && ! str_contains($patched, 'BrowserWindow, nativeTheme')) {
-        $patched = str_replace($oldSplashImport, $importReplace, $patched);
-    }
-
-    // b) Swap the dark-only splash markup for the OS-following themed markup.
-    $oldSplashHtmlBlock = <<<'JS'
-// [rfa splash] Self-contained splash markup — inline styles only, no external
-// resources, so it loads instantly from a data: URL with nothing to bundle.
-const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#0d1117;overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e6edf3;-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid rgba(230,237,243,.18);border-top-color:#58a6ff;border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
-JS;
-    if (str_contains($patched, $oldSplashHtmlBlock)) {
-        $patched = str_replace($oldSplashHtmlBlock, $htmlConst, $patched);
-    }
-
-    // c) Tint the native window fill to the OS appearance instead of a fixed dark.
-    //    The replacement must stay byte-identical to the same lines baked into
-    //    $methods above (so an upgraded file equals a fresh stock patch).
-    $oldSplashBgBlock = <<<'JS'
-                show: false,
-                skipTaskbar: true,
-                backgroundColor: '#0d1117',
-                title: 'rfa',
-JS;
-    $newSplashBgBlock = str_replace('__RFA_BACKGROUND_EXPRESSION__', rfaBackgroundExpression(), <<<'JS'
-                show: false,
-                skipTaskbar: true,
-                // Tint the native window fill to the OS appearance so the frame
-                // shown before the data: URL paints matches the splash content
-                // (and RFA's default system-following theme) — no light/dark flash.
-                backgroundColor: __RFA_BACKGROUND_EXPRESSION__,
-                title: 'rfa',
-JS
-    );
-    if (str_contains($patched, $oldSplashBgBlock)) {
-        $patched = str_replace($oldSplashBgBlock, $newSplashBgBlock, $patched);
-    }
-
-    $previousPresentationListener = <<<'JS'
-                // Close on `show` (painted — the seamless handoff) and on `closed`
-                // (a window torn down before it ever shows — e.g. a failed load —
-                // must not strand the splash until the 60s timer).
-                window.once('show', () => this.rfaCloseSplash());
-JS;
-    $presentationListener = <<<'JS'
-                // Close on the opaque presentation handoff and on `closed` (a
-                // window torn down before it presents must not strand the splash
-                // until the 60s timer).
-                window.once('rfa:presented', () => this.rfaCloseSplash());
-JS;
-
-    if (str_contains($patched, $previousPresentationListener)) {
-        $patched = str_replace($previousPresentationListener, $presentationListener, $patched);
-    }
-
     // Only success when every edit is present, so a NativePHP bump that reshapes
     // one anchor can't half-apply (e.g. a splash that is created but never shown,
     // or themed markup without the nativeTheme import that tints the window).
@@ -1164,13 +984,6 @@ function rfaPatchResolvedAppearance(string $content): ?string
 JS
     );
 
-    $previousCookieLookup = <<<'JS'
-                const rfaCookies = yield session.defaultSession.cookies.get({
-                    url: 'http://127.0.0.1',
-                    name: 'rfa_appearance',
-                });
-                const rfaAppearance = rfaCookies.length > 0 ? rfaCookies[0].value : 'system';
-JS;
     $cookieLookup = <<<'JS'
                 const rfaAppearanceCookies = yield session.defaultSession.cookies.get({
                     url: 'http://127.0.0.1',
@@ -1208,10 +1021,6 @@ JS;
 
     if (str_contains($patched, $methodsAnchor) && ! str_contains($patched, 'rfaResolveAppearance() {')) {
         $patched = str_replace($methodsAnchor, $methodsReplace, $patched);
-    }
-
-    if (str_contains($patched, $previousCookieLookup)) {
-        $patched = str_replace($previousCookieLookup, $cookieLookup, $patched);
     }
 
     if (str_contains($patched, $backgroundFind)) {
@@ -1337,38 +1146,18 @@ if (platform.phpBinary) {
     }
 }
 JS;
-    $destinationPreparation = <<<'JS'
-        console.log('Unzipping PHP binary from ' + binarySrcDir + ' to ' + binaryDestDir);
-        removeSync(binaryDestDir);
-        ensureDirSync(binaryDestDir);
-
-JS;
-    $previousReplacement = str_replace($destinationPreparation, '', $replacement);
     $isStock = str_contains($content, $importFind)
         && str_contains($content, $blockFind);
-    $isCurrent = str_contains($content, $importReplace)
-        && str_contains($content, $replacement);
-    $isPrevious = str_contains($content, $importReplace)
-        && str_contains($content, $previousReplacement);
-
-    if (! $isStock && ! $isCurrent && ! $isPrevious) {
-        return null;
-    }
 
     if ($isStock) {
         $content = str_replace($blockFind, $replacement, $content);
         $content = str_replace($importFind, $importReplace, $content);
     }
 
-    if ($isPrevious) {
-        $content = str_replace($previousReplacement, $replacement, $content);
-    }
-
     $fullyPatched = str_contains($content, $importReplace)
         && str_contains($content, $replacement)
         && ! str_contains($content, $importFind)
-        && ! str_contains($content, $blockFind)
-        && ! str_contains($content, $previousReplacement);
+        && ! str_contains($content, $blockFind);
 
     return $fullyPatched ? $content : null;
 }
@@ -1388,48 +1177,17 @@ function rfaPatchPhpBuildWait(string $content): ?string
 {
     $importFind = "import { exec } from 'child_process';";
     $importReplace = "import { execFileSync } from 'child_process'; // [rfa php build wait]";
-    $permissionImport = "import { chmodSync } from 'fs'; // [rfa php build permission]";
-    $pathImport = "import { join } from 'path'; // [rfa php build path]";
     $callFind = '        exec(`node php.js --${targetOs} --${arch}`);';
     $callReplace = "        execFileSync(process.execPath, ['php.js', `--\${targetOs}`, `--\${arch}`], { stdio: 'inherit' });";
-    $previousCallReplace = <<<'JS'
-        execFileSync(process.execPath, ['php.js', `--${targetOs}`, `--${arch}`], { stdio: 'inherit' });
-        if (targetOs !== 'win') {
-            chmodSync(join(process.env.NATIVEPHP_BUILD_PATH, 'php', 'php'), 0o755);
-        }
-JS;
-    $isStock = str_contains($content, $importFind)
-        && str_contains($content, $callFind);
-    $isCurrent = str_contains($content, $importReplace)
-        && str_contains($content, $callReplace)
-        && ! str_contains($content, $permissionImport)
-        && ! str_contains($content, $pathImport)
-        && ! str_contains($content, $previousCallReplace);
-    $isPrevious = str_contains($content, $importReplace)
-        && str_contains($content, $permissionImport)
-        && str_contains($content, $previousCallReplace);
 
-    if (! $isStock && ! $isCurrent && ! $isPrevious) {
-        return null;
-    }
-
-    if ($isStock) {
+    if (str_contains($content, $importFind) && str_contains($content, $callFind)) {
         $content = str_replace($importFind, $importReplace, $content);
         $content = str_replace($callFind, $callReplace, $content);
     }
 
-    if ($isPrevious) {
-        $content = str_replace($permissionImport."\n", '', $content);
-        $content = str_replace($pathImport."\n", '', $content);
-        $content = str_replace($previousCallReplace, $callReplace, $content);
-    }
-
     $fullyPatched = str_contains($content, '[rfa php build wait]')
         && str_contains($content, $callReplace)
-        && ! str_contains($content, $callFind)
-        && ! str_contains($content, $permissionImport)
-        && ! str_contains($content, $pathImport)
-        && ! str_contains($content, $previousCallReplace);
+        && ! str_contains($content, $callFind);
 
     return $fullyPatched ? $content : null;
 }

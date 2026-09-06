@@ -192,25 +192,6 @@ test('renderer readiness window: never touches a destroyed webContents during cl
         ->toContain("if (rfaRendererMessageListener !== null && !window.isDestroyed()) {\n            window.webContents.removeListener('ipc-message', rfaRendererMessageListener);");
 });
 
-test('renderer readiness window: upgrades the previous frame-subscription revision', function () {
-    $source = file_get_contents(dirname(__DIR__, 3).'/scripts/patch-nativephp.php');
-    preg_match("/\\\$previousReplace = <<<'JS'\n(.*?)\nJS;/s", substr($source, strpos($source, 'function rfaPatchRendererReadyWindow')), $matches);
-    $previous = $matches[1];
-    $previousRevision = str_replace(
-        [
-            "    window.webContents.on('did-finish-load', () => {\n        if (state.noFocusOnRestart && window.isVisible()) {\n            return;\n        }\n        window.show();\n    });",
-        ],
-        [$previous],
-        stockWindowApi(),
-    );
-    $previousRevision = (string) rfaPatchRendererReadyWindow($previousRevision);
-
-    expect($previous)->toContain('beginFrameSubscription')
-        ->and($previousRevision)->not->toContain('beginFrameSubscription')
-        ->and($previousRevision)->toContain('!window.isDestroyed()')
-        ->and(rfaPatchRendererReadyWindow($previousRevision))->toBe($previousRevision);
-});
-
 test('renderer readiness window: is idempotent', function () {
     $patched = rfaPatchRendererReadyWindow(stockWindowApi());
 
@@ -502,83 +483,6 @@ test('splash: follows the OS light/dark appearance (matches RFA, which follows t
         ->not->toContain('#0d1117');
 });
 
-// -- Upgrading a file left splash-patched by the previous (dark-only) revision --
-
-// Reconstruct a file exactly as the pre-theme splash revision left it: patch
-// stock, then reverse the three theme edits back to the dark-only shape.
-function oldThemedSplashServer(): string
-{
-    $themed = rfaPatchSplashWindow(stockIndexForSplash());
-
-    $newHtmlBlock = <<<'JS'
-// [rfa splash] Self-contained splash markup — inline styles only, no external
-// resources, so it loads instantly from a data: URL with nothing to bundle. It
-// theme-matches the OS (and thus RFA's default appearance) via prefers-color-scheme.
-const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>:root{--rfa-bg:#ffffff;--rfa-fg:#09090b;--rfa-track:rgba(9,9,11,.14);--rfa-accent:#3b82f6}@media (prefers-color-scheme:dark){:root{--rfa-bg:#09090b;--rfa-fg:#fafafa;--rfa-track:rgba(250,250,250,.18);--rfa-accent:#60a5fa}}html,body{margin:0;height:100%;background:var(--rfa-bg);overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--rfa-fg);-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid var(--rfa-track);border-top-color:var(--rfa-accent);border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
-JS;
-    $oldHtmlBlock = <<<'JS'
-// [rfa splash] Self-contained splash markup — inline styles only, no external
-// resources, so it loads instantly from a data: URL with nothing to bundle.
-const RFA_SPLASH_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#0d1117;overflow:hidden}.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e6edf3;-webkit-user-select:none;user-select:none}.name{font-size:22px;font-weight:600;letter-spacing:.4px;opacity:.92}.spinner{margin-top:18px;width:26px;height:26px;border:3px solid rgba(230,237,243,.18);border-top-color:#58a6ff;border-radius:50%;animation:rfaspin .8s linear infinite}@keyframes rfaspin{to{transform:rotate(360deg)}}</style></head><body><div class="wrap"><div class="name">rfa</div><div class="spinner"></div></div></body></html>`;
-JS;
-    $newBg = <<<'JS'
-                show: false,
-                skipTaskbar: true,
-                // Tint the native window fill to the OS appearance so the frame
-                // shown before the data: URL paints matches the splash content
-                // (and RFA's default system-following theme) — no light/dark flash.
-                backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff',
-                title: 'rfa',
-JS;
-    $oldBg = <<<'JS'
-                show: false,
-                skipTaskbar: true,
-                backgroundColor: '#0d1117',
-                title: 'rfa',
-JS;
-
-    // Guard: if the current patch reshaped any of these, the reversal would
-    // silently no-op and the "old" fixture would actually be the new shape.
-    expect($themed)
-        ->toContain('powerMonitor, BrowserWindow, nativeTheme')
-        ->toContain($newHtmlBlock)
-        ->toContain($newBg);
-
-    $old = str_replace('powerMonitor, BrowserWindow, nativeTheme', 'powerMonitor, BrowserWindow', $themed);
-    $old = str_replace($newHtmlBlock, $oldHtmlBlock, $old);
-
-    return str_replace($newBg, $oldBg, $old);
-}
-
-test('splash: a dark-only patched file is NOT mistaken for fully patched (would fail the gate)', function () {
-    // The old splash carries BrowserWindow + rfaShowSplash but no nativeTheme, so
-    // the success gate must treat it as not-current rather than already_patched.
-    $old = oldThemedSplashServer();
-
-    expect($old)
-        ->toContain('#0d1117')
-        ->not->toContain('nativeTheme');
-});
-
-test('splash: upgrades a previously dark-only splash to the OS-following themed shape', function () {
-    $content = rfaPatchSplashWindow(oldThemedSplashServer());
-
-    expect($content)
-        ->toContain('powerMonitor, BrowserWindow, nativeTheme')
-        ->toContain('@media (prefers-color-scheme:dark)')
-        ->toContain("backgroundColor: nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff'")
-        ->not->toContain('#0d1117');
-
-    // The upgrade is byte-identical to a fresh stock → themed patch.
-    expect($content)->toBe(rfaPatchSplashWindow(stockIndexForSplash()));
-});
-
-test('splash: upgrading a previously dark-only splash is idempotent', function () {
-    $upgraded = rfaPatchSplashWindow(oldThemedSplashServer());
-
-    expect(rfaPatchSplashWindow($upgraded))->toBe($upgraded);
-});
-
 test('splash: preserves the existing browser-window-created listener', function () {
     // The patch adds its own handoff listener without clobbering NativePHP's.
     expect(rfaPatchSplashWindow(stockIndexForSplash()))
@@ -652,41 +556,6 @@ test('appearance: falls back to the legacy resolved theme on the first upgraded 
         ->toContain('if (rfaLegacyThemeCookies.length > 0)');
 });
 
-test('appearance: upgrades the exact appearance-only cookie lookup', function () {
-    $previous = str_replace(
-        <<<'JS'
-                const rfaAppearanceCookies = yield session.defaultSession.cookies.get({
-                    url: 'http://127.0.0.1',
-                    name: 'rfa_appearance',
-                });
-                let rfaAppearance = 'system';
-                if (rfaAppearanceCookies.length > 0) {
-                    rfaAppearance = rfaAppearanceCookies[0].value;
-                }
-                else {
-                    const rfaLegacyThemeCookies = yield session.defaultSession.cookies.get({
-                        url: 'http://127.0.0.1',
-                        name: 'rfa_theme',
-                    });
-                    if (rfaLegacyThemeCookies.length > 0) {
-                        rfaAppearance = rfaLegacyThemeCookies[0].value;
-                    }
-                }
-JS,
-        <<<'JS'
-                const rfaCookies = yield session.defaultSession.cookies.get({
-                    url: 'http://127.0.0.1',
-                    name: 'rfa_appearance',
-                });
-                const rfaAppearance = rfaCookies.length > 0 ? rfaCookies[0].value : 'system';
-JS,
-        rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash())),
-    );
-
-    expect(rfaPatchResolvedAppearance($previous))
-        ->toBe(rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash())));
-});
-
 test('appearance: shares the exact RFA light and dark background tokens', function () {
     expect(rfaPatchResolvedAppearance(rfaPatchSplashWindow(stockIndexForSplash())))
         ->toContain("return nativeTheme.shouldUseDarkColors ? '#09090b' : '#ffffff'")
@@ -724,19 +593,6 @@ test('PHP extraction: replaces the complete stock installer block', function () 
         ->not->toContain('unzip.open(binarySrcDir');
 });
 
-test('PHP extraction: upgrades the exact current-head partial block', function () {
-    $current = rfaPatchPhpExtraction(stockPhpInstaller());
-    $destinationPreparation = <<<'JS'
-        console.log('Unzipping PHP binary from ' + binarySrcDir + ' to ' + binaryDestDir);
-        removeSync(binaryDestDir);
-        ensureDirSync(binaryDestDir);
-
-JS;
-    $previous = str_replace($destinationPreparation, '', $current);
-
-    expect(rfaPatchPhpExtraction($previous))->toBe($current);
-});
-
 test('PHP extraction: rejects incomplete patched blocks', function (string $missingFragment) {
     $current = rfaPatchPhpExtraction(stockPhpInstaller());
     $partial = str_replace($missingFragment, '', $current);
@@ -768,26 +624,6 @@ test('PHP build wait: waits for extraction without changing permissions', functi
         ->not->toContain('[rfa php build permission]')
         ->not->toContain('[rfa php build path]')
         ->not->toContain('chmodSync(');
-});
-
-test('PHP build wait: upgrades the exact permission-owning block', function () {
-    $previous = str_replace(
-        "import { exec } from 'child_process';",
-        "import { execFileSync } from 'child_process'; // [rfa php build wait]\nimport { chmodSync } from 'fs'; // [rfa php build permission]\nimport { join } from 'path'; // [rfa php build path]",
-        stockElectronBuilder(),
-    );
-    $previous = str_replace(
-        '        exec(`node php.js --${targetOs} --${arch}`);',
-        <<<'JS'
-        execFileSync(process.execPath, ['php.js', `--${targetOs}`, `--${arch}`], { stdio: 'inherit' });
-        if (targetOs !== 'win') {
-            chmodSync(join(process.env.NATIVEPHP_BUILD_PATH, 'php', 'php'), 0o755);
-        }
-JS,
-        $previous,
-    );
-
-    expect(rfaPatchPhpBuildWait($previous))->toBe(rfaPatchPhpBuildWait(stockElectronBuilder()));
 });
 
 test('PHP build wait: leaves the complete patched block unchanged', function () {
