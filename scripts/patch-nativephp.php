@@ -1970,37 +1970,53 @@ function rfaNativePhpPatchSet(): array
 }
 
 /**
+ * Every edit the set makes carries a `[rfa <name>]` comment, so a target
+ * holding this text was written by some revision of this script.
+ */
+const RFA_PATCH_MARKER = '[rfa ';
+
+/**
  * Apply the whole patch set under `$distRoot`, or none of it.
+ *
+ * Patches are always applied to the stock file, never to the output of an
+ * earlier revision of this script. The first run over a vendor tree copies
+ * each target into `$stockRoot` before rewriting it; every later run patches
+ * that copy and writes the result over whatever the target holds, so editing
+ * a patch needs no upgrade path from its previous output. A target that
+ * carries rfa edits but has no stock copy comes from a script revision that
+ * kept none, and is refused with a reinstall hint rather than guessed at.
  *
  * Three phases, in order:
  *
- *  1. **Preflight.** Read each target once and run its edits in memory. A file
- *     that is missing entirely is reported as absent and skipped — the release
- *     build re-runs this hook over a pruned `--no-dev` copy where the plugin
- *     dist legitimately isn't there. A file that is present but whose expected
- *     shape is gone blocks the run.
+ *  1. **Preflight.** Read each target once, pick its stock text, and run the
+ *     edits in memory. A file that is missing entirely is reported as absent
+ *     and skipped — the release build re-runs this hook over a pruned
+ *     `--no-dev` copy where the plugin dist legitimately isn't there. A file
+ *     that is present but whose expected shape is gone blocks the run.
  *  2. **Abort on any block.** Nothing has been written yet, so there is nothing
  *     to undo.
- *  3. **Write.** Each changed file goes to a sibling temporary file that is
- *     renamed into place, so a reader never sees a half-written file. If a
- *     later write fails, the files already renamed are restored from the
+ *  3. **Write.** A missing or outdated stock copy is stored first. Each
+ *     changed target then goes to a sibling temporary file that is renamed
+ *     into place, so a reader never sees a half-written file. If a later
+ *     write fails, the targets already renamed are restored from the
  *     originals held in memory.
  *
- * @return array{applied: list<string>, unchanged: list<string>, blocked: list<string>, absent: list<string>, written: list<string>, error: ?string, rolledBack: bool}
+ * @return array{applied: list<string>, unchanged: list<string>, blocked: list<string>, stale: list<string>, absent: list<string>, written: list<string>, error: ?string, rolledBack: bool}
  */
-function applyRfaNativePhpPatchSet(string $distRoot): array
+function applyRfaNativePhpPatchSet(string $distRoot, string $stockRoot): array
 {
     $result = [
         'applied' => [],
         'unchanged' => [],
         'blocked' => [],
+        'stale' => [],
         'absent' => [],
         'written' => [],
         'error' => null,
         'rolledBack' => false,
     ];
 
-    /** @var array<string, array{original: string, patched: string}> $files */
+    /** @var array<string, array{live: string, patched: string, stockPath: string, storeStock: bool, changed: list<string>, unchanged: list<string>}> $files */
     $files = [];
 
     foreach (rfaNativePhpPatchSet() as $patch) {
@@ -2013,15 +2029,36 @@ function applyRfaNativePhpPatchSet(string $distRoot): array
                 continue;
             }
 
-            $original = @file_get_contents($path);
+            $live = @file_get_contents($path);
 
-            if ($original === false) {
+            if ($live === false) {
                 $result['blocked'][] = $patch['name'];
 
                 continue;
             }
 
-            $files[$path] = ['original' => $original, 'patched' => $original];
+            // A target without rfa edits is stock, and becomes the stock copy
+            // when the stored one is missing or differs (a reinstalled or
+            // upgraded plugin). A patched target starts from its stored copy.
+            $stockPath = $stockRoot.'/'.rfaStockKey($patch['file']);
+            $stored = is_file($stockPath) ? @file_get_contents($stockPath) : false;
+            $isPatched = str_contains($live, RFA_PATCH_MARKER);
+
+            if ($isPatched && $stored === false) {
+                $result['blocked'][] = $patch['name'];
+                $result['stale'][] = $patch['name'];
+
+                continue;
+            }
+
+            $files[$path] = [
+                'live' => $live,
+                'patched' => $isPatched ? $stored : $live,
+                'stockPath' => $stockPath,
+                'storeStock' => ! $isPatched && $stored !== $live,
+                'changed' => [],
+                'unchanged' => [],
+            ];
         }
 
         $next = $patch['apply']($files[$path]['patched']);
@@ -2032,7 +2069,7 @@ function applyRfaNativePhpPatchSet(string $distRoot): array
             continue;
         }
 
-        $result[$next === $files[$path]['patched'] ? 'unchanged' : 'applied'][] = $patch['name'];
+        $files[$path][$next === $files[$path]['patched'] ? 'unchanged' : 'changed'][] = $patch['name'];
         $files[$path]['patched'] = $next;
     }
 
@@ -2053,7 +2090,23 @@ function applyRfaNativePhpPatchSet(string $distRoot): array
     $renamed = [];
 
     foreach ($files as $path => $contents) {
-        if ($contents['patched'] === $contents['original']) {
+        // A target already holding this revision's output reports every patch
+        // as unchanged, whatever the in-memory run from stock had to do.
+        if ($contents['patched'] === $contents['live']) {
+            $result['unchanged'] = [...$result['unchanged'], ...$contents['changed'], ...$contents['unchanged']];
+        } else {
+            $result['applied'] = [...$result['applied'], ...$contents['changed']];
+            $result['unchanged'] = [...$result['unchanged'], ...$contents['unchanged']];
+        }
+
+        if ($contents['storeStock'] && ! rfaStoreStockCopy($contents['stockPath'], $contents['live'])) {
+            $result['error'] = $contents['stockPath'];
+            $result['rolledBack'] = rfaRestoreFiles($renamed);
+
+            return $result;
+        }
+
+        if ($contents['patched'] === $contents['live']) {
             continue;
         }
 
@@ -2064,11 +2117,46 @@ function applyRfaNativePhpPatchSet(string $distRoot): array
             return $result;
         }
 
-        $renamed[$path] = $contents['original'];
+        $renamed[$path] = $contents['live'];
         $result['written'][] = $path;
     }
 
     return $result;
+}
+
+/**
+ * Where a target's stock copy lives under the stock root: its path relative
+ * to the vendored `resources/electron` directory, with `..` folded away.
+ */
+function rfaStockKey(string $file): string
+{
+    $segments = [];
+
+    foreach (explode('/', 'electron-plugin/dist/'.$file) as $segment) {
+        if ($segment === '..') {
+            array_pop($segments);
+
+            continue;
+        }
+
+        if ($segment !== '' && $segment !== '.') {
+            $segments[] = $segment;
+        }
+    }
+
+    return implode('/', $segments);
+}
+
+/**
+ * Store the stock text of a target, creating the directory it lives in.
+ */
+function rfaStoreStockCopy(string $stockPath, string $contents): bool
+{
+    if (! is_dir(dirname($stockPath)) && ! @mkdir(dirname($stockPath), 0755, true) && ! is_dir(dirname($stockPath))) {
+        return false;
+    }
+
+    return rfaWriteFileAtomically($stockPath, $contents);
 }
 
 /**
@@ -2127,9 +2215,19 @@ function rfaNativePhpDistRoot(): string
     return dirname(__DIR__).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist';
 }
 
+/**
+ * Where the stock copies of the patched files are kept: inside the vendored
+ * package, so Composer drops them with the package, and outside its
+ * `resources/electron` tree, which the build copies whole.
+ */
+function rfaNativePhpStockRoot(): string
+{
+    return dirname(__DIR__).'/vendor/nativephp/desktop/.rfa-stock';
+}
+
 // Run when executed directly (not when required by tests)
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
-    $outcome = applyRfaNativePhpPatchSet(rfaNativePhpDistRoot());
+    $outcome = applyRfaNativePhpPatchSet(rfaNativePhpDistRoot(), rfaNativePhpStockRoot());
 
     /** @var array<string, string> $summaries */
     $summaries = array_column(rfaNativePhpPatchSet(), 'summary', 'name');
@@ -2143,6 +2241,16 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === realpath(__FILE__)) {
     }
 
     foreach ($outcome['blocked'] as $name) {
+        if (in_array($name, $outcome['stale'], true)) {
+            fwrite(STDERR, sprintf(
+                "  ERROR: the '%s' patch (%s) targets a file already patched by an earlier revision of this script that kept no stock copy, so NOTHING was patched. Reinstall the plugin to start from stock: rm -rf vendor/nativephp/desktop && composer install\n",
+                $name,
+                $summaries[$name],
+            ));
+
+            continue;
+        }
+
         fwrite(STDERR, sprintf(
             "  ERROR: the '%s' patch (%s) could not be applied, so NOTHING was patched. The vendored NativePHP files changed shape or are incomplete — update scripts/patch-nativephp.php to match them, or reinstall nativephp/desktop.\n",
             $name,

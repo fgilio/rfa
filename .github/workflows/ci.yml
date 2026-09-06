@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+  # Every pull request, whatever its base: stacked PRs need their checks
+  # before the branch under them merges.
   pull_request:
-    branches: [main]
 
 # Cancel superseded PR runs, but never group `push` events together — otherwise
 # back-to-back merges to main could silently drop intermediate CI runs even
