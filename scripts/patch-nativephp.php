@@ -1443,9 +1443,12 @@ JS;
  * of the PHP set-up depends on Electron being ready, so the server is spawned
  * as soon as the main bundle runs and asked to pre-compile the scripts the
  * previous launches needed (`/_rfa/warm`, see OpcacheWarmService) while
- * Electron finishes starting. The `booted` handshake and the first page
- * request then run against a warm opcache. Fail open: a warm-up error or
- * timeout only costs the cold first request this patch exists to avoid.
+ * Electron finishes starting. The warm request is sent from a worker thread
+ * that polls the port from the spawn hook the server start calls, because
+ * the main thread is saturated with Electron's own start-up right when PHP
+ * begins to listen. The `booted` handshake and the first page request then
+ * run against a warm opcache. Fail open: a warm-up error or timeout only
+ * costs the cold first request this patch exists to avoid.
  *
  * Applied after the splash and appearance patches, which own the lines it
  * moves around `app.whenReady()`.
@@ -1456,7 +1459,7 @@ JS;
 function rfaPatchEarlyPhpBoot(string $content): ?string
 {
     $importFind = 'import Store from "electron-store"; // [rfa preflight cache]';
-    $importMarker = 'import { rfaAxios as axios } from "./server/utils.js"; // [rfa early php]';
+    $importMarker = 'import { Worker } from "worker_threads"; // [rfa early php]';
     $importReplace = $importFind."\n".$importMarker;
 
     $bootFind = <<<'JS'
@@ -1476,15 +1479,23 @@ JS;
 
     $bootReplace = <<<'JS'
             // [rfa early php] Nothing the PHP server needs waits on Electron's
-            // readiness, so it is spawned first and pre-compiles its opcache
-            // while Electron finishes starting and the splash appears. The
-            // `booted` handshake below then reaches a warm server. The config
-            // is only needed after readiness, so its own PHP boot (on a
-            // pre-flight cache miss) overlaps with the server spawn.
+            // readiness, so it is spawned first. The opcache warm-up is sent by
+            // a worker thread that polls the port from the moment the server is
+            // spawned (the hook the server start calls), so it lands the instant
+            // PHP listens while the main thread is still finishing Electron's
+            // own start-up, the cookie, and the splash. The `booted` handshake
+            // below then reaches a warm server. The config is only needed after
+            // readiness, so its own PHP boot (on a pre-flight cache miss)
+            // overlaps with the server spawn, and the updater starts once the
+            // window has been asked for.
             const rfaConfig = this.loadConfig();
             yield this.startElectronApi();
             state.phpIni = yield this.loadPhpIni();
-            const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).then(() => null, (rfaError) => rfaError);
+            let rfaWarm = Promise.resolve();
+            globalThis.__rfaPhpSpawned = (port) => {
+                rfaWarm = this.rfaWarmPhp(port);
+            };
+            const rfaPhpBoot = this.startPhpApp().then(() => rfaWarm).then(() => null, (rfaError) => rfaError);
             yield app.whenReady();
             yield this.rfaResolveAppearance(); // [rfa appearance] resolve before either window exists
             this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots
@@ -1492,7 +1503,6 @@ JS;
             this.setDockIcon();
             this.setAppUserModelId(config);
             this.setDeepLinkHandler(config);
-            this.startAutoUpdater(config);
             const rfaPhpFailure = yield rfaPhpBoot;
             if (rfaPhpFailure) {
                 throw rfaPhpFailure;
@@ -1500,21 +1510,62 @@ JS;
             this.startScheduler();
 JS;
 
+    // The updater is not needed for the window, so it starts after the
+    // `booted` handshake has asked for it. Anchored on the stock tail of the
+    // bootstrap; the launch timeline later wraps the notify line, so only
+    // the marker is required afterwards.
+    $updaterFind = <<<'JS'
+            yield notifyLaravel("booted");
+        });
+JS;
+
+    $updaterMarker = '            this.startAutoUpdater(config); // [rfa early php] after the window is requested';
+    $updaterReplace = <<<'JS'
+            yield notifyLaravel("booted");
+            this.startAutoUpdater(config); // [rfa early php] after the window is requested
+        });
+JS;
+
     $methodsAnchor = <<<'JS'
     loadPhpIni() {
 JS;
 
     $methodsReplace = <<<'JS'
-    rfaWarmPhp() {
+    rfaWarmPhp(port) {
         // [rfa early php] Ask the server to compile the scripts earlier page
-        // loads needed into opcache shared memory. Best effort: an error or a
-        // slow answer never holds the window back for long. Resolves to
+        // loads needed into opcache shared memory. The request goes out from a
+        // worker thread that retries until the port accepts: the main thread
+        // is busy finishing Electron's start-up right then, and a request
+        // issued from it would only leave once that work is done. Best effort:
+        // a failure or the deadline never holds the window back. Resolves to
         // nothing either way: the boot chain treats any value as a failure.
-        return axios.get(`http://127.0.0.1:${state.phpPort}/_rfa/warm`, {
-            headers: { 'X-NativePHP-Secret': state.randomSecret },
-            proxy: false,
-            timeout: 4000,
-        }).then(() => undefined, () => undefined);
+        return new Promise((resolve) => {
+            const settle = () => resolve(undefined);
+            try {
+                const worker = new Worker([
+                    "const { workerData, parentPort } = require('worker_threads');",
+                    "const http = require('http');",
+                    "const attempt = () => {",
+                    "    const request = http.get({ host: '127.0.0.1', port: workerData.port, path: '/_rfa/warm', agent: false, headers: { 'X-NativePHP-Secret': workerData.secret } }, (response) => {",
+                    "        response.resume();",
+                    "        response.once('end', () => parentPort.postMessage(response.statusCode));",
+                    "    });",
+                    "    request.once('error', () => Date.now() < workerData.deadline ? setTimeout(attempt, 5) : parentPort.postMessage(0));",
+                    "};",
+                    "attempt();",
+                ].join('\n'), {
+                    eval: true,
+                    workerData: { port, secret: state.randomSecret, deadline: Date.now() + 4000 },
+                });
+                worker.once('message', settle);
+                worker.once('error', settle);
+                worker.once('exit', settle);
+                setTimeout(() => worker.terminate().catch(() => undefined), 5000).unref();
+            }
+            catch (rfaError) {
+                settle();
+            }
+        });
     }
     loadPhpIni() {
 JS;
@@ -1527,13 +1578,19 @@ JS;
         $content = str_replace($bootFind, $bootReplace, $content);
     }
 
-    if (str_contains($content, $methodsAnchor) && ! str_contains($content, 'rfaWarmPhp() {')) {
+    if (str_contains($content, $methodsAnchor) && ! str_contains($content, 'rfaWarmPhp(port) {')) {
         $content = str_replace($methodsAnchor, $methodsReplace, $content);
+    }
+
+    if (str_contains($content, $updaterFind) && ! str_contains($content, $updaterMarker)) {
+        $content = str_replace($updaterFind, $updaterReplace, $content);
     }
 
     $fullyPatched = str_contains($content, $importMarker)
         && str_contains($content, $bootReplace)
         && str_contains($content, $methodsReplace)
+        && str_contains($content, $updaterMarker)
+        && substr_count($content, 'this.startAutoUpdater(config);') === 1
         && ! str_contains($content, $bootFind);
 
     return $fullyPatched ? $content : null;
@@ -2264,6 +2321,33 @@ JS;
 }
 
 /**
+ * Hand the port to the main process the moment the PHP server is spawned
+ * (`dist/server/php.js`), so the opcache warm-up can start polling for the
+ * listener without waiting on the main thread.
+ *
+ * Anchored on the line the lazy externals preload adds, ahead of it, so that
+ * patch's own text stays intact.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchWarmOnSpawn(string $content): ?string
+{
+    $find = "        globalThis.__rfaPreloadExternals?.(); // [rfa lazy externals] load axios while the server comes up\n";
+    $replace = "        globalThis.__rfaPhpSpawned?.(phpPort); // [rfa early php] start the opcache warm-up as soon as the server can accept it\n".$find;
+
+    if (str_contains($content, $replace)) {
+        return $content;
+    }
+
+    if (substr_count($content, $find) !== 1) {
+        return null;
+    }
+
+    return str_replace($find, $replace, $content);
+}
+
+/**
  * The patch set: what has to be true of the vendored Electron plugin.
  *
  * Order matters within a file. The pre-flight cache, splash window, resolved
@@ -2328,6 +2412,12 @@ function rfaNativePhpPatchSet(): array
             'file' => 'server/php.js',
             'apply' => rfaPatchLazyAxiosPreload(...),
             'summary' => 'PHP server start preloads the lazily required externals',
+        ],
+        [
+            'name' => 'warm-on-spawn',
+            'file' => 'server/php.js',
+            'apply' => rfaPatchWarmOnSpawn(...),
+            'summary' => 'PHP server start hands the port to the opcache warm-up as soon as it is spawned',
         ],
         [
             'name' => 'cookie-after-ready',

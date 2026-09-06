@@ -871,29 +871,39 @@ test('early php boot: refuses a bootstrap that the splash and appearance patches
     expect(rfaPatchEarlyPhpBoot(stockIndexForSplash()."\n".stockIndex()))->toBeNull();
 });
 
-test('early php boot: spawns PHP first, warms it, then waits for Electron and the splash', function () {
+test('early php boot: spawns PHP first, warms it from a worker thread, then waits for Electron and the splash', function () {
     $content = (string) rfaPatchEarlyPhpBoot(indexReadyForEarlyPhpBoot());
 
     expect($content)
-        ->toContain('import { rfaAxios as axios } from "./server/utils.js"; // [rfa early php]')
-        ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).then(() => null, (rfaError) => rfaError);')
+        ->toContain('import { Worker } from "worker_threads"; // [rfa early php]')
+        ->toContain('let rfaWarm = Promise.resolve();')
+        ->toContain('globalThis.__rfaPhpSpawned = (port) => {')
+        ->toContain('rfaWarm = this.rfaWarmPhp(port);')
+        ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => rfaWarm).then(() => null, (rfaError) => rfaError);')
         ->toContain('const rfaPhpFailure = yield rfaPhpBoot;')
         ->toContain('throw rfaPhpFailure;')
-        ->toContain('rfaWarmPhp() {')
-        ->toContain('/_rfa/warm`')
-        ->toContain("headers: { 'X-NativePHP-Secret': state.randomSecret }")
-        ->toContain('proxy: false')
-        ->toContain('timeout: 4000')
-        ->toContain('}).then(() => undefined, () => undefined);')
+        ->toContain('rfaWarmPhp(port) {')
+        // The request leaves a worker thread that retries until PHP listens.
+        ->toContain('const worker = new Worker([')
+        ->toContain("path: '/_rfa/warm'")
+        ->toContain("headers: { 'X-NativePHP-Secret': workerData.secret }")
+        ->toContain('Date.now() < workerData.deadline ? setTimeout(attempt, 5) : parentPort.postMessage(0)')
+        ->toContain('workerData: { port, secret: state.randomSecret, deadline: Date.now() + 4000 },')
+        ->toContain("worker.once('exit', settle);")
+        // The updater starts after the window has been asked for.
+        ->toContain('this.startAutoUpdater(config); // [rfa early php] after the window is requested')
         ->toContain('const rfaConfig = this.loadConfig();')
         ->toContain('const config = yield rfaConfig;')
         ->toContain('yield this.rfaResolveAppearance(); // [rfa appearance] resolve before either window exists')
         ->toContain('this.rfaShowSplash(); // [rfa splash] instant feedback before PHP boots')
         ->toContain('yield notifyLaravel("booted");')
-        ->and(substr_count($content, 'rfaWarmPhp() {'))->toBe(1)
+        ->and(substr_count($content, 'rfaWarmPhp(port) {'))->toBe(1)
+        ->and(substr_count($content, 'this.startAutoUpdater(config);'))->toBe(1)
+        ->and(strpos($content, 'globalThis.__rfaPhpSpawned ='))->toBeLessThan(strpos($content, 'const rfaPhpBoot'))
         ->and(strpos($content, 'const rfaPhpBoot'))->toBeLessThan(strpos($content, 'yield app.whenReady();'))
         ->and(strpos($content, 'this.rfaShowSplash();'))->toBeLessThan(strpos($content, 'const rfaPhpFailure'))
-        ->and(strpos($content, 'const rfaPhpFailure'))->toBeLessThan(strpos($content, 'this.startScheduler();'));
+        ->and(strpos($content, 'const rfaPhpFailure'))->toBeLessThan(strpos($content, 'this.startScheduler();'))
+        ->and(strpos($content, 'yield notifyLaravel("booted");'))->toBeLessThan(strpos($content, 'this.startAutoUpdater(config);'));
 });
 
 test('early php boot: leaves the splash and appearance patches idempotent', function () {
@@ -915,8 +925,8 @@ test('the vendored NativePHP main bootstrap starts PHP before Electron is ready'
 
     expect(file_get_contents($indexPath))
         ->toContain('[rfa early php]')
-        ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp())')
-        ->toContain('/_rfa/warm`');
+        ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => rfaWarm).then(() => null, (rfaError) => rfaError);')
+        ->toContain("path: '/_rfa/warm'");
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
 
 // -- Applied to the real vendored file --
@@ -970,7 +980,10 @@ test('launch timeline: collects marks, flushes once, and wraps the bootstrap ste
         ->toContain('rfaLaunch.deadline = Date.now() + 60000;')
         ->toContain('export default new NativePHP();')
         // The bootstrap sequence the earlier patches verify by exact text is untouched.
-        ->toContain("            const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp()).then(() => null, (rfaError) => rfaError);\n            yield app.whenReady();\n            yield this.rfaResolveAppearance();")
+        ->toContain("            const rfaPhpBoot = this.startPhpApp().then(() => rfaWarm).then(() => null, (rfaError) => rfaError);\n            yield app.whenReady();\n            yield this.rfaResolveAppearance();")
+        // The updater start the early PHP boot moved after the handshake sits
+        // after the acked mark.
+        ->and(strpos($content, "rfaLaunchMark('booted.acked')"))->toBeLessThan(strpos($content, 'this.startAutoUpdater(config); // [rfa early php]'))
         ->and(strpos($content, "rfaLaunchMark('booted.sent')"))->toBeLessThan(strpos($content, 'yield notifyLaravel("booted");'))
         ->and(strpos($content, 'yield notifyLaravel("booted");'))->toBeLessThan(strpos($content, "rfaLaunchMark('booted.acked')"));
 });
@@ -1222,3 +1235,30 @@ test('the vendored NativePHP plugin loads its externals lazily', function () {
         ->and(file_get_contents($dist.'/server/php.js'))->toContain('globalThis.__rfaPreloadExternals?.();')
         ->and(file_get_contents($electron.'/src/main/index.js'))->toContain('rfaInheritShellPath();');
 })->skip(fn () => ! file_exists(dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/electron-plugin/dist/index.js'), 'NativePHP desktop electron plugin not installed');
+
+test('warm on spawn: reports a shape change when the preload line is missing or ambiguous', function () {
+    expect(rfaPatchWarmOnSpawn(stockServer()))->toBeNull();
+
+    $preloaded = (string) rfaPatchLazyAxiosPreload((string) rfaPatchLaunchTimelineServer((string) rfaPatchServerWorkers((string) rfaPatchServerOptimize(stockServer()))));
+
+    expect(rfaPatchWarmOnSpawn($preloaded."\n".$preloaded))->toBeNull();
+});
+
+test('warm on spawn: hands the port to the main process right after the spawn', function () {
+    $content = (string) rfaPatchWarmOnSpawn((string) rfaPatchLazyAxiosPreload((string) rfaPatchLaunchTimelineServer((string) rfaPatchServerWorkers((string) rfaPatchServerOptimize(stockServer())))));
+
+    expect($content)
+        ->toContain('globalThis.__rfaPhpSpawned?.(phpPort); // [rfa early php] start the opcache warm-up as soon as the server can accept it')
+        ->and(substr_count($content, '__rfaPhpSpawned'))->toBe(1)
+        ->and(strpos($content, 'const phpServer = callPhp('))->toBeLessThan(strpos($content, '__rfaPhpSpawned'))
+        ->and(strpos($content, '__rfaPhpSpawned'))->toBeLessThan(strpos($content, '__rfaPreloadExternals'))
+        ->and(strpos($content, '__rfaPhpSpawned'))->toBeLessThan(strpos($content, "phpServer.stderr.on('data'"));
+});
+
+test('warm on spawn: leaves the earlier php.js patches idempotent and is idempotent itself', function () {
+    $content = (string) rfaPatchWarmOnSpawn((string) rfaPatchLazyAxiosPreload((string) rfaPatchLaunchTimelineServer((string) rfaPatchServerWorkers((string) rfaPatchServerOptimize(stockServer())))));
+
+    foreach ([rfaPatchServerOptimize(...), rfaPatchServerWorkers(...), rfaPatchLaunchTimelineServer(...), rfaPatchLazyAxiosPreload(...), rfaPatchWarmOnSpawn(...)] as $patch) {
+        expect($patch($content))->toBe($content);
+    }
+});
