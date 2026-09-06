@@ -72,7 +72,7 @@ function distSnapshot(string $root): array
 
 test('the patch set covers every vendored file rfa depends on', function () {
     expect(collect(rfaNativePhpPatchSet())->pluck('name')->all())
-        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'lazy-updater-api', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path']);
+        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'lazy-updater-api', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path']);
 });
 
 test('the dist root points at the vendored electron plugin', function () {
@@ -95,7 +95,7 @@ test('applies every patch in one run', function () {
 
     $outcome = applyPatchSet($root);
 
-    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'lazy-updater-api', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path'])
+    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'lazy-updater-api', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path'])
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['absent'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
@@ -117,7 +117,8 @@ test('applies every patch in one run', function () {
     expect(file_get_contents($root.'/server/php.js'))
         ->toContain('rfaNeedsFullOptimize')
         ->toContain("PHP_CLI_SERVER_WORKERS: '4'")
-        ->toContain("__rfaLaunchMark?.('php.listening')");
+        ->toContain("__rfaLaunchMark?.('php.listening')")
+        ->toContain('globalThis.__rfaPhpSpawned?.(phpPort);');
     expect(file_get_contents($root.'/server/utils.js'))
         ->toContain('yield app.whenReady(); // [rfa cookie after ready]')
         ->toContain('globalThis.__rfaPreloadExternals = rfaLoadAxios;');
@@ -129,10 +130,11 @@ test('applies every patch in one run', function () {
         ->toContain('const RFA_SPLASH_HTML')
         ->toContain("window.once('rfa:presented'")
         ->toContain('rfaResolveAppearance()')
-        ->toContain('import { rfaAxios as axios } from "./server/utils.js"; // [rfa early php]')
+        ->toContain('import { Worker } from "worker_threads"; // [rfa early php]')
         ->toContain('autoUpdater: new Proxy({}, {')
-        ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp())')
-        ->toContain('/_rfa/warm`')
+        ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => rfaWarm).then(() => null, (rfaError) => rfaError);')
+        ->toContain('globalThis.__rfaPhpSpawned = (port) => {')
+        ->toContain("path: '/_rfa/warm'")
         ->toContain('globalThis.__rfaLaunchMark = rfaLaunchMark;')
         ->toContain("rfaLaunchMark('booted.sent')");
     expect(file_get_contents($root.'/../../php.js'))
@@ -198,7 +200,7 @@ test('a second run changes nothing', function () {
     $outcome = applyPatchSet($root);
 
     expect($outcome['applied'])->toBeEmpty()
-        ->and($outcome['unchanged'])->toHaveCount(22)
+        ->and($outcome['unchanged'])->toHaveCount(23)
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($afterFirst);
 });
@@ -326,7 +328,7 @@ test('a reshaped block in one file blocks the patches to the other files', funct
 
     $outcome = applyPatchSet($root);
 
-    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload'])
+    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn'])
         ->and(distSnapshot($root))->toBe($before);
 });
 
@@ -342,7 +344,7 @@ test('an unreadable target blocks the run rather than half-patching', function (
 
     chmod($root.'/server/php.js', 0644);
 
-    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload'])
+    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn'])
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($before);
 })->skip(fn () => posix_geteuid() === 0, 'root can read a 0000 file');
@@ -390,7 +392,7 @@ test('an absent dist tree is reported, not failed', function () {
     // pruned copy where the plugin dist is not present.
     $outcome = applyPatchSet(sys_get_temp_dir().'/rfa_test_dist_nowhere_'.getmypid().'/electron-plugin/dist');
 
-    expect($outcome['absent'])->toHaveCount(22)
+    expect($outcome['absent'])->toHaveCount(23)
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 });
@@ -470,8 +472,8 @@ test('a tree holding only some of the targets is refused, not half-patched', fun
 
     $outcome = applyPatchSet($root);
 
-    expect($outcome['absent'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload'])
-        ->and($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload'])
+    expect($outcome['absent'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn'])
+        ->and($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn'])
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($before);
 });

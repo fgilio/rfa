@@ -150,6 +150,10 @@ function serveApp(secret, apiPort, phpIniSettings) {
             if (match) {
                 const port = parseInt(match[1]);
                 console.log("PHP Server started on port: ", port);
+                resolve({
+                    port,
+                    process: phpServer,
+                });
             }
         });
 JS;
