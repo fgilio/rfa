@@ -26,9 +26,15 @@ function stubDistRoot(string $root, ?callable $mutate = null): string
     file_put_contents($root.'/server/api/window.js', stockWindowApi());
     file_put_contents($root.'/server/php.js', stockServer());
     file_put_contents($root.'/server/utils.js', stockUtils());
-    file_put_contents($root.'/index.js', stockIndexForSplash()."\n".stockIndex());
+    file_put_contents($root.'/server/api/autoUpdater.js', stockAutoUpdaterApi());
+    file_put_contents($root.'/server/api/contextMenu.js', stockContextMenuApi());
+    // stockIndex() opens with the electron-updater import the preflight patch
+    // anchors on; the splash fixture already carries it, so keep one copy.
+    file_put_contents($root.'/index.js', stockIndexForSplash()."\n".str_replace("import electronUpdater from 'electron-updater';\n", '', stockIndex()));
     file_put_contents($root.'/../../php.js', stockPhpInstaller());
     file_put_contents($root.'/../../electron-builder.mjs', stockElectronBuilder());
+    mkdir($root.'/../../src/main', 0755, true);
+    file_put_contents($root.'/../../src/main/index.js', stockMainEntry());
 
     if ($mutate !== null) {
         $mutate($root);
@@ -56,7 +62,7 @@ function stockRootFor(string $root): string
 /** @return array<string, string> */
 function distSnapshot(string $root): array
 {
-    return collect(['preload/index.mjs', 'server/api/window.js', 'server/php.js', 'server/utils.js', 'index.js', '../../php.js', '../../electron-builder.mjs'])
+    return collect(['preload/index.mjs', 'server/api/window.js', 'server/api/autoUpdater.js', 'server/api/contextMenu.js', 'server/php.js', 'server/utils.js', 'index.js', '../../php.js', '../../electron-builder.mjs', '../../src/main/index.js'])
         ->filter(fn (string $file) => is_file($root.'/'.$file))
         ->mapWithKeys(fn (string $file) => [$file => file_get_contents($root.'/'.$file)])
         ->all();
@@ -66,7 +72,7 @@ function distSnapshot(string $root): array
 
 test('the patch set covers every vendored file rfa depends on', function () {
     expect(collect(rfaNativePhpPatchSet())->pluck('name')->all())
-        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'cookie-after-ready', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'php-extraction', 'php-build-wait']);
+        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'lazy-updater-api', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path']);
 });
 
 test('the dist root points at the vendored electron plugin', function () {
@@ -89,7 +95,7 @@ test('applies every patch in one run', function () {
 
     $outcome = applyPatchSet($root);
 
-    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'cookie-after-ready', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'php-extraction', 'php-build-wait'])
+    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'lazy-updater-api', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path'])
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['absent'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
@@ -113,13 +119,18 @@ test('applies every patch in one run', function () {
         ->toContain("PHP_CLI_SERVER_WORKERS: '4'")
         ->toContain("__rfaLaunchMark?.('php.listening')");
     expect(file_get_contents($root.'/server/utils.js'))
-        ->toContain('yield app.whenReady(); // [rfa cookie after ready]');
+        ->toContain('yield app.whenReady(); // [rfa cookie after ready]')
+        ->toContain('globalThis.__rfaPreloadExternals = rfaLoadAxios;');
+    expect(file_get_contents($root.'/server/api/autoUpdater.js'))->toContain('export function rfaAutoUpdater() {');
+    expect(file_get_contents($root.'/server/api/contextMenu.js'))->toContain('import("electron-context-menu")');
+    expect(file_get_contents($root.'/../../src/main/index.js'))->toContain('rfaInheritShellPath();');
     expect(file_get_contents($root.'/index.js'))
         ->toContain("'preflight_config_'")
         ->toContain('const RFA_SPLASH_HTML')
         ->toContain("window.once('rfa:presented'")
         ->toContain('rfaResolveAppearance()')
-        ->toContain('import axios from "axios"; // [rfa early php]')
+        ->toContain('import { rfaAxios as axios } from "./server/utils.js"; // [rfa early php]')
+        ->toContain('autoUpdater: new Proxy({}, {')
         ->toContain('const rfaPhpBoot = this.startPhpApp().then(() => this.rfaWarmPhp())')
         ->toContain('/_rfa/warm`')
         ->toContain('globalThis.__rfaLaunchMark = rfaLaunchMark;')
@@ -187,7 +198,7 @@ test('a second run changes nothing', function () {
     $outcome = applyPatchSet($root);
 
     expect($outcome['applied'])->toBeEmpty()
-        ->and($outcome['unchanged'])->toHaveCount(16)
+        ->and($outcome['unchanged'])->toHaveCount(22)
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($afterFirst);
 });
@@ -315,7 +326,7 @@ test('a reshaped block in one file blocks the patches to the other files', funct
 
     $outcome = applyPatchSet($root);
 
-    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server'])
+    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload'])
         ->and(distSnapshot($root))->toBe($before);
 });
 
@@ -331,7 +342,7 @@ test('an unreadable target blocks the run rather than half-patching', function (
 
     chmod($root.'/server/php.js', 0644);
 
-    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server'])
+    expect($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload'])
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($before);
 })->skip(fn () => posix_geteuid() === 0, 'root can read a 0000 file');
@@ -379,7 +390,7 @@ test('an absent dist tree is reported, not failed', function () {
     // pruned copy where the plugin dist is not present.
     $outcome = applyPatchSet(sys_get_temp_dir().'/rfa_test_dist_nowhere_'.getmypid().'/electron-plugin/dist');
 
-    expect($outcome['absent'])->toHaveCount(16)
+    expect($outcome['absent'])->toHaveCount(22)
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
 });
@@ -459,8 +470,8 @@ test('a tree holding only some of the targets is refused, not half-patched', fun
 
     $outcome = applyPatchSet($root);
 
-    expect($outcome['absent'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server'])
-        ->and($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server'])
+    expect($outcome['absent'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload'])
+        ->and($outcome['blocked'])->toBe(['server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload'])
         ->and($outcome['written'])->toBeEmpty()
         ->and(distSnapshot($root))->toBe($before);
 });

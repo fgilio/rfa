@@ -1456,7 +1456,7 @@ JS;
 function rfaPatchEarlyPhpBoot(string $content): ?string
 {
     $importFind = 'import Store from "electron-store"; // [rfa preflight cache]';
-    $importMarker = 'import axios from "axios"; // [rfa early php]';
+    $importMarker = 'import { rfaAxios as axios } from "./server/utils.js"; // [rfa early php]';
     $importReplace = $importFind."\n".$importMarker;
 
     $bootFind = <<<'JS'
@@ -1903,6 +1903,367 @@ JS;
 }
 
 /**
+ * Load electron-updater the first time the updater is used (`dist/index.js`).
+ *
+ * The module costs ~20ms of loading before bootstrap and is first needed
+ * when `startAutoUpdater` runs, after the window is on screen. The import
+ * becomes a proxy over the lazily required instance so the `autoUpdater`
+ * binding the file (and the launch timeline patch) relies on keeps working.
+ * The loader itself lives in the updater API router, which also owns the
+ * event forwarding to Laravel.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchLazyUpdater(string $content): ?string
+{
+    $find = "import electronUpdater from 'electron-updater';\n";
+    $replace = <<<'JS'
+import { rfaAutoUpdater } from "./server/api/autoUpdater.js"; // [rfa lazy externals]
+// [rfa lazy externals] electron-updater is loaded the first time the updater
+// is used, after the window is on screen, instead of before bootstrap. The
+// proxy keeps the `autoUpdater` binding below usable as before.
+const electronUpdater = {
+    autoUpdater: new Proxy({}, {
+        get(target, property) {
+            const updater = rfaAutoUpdater();
+            const value = updater[property];
+            return typeof value === 'function' ? value.bind(updater) : value;
+        },
+    }),
+};
+
+JS;
+
+    if (str_contains($content, $find) && ! str_contains($content, $replace)) {
+        $content = str_replace($find, $replace, $content);
+    }
+
+    return str_contains($content, $replace) ? $content : null;
+}
+
+/**
+ * Require electron-updater on first use in the updater API router
+ * (`dist/server/api/autoUpdater.js`).
+ *
+ * The router attached its event forwarding at module load, which forced the
+ * module in before bootstrap. `rfaAutoUpdater()` now requires it and attaches
+ * the forwarding in one step, so every event after the first use still
+ * reaches Laravel. The routes and `index.js` go through that loader.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchLazyUpdaterApi(string $content): ?string
+{
+    $headFind = <<<'JS'
+import express from "express";
+import electronUpdater from 'electron-updater';
+const { autoUpdater } = electronUpdater;
+import { notifyLaravel } from "../utils.js";
+const router = express.Router();
+JS;
+
+    $headReplace = <<<'JS'
+import express from "express";
+import { createRequire } from "module"; // [rfa lazy externals]
+import { notifyLaravel } from "../utils.js";
+// [rfa lazy externals] electron-updater is required on first use, and its
+// event forwarding is attached in the same step so no update event is missed.
+const rfaRequire = createRequire(import.meta.url);
+let rfaUpdater = null;
+export function rfaAutoUpdater() {
+    if (rfaUpdater === null) {
+        rfaUpdater = rfaRequire('electron-updater').autoUpdater;
+        rfaForwardUpdaterEvents(rfaUpdater);
+    }
+    return rfaUpdater;
+}
+const router = express.Router();
+JS;
+
+    $listenersStart = 'autoUpdater.addListener("checking-for-update", () => {';
+    $listenersEnd = 'export default router;';
+    $listenersMarker = 'function rfaForwardUpdaterEvents(autoUpdater) {';
+
+    if (str_contains($content, $headFind)) {
+        $content = str_replace($headFind, $headReplace, $content);
+    }
+
+    foreach (['checkForUpdates', 'downloadUpdate', 'quitAndInstall'] as $method) {
+        $content = str_replace("    autoUpdater.{$method}();", "    rfaAutoUpdater().{$method}();", $content);
+    }
+
+    $start = strpos($content, $listenersStart);
+    $end = strpos($content, $listenersEnd);
+
+    if (! str_contains($content, $listenersMarker) && $start !== false && $end !== false && $start < $end) {
+        $listeners = rtrim(substr($content, $start, $end - $start));
+        $indented = '    '.str_replace("\n", "\n    ", $listeners);
+        $content = substr($content, 0, $start).$listenersMarker."\n".$indented."\n}\n".substr($content, $end);
+    }
+
+    $fullyPatched = str_contains($content, $headReplace)
+        && str_contains($content, $listenersMarker)
+        && substr_count($content, 'rfaAutoUpdater().') === 3
+        && ! str_contains($content, "import electronUpdater from 'electron-updater';");
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
+ * Load electron-context-menu when the first context menu is installed
+ * (`dist/server/api/contextMenu.js`).
+ *
+ * The package is ESM, so it is imported dynamically inside the route that
+ * needs it. The response is sent before the load as in stock.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchLazyContextMenu(string $content): ?string
+{
+    $importFind = <<<'JS'
+import { compileMenu } from "./helper/index.js";
+import contextMenu from "electron-context-menu";
+JS;
+
+    $importReplace = <<<'JS'
+import { compileMenu } from "./helper/index.js";
+// [rfa lazy externals] electron-context-menu is loaded the first time a
+// context menu is installed instead of before bootstrap.
+let rfaContextMenuModule = null;
+function rfaContextMenu() {
+    if (rfaContextMenuModule === null) {
+        rfaContextMenuModule = import("electron-context-menu").then((loaded) => loaded.default);
+    }
+    return rfaContextMenuModule;
+}
+JS;
+
+    $installFind = <<<'JS'
+    contextMenuDisposable = contextMenu({
+        showLookUpSelection: false,
+        showSearchWithGoogle: false,
+        showInspectElement: false,
+        prepend: (defaultActions, parameters, browserWindow) => {
+            return req.body.entries.map(compileMenu);
+        },
+    });
+});
+JS;
+
+    $installReplace = <<<'JS'
+    rfaContextMenu().then((contextMenu) => {
+        if (contextMenuDisposable) {
+            contextMenuDisposable();
+        }
+        contextMenuDisposable = contextMenu({
+            showLookUpSelection: false,
+            showSearchWithGoogle: false,
+            showInspectElement: false,
+            prepend: (defaultActions, parameters, browserWindow) => {
+                return req.body.entries.map(compileMenu);
+            },
+        });
+    });
+});
+JS;
+
+    if (str_contains($content, $importFind)) {
+        $content = str_replace($importFind, $importReplace, $content);
+    }
+
+    if (str_contains($content, $installFind)) {
+        $content = str_replace($installFind, $installReplace, $content);
+    }
+
+    $fullyPatched = str_contains($content, $importReplace) && str_contains($content, $installReplace);
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
+ * Require axios on first use (`dist/server/utils.js`).
+ *
+ * axios costs ~30ms of loading before bootstrap and is first needed for the
+ * opcache warm-up request once the PHP server listens. The module exports a
+ * lazy `rfaAxios` for `index.js` and publishes a preload hook the server
+ * start calls right after spawning PHP, so the load overlaps the wait for
+ * the server instead of delaying either bootstrap or the first request.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchLazyAxios(string $content): ?string
+{
+    $find = "import axios from 'axios';\n";
+    $replace = <<<'JS'
+import { createRequire } from 'module'; // [rfa lazy externals]
+// [rfa lazy externals] axios is required on first use rather than before
+// bootstrap. The PHP server start calls the preload hook right after it
+// spawns the server, so the load lands while the main process waits for the
+// server to listen and the first request pays nothing.
+const rfaRequire = createRequire(import.meta.url);
+let rfaAxiosModule = null;
+function rfaLoadAxios() {
+    if (rfaAxiosModule === null) {
+        rfaAxiosModule = rfaRequire('axios');
+    }
+    return rfaAxiosModule;
+}
+export const rfaAxios = {
+    get: (...args) => rfaLoadAxios().get(...args),
+    post: (...args) => rfaLoadAxios().post(...args),
+};
+globalThis.__rfaPreloadExternals = rfaLoadAxios;
+const axios = rfaAxios;
+
+JS;
+
+    if (str_contains($content, $find) && ! str_contains($content, $replace)) {
+        $content = str_replace($find, $replace, $content);
+    }
+
+    return str_contains($content, $replace) ? $content : null;
+}
+
+/**
+ * Ask for the lazily loaded externals right after the PHP server spawns
+ * (`dist/server/php.js`), so they load while the server comes up.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchLazyAxiosPreload(string $content): ?string
+{
+    $find = "        phpServer.stderr.on('data', (data) => {\n";
+    $replace = "        globalThis.__rfaPreloadExternals?.(); // [rfa lazy externals] load axios while the server comes up\n".
+        "        phpServer.stderr.on('data', (data) => {\n";
+
+    if (substr_count($content, $find) !== 1) {
+        return null;
+    }
+
+    if (! str_contains($content, $replace)) {
+        $content = str_replace($find, $replace, $content);
+    }
+
+    return str_contains($content, $replace) ? $content : null;
+}
+
+/**
+ * Apply the login shell's PATH from a cache instead of spawning the shell
+ * before bootstrap (`src/main/index.js`, the Electron entry).
+ *
+ * fix-path runs the user's login shell synchronously on every launch
+ * (~55ms) so PHP and its children see the same PATH a terminal would. The
+ * resolved PATH rarely changes, so the value from the previous launch is
+ * applied at once and the shell is asked again in the background, updating
+ * this process and the cache for next time. The first launch, or a change
+ * of login shell, still resolves synchronously before anything spawns. The
+ * shell query is done directly with child_process, which drops fix-path and
+ * its dependencies from the module graph.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchCachedShellPath(string $content): ?string
+{
+    $find = <<<'JS'
+// Inherit User's PATH in Process & ChildProcess
+import fixPath from 'fix-path';
+fixPath();
+JS;
+
+    $replace = <<<'JS'
+// Inherit User's PATH in Process & ChildProcess
+// [rfa cached shell path] The login shell's PATH from the previous launch is
+// applied at once and refreshed in the background; only the first launch, or
+// a change of login shell, waits for the shell before bootstrap.
+import { execFile, execFileSync } from 'child_process';
+import { accessSync, constants, readFileSync, renameSync, writeFileSync } from 'fs';
+const rfaShellPathFile = path.join(app.getPath('userData'), 'rfa-shell-path.json');
+const rfaShell = process.env.SHELL || '/bin/zsh';
+const rfaPathMarker = '__RFA_PATH__';
+const rfaShellArgs = ['-ilc', `printf '%s%s%s' '${rfaPathMarker}' "$PATH" '${rfaPathMarker}'; exit`];
+const rfaShellOptions = { env: { ...process.env, DISABLE_AUTO_UPDATE: 'true' }, encoding: 'utf8', timeout: 10000 };
+function rfaPathFromShellOutput(output) {
+    const match = String(output).match(new RegExp(`${rfaPathMarker}(.*?)${rfaPathMarker}`, 's'));
+    return match ? match[1].trim() : '';
+}
+// PHP copies PATH when it spawns and never sees the background refresh, and
+// git is the one executable it resolves through PATH. A cached PATH that no
+// longer reaches a git is stale for the whole session, so it is not applied.
+function rfaPathResolvesGit(value) {
+    return String(value).split(path.delimiter).some((directory) => {
+        try {
+            accessSync(path.join(directory, 'git'), constants.X_OK);
+            return true;
+        }
+        catch (error) {
+            return false;
+        }
+    });
+}
+function rfaCachedShellPath() {
+    try {
+        const cached = JSON.parse(readFileSync(rfaShellPathFile, 'utf8'));
+        return cached.shell === rfaShell && typeof cached.path === 'string' && rfaPathResolvesGit(cached.path) ? cached.path : null;
+    }
+    catch (error) {
+        return null;
+    }
+}
+function rfaRememberShellPath(value) {
+    try {
+        writeFileSync(`${rfaShellPathFile}.tmp`, JSON.stringify({ shell: rfaShell, path: value }));
+        renameSync(`${rfaShellPathFile}.tmp`, rfaShellPathFile);
+    }
+    catch (error) {
+        console.error('Failed to remember the shell PATH:', error);
+    }
+}
+function rfaInheritShellPath() {
+    if (process.platform === 'win32') {
+        return;
+    }
+    const cached = rfaCachedShellPath();
+    if (cached === null) {
+        let resolved = '';
+        try {
+            resolved = rfaPathFromShellOutput(execFileSync(rfaShell, rfaShellArgs, rfaShellOptions));
+        }
+        catch (error) {
+            console.error('Failed to resolve the shell PATH:', error);
+        }
+        process.env.PATH = resolved || ['./node_modules/.bin', '/.nodebrew/current/bin', '/usr/local/bin', process.env.PATH].join(':');
+        if (resolved !== '') {
+            rfaRememberShellPath(resolved);
+        }
+        return;
+    }
+    process.env.PATH = cached;
+    execFile(rfaShell, rfaShellArgs, rfaShellOptions, (error, stdout) => {
+        const resolved = error ? '' : rfaPathFromShellOutput(stdout);
+        if (resolved === '' || resolved === cached) {
+            return;
+        }
+        process.env.PATH = resolved;
+        rfaRememberShellPath(resolved);
+    });
+}
+rfaInheritShellPath();
+JS;
+
+    if (str_contains($content, $find) && ! str_contains($content, $replace)) {
+        $content = str_replace($find, $replace, $content);
+    }
+
+    return str_contains($content, $replace) ? $content : null;
+}
+
+/**
  * The patch set: what has to be true of the vendored Electron plugin.
  *
  * Order matters within a file. The pre-flight cache, splash window, resolved
@@ -1963,10 +2324,22 @@ function rfaNativePhpPatchSet(): array
             'summary' => 'PHP server start-up phases are stamped on the launch timeline',
         ],
         [
+            'name' => 'lazy-axios-preload',
+            'file' => 'server/php.js',
+            'apply' => rfaPatchLazyAxiosPreload(...),
+            'summary' => 'PHP server start preloads the lazily required externals',
+        ],
+        [
             'name' => 'cookie-after-ready',
             'file' => 'server/utils.js',
             'apply' => rfaPatchCookieAfterReady(...),
             'summary' => 'PHP secret cookie waits for Electron readiness',
+        ],
+        [
+            'name' => 'lazy-axios',
+            'file' => 'server/utils.js',
+            'apply' => rfaPatchLazyAxios(...),
+            'summary' => 'axios is required on first use, preloaded while the PHP server comes up',
         ],
         [
             'name' => 'preflight-cache',
@@ -1999,6 +2372,24 @@ function rfaNativePhpPatchSet(): array
             'summary' => 'main-process launch phases are written to storage/logs/rfa-launch.jsonl',
         ],
         [
+            'name' => 'lazy-updater',
+            'file' => 'index.js',
+            'apply' => rfaPatchLazyUpdater(...),
+            'summary' => 'electron-updater loads when the updater starts, not before bootstrap',
+        ],
+        [
+            'name' => 'lazy-updater-api',
+            'file' => 'server/api/autoUpdater.js',
+            'apply' => rfaPatchLazyUpdaterApi(...),
+            'summary' => 'updater API requires electron-updater on first use and forwards events from then on',
+        ],
+        [
+            'name' => 'lazy-context-menu',
+            'file' => 'server/api/contextMenu.js',
+            'apply' => rfaPatchLazyContextMenu(...),
+            'summary' => 'electron-context-menu loads with the first context menu',
+        ],
+        [
             'name' => 'php-extraction',
             'file' => '../../php.js',
             'apply' => rfaPatchPhpExtraction(...),
@@ -2009,6 +2400,12 @@ function rfaNativePhpPatchSet(): array
             'file' => '../../electron-builder.mjs',
             'apply' => rfaPatchPhpBuildWait(...),
             'summary' => 'Electron Builder waits for PHP extraction before copying resources',
+        ],
+        [
+            'name' => 'cached-shell-path',
+            'file' => '../../src/main/index.js',
+            'apply' => rfaPatchCachedShellPath(...),
+            'summary' => 'login shell PATH is applied from a cache and refreshed in the background',
         ],
     ];
 }
