@@ -87,8 +87,15 @@
         });
     }
 
+    function nowMs(root) {
+        return root.performance?.now ? root.performance.now() : null;
+    }
+
     async function settleRenderer(root, timeoutMs = DEFAULT_TIMEOUT_MS) {
         const startedAt = Date.now();
+        // Sub-marks of the settle for the launch timeline (runtime-diagnostics.js).
+        const timeline = { settleStartMs: nowMs(root) };
+        root.__rfaRendererReadyTimeline = timeline;
         const fonts = loadRequiredFonts(root);
         const fontReadiness = fonts
             ? (async () => {
@@ -97,6 +104,7 @@
                 } catch (_) {
                     // Font errors must not strand the startup screen.
                 }
+                timeline.fontsReadyMs = nowMs(root);
             })()
             : null;
         let fontsReady = fonts === null;
@@ -104,6 +112,7 @@
         // Livewire initializes while its script is still executing. Window load
         // is the first point where Chromium can expose final shell geometry.
         await waitForWindowLoad(root);
+        timeline.windowLoadMs = nowMs(root);
 
         // Let Alpine's initialization work reach layout before reading geometry.
         await nextFrame(root);
@@ -149,7 +158,12 @@
 
                     stableFrames = isSettled() ? stableFrames + 1 : 0;
 
+                    if (stableFrames === 1 && timeline.firstSettledMs === undefined) {
+                        timeline.firstSettledMs = nowMs(root);
+                    }
+
                     if (stableFrames >= REQUIRED_STABLE_FRAMES) {
+                        timeline.stableMs = nowMs(root);
                         finish(true);
                     } else if (stableFrames > 0) {
                         scheduleCheck();
@@ -187,6 +201,15 @@
             root.nativeRendererReady?.();
         } catch (_) {
             // Browser development has no NativePHP preload bridge.
+        }
+
+        // Runtime diagnostics record the launch timing at this point.
+        try {
+            root.document.dispatchEvent(new root.CustomEvent('rfa:renderer-ready', {
+                detail: { ...(root.__rfaRendererReadyTimeline || {}), atMs: nowMs(root) },
+            }));
+        } catch (_) {
+            // A missing CustomEvent only loses the diagnostic sample.
         }
 
         return true;

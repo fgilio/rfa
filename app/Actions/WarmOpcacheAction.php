@@ -19,6 +19,7 @@ final readonly class WarmOpcacheAction
 {
     public function __construct(
         private OpcacheWarmService $warmer,
+        private RecordRuntimeDiagnosticAction $diagnostics,
     ) {}
 
     /** @return array{available: bool, compiled: int, cached: int, missing: int, failed: int} */
@@ -50,14 +51,21 @@ final readonly class WarmOpcacheAction
 
             throw $e;
         } finally {
+            $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+
             Context::add('rfa.compiled_count', $result['compiled']);
             Context::add('rfa.cached_count', $result['cached']);
             Context::add('rfa.missing_count', $result['missing']);
             Context::add('rfa.failed_count', $result['failed']);
             Context::add('rfa.outcome', $outcome);
-            Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
+            Context::add('rfa.duration_ms', $durationMs);
 
             Log::info('opcache.warmed');
+
+            // The launch report reads this from the diagnostics log; the
+            // canonical event above lands in the app log, whose packaged
+            // level hides info events.
+            $this->diagnostics->handle('opcache.warmed', [...$result, 'outcome' => $outcome, 'duration_ms' => $durationMs]);
         }
 
         return $result;

@@ -50,6 +50,18 @@ test('breadcrumb writes one json line with php memory context', function () {
         ->and(strlen($entry['context']['long']))->toBeLessThanOrEqual(500);
 });
 
+test('breadcrumb stamps the request start and elapsed time in epoch milliseconds', function () {
+    $requestStartedAt = $_SERVER['REQUEST_TIME_FLOAT'];
+
+    app(RuntimeDiagnosticsService::class)->breadcrumb('review.opened');
+
+    $entry = json_decode(trim((string) file_get_contents($this->diagnosticsPath)), true);
+
+    expect($entry['request']['started_at_ms'])->toBe((int) round($requestStartedAt * 1000))
+        ->and($entry['request']['elapsed_ms'])->toBeGreaterThanOrEqual(0)
+        ->and($entry['request']['elapsed_ms'])->toBeLessThan(60_000);
+});
+
 test('disabled diagnostics do not touch the filesystem', function () {
     config(['rfa.diagnostics.enabled' => false]);
 

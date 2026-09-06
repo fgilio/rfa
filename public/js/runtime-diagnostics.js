@@ -168,11 +168,31 @@
 
     function collectNavigation(win) {
         const [entry] = win.performance?.getEntriesByType?.('navigation') || [];
+        const mark = (value) => (entry && typeof value === 'number' && value > 0 ? Math.round(value) : null);
 
         return {
             type: entry?.type || null,
+            timeOriginMs: win.performance?.timeOrigin ? Math.round(win.performance.timeOrigin) : null,
+            fetchStartMs: mark(entry?.fetchStart),
+            responseStartMs: mark(entry?.responseStart),
+            responseEndMs: mark(entry?.responseEnd),
+            domInteractiveMs: mark(entry?.domInteractive),
+            domContentLoadedMs: mark(entry?.domContentLoadedEventEnd),
             domCompleteMs: entry ? Math.round(entry.domComplete) : null,
+            loadEventEndMs: mark(entry?.loadEventEnd),
             resources: win.performance?.getEntriesByType?.('resource')?.length || 0,
+        };
+    }
+
+    function collectLaunch(root, detail) {
+        return {
+            livewireInitializedMs: roundMs(root.__rfaLivewireInitializedMs ?? null),
+            settleStartMs: roundMs(detail?.settleStartMs ?? null),
+            windowLoadMs: roundMs(detail?.windowLoadMs ?? null),
+            fontsReadyMs: roundMs(detail?.fontsReadyMs ?? null),
+            firstSettledMs: roundMs(detail?.firstSettledMs ?? null),
+            stableMs: roundMs(detail?.stableMs ?? null),
+            rendererReadyMs: roundMs(detail?.atMs ?? nowMs(root)),
         };
     }
 
@@ -888,6 +908,14 @@
             sample('visibility');
         });
         root.document.addEventListener('livewire:navigated', () => sample('navigate', true));
+        root.document.addEventListener('livewire:initialized', () => {
+            root.__rfaLivewireInitializedMs = nowMs(root);
+        }, { once: true });
+        // renderer-ready.js announces the signal that lets Electron present the
+        // window; this sample carries the renderer half of the launch timeline.
+        root.document.addEventListener('rfa:renderer-ready', (event) => {
+            sample('launch', false, { launch: collectLaunch(root, event.detail) });
+        }, { once: true });
 
         root.document.addEventListener('livewire:init', () => {
             if (!root.Livewire || root.__rfaRuntimeDiagnosticsLivewireHooked) {

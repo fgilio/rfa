@@ -32,6 +32,7 @@ final class RuntimeDiagnosticsService
             'event' => $event,
             'pid' => getmypid() ?: null,
             'php' => $this->phpMemory(),
+            'request' => $this->requestTiming(),
             'context' => $this->normalize($context),
         ]);
     }
@@ -59,6 +60,27 @@ final class RuntimeDiagnosticsService
     public function enabled(): bool
     {
         return (bool) config('rfa.diagnostics.enabled', true);
+    }
+
+    /**
+     * When the request began and how far into it this breadcrumb falls, in
+     * epoch milliseconds so the entry lines up with the Electron main-process
+     * launch marks (`rfa-launch.jsonl`) and the renderer's navigation timing.
+     *
+     * @return array{started_at_ms: int, elapsed_ms: int}|null
+     */
+    private function requestTiming(): ?array
+    {
+        $startedAt = $_SERVER['REQUEST_TIME_FLOAT'] ?? null;
+
+        if (! is_float($startedAt)) {
+            return null;
+        }
+
+        return [
+            'started_at_ms' => (int) round($startedAt * 1000),
+            'elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+        ];
     }
 
     /** @return array{memory_mb: float, peak_mb: float} */
