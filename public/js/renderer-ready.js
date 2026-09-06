@@ -11,7 +11,9 @@
 })(typeof window !== 'undefined' ? window : null, function () {
     const DEFAULT_TIMEOUT_MS = 4000;
     const POLL_INTERVAL_MS = 100;
-    const REQUIRED_STABLE_FRAMES = 3;
+    // A morph mutates the DOM within one task, so one quiet frame already means
+    // layout is final; the second is the margin for a straggling lazy response.
+    const REQUIRED_STABLE_FRAMES = 2;
     const REQUIRED_FONTS = [
         '400 1em "Space Grotesk"',
         '700 1em "Space Grotesk"',
@@ -115,7 +117,6 @@
         timeline.windowLoadMs = nowMs(root);
 
         // Let Alpine's initialization work reach layout before reading geometry.
-        await nextFrame(root);
         await nextFrame(root);
 
         return new Promise((resolve) => {
@@ -227,10 +228,9 @@
         if (!settled) return false;
 
         // The settled check resolves inside an animation frame callback, before
-        // that frame is painted. Waiting two more frames is a margin, not a
-        // guarantee: one frame commits the settled DOM to the compositor, the
-        // second gives it time to be presented before the window is shown.
-        await nextFrame(root);
+        // that frame is painted. One more frame commits the settled DOM to the
+        // compositor; the main process shows the window on the IPC that follows,
+        // which lands after that frame has been presented.
         await nextFrame(root);
 
         return sendRendererReady(root);
