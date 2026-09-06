@@ -121,14 +121,17 @@ test('phases are the spans between marks and skip spans with a missing end', fun
     $phases = app(LaunchTimelineService::class)->phases([
         'bootstrap' => 120,
         'app.ready' => 500,
+        'php.optimize.started' => 190,
         'php.spawning' => 200,
         'php.listening' => 400,
         'window.presented' => 1710,
+        'php.optimize.finished' => 1900,
     ]);
 
     expect($phases)->toBe([
         'electron: process -> bootstrap' => 120,
         'electron: bootstrap -> app ready' => 380,
+        'php: optimize started -> finished (background)' => 1710,
         'php: spawn -> listening' => 200,
         'total: process -> presented' => 1710,
     ]);

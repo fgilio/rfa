@@ -120,6 +120,8 @@ function retrieveNativePHPConfig() {
         return yield promisify(execFile)(state.php, command, phpOptions);
     });
 }
+function serveApp(secret, apiPort, phpIniSettings) {
+    return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
         if (env.NIGHTWATCH_INGEST_URI && phpNightWatchPort) {
             console.log('Starting Nightwatch server...');
         }

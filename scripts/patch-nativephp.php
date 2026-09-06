@@ -468,13 +468,17 @@ JS;
  * `electron-vite build` bundles directly — it does not run the plugin's `tsc`
  * step):
  *
- *  1. Optimize once per version, then skip the cache step on warm launches.
- *     NativePHP runs `php artisan optimize` synchronously before the PHP server
- *     starts, on every launch. That recompiles all Blade views and re-caches
- *     config/routes/events (~1s) and blocks the window. The compiled caches
- *     persist in the build's bootstrap/cache, so the full optimize is only
- *     needed on a version change (fresh install / post-update) or when a cache
- *     file is missing. On same-version launches the cache step is skipped
+ *  1. Optimize once per version, in the background, and skip the cache step
+ *     on warm launches. NativePHP runs `php artisan optimize` synchronously
+ *     before the PHP server starts, on every launch. That recompiles all Blade
+ *     views and re-caches config/routes/events (~1.7s) and blocks the window.
+ *     The compiled caches persist in the build's bootstrap/cache, so the
+ *     rebuild is only needed on a version change (fresh install / post-update)
+ *     or when a cache file is missing, and then it runs as `rfa:optimize` in a
+ *     background child while the server serves from source: the three cache
+ *     files are written to a staging directory and renamed into place so no
+ *     request ever reads a torn file, and views are compiled without clearing
+ *     the live directory. On same-version launches the cache step is skipped
  *     ENTIRELY: the only per-launch-varying config (the native API port and IPC
  *     secret) is re-read from the live process environment at runtime by
  *     RehydrateNativeRuntimeConfigAction, so the persisted config stays valid
@@ -489,8 +493,8 @@ JS;
  *     (The long-lived server and the optimize/migrate calls already get opcache
  *     via NativeAppServiceProvider::phpIni().)
  *
- * Both edits must land: this returns null unless every one of them is present
- * in the result, so a NativePHP bump that reshapes one block fails the patch
+ * Every edit must land: this returns null unless each of them is present in
+ * the result, so a NativePHP bump that reshapes one block fails the patch
  * set rather than shipping a half-optimized bootstrap.
  *
  * @return string|null the patched content, or null when the expected source
@@ -514,26 +518,27 @@ JS;
     $optimizeReplace = <<<'JS'
         if (shouldOptimize(store)) {
             // [rfa patch] `php artisan optimize` recompiles every Blade view and
-            // re-caches config/routes/events (~1s) and previously ran on every
-            // launch, blocking the window. The compiled caches persist in the
-            // build's bootstrap/cache, so the full optimize is only needed when
-            // the app version changes (fresh install / post-update) or a cache
-            // file is missing.
+            // re-caches config/routes/events (~1.7s). Stock NativePHP ran it on
+            // every launch, blocking the window. The compiled caches persist in
+            // the build's bootstrap/cache, so it is only needed when the app
+            // version changes (fresh install / post-update) or a cache file is
+            // missing, and then it runs in the background while the PHP server
+            // starts and serves: the framework boots from source until the
+            // caches land, a few ms per request, instead of holding the window
+            // for the whole optimize.
             //
-            // On a same-version launch we skip the cache step ENTIRELY — including
-            // the config:cache the earlier RFA patch ran for the fresh per-launch
-            // API port and IPC secret. Those two values are the only per-launch
-            // config that varies, and the app now re-reads them from the live
-            // process environment at runtime (RehydrateNativeRuntimeConfigAction,
-            // wired in bootstrap/app.php via a beforeBootstrapping(RegisterProviders)
+            // On a same-version launch the cache step is skipped ENTIRELY,
+            // including config:cache for the fresh per-launch API port and IPC
+            // secret: the app re-reads those two values from the live process
+            // environment at runtime (RehydrateNativeRuntimeConfigAction, wired
+            // in bootstrap/app.php via a beforeBootstrapping(RegisterProviders)
             // hook that runs before any provider registers), so the persisted
-            // version-cached config stays valid and we avoid a full framework boot
-            // on every warm launch.
+            // version-cached config stays valid.
             //
             // Probe the caches at the directory Laravel actually writes them to
             // for this build type. NativePHP only redirects APP_*_CACHE into
             // userData/bootstrap/cache for a *secure* build; an unsecure build
-            // (what `native:build` produces without a bundle — RFA's shipping
+            // (what `native:build` produces without a bundle, RFA's shipping
             // shape) leaves them at <appPath>/bootstrap/cache. Checking
             // bootstrapCache unconditionally would never find them in an unsecure
             // build, so the gate would trip every launch and pay the full optimize.
@@ -544,59 +549,95 @@ JS;
                 || !existsSync(join(rfaCacheDir, 'routes-v7.php'))
                 || !existsSync(join(rfaCacheDir, 'events.php'));
             if (rfaNeedsFullOptimize) {
-                console.log('Caching views, routes, and config...');
-                let result = callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings);
-                if (result.status !== 0) {
-                    console.error('Failed to cache framework bootstrap:', result.stderr.toString());
-                }
-                else {
+                rfaOptimizeInBackground(rfaCacheDir, rfaVersionChanged, phpOptions, phpIniSettings, () => {
                     store.set('optimized_version', app.getVersion());
-                }
+                });
             }
         }
 JS;
 
-    // The optimize block as the PREVIOUS RFA revision left it: a same-version
-    // launch re-ran `config:cache` via an rfaCommand ternary (no config.php
-    // probe). The stock find above no longer matches such a file, so without
-    // this an already-patched vendor copy would keep paying config:cache every
-    // warm launch. Replacing the whole old block upgrades it to the current
-    // skip-entirely shape, byte-identical to a fresh patch.
-    $oldOptimizeFind = <<<'JS'
-        if (shouldOptimize(store)) {
-            // [rfa patch] `php artisan optimize` recompiles every Blade view
-            // (~1s) and previously ran on every launch, blocking the window.
-            // Compiled views persist in userData and self-heal via on-demand
-            // compilation, so the full optimize is only needed when the app
-            // version changes (fresh install / post-update) or the route/event
-            // caches are missing. On same-version launches we re-cache config
-            // alone: NativePHP injects a fresh per-launch API port and secret
-            // that PHP reads through config(), so a reused config cache would
-            // point the PHP server at a stale port and break the native bridge.
-            //
-            // Probe the route/event caches at the directory Laravel actually
-            // writes them to for this build type. NativePHP only redirects
-            // APP_ROUTES_CACHE/APP_EVENTS_CACHE into userData/bootstrap/cache
-            // for a *secure* build; an unsecure build (what `native:build`
-            // produces without a bundle — RFA's shipping shape) leaves them at
-            // <appPath>/bootstrap/cache. Checking bootstrapCache unconditionally
-            // would never find them in an unsecure build, so the gate would trip
-            // every launch and pay the full optimize anyway.
-            const rfaCacheDir = runningSecureBuild() ? bootstrapCache : join(getAppPath(), 'bootstrap', 'cache');
-            const rfaVersionChanged = store.get('optimized_version') !== app.getVersion();
-            const rfaNeedsFullOptimize = rfaVersionChanged
-                || !existsSync(join(rfaCacheDir, 'routes-v7.php'))
-                || !existsSync(join(rfaCacheDir, 'events.php'));
-            const rfaCommand = rfaNeedsFullOptimize ? 'optimize' : 'config:cache';
-            console.log(rfaNeedsFullOptimize ? 'Caching views, routes, and config...' : 'Refreshing config cache...');
-            let result = callPhpSync(['artisan', rfaCommand], phpOptions, phpIniSettings);
-            if (result.status !== 0) {
-                console.error('Failed to cache framework bootstrap:', result.stderr.toString());
+    // The background runner lives next to serveApp() so the optimize block
+    // stays a gate and a call. It relies on php.js's own imports (fs_extra,
+    // mkdirpSync, join, app, callPhp) so no import line changes.
+    $helperFind = 'function serveApp(secret, apiPort, phpIniSettings) {';
+    $helperMarker = 'function rfaOptimizeInBackground(';
+    $helperReplace = <<<'JS'
+// [rfa patch] The framework caches, rebuilt without blocking the launch.
+//
+// Laravel writes config.php, routes-v7.php, and events.php with a plain
+// file_put_contents and the server `require`s them on every request, so a
+// request landing mid-write would parse a torn file. The child therefore
+// writes them into a staging directory, and each is renamed into place with
+// one atomic rename once the child exits cleanly. Compiled views go straight
+// to the live directory: Blade writes those atomically and skips unchanged
+// ones, and rfa:optimize never clears the directory the running server reads
+// (view:cache does, which is why plain `optimize` is not used here).
+//
+// After a version change the caches left by the previous version are removed
+// before the server spawns, so the new code never boots against them. That
+// includes the compiled views: Blade and Livewire both keep a compiled file
+// while it is newer than its source, and a build's sources predate whatever
+// the previous version compiled, so a stale view would otherwise be served
+// for as long as it is not recompiled.
+const rfaStagedCaches = {
+    APP_CONFIG_CACHE: 'config.php',
+    APP_ROUTES_CACHE: 'routes-v7.php',
+    APP_EVENTS_CACHE: 'events.php',
+};
+function rfaOptimizeInBackground(cacheDir, versionChanged, phpOptions, phpIniSettings, onOptimized) {
+    const stagingDir = join(cacheDir, 'rfa-staging');
+    const env = Object.assign({}, phpOptions.env);
+    try {
+        fs_extra.removeSync(stagingDir);
+        mkdirpSync(stagingDir);
+        Object.keys(rfaStagedCaches).forEach((key) => {
+            env[key] = join(stagingDir, rfaStagedCaches[key]);
+            if (versionChanged) {
+                fs_extra.removeSync(join(cacheDir, rfaStagedCaches[key]));
             }
-            else if (rfaNeedsFullOptimize) {
-                store.set('optimized_version', app.getVersion());
-            }
+        });
+        if (versionChanged) {
+            fs_extra.emptyDirSync(join(storagePath, 'framework', 'views'));
         }
+    }
+    catch (error) {
+        console.error('Failed to prepare the framework cache staging directory:', error);
+        return;
+    }
+    console.log('Caching views, routes, and config in the background...');
+    globalThis.__rfaLaunchMark?.('php.optimize.started');
+    const child = callPhp(['artisan', 'rfa:optimize'], { cwd: phpOptions.cwd, env }, phpIniSettings);
+    let stderr = '';
+    child.stdout.on('data', () => { });
+    child.stderr.on('data', (data) => { stderr += data.toString(); });
+    const stopWithApp = () => child.kill();
+    app.once('before-quit', stopWithApp);
+    child.on('error', (error) => {
+        app.removeListener('before-quit', stopWithApp);
+        console.error('Failed to start the framework cache rebuild:', error);
+    });
+    child.on('exit', (code) => {
+        app.removeListener('before-quit', stopWithApp);
+        globalThis.__rfaLaunchMark?.('php.optimize.finished');
+        if (code !== 0) {
+            if (code !== null) {
+                console.error('Failed to cache framework bootstrap:', stderr);
+            }
+            return;
+        }
+        try {
+            Object.values(rfaStagedCaches).forEach((file) => {
+                fs_extra.renameSync(join(stagingDir, file), join(cacheDir, file));
+            });
+            fs_extra.removeSync(stagingDir);
+            onOptimized();
+        }
+        catch (error) {
+            console.error('Failed to install the framework caches:', error);
+        }
+    });
+}
+function serveApp(secret, apiPort, phpIniSettings) {
 JS;
 
     // Create the opcache file-cache directory at module load, before any PHP
@@ -630,11 +671,8 @@ JS;
         $patched = str_replace($optimizeFind, $optimizeReplace, $patched);
     }
 
-    // Upgrade a file left patched by the previous RFA revision in place. Only one
-    // of these two finds can match (stock OR old-patched), so this never double-
-    // applies; on the current shape neither matches.
-    if (str_contains($patched, $oldOptimizeFind)) {
-        $patched = str_replace($oldOptimizeFind, $optimizeReplace, $patched);
+    if (str_contains($patched, $helperFind) && ! str_contains($patched, $helperMarker)) {
+        $patched = str_replace($helperFind, $helperReplace, $patched);
     }
 
     if (str_contains($patched, $mkdirFind) && ! str_contains($patched, '[rfa opcache] persistent opcode cache dir')) {
@@ -646,18 +684,17 @@ JS;
         $patched = str_replace($preflightFind, $preflightReplace, $patched);
     }
 
-    // Only report success when every edit is present in the result. The config.php
-    // probe is the marker UNIQUE to the current skip-entirely shape — requiring it
-    // (not just `rfaNeedsFullOptimize`, which the previous revision also had) means
-    // a file still carrying the old config:cache warm-launch branch is treated as
-    // not-yet-patched rather than mis-reported as already_patched. The two opcache
-    // markers are each UNIQUE to their edit: the mkdir comment proves the cache
-    // directory is created, and the pre-flight banner (×2) proves both retrieve*
-    // helpers reuse it. (`'framework', 'opcache'` alone would be ambiguous — the
-    // pre-flight `opcache.file_cache=…` path contains that same substring, so a
-    // file with only the pre-flight edit could mis-report as fully patched while
+    // Only report success when every edit is present in the result. The
+    // background call and the helper are the markers of the optimize edit. The
+    // two opcache markers are each UNIQUE to their edit: the mkdir comment
+    // proves the cache directory is created, and the pre-flight banner (x2)
+    // proves both retrieve* helpers reuse it.
+    // (`'framework', 'opcache'` alone would be ambiguous: the pre-flight
+    // `opcache.file_cache=...` path contains that same substring, so a file
+    // with only the pre-flight edit could mis-report as fully patched while
     // the cache directory is never created.)
-    $fullyPatched = str_contains($patched, "existsSync(join(rfaCacheDir, 'config.php'))")
+    $fullyPatched = str_contains($patched, 'rfaOptimizeInBackground(rfaCacheDir, rfaVersionChanged, phpOptions, phpIniSettings')
+        && str_contains($patched, $helperMarker)
         && str_contains($patched, 'rfaNeedsFullOptimize')
         && str_contains($patched, '[rfa opcache] persistent opcode cache dir')
         && substr_count($patched, '[rfa opcache] reuse compiled opcode') === 2;
@@ -1615,6 +1652,7 @@ const rfaLaunch = {
     marks: [],
     flushed: false,
     flushTimer: null,
+    deadline: Infinity,
 };
 function rfaLaunchMark(name) {
     if (rfaLaunch.flushed) {
@@ -1626,8 +1664,17 @@ function rfaLaunchMark(name) {
         rfaLaunch.flushTimer = setTimeout(rfaLaunchFlush, 1500);
     }
 }
+function rfaLaunchMarked(name) {
+    return rfaLaunch.marks.some((mark) => mark.name === name);
+}
 function rfaLaunchFlush() {
     if (rfaLaunch.flushed) {
+        return;
+    }
+    // A background cache rebuild outlives the presented window; hold the
+    // line for its finish mark, but never past the deadline.
+    if (Date.now() < rfaLaunch.deadline && rfaLaunchMarked('php.optimize.started') && !rfaLaunchMarked('php.optimize.finished')) {
+        rfaLaunch.flushTimer = setTimeout(rfaLaunchFlush, 500);
         return;
     }
     rfaLaunch.flushed = true;
@@ -1699,6 +1746,7 @@ JS;
     NativePHP.prototype[method] = function (...args) {
         if (when === 'before') {
             rfaLaunchMark(mark);
+            rfaLaunch.deadline = Date.now() + 60000;
             rfaLaunch.flushTimer = setTimeout(rfaLaunchFlush, 60000);
         }
         const result = original.apply(this, args);
@@ -1756,10 +1804,6 @@ JS;
 function rfaPatchLaunchTimelineServer(string $content): ?string
 {
     $edits = [
-        [
-            "                let result = callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings);\n",
-            "                globalThis.__rfaLaunchMark?.('php.optimize.started'); // [rfa launch timeline]\n                let result = callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings);\n                globalThis.__rfaLaunchMark?.('php.optimize.finished');\n",
-        ],
         [
             "            let result = callPhpSync(['artisan', 'migrate', '--force'], phpOptions, phpIniSettings);\n",
             "            globalThis.__rfaLaunchMark?.('php.migrate.started'); // [rfa launch timeline]\n            let result = callPhpSync(['artisan', 'migrate', '--force'], phpOptions, phpIniSettings);\n            globalThis.__rfaLaunchMark?.('php.migrate.finished');\n",
