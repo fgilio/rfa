@@ -42,7 +42,7 @@ When copying the SQLite file while the app is running, copy `database.sqlite`, `
 
 ## Cold-launch timeline
 
-Every launch writes one line to `<storage>/logs/rfa-launch.jsonl` from the Electron main process (marks in ms since process creation: PHP spawn, listening, warm, splash, booted handshake, window open, load, renderer-ready, presented). The PHP side stamps its breadcrumbs in `rfa-diagnostics.jsonl` with the request start (`request.started_at_ms`), and the renderer posts a `launch` browser sample with navigation timing and the settle sub-marks. The file rotates at 1MB.
+Every launch writes one line to `<storage>/logs/rfa-launch.jsonl` from the Electron main process (marks in ms since process creation: PHP spawn, listening, warm, splash, booted handshake, window open, load, renderer-ready, presented). The PHP side stamps its breadcrumbs in `rfa-diagnostics.jsonl` with the request start (a `request` object holding `started_at_ms` and `elapsed_ms`), and the renderer posts a `launch` browser sample with navigation timing and the settle sub-marks. The file rotates at 1MB.
 
 Read the three as one timeline (defaults to the installed app's log directory, medians over the last launches):
 

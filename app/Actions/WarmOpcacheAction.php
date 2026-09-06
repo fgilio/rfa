@@ -13,7 +13,9 @@ use Throwable;
  * Pre-compiles the scripts a page load needs into opcache shared memory.
  *
  * Called by the Electron main process right after the PHP server starts,
- * before the window and its first page request exist.
+ * before the window and its first page request exist. The result is also
+ * left as a diagnostics breadcrumb for the launch report, because the
+ * packaged log level hides the canonical info event.
  */
 final readonly class WarmOpcacheAction
 {
@@ -62,9 +64,6 @@ final readonly class WarmOpcacheAction
 
             Log::info('opcache.warmed');
 
-            // The launch report reads this from the diagnostics log; the
-            // canonical event above lands in the app log, whose packaged
-            // level hides info events.
             $this->diagnostics->handle('opcache.warmed', [...$result, 'outcome' => $outcome, 'duration_ms' => $durationMs]);
         }
 
