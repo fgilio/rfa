@@ -181,6 +181,38 @@ describe('renderer readiness', () => {
         expect(window.nativeRendererReady).not.toHaveBeenCalled();
     });
 
+    it('signals on the fourth frame: one for layout, two quiet checks, one commit', async () => {
+        let frames = 0;
+        window.requestAnimationFrame = (callback) => window.setTimeout(() => {
+            frames += 1;
+            callback();
+        }, 16);
+
+        const readiness = signalWhenSettled(window, 1000);
+
+        await vi.advanceTimersByTimeAsync(48);
+        expect(window.nativeRendererReady).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(16);
+        expect(window.nativeRendererReady).toHaveBeenCalledOnce();
+        expect(frames).toBe(4);
+        expect(await readiness).toBe(true);
+    });
+
+    it('restarts the quiet-frame count when the DOM changes between checks', async () => {
+        const readiness = signalWhenSettled(window, 1000);
+
+        await vi.advanceTimersByTimeAsync(40);
+        document.body.appendChild(document.createElement('div'));
+
+        await vi.advanceTimersByTimeAsync(24);
+        expect(window.nativeRendererReady).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(16);
+        expect(window.nativeRendererReady).toHaveBeenCalledOnce();
+        expect(await readiness).toBe(true);
+    });
+
     it('starts once after Livewire finishes initialization', async () => {
         expect(install(window, { timeoutMs: 1000 })).toBe(true);
         expect(install(window, { timeoutMs: 1000 })).toBe(false);
