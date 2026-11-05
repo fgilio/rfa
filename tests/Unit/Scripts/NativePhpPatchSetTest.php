@@ -72,7 +72,7 @@ function distSnapshot(string $root): array
 
 test('the patch set covers every vendored file rfa depends on', function () {
     expect(collect(rfaNativePhpPatchSet())->pluck('name')->all())
-        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'lazy-updater-api', 'updater-check-retry', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path', 'early-bootstrap-entry']);
+        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'quit-after-cleanup', 'lazy-updater-api', 'updater-check-retry', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path', 'early-bootstrap-entry']);
 });
 
 test('the dist root points at the vendored electron plugin', function () {
@@ -95,7 +95,7 @@ test('applies every patch in one run', function () {
 
     $outcome = applyPatchSet($root);
 
-    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'lazy-updater-api', 'updater-check-retry', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path', 'early-bootstrap-entry'])
+    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'quit-after-cleanup', 'lazy-updater-api', 'updater-check-retry', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path', 'early-bootstrap-entry'])
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['absent'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();

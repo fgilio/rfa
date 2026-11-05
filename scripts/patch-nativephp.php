@@ -1804,6 +1804,41 @@ JS;
 }
 
 /**
+ * Quit on the next tick after the before-quit cleanup (`dist/index.js`).
+ *
+ * The stock handler cancels the first quit, stops PHP, and quits again from
+ * the same handler chain. When the first quit came from the Quit menu item
+ * (Cmd+Q), macOS is still settling the cancelled quit, so the second one
+ * closes the windows and leaves the process running with no window.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchQuitAfterCleanup(string $content): ?string
+{
+    $find = <<<'JS'
+                yield new Promise((resolve) => setTimeout(resolve, 200));
+            }
+            app.quit();
+        }));
+JS;
+    $replace = <<<'JS'
+                yield new Promise((resolve) => setTimeout(resolve, 200));
+            }
+            // [rfa quit after cleanup] A quit requested while macOS settles the
+            // cancelled one closes the windows but never exits the process.
+            setTimeout(() => app.quit(), 0);
+        }));
+JS;
+
+    if (str_contains($content, $find)) {
+        return str_replace($find, $replace, $content);
+    }
+
+    return str_contains($content, $replace) ? $content : null;
+}
+
+/**
  * Require electron-updater on first use in the updater API router
  * (`dist/server/api/autoUpdater.js`).
  *
@@ -2433,6 +2468,12 @@ function rfaNativePhpPatchSet(): array
             'file' => 'index.js',
             'apply' => rfaPatchLazyUpdater(...),
             'summary' => 'electron-updater loads when the updater starts, not before bootstrap',
+        ],
+        [
+            'name' => 'quit-after-cleanup',
+            'file' => 'index.js',
+            'apply' => rfaPatchQuitAfterCleanup(...),
+            'summary' => 'Cmd+Q exits the app after PHP stops instead of leaving it running without a window',
         ],
         [
             'name' => 'lazy-updater-api',
