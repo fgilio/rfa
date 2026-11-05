@@ -146,8 +146,17 @@ jobs:
       - run: php artisan key:generate
       # No `migrate` step: browser tests use DB_DATABASE=:memory: from phpunit.xml,
       # and Pest spins the test server up in-process so it inherits that env.
+      - name: DIAG instrument
+        run: php .github/diag/instrument.php
       - name: Run browser tests (shard ${{ matrix.shard }}/5)
+        env:
+          PEST_DIAG_LOG: /tmp/pest-diag.log
         run: ./vendor/bin/pest --testsuite=Browser --shard=${{ matrix.shard }}/5 --parallel --compact
+      - name: DIAG log
+        if: always()
+        run: |
+          nproc; free -m; uptime
+          sort /tmp/pest-diag.log || true
       - name: Upload browser screenshots on failure
         if: failure()
         uses: actions/upload-artifact@v4
