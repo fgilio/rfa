@@ -925,6 +925,29 @@ test('lazy updater: leaves the earlier index.js patches idempotent', function ()
     }
 });
 
+// ===== quit after cleanup: index.js =====
+
+test('quit after cleanup: reports a shape change when the before-quit handler is missing', function () {
+    expect(rfaPatchQuitAfterCleanup(stockIndex()))->toBeNull();
+});
+
+test('quit after cleanup: quits on the next tick after the before-quit cleanup', function () {
+    $content = (string) rfaPatchQuitAfterCleanup(stockIndexForSplash());
+
+    expect($content)
+        ->toContain('[rfa quit after cleanup]')
+        ->toContain("            setTimeout(() => app.quit(), 0);\n        }));")
+        ->not->toContain("            }\n            app.quit();\n        }));")
+        // The guard that lets the second quit through stays in place.
+        ->toContain("if (this.quitting) {\n                return;");
+});
+
+test('quit after cleanup: leaves patched content unchanged', function () {
+    $content = (string) rfaPatchQuitAfterCleanup(stockIndexForSplash());
+
+    expect(rfaPatchQuitAfterCleanup($content))->toBe($content);
+});
+
 test('lazy updater api: reports a shape change when the router head is missing', function () {
     expect(rfaPatchLazyUpdaterApi('const reshaped = true;'))->toBeNull();
 });

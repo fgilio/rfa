@@ -270,6 +270,20 @@ import electronUpdater from 'electron-updater';
 const { autoUpdater } = electronUpdater;
 class NativePHP {
     registerListeners(app) {
+        app.on('before-quit', (event) => __awaiter(this, void 0, void 0, function* () {
+            if (this.quitting) {
+                return;
+            }
+            this.quitting = true;
+            event.preventDefault();
+            this.killChildProcesses();
+            stopAllProcesses();
+            const deadline = Date.now() + 12000;
+            while (Object.keys(state.processes).length > 0 && Date.now() < deadline) {
+                yield new Promise((resolve) => setTimeout(resolve, 200));
+            }
+            app.quit();
+        }));
         app.on("browser-window-created", (_, window) => {
             optimizer.watchWindowShortcuts(window);
         });
