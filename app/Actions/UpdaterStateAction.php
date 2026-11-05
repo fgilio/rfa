@@ -7,10 +7,10 @@ namespace App\Actions;
 use App\Services\UpdaterStateService;
 
 /**
- * The updater's one entry point for every interface: the native provider's
- * event listeners, the "Check for Updates..." menu item, and the update
- * banner in the renderer. Each of them reports what happened and reads back
- * the same view snapshot; none of them touches the cache.
+ * The updater's one entry point for every interface: the "Check for
+ * Updates..." menu item and the update banner in the renderer. Each of them
+ * reports what happened and reads back the same view snapshot; none of them
+ * touches the cache.
  *
  * @phpstan-type UpdaterViewSnapshot array{status: ?string, version: ?string, releaseNotes: ?string, downloadPercent: int}
  */

@@ -50,6 +50,8 @@ Default owner heuristic:
 
 Child services may emit warnings for recoverable failures, but they should not emit a second canonical info event for the same operation.
 
+**[Agent MUST]** Every NativePHP event listener is an auto-discovered class in `app/Listeners/`. `NativeAppServiceProvider::boot()` runs only in the booted request, and Electron delivers each later event in a fresh request, so an `Event::listen()` closure registered there never sees it.
+
 ## Scope
 
 These rules apply to production paths:
@@ -369,7 +371,9 @@ Log::warning('git.diff.failed', [
 Listener-owned unit that stays canonical on the failure path (diagnostic `Log::error()` plus a canonical `Log::info()` of the same name from `finally`):
 
 ```php
-Event::listen(UpdateError::class, function (UpdateError $event) {
+// app/Listeners/RecordUpdaterOutcome.php
+public function handleUpdateError(UpdateError $event): void
+{
     Context::flush();
 
     $startedAt = microtime(true);
@@ -387,7 +391,7 @@ Event::listen(UpdateError::class, function (UpdateError $event) {
         Context::add('rfa.duration_ms', (int) round((microtime(true) - $startedAt) * 1000));
         Log::info('updater.failed');
     }
-});
+}
 ```
 
 ## Anti-Patterns

@@ -12,12 +12,10 @@ use Illuminate\Support\Facades\Cache;
 /**
  * The single owner of auto-updater state.
  *
- * Updater events reach the app through two processes — the main process
- * (`NativeAppServiceProvider`, `HandleMenuItemClicked`) and the renderer
- * (the update banner's `native:` listeners) — and both used to write the
- * cache themselves, each repeating the key, the per-status TTL and the
- * normalization. Everything that decides what a state *is* lives here now;
- * callers only say what happened.
+ * State changes come from the "Check for Updates..." menu item
+ * (`HandleMenuItemClicked`) and from the update banner's `native:` listeners,
+ * which receive every updater event. Everything that decides what a state
+ * *is* lives here. Callers only say what happened.
  */
 final class UpdaterStateService
 {
