@@ -24,10 +24,14 @@ beforeEach(function () {
     });
 });
 
-test('updater events are handled outside the booted-request provider', function () {
+test('native events are handled outside the booted-request provider', function () {
     $source = (string) file_get_contents((new ReflectionClass(NativeAppServiceProvider::class))->getFileName());
 
-    expect($source)->not->toContain('Native\\Desktop\\Events\\AutoUpdater');
+    // boot() runs only in the booted request. Electron delivers every later
+    // event in a fresh request, so a listener registered there never runs.
+    expect($source)
+        ->not->toContain('Event::listen')
+        ->not->toContain('Native\\Desktop\\Events\\');
 });
 
 test('dev compiled view cleanup does not clear persisted updater state', function () {

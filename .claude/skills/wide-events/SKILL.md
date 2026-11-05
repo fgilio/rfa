@@ -50,7 +50,7 @@ Default owner heuristic:
 
 Child services may emit warnings for recoverable failures, but they should not emit a second canonical info event for the same operation.
 
-**[Agent MUST]** A NativePHP listener that logs is an auto-discovered class in `app/Listeners/`. `NativeAppServiceProvider::boot()` runs only in the booted request, and Electron delivers each later event in a fresh request, so an `Event::listen()` closure registered there never sees it.
+**[Agent MUST]** Every NativePHP event listener is an auto-discovered class in `app/Listeners/`. `NativeAppServiceProvider::boot()` runs only in the booted request, and Electron delivers each later event in a fresh request, so an `Event::listen()` closure registered there never sees it.
 
 ## Scope
 

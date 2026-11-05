@@ -9,16 +9,12 @@ use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveStartupRouteAction;
 use App\Actions\ZoomWindowAction;
 use App\Console\Benchmark\BenchmarkIsolation;
-use App\Listeners\UnregisterNativeGlobalShortcuts;
 use App\Support\Shortcuts;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Context;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Native\Desktop\Contracts\ProvidesPhpIni;
-use Native\Desktop\Events\Windows\WindowClosed;
-use Native\Desktop\Facades\App;
 use Native\Desktop\Facades\Menu;
 use Native\Desktop\Facades\Window;
 use Throwable;
@@ -34,7 +30,6 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         $this->ensureNativeDevelopmentDatabaseIsMigrated();
         $this->clearCompiledViewsForDev();
 
-        $this->registerNativeEventListeners();
         $this->createMenu();
         $this->createWindow();
         $this->processInbox();
@@ -46,25 +41,6 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             'sapi' => PHP_SAPI,
             'entry' => basename((string) ($_SERVER['argv'][0] ?? 'unknown')),
         ]);
-    }
-
-    /**
-     * Listeners registered here live only for the booted request. Electron
-     * delivers later events in fresh requests that never call boot(), so a
-     * reaction that must run belongs in an auto-discovered app/Listeners class.
-     */
-    private function registerNativeEventListeners(): void
-    {
-        Event::listen(WindowClosed::class, function (WindowClosed $event) {
-            app(RecordRuntimeDiagnosticAction::class)->handle('window.closed', [
-                'id' => $event->id,
-            ]);
-
-            if ($event->id === 'main') {
-                UnregisterNativeGlobalShortcuts::unregister();
-                App::quit();
-            }
-        });
     }
 
     private function createWindow(): void
