@@ -1,11 +1,13 @@
 <?php
 
 use App\Services\RuntimeDiagnosticsService;
+use Carbon\CarbonImmutable;
 use Tests\TestCase;
 
 uses(TestCase::class);
 
 beforeEach(function () {
+    $this->originalRequestStartedAt = $_SERVER['REQUEST_TIME_FLOAT'];
     $this->diagnosticsDir = sys_get_temp_dir().'/rfa-diagnostics-test-'.getmypid().'-'.uniqid('', true);
     $this->diagnosticsPath = $this->diagnosticsDir.'/diagnostics.jsonl';
 
@@ -18,6 +20,8 @@ beforeEach(function () {
 });
 
 afterEach(function () {
+    $_SERVER['REQUEST_TIME_FLOAT'] = $this->originalRequestStartedAt;
+
     foreach (glob($this->diagnosticsPath.'*') ?: [] as $path) {
         @unlink($path);
     }
@@ -50,16 +54,32 @@ test('breadcrumb writes one json line with php memory context', function () {
         ->and(strlen($entry['context']['long']))->toBeLessThanOrEqual(500);
 });
 
-test('breadcrumb stamps the request start and elapsed time in epoch milliseconds', function () {
-    $requestStartedAt = $_SERVER['REQUEST_TIME_FLOAT'];
+test('breadcrumb stamps the request start and elapsed time in epoch milliseconds', function (float $secondsSinceRequestStart, int $expectedElapsedMs) {
+    $now = CarbonImmutable::parse('2026-01-15 10:00:00.500000');
+    $this->travelTo($now);
+    $_SERVER['REQUEST_TIME_FLOAT'] = $now->getPreciseTimestamp(6) / 1_000_000 - $secondsSinceRequestStart;
 
     app(RuntimeDiagnosticsService::class)->breadcrumb('review.opened');
 
     $entry = json_decode(trim((string) file_get_contents($this->diagnosticsPath)), true);
 
-    expect($entry['request']['started_at_ms'])->toBe((int) round($requestStartedAt * 1000))
-        ->and($entry['request']['elapsed_ms'])->toBeGreaterThanOrEqual(0)
-        ->and($entry['request']['elapsed_ms'])->toBeLessThan(60_000);
+    expect($entry['request'])->toBe([
+        'started_at_ms' => $now->getTimestampMs() - $expectedElapsedMs,
+        'elapsed_ms' => $expectedElapsedMs,
+    ]);
+})->with([
+    'short request' => [1.234, 1_234],
+    'long-running process' => [7_200.0, 7_200_000],
+]);
+
+test('breadcrumb omits request timing when the request start is unknown', function () {
+    unset($_SERVER['REQUEST_TIME_FLOAT']);
+
+    app(RuntimeDiagnosticsService::class)->breadcrumb('review.opened');
+
+    $entry = json_decode(trim((string) file_get_contents($this->diagnosticsPath)), true);
+
+    expect($entry['request'])->toBeNull();
 });
 
 test('disabled diagnostics do not touch the filesystem', function () {
