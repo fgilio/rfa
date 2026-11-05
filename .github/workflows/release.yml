@@ -71,6 +71,24 @@ jobs:
       - name: Set repository in electron package.json
         run: node -e "const f='vendor/nativephp/desktop/resources/electron/package.json';const p=JSON.parse(require('fs').readFileSync(f));p.repository='github:fgilio/rfa';require('fs').writeFileSync(f,JSON.stringify(p,null,4))"
 
+      # native:build runs `npm ci` here once, with no retry, and the Electron
+      # postinstall downloads its binary from GitHub. Installing first, with
+      # retries, puts the binary in the Electron cache so that run needs no network.
+      - name: Install Electron dependencies
+        shell: bash
+        working-directory: vendor/nativephp/desktop/resources/electron
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if npm ci --no-audit --no-fund; then
+              exit 0
+            fi
+            echo "::warning::npm ci failed (attempt $attempt of 3)."
+            sleep $((attempt * 20))
+          done
+          echo "::error::npm ci failed 3 times."
+          exit 1
+
       # electron-builder's GitHub publisher creates a draft release per artifact when none
       # exists yet: getOrCreateRelease() lists releases, and only when no draft matches the
       # tag does it call createRelease(). With several artifacts (zip, dmg, their blockmaps,
@@ -91,7 +109,12 @@ jobs:
           # expanded before the shell parses it, executing attacker-controlled code.
           tag="${GITHUB_REF_NAME}"
           version="${tag#v}"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          # A draft has no tag until it is published, so `gh release view <tag>`
+          # misses it. Match on tag_name across every release instead, so a
+          # re-run reuses the draft an earlier attempt created.
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --slurp \
+            | jq --arg tag "$tag" '[.[][] | select(.tag_name == $tag)] | length')
+          if [ "$existing" -gt 0 ]; then
             echo "Release for $tag already exists; reusing it."
           else
             gh release create "$tag" \
@@ -114,7 +137,28 @@ jobs:
           NATIVEPHP_APPLE_TEAM_ID: ${{ secrets.NATIVEPHP_APPLE_TEAM_ID }}
           ELECTRON_CACHE: ~/Library/Caches/electron
           ELECTRON_BUILDER_CACHE: ~/Library/Caches/electron-builder
-        run: php artisan native:build mac arm64 --publish --no-interaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          php artisan native:build mac arm64 --publish --no-interaction
+
+          # native:build exits 0 even when its `npm ci` or electron-builder run
+          # fails, so check that the build wrote every artifact it publishes.
+          version="${GITHUB_REF_NAME#v}"
+          dist="nativephp/electron/dist"
+          missing=()
+          for artifact in \
+            "latest-mac.yml" \
+            "rfa-${version}-arm64.zip" \
+            "rfa-${version}-arm64.zip.blockmap" \
+            "rfa-${version}-arm64.dmg" \
+            "rfa-${version}-arm64.dmg.blockmap"; do
+            [ -f "$dist/$artifact" ] || missing+=("$artifact")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::native:build did not produce: ${missing[*]}. Look for the npm or electron-builder error above."
+            exit 1
+          fi
 
       # Defense in depth: even with the pre-created draft, fail loudly if the publish didn't
       # land exactly one release carrying every expected artifact. A split or a dropped upload
