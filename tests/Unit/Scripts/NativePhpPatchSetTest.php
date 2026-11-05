@@ -72,7 +72,7 @@ function distSnapshot(string $root): array
 
 test('the patch set covers every vendored file rfa depends on', function () {
     expect(collect(rfaNativePhpPatchSet())->pluck('name')->all())
-        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'lazy-updater-api', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path', 'early-bootstrap-entry']);
+        ->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'lazy-updater-api', 'updater-check-retry', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path', 'early-bootstrap-entry']);
 });
 
 test('the dist root points at the vendored electron plugin', function () {
@@ -95,7 +95,7 @@ test('applies every patch in one run', function () {
 
     $outcome = applyPatchSet($root);
 
-    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'lazy-updater-api', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path', 'early-bootstrap-entry'])
+    expect($outcome['applied'])->toBe(['preload-file-bridge', 'preload-renderer-ready', 'window-theme', 'renderer-ready-window', 'launch-timeline-window', 'server-optimize', 'server-workers', 'launch-timeline-server', 'lazy-axios-preload', 'warm-on-spawn', 'cookie-after-ready', 'lazy-axios', 'preflight-cache', 'splash-window', 'resolved-appearance', 'early-php-boot', 'launch-timeline', 'lazy-updater', 'lazy-updater-api', 'updater-check-retry', 'lazy-context-menu', 'php-extraction', 'php-build-wait', 'cached-shell-path', 'early-bootstrap-entry'])
         ->and($outcome['blocked'])->toBeEmpty()
         ->and($outcome['absent'])->toBeEmpty()
         ->and($outcome['error'])->toBeNull();
@@ -122,7 +122,9 @@ test('applies every patch in one run', function () {
     expect(file_get_contents($root.'/server/utils.js'))
         ->toContain('yield app.whenReady(); // [rfa cookie after ready]')
         ->toContain('globalThis.__rfaPreloadExternals = rfaLoadAxios;');
-    expect(file_get_contents($root.'/server/api/autoUpdater.js'))->toContain('export function rfaAutoUpdater() {');
+    expect(file_get_contents($root.'/server/api/autoUpdater.js'))
+        ->toContain('export function rfaAutoUpdater() {')
+        ->toContain('rfaForwardUpdaterErrors(autoUpdater, (error) => { // [rfa updater-check-retry]');
     expect(file_get_contents($root.'/server/api/contextMenu.js'))->toContain('import("electron-context-menu")');
     expect(file_get_contents($root.'/../../src/main/index.js'))->toContain('rfaInheritShellPath();');
     expect(file_get_contents($root.'/index.js'))

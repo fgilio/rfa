@@ -1887,6 +1887,95 @@ JS;
 }
 
 /**
+ * Retry update checks that fail on a transient network or GitHub error
+ * before the error reaches Laravel (`dist/server/api/autoUpdater.js`).
+ *
+ * GitHub answers the release feed with short-lived 5xx and 429 responses,
+ * which the update banner reported as a failed check. While a check is in
+ * progress, such an error schedules `checkForUpdates()` again with backoff.
+ * Laravel hears the error only once the retries run out, or at once for any
+ * other error and for every error after the check (a failed download). Runs
+ * after `lazy-updater-api`, whose forwarding listener it wraps.
+ *
+ * @return string|null the patched content, or null when the expected source
+ *                     shape is gone
+ */
+function rfaPatchUpdaterCheckRetry(string $content): ?string
+{
+    $listenerFind = "    autoUpdater.addListener('error', (error) => {\n";
+    $listenerReplace = "    rfaForwardUpdaterErrors(autoUpdater, (error) => { // [rfa updater-check-retry]\n";
+    $routerEnd = "\nexport default router;";
+    $helper = <<<'JS'
+// [rfa updater-check-retry] Milliseconds to wait before each retry of a check
+// that failed on a transient error. Laravel hears the error after the last one.
+const RFA_CHECK_RETRY_DELAYS = [2000, 5000, 15000];
+function rfaIsTransientUpdaterError(error) {
+    const statusCode = error?.statusCode;
+    if (statusCode === 429 || (statusCode >= 500 && statusCode <= 599)) {
+        return true;
+    }
+    // A check error wraps the HTTP or network error in its message.
+    return /HttpError: (5\d\d|429)\b|net::ERR_|\b(ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN)\b/
+        .test(`${error?.code ?? ''} ${error?.message ?? error}`);
+}
+function rfaForwardUpdaterErrors(autoUpdater, forwardError) {
+    let isChecking = false;
+    let failedChecks = 0;
+    let retryTimer = null;
+    // A check started by hand during the backoff replaces the pending retry
+    // and counts against the same attempts.
+    autoUpdater.addListener("checking-for-update", () => {
+        isChecking = true;
+        clearTimeout(retryTimer);
+        retryTimer = null;
+    });
+    const finishCheck = () => {
+        isChecking = false;
+        failedChecks = 0;
+    };
+    autoUpdater.addListener('update-available', finishCheck);
+    autoUpdater.addListener('update-not-available', finishCheck);
+    autoUpdater.addListener('error', (error, description) => {
+        // electron-updater describes a failed check this way. A download
+        // started earlier can fail while a check is in progress.
+        const isCheckError = isChecking
+            && typeof description === 'string'
+            && description.startsWith('Cannot check for updates:');
+        if (!isCheckError) {
+            forwardError(error);
+            return;
+        }
+        isChecking = false;
+        if (failedChecks >= RFA_CHECK_RETRY_DELAYS.length || !rfaIsTransientUpdaterError(error)) {
+            failedChecks = 0;
+            forwardError(error);
+            return;
+        }
+        retryTimer = setTimeout(() => {
+            retryTimer = null;
+            // The 'error' event reports a failed retry, so the rejection is handled.
+            autoUpdater.checkForUpdates().catch(() => {});
+        }, RFA_CHECK_RETRY_DELAYS[failedChecks]);
+        failedChecks += 1;
+    });
+}
+JS;
+
+    if (! str_contains($content, $listenerReplace) && substr_count($content, $listenerFind) === 1) {
+        $content = str_replace($listenerFind, $listenerReplace, $content);
+    }
+
+    if (! str_contains($content, $helper) && substr_count($content, $routerEnd) === 1) {
+        $content = str_replace($routerEnd, "\n".$helper.$routerEnd, $content);
+    }
+
+    $fullyPatched = str_contains($content, $listenerReplace)
+        && str_contains($content, $helper);
+
+    return $fullyPatched ? $content : null;
+}
+
+/**
  * Load electron-context-menu when the first context menu is installed
  * (`dist/server/api/contextMenu.js`).
  *
@@ -2350,6 +2439,12 @@ function rfaNativePhpPatchSet(): array
             'file' => 'server/api/autoUpdater.js',
             'apply' => rfaPatchLazyUpdaterApi(...),
             'summary' => 'updater API requires electron-updater on first use and forwards events from then on',
+        ],
+        [
+            'name' => 'updater-check-retry',
+            'file' => 'server/api/autoUpdater.js',
+            'apply' => rfaPatchUpdaterCheckRetry(...),
+            'summary' => 'update checks retry transient GitHub and network errors before reporting them',
         ],
         [
             'name' => 'lazy-context-menu',
