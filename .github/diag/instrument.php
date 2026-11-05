@@ -36,5 +36,17 @@ $s = str_replace(
     $s, $count4);
 file_put_contents($server, $s);
 
+$manager = "$base/ServerManager.php";
+$s = file_get_contents($manager);
+$s = str_replace("'.'.DIRECTORY_SEPARATOR.'node_modules'", "'exec .'.DIRECTORY_SEPARATOR.'node_modules'", $s);
+$s = str_replace("--mode launchServer',", "--mode launchServer 2>>/tmp/pw-server.log',", $s, $count5);
+file_put_contents($manager, $s);
+
+$client = "$base/Playwright/Client.php";
+$s = file_get_contents($client);
+$s = str_replace("                \$__log('ERR '", "                file_put_contents($log, shell_exec('date +%T.%N; uptime; ps -eo pid,ppid,etime,pcpu,rss,stat,args --sort=-pcpu | cut -c1-200 | head -40'), FILE_APPEND);\n                \$__log('ERR '", $s, $count6);
+file_put_contents($client, $s);
+
+echo "patched: $count5 $count6\n";
 echo "patched: $count1 $count2 $count3 $count4\n";
-exit($count1 && $count2 && $count3 && $count4 ? 0 : 1);
+exit($count1 && $count2 && $count3 && $count4 && $count5 && $count6 ? 0 : 1);
