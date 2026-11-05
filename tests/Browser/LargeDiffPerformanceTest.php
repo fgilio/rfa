@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Support\Facades\Storage;
+
 beforeEach(function () {
     $this->diagnosticsDir = sys_get_temp_dir().'/rfa-browser-perf-'.getmypid().'-'.uniqid('', true);
     $this->diagnosticsPath = $this->diagnosticsDir.'/diagnostics.jsonl';
@@ -53,4 +55,10 @@ test('large Blade full context records browser and PHP timings', function () {
         ->and($metrics['timing']['diffLines'])->toBeGreaterThan(2000)
         ->and($metrics['sample']['dom']['diffLines'])->toBeGreaterThan(2000)
         ->and($metrics['sample']['timings'])->toHaveKey('longTasks');
+
+    $reportPath = getenv('RFA_BROWSER_PERF_REPORT');
+    if (is_string($reportPath) && $reportPath !== '') {
+        Storage::build(['driver' => 'local', 'root' => dirname($reportPath), 'throw' => true])
+            ->put(basename($reportPath), json_encode($metrics, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
+    }
 })->skip(getenv('RFA_RUN_BROWSER_PERF') !== '1', 'Set RFA_RUN_BROWSER_PERF=1 to run the large diff browser perf probe.');

@@ -22,6 +22,8 @@ test('checkbox on a commit row toggles it into the selection', function () {
     $row->getByTestId('commit-select-toggle')->click();
 
     $page->page()->getByText('1 selected')->waitFor();
+
+    $page->assertSee('1 selected');
 });
 
 test('shift-clicking a second checkbox selects the commits between them', function () {
@@ -39,6 +41,8 @@ test('shift-clicking a second checkbox selects the commits between them', functi
     $last->getByTestId('commit-select-toggle')->click(['modifiers' => ['Shift']]);
 
     $page->page()->getByText('3 selected')->waitFor();
+
+    $page->assertSee('3 selected');
 });
 
 test('clicking Apply with a multi-commit selection navigates to a range URL', function () {
@@ -90,6 +94,8 @@ test('shift-clicking a commit after WT is selected forms a WT + commits[0..N] ra
 
     // 3-commit fixture; shift-click on the oldest pulls all three + WT.
     $page->page()->getByText('WT+3')->waitFor();
+
+    $page->assertSee('WT+3');
 });
 
 test('range-to-working caret URL rehydrates WT and selected commits in the drawer', function () {
@@ -99,6 +105,8 @@ test('range-to-working caret URL rehydrates WT and selected commits in the drawe
     $page->page()->getByLabel('Open selection drawer')->click();
 
     $page->page()->getByText('WT+2')->waitFor();
+
+    $page->assertSee('WT+2');
 });
 
 test('clearing the selection removes the selected chip', function () {

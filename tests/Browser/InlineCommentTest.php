@@ -68,6 +68,8 @@ test('clicking the same line number again with an empty input closes the form', 
     $lineNumber->click();
 
     $file->getByRole('button', ['name' => 'Cancel'])->waitFor(['state' => 'hidden']);
+
+    $page->assertDontSee('Cancel');
 });
 
 test('clicking the same line number again with a non-empty input keeps the form open', function () {

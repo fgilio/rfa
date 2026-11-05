@@ -49,13 +49,30 @@ final class PerfScenarioRunner
     {
         $results = [];
         $diagnosticsEnabled = config('rfa.diagnostics.enabled');
+        $actionBindings = collect([
+            LoadFileDiffAction::class,
+            ResolveProjectAction::class,
+            SessionStateAction::class,
+            BackfillGlobalGitignoreAction::class,
+            GetFileListAction::class,
+        ])->mapWithKeys(fn (string $action): array => [$action => $this->app->getBindings()[$action] ?? null]);
 
         config(['rfa.diagnostics.enabled' => false]);
 
         try {
             foreach ($this->scenarios($only) as $name => $scenario) {
-                $this->prepareScenario($name);
-                $results[$name] = $this->measureScenario($scenario, $rounds, $warmupRounds);
+                try {
+                    $this->prepareScenario($name);
+                    $results[$name] = $this->measureScenario($scenario, $rounds, $warmupRounds);
+                } finally {
+                    $actionBindings->each(function (?array $binding, string $action): void {
+                        $this->app->offsetUnset($action);
+
+                        if ($binding !== null) {
+                            $this->app->bind($action, $binding['concrete'], $binding['shared']);
+                        }
+                    });
+                }
             }
         } finally {
             config(['rfa.diagnostics.enabled' => $diagnosticsEnabled]);

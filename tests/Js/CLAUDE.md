@@ -5,7 +5,7 @@ event handling, state machines), add unit tests here.
 
 ## Setup
 
-- File pattern: `tests/Js/*.test.js` (picked up by `vitest.config.js`).
+- File pattern: `tests/Js/*.test.js` (picked up by `vitest.config.mjs`).
 - Run: `composer test:js` (or `npm test` / `npm run test:watch`).
 - Environment: `happy-dom` — provides `window`, `document`, events, but no
   network.

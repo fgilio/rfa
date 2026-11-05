@@ -208,7 +208,7 @@ class StartupBenchCommand extends Command
         for ($i = 0; $i < $repeat; $i++) {
             $process = new Process($command, base_path());
             $process->setTimeout(120);
-            $process->run();
+            $process->mustRun();
         }
 
         return ((hrtime(true) - $started) / 1_000_000) / $repeat;

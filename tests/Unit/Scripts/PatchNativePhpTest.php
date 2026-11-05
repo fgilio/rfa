@@ -1098,3 +1098,34 @@ test('warm on spawn: leaves the earlier php.js patches idempotent and is idempot
         expect($patch($content))->toBe($content);
     }
 });
+
+test('stable NativePHP entry starts PHP before Electron readiness and uses the RFA splash', function () {
+    $entry = file_get_contents(dirname(__DIR__, 3).'/vendor/nativephp/desktop/.rfa-stock/src/main/index.js');
+    $patched = rfaPatchEarlyBootstrapEntry($entry);
+
+    expect($patched)->not->toBeNull()
+        ->toContain("\nNativePHP.bootstrap(app, defaultIcon, phpBinary, certificate, appPath);")
+        ->not->toContain('app.whenReady().then(')
+        ->not->toContain('createSplash(')
+        ->and(rfaPatchEarlyBootstrapEntry($patched))->toBe($patched);
+});
+
+test('stable NativePHP keeps upstream extraction and packaging barriers', function () {
+    $root = dirname(__DIR__, 3).'/vendor/nativephp/desktop/resources/electron/';
+    $extractor = file_get_contents($root.'php.js');
+    $builder = file_get_contents($root.'electron-builder.mjs');
+
+    expect(rfaPatchPhpExtraction($extractor))->toBe($extractor)
+        ->and(rfaPatchPhpBuildWait($builder))->toBe($builder)
+        ->and(rfaPatchPhpExtraction(str_replace('pipeline(readStream, writeStream)', '', $extractor)))->toBeNull()
+        ->and(rfaPatchPhpBuildWait(str_replace('if (code === 0)', '', $builder)))->toBeNull();
+});
+
+test('stable NativePHP window timeline preserves validated zoom parsing', function () {
+    $window = file_get_contents(dirname(__DIR__, 3).'/vendor/nativephp/desktop/.rfa-stock/electron-plugin/dist/server/api/window.js');
+    $patched = rfaPatchLaunchTimelineWindow($window);
+
+    expect($patched)->not->toBeNull()
+        ->toContain('window.webContents.setZoomFactor(parseZoomFactor(zoomFactor));')
+        ->not->toContain('window.webContents.setZoomFactor(parseFloat(zoomFactor));');
+});

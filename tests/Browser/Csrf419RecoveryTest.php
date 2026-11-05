@@ -22,9 +22,7 @@ beforeEach(function () {
  *   first; our interceptor's preventDefault() should beat it. If the trap
  *   fires, the interceptor regressed.
  *
- * Note: the Pest-browser wrapper's waitForFunction is not a poll (it's a
- * single evaluate), so we poll from PHP instead. The loop tolerates the
- * execution-context-destroyed errors that naturally happen during the reload.
+ * Poll from PHP because the browser execution context disappears during reload.
  */
 function waitForSessionValue($page, string $key, string $expected, float $timeoutSec = 5.0): ?string
 {
@@ -74,7 +72,7 @@ function readSessionValue($page, string $key, float $timeoutSec = 3.0): ?string
 test('interceptor silently reloads on 419 instead of showing Livewire confirm dialog', function () {
     $page = $this->visit($this->projectUrl());
 
-    $page->page()->waitForFunction('typeof Livewire !== "undefined"');
+    $page->assertScript('typeof Livewire !== "undefined"');
 
     $page->page()->evaluate(<<<'JS'
         () => {

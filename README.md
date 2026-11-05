@@ -75,7 +75,7 @@ Always excluded: `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`,
 
 ## Development
 
-Prerequisites: PHP 8.4+, Composer, Node.js 22+, git.
+Prerequisites: PHP 8.4+, Composer, Node.js 24+, git.
 
 ```bash
 composer install
@@ -92,6 +92,17 @@ composer test:lint   # Pint
 composer test:types  # PHPStan
 composer test        # Pest
 ```
+
+### Benchmarks
+
+```bash
+php artisan rfa:benchmark-perf --snapshot=/tmp/rfa-before.json
+php artisan rfa:benchmark-perf --compare=/tmp/rfa-before.json
+php artisan rfa:benchmark-syntax app/Services/SyntaxHighlightService.php composer.json
+php artisan rfa:startup-bench --json
+```
+
+See [the dependency benchmark](DEPENDENCY-BENCHMARK.md) for measured results, sample settings, and raw data.
 
 ## Tech Stack
 

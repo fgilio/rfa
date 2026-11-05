@@ -2,7 +2,7 @@
 
 ## Stack
 
-- Pest 4 on PHPUnit 12
+- Pest 5 on PHPUnit 13
 - Default fast path: `composer test` (parallel via paratest, ~6s)
 - Single-process fallback: `composer test:serial` (when debugging worker isolation)
 - Arch only: `composer test:arch`
@@ -15,6 +15,8 @@
 ## JS unit tests
 
 See `tests/Js/CLAUDE.md`.
+
+Run separate Pest commands in sequence. Browser runs share the Playwright server-state file, so a second Pest process can remove it during another run.
 
 ## Parallel test isolation
 
@@ -46,7 +48,7 @@ the pattern.
 
 ## Faker
 
-- Import: `use Faker\Factory as Faker;` (not pest-plugin-faker - it's deprecated in Pest 4)
+- Import: `use Faker\Factory as Faker;` (not pest-plugin-faker - it's deprecated in Pest 5)
 - Seed in `beforeEach` for deterministic, reproducible tests:
   ```php
   $this->faker = Faker::create();
@@ -88,8 +90,8 @@ the pattern.
 
 ## Fixtures
 
-- Directory: `tests/Fixtures/` (capital F - Pest 4 convention)
-- Use Pest 4's native `fixture('name.ext')` - returns the **file path**, not contents
+- Directory: `tests/Fixtures/` (capital F - Pest convention)
+- Use Pest's native `fixture('name.ext')` - returns the **file path**, not contents
 - Wrap with `File::get(fixture('name.ext'))` when you need the content
 
 ## Reflection

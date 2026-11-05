@@ -1,5 +1,10 @@
 <?php
 
+use App\Actions\BackfillGlobalGitignoreAction;
+use App\Actions\GetFileListAction;
+use App\Actions\LoadFileDiffAction;
+use App\Actions\ResolveProjectAction;
+use App\Actions\SessionStateAction;
 use App\Console\Benchmark\PerfScenarioRunner;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
@@ -42,6 +47,22 @@ test('benchmark runner preserves targeted scenario order', function () {
     );
 
     expect(array_keys($results))->toBe(['diff-large', 'diff-small']);
+});
+
+test('rendering fixtures do not replace the real action in later scenarios', function () {
+    $originalBindings = app()->getBindings();
+
+    app(PerfScenarioRunner::class)->measureAll(
+        rounds: 1,
+        warmupRounds: 0,
+        only: ['diff-small', 'review-page-20-files', 'load-file-diff-blade-full-context'],
+    );
+
+    expect(app(LoadFileDiffAction::class))->toBeInstanceOf(LoadFileDiffAction::class);
+
+    foreach ([LoadFileDiffAction::class, ResolveProjectAction::class, SessionStateAction::class, BackfillGlobalGitignoreAction::class, GetFileListAction::class] as $action) {
+        expect(app()->getBindings()[$action] ?? null)->toBe($originalBindings[$action] ?? null);
+    }
 });
 
 test('drawer reply filter fixtures are seeded once outside measured rounds', function () {

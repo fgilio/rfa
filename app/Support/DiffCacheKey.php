@@ -31,7 +31,7 @@ final class DiffCacheKey
      */
     public static function for(int|string $projectIdOrRepoPath, string $fileId, string $reviewFingerprint, string $contextKey = self::WORKING_TREE_CONTEXT): string
     {
-        return 'rfa_diff_v13_'.hash('xxh128', $projectIdOrRepoPath.':'.$contextKey.':'.$reviewFingerprint.':'.$fileId);
+        return 'rfa_diff_v15_'.hash('xxh128', $projectIdOrRepoPath.':'.$contextKey.':'.$reviewFingerprint.':'.$fileId);
     }
 
     /**

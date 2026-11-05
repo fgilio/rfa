@@ -22,4 +22,6 @@ test('the original line snippet renders when a stored comment becomes unplaced',
     $commitPage->page()->getByText('Snippet pinned here')->first()->waitFor();
     $commitPage->page()->getByText('Original snippet')->first()->waitFor();
     $commitPage->page()->getByText('// Updated with WD change')->first()->waitFor();
+
+    $commitPage->assertSee('Original snippet')->assertSee('// Updated with WD change');
 });

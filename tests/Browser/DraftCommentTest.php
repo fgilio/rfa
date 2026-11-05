@@ -206,7 +206,7 @@ test('clicking line with existing draft re-opens it', function () {
     // the next Alpine tick — wait (in-browser, polled) until the value hydrates.
     $input = $helloFile->getByPlaceholder('Write a comment', false);
     $input->waitFor(['state' => 'visible']);
-    $page->page()->waitForFunction(<<<'JS'
+    $page->assertScript(<<<'JS'
         () => {
             const ta = [...document.querySelectorAll('textarea')].find(t => (t.placeholder || '').startsWith('Write a comment'));
             return !!ta && ta.value === 'Existing draft';

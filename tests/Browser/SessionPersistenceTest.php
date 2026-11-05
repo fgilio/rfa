@@ -52,7 +52,7 @@ test('global comment persists after page reload', function () {
         Livewire.find(wireId).set('globalComment', 'Global persisted note');
     JS);
 
-    $page->page()->waitForFunction('window.__globalCommentPersisted === true && window.__globalCommentPendingCommits === 0');
+    $page->assertScript('window.__globalCommentPersisted === true && window.__globalCommentPendingCommits === 0');
 
     $page->refresh();
 
@@ -62,36 +62,13 @@ test('global comment persists after page reload', function () {
 
 test('reviewed files persist after page reload', function () {
     $page = $this->visitAndLoad($this->projectUrl());
-
-    $page->script(<<<'JS'
-        window.__reviewedPersisted = false;
-        window.__reviewedPendingCommits = 0;
-
-        const wireId = document.querySelector('[data-testid="review-component"]').getAttribute('wire:id');
-
-        Livewire.hook('commit', ({ component, succeed, fail }) => {
-            if (component.id !== wireId) return;
-
-            window.__reviewedPendingCommits++;
-
-            // Only a SUCCESSFUL commit proves the toggle persisted; a failed commit must
-            // not satisfy the wait (it would refresh against unsaved state).
-            succeed(() => {
-                window.__reviewedPendingCommits--;
-                window.__reviewedPersisted = true;
-            });
-            fail(() => {
-                window.__reviewedPendingCommits--;
-            });
-        });
-    JS);
-
     $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
-    // The reviewed-counter island re-renders on the toggle round-trip;
-    // poll until it renders.
-    $page->page()->waitForFunction("document.querySelector('[data-testid=\"reviewed-counter\"]')?.textContent?.includes('1/3 reviewed')");
-    $page->page()->waitForFunction('window.__reviewedPersisted === true && window.__reviewedPendingCommits === 0');
+
+    $counter = $page->page()->getByTestId('reviewed-counter');
+    $counter->getByText('1/3 reviewed')->waitFor(['state' => 'visible']);
 
     $page->refresh();
-    $page->page()->waitForFunction("document.querySelector('[data-testid=\"reviewed-counter\"]')?.textContent?.includes('1/3 reviewed')");
+    $counter->getByText('1/3 reviewed')->waitFor(['state' => 'visible']);
+
+    expect($counter->innerText())->toContain('1/3 reviewed');
 });

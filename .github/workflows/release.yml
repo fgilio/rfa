@@ -44,7 +44,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: |
             package-lock.json
@@ -70,16 +70,6 @@ jobs:
 
       - name: Set repository in electron package.json
         run: node -e "const f='vendor/nativephp/desktop/resources/electron/package.json';const p=JSON.parse(require('fs').readFileSync(f));p.repository='github:fgilio/rfa';require('fs').writeFileSync(f,JSON.stringify(p,null,4))"
-
-      # WORKAROUND: nativephp/desktop@dev-l13-compatibility bug
-      # NativePHP's BuildCommand patches electron's package.json (name, version, etc.)
-      # via PatchesPackagesJson trait BEFORE running `npm ci`. This causes `npm ci` to
-      # fail with "package.json and package-lock.json are out of sync", silently skipping
-      # all dependency installation. The build then fails with "cross-env: command not found".
-      # Fix: swap `npm ci` for `npm install` so it tolerates the patched package.json.
-      # TODO: Remove this once nativephp/desktop ships a stable L13-compatible release.
-      - name: "Patch NativePHP: npm ci -> npm install (dev-l13-compatibility workaround)"
-        run: sed -i '' "s/->run('npm ci'/->run('npm install'/" vendor/nativephp/desktop/src/Drivers/Electron/Commands/BuildCommand.php
 
       # electron-builder's GitHub publisher creates a draft release per artifact when none
       # exists yet: getOrCreateRelease() lists releases, and only when no draft matches the

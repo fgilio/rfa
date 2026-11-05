@@ -98,9 +98,7 @@ test('undo toast shows countdown that decrements', function () {
     $page->assertSee('10s');
 
     // Wait 2 seconds, verify countdown has decremented
-    $page->page()->waitForFunction(
+    $page->assertScript(
         "document.querySelector('[data-testid=\"undo-toast\"]')?.textContent?.includes('8s')",
-        null,
-        ['timeout' => 5000],
     );
 });
