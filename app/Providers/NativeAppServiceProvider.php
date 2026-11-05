@@ -7,16 +7,9 @@ namespace App\Providers;
 use App\Actions\OpenTerminalRequestAction;
 use App\Actions\RecordRuntimeDiagnosticAction;
 use App\Actions\ResolveStartupRouteAction;
-use App\Actions\UpdaterStateAction;
 use App\Actions\ZoomWindowAction;
 use App\Console\Benchmark\BenchmarkIsolation;
-use App\Events\ZoomShortcutPressed;
-use App\Listeners\HandleDeepLink;
-use App\Listeners\HandleMenuItemClicked;
-use App\Listeners\HandleZoomShortcutPressed;
-use App\Listeners\RegisterNativeGlobalShortcuts;
 use App\Listeners\UnregisterNativeGlobalShortcuts;
-use App\Support\LogSanitizer;
 use App\Support\Shortcuts;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Context;
@@ -24,21 +17,10 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Native\Desktop\Contracts\ProvidesPhpIni;
-use Native\Desktop\Events\App\OpenedFromURL;
-use Native\Desktop\Events\AutoUpdater\CheckingForUpdate;
-use Native\Desktop\Events\AutoUpdater\DownloadProgress;
-use Native\Desktop\Events\AutoUpdater\Error as UpdateError;
-use Native\Desktop\Events\AutoUpdater\UpdateAvailable;
-use Native\Desktop\Events\AutoUpdater\UpdateDownloaded;
-use Native\Desktop\Events\AutoUpdater\UpdateNotAvailable;
-use Native\Desktop\Events\Menu\MenuItemClicked;
-use Native\Desktop\Events\Windows\WindowBlurred;
 use Native\Desktop\Events\Windows\WindowClosed;
-use Native\Desktop\Events\Windows\WindowFocused;
 use Native\Desktop\Facades\App;
 use Native\Desktop\Facades\Menu;
 use Native\Desktop\Facades\Window;
-use Native\Desktop\Notification;
 use Throwable;
 
 class NativeAppServiceProvider implements ProvidesPhpIni
@@ -66,13 +48,13 @@ class NativeAppServiceProvider implements ProvidesPhpIni
         ]);
     }
 
+    /**
+     * Listeners registered here live only for the booted request. Electron
+     * delivers later events in fresh requests that never call boot(), so a
+     * reaction that must run belongs in an auto-discovered app/Listeners class.
+     */
     private function registerNativeEventListeners(): void
     {
-        Event::listen(MenuItemClicked::class, HandleMenuItemClicked::class);
-        Event::listen(OpenedFromURL::class, HandleDeepLink::class);
-        Event::listen(WindowFocused::class, RegisterNativeGlobalShortcuts::class);
-        Event::listen(WindowBlurred::class, UnregisterNativeGlobalShortcuts::class);
-        Event::listen(ZoomShortcutPressed::class, HandleZoomShortcutPressed::class);
         Event::listen(WindowClosed::class, function (WindowClosed $event) {
             app(RecordRuntimeDiagnosticAction::class)->handle('window.closed', [
                 'id' => $event->id,
@@ -83,135 +65,6 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                 App::quit();
             }
         });
-
-        Event::listen(CheckingForUpdate::class, function () {
-            app(UpdaterStateAction::class)->beginCheck();
-        });
-
-        Event::listen(UpdateAvailable::class, function (UpdateAvailable $event) {
-            Context::flush();
-
-            $startedAt = microtime(true);
-            $outcome = 'completed';
-
-            try {
-                app(UpdaterStateAction::class)->recordAvailable($event->version, $event->releaseNotes);
-
-                Notification::new()
-                    ->title('Update Available')
-                    ->message("Version {$event->version} is available and downloading.")
-                    ->show();
-            } catch (Throwable $e) {
-                $outcome = 'error';
-                Context::add('rfa.error_class', $e::class);
-                Context::add('rfa.reason', 'update_available_handling_failed');
-
-                throw $e;
-            } finally {
-                Context::add('rfa.update_version', $event->version);
-                Context::add('rfa.outcome', $outcome);
-                Context::add('rfa.duration_ms', $this->elapsedMs($startedAt));
-                Log::info('updater.available');
-            }
-        });
-
-        Event::listen(DownloadProgress::class, function (DownloadProgress $event) {
-            app(UpdaterStateAction::class)->recordProgress($event->percent);
-        });
-
-        Event::listen(UpdateNotAvailable::class, function (UpdateNotAvailable $event) {
-            Context::flush();
-
-            $startedAt = microtime(true);
-            $outcome = 'completed';
-
-            try {
-                app(UpdaterStateAction::class)->recordUpToDate();
-                Notification::new()
-                    ->title('No Updates')
-                    ->message('You are running the latest version.')
-                    ->show();
-            } catch (Throwable $e) {
-                $outcome = 'error';
-                Context::add('rfa.error_class', $e::class);
-                Context::add('rfa.reason', 'update_not_available_handling_failed');
-
-                throw $e;
-            } finally {
-                Context::add('rfa.update_version', $event->version);
-                Context::add('rfa.outcome', $outcome);
-                Context::add('rfa.duration_ms', $this->elapsedMs($startedAt));
-                Log::info('updater.current');
-            }
-        });
-
-        Event::listen(UpdateDownloaded::class, function (UpdateDownloaded $event) {
-            Context::flush();
-
-            $startedAt = microtime(true);
-            $outcome = 'completed';
-
-            try {
-                app(UpdaterStateAction::class)->recordDownloaded($event->version, $event->releaseNotes);
-
-                Notification::new()
-                    ->title('Update Ready')
-                    ->message("Version {$event->version} will be installed on restart.")
-                    ->show();
-            } catch (Throwable $e) {
-                $outcome = 'error';
-                Context::add('rfa.error_class', $e::class);
-                Context::add('rfa.reason', 'update_downloaded_handling_failed');
-
-                throw $e;
-            } finally {
-                Context::add('rfa.update_version', $event->version);
-                Context::add('rfa.outcome', $outcome);
-                Context::add('rfa.duration_ms', $this->elapsedMs($startedAt));
-                Log::info('updater.downloaded');
-            }
-        });
-
-        Event::listen(UpdateError::class, function (UpdateError $event) {
-            Context::flush();
-
-            $startedAt = microtime(true);
-
-            try {
-                // Diagnostic detail for triage. The canonical info event below
-                // keeps the failure path the same shape as the success paths so
-                // `rfa.outcome` distribution stays queryable across outcomes.
-                Log::error('updater.failed', [
-                    'reason' => 'updater_error',
-                    'message' => LogSanitizer::summary($event->message),
-                    'stack' => LogSanitizer::summary($event->stack, 500),
-                ]);
-                app(UpdaterStateAction::class)->recordError();
-                Notification::new()
-                    ->title('Update Error')
-                    ->message('Could not check for updates. Try again later.')
-                    ->show();
-            } finally {
-                Context::add('rfa.outcome', 'error');
-                Context::add('rfa.reason', 'updater_error');
-                Context::add('rfa.duration_ms', $this->elapsedMs($startedAt));
-                Log::info('updater.failed');
-            }
-        });
-    }
-
-    /**
-     * Milliseconds elapsed since `$startedAt` (a {@see microtime()} float).
-     *
-     * The updater listeners have no reliable end-to-end operation start time —
-     * the `native-update-state` cache is written by both this main process and
-     * the renderer banner, so its `startedAt` can be raced. Per the wide-events
-     * protocol, a listener-owned event without a trustworthy start time records
-     * its callback duration instead.
-     */
-    private function elapsedMs(float $startedAt): int
-    {
-        return (int) round((microtime(true) - $startedAt) * 1000);
     }
 
     private function createWindow(): void

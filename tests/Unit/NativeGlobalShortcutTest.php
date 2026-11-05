@@ -9,7 +9,6 @@ use App\Events\ZoomShortcutPressed;
 use App\Listeners\HandleZoomShortcutPressed;
 use App\Listeners\RegisterNativeGlobalShortcuts;
 use App\Listeners\UnregisterNativeGlobalShortcuts;
-use App\Providers\NativeAppServiceProvider;
 use App\Support\NativeShortcutRegistry;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
@@ -26,13 +25,7 @@ beforeEach(function () {
     Cache::forget(ZoomWindowAction::CACHE_KEY);
 });
 
-test('native provider registers the app-level shortcut listeners', function () {
-    $provider = new ReflectionClass(NativeAppServiceProvider::class);
-    $registerNativeEventListeners = $provider->getMethod('registerNativeEventListeners');
-    $registerNativeEventListeners->setAccessible(true);
-
-    $registerNativeEventListeners->invoke(new NativeAppServiceProvider);
-
+test('app-level shortcut listeners are discovered without the native provider', function () {
     Event::fake();
 
     Event::assertListening(WindowFocused::class, RegisterNativeGlobalShortcuts::class);
