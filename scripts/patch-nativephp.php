@@ -1935,12 +1935,18 @@ function rfaForwardUpdaterErrors(autoUpdater, forwardError) {
     };
     autoUpdater.addListener('update-available', finishCheck);
     autoUpdater.addListener('update-not-available', finishCheck);
-    autoUpdater.addListener('error', (error) => {
-        const canRetry = isChecking
-            && failedChecks < RFA_CHECK_RETRY_DELAYS.length
-            && rfaIsTransientUpdaterError(error);
+    autoUpdater.addListener('error', (error, description) => {
+        // electron-updater describes a failed check this way. A download
+        // started earlier can fail while a check is in progress.
+        const isCheckError = isChecking
+            && typeof description === 'string'
+            && description.startsWith('Cannot check for updates:');
+        if (!isCheckError) {
+            forwardError(error);
+            return;
+        }
         isChecking = false;
-        if (!canRetry) {
+        if (failedChecks >= RFA_CHECK_RETRY_DELAYS.length || !rfaIsTransientUpdaterError(error)) {
             failedChecks = 0;
             forwardError(error);
             return;

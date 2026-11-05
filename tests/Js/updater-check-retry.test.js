@@ -27,6 +27,14 @@ function githubFeedError(statusCode) {
 }
 
 /**
+ * The description electron-updater passes with the 'error' event of a
+ * failed check. Download errors carry only the stack.
+ */
+function checkErrorDescription(error) {
+    return `Cannot check for updates: ${error.stack}`;
+}
+
+/**
  * An EventEmitter shaped like electron-updater's AppUpdater: every check
  * emits 'checking-for-update', then the outcome the test queued for it.
  */
@@ -40,7 +48,7 @@ function createHarness(outcomes) {
 
         const check = Promise.resolve().then(() => {
             if (outcome instanceof Error) {
-                updater.emit('error', outcome);
+                updater.emit('error', outcome, checkErrorDescription(outcome));
                 throw outcome;
             }
 
@@ -125,11 +133,52 @@ describe('generated updater check retry', () => {
         const downloadFailure = new Error('net::ERR_CONNECTION_RESET');
 
         await harness.check();
-        harness.updater.emit('error', downloadFailure);
+        harness.updater.emit('error', downloadFailure, downloadFailure.stack);
         await vi.advanceTimersByTimeAsync(60000);
 
         expect(harness.forwardedErrors).toEqual([downloadFailure]);
         expect(harness.updater.checkForUpdates).toHaveBeenCalledOnce();
+    });
+
+    it('reports a download error that arrives during a check at once and keeps the check retryable', async () => {
+        const harness = createHarness([]);
+        const downloadFailure = new Error('net::ERR_CONNECTION_RESET');
+        const checkFailure = githubFeedError(529);
+
+        harness.updater.emit('checking-for-update');
+        harness.updater.emit('error', downloadFailure, downloadFailure.stack);
+
+        expect(harness.forwardedErrors).toEqual([downloadFailure]);
+
+        harness.updater.emit('error', checkFailure, checkErrorDescription(checkFailure));
+        await vi.advanceTimersByTimeAsync(2000);
+
+        expect(harness.forwardedErrors).toEqual([downloadFailure]);
+        expect(harness.updater.checkForUpdates).toHaveBeenCalledOnce();
+    });
+
+    it('retries a transient check error that carries the check description', async () => {
+        const harness = createHarness([]);
+        const checkFailure = githubFeedError(529);
+
+        harness.updater.emit('checking-for-update');
+        harness.updater.emit('error', checkFailure, checkErrorDescription(checkFailure));
+        await vi.advanceTimersByTimeAsync(2000);
+
+        expect(harness.forwardedErrors).toEqual([]);
+        expect(harness.updater.checkForUpdates).toHaveBeenCalledOnce();
+    });
+
+    it('reports a transient error without the check description at once', async () => {
+        const harness = createHarness([]);
+        const failure = githubFeedError(529);
+
+        harness.updater.emit('checking-for-update');
+        harness.updater.emit('error', failure);
+        await vi.advanceTimersByTimeAsync(60000);
+
+        expect(harness.forwardedErrors).toEqual([failure]);
+        expect(harness.updater.checkForUpdates).not.toHaveBeenCalled();
     });
 
     it('gives the next check a fresh set of retries after a successful one', async () => {
