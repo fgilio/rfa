@@ -67,6 +67,8 @@ final class RuntimeDiagnosticsService
      * epoch milliseconds so the entry lines up with the Electron main-process
      * launch marks (`rfa-launch.jsonl`) and the renderer's navigation timing.
      *
+     * Elapsed time reads the same clock as the entry's `ts`, so the two agree.
+     *
      * @return array{started_at_ms: int, elapsed_ms: int}|null
      */
     private function requestTiming(): ?array
@@ -77,9 +79,11 @@ final class RuntimeDiagnosticsService
             return null;
         }
 
+        $startedAtMs = $startedAt * 1000;
+
         return [
-            'started_at_ms' => (int) round($startedAt * 1000),
-            'elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            'started_at_ms' => (int) round($startedAtMs),
+            'elapsed_ms' => (int) round(now()->getPreciseTimestamp(3) - $startedAtMs),
         ];
     }
 
