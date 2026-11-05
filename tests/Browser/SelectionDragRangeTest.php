@@ -25,6 +25,8 @@ test('press-and-hold on a checkbox, drag across rows, release: range from anchor
     JS);
 
     $page->page()->getByText('3 selected')->waitFor();
+
+    $page->assertSee('3 selected');
 });
 
 test('dragging back toward the anchor shrinks the range', function () {
@@ -48,6 +50,8 @@ test('dragging back toward the anchor shrinks the range', function () {
     JS);
 
     $page->page()->getByText('2 selected')->waitFor();
+
+    $page->assertSee('2 selected');
 });
 
 test('pressing without drag falls back to the single-toggle click', function () {
@@ -61,6 +65,8 @@ test('pressing without drag falls back to the single-toggle click', function () 
     $row->getByTestId('commit-select-toggle')->click();
 
     $page->page()->getByText('1 selected')->waitFor();
+
+    $page->assertSee('1 selected');
 });
 
 test('drag ended by out-of-window release does not eat the next intentional click', function () {

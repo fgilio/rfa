@@ -21,7 +21,7 @@ test('adding a comment pops the count on the drawer trigger badge', function () 
 
     // The drawer hydrates lazily and the badge updates on a separate
     // round-trip, so poll instead of asserting once.
-    $page->page()->waitForFunction(
+    $page->assertScript(
         "document.querySelector('[aria-label=\"All comments in this repo\"]')?.parentElement?.textContent?.includes('1')"
     );
 });
@@ -99,7 +99,7 @@ test('the drawer filter narrows the visible comments', function () {
     $page->page()->getByPlaceholder('Filter comments...')->fill('apple');
 
     // Wait for Livewire's debounced filter + re-render to hide the non-matching row.
-    $page->page()->waitForFunction(<<<'JS'
+    $page->assertScript(<<<'JS'
         (() => {
             const panel = document.querySelector('[data-testid="overlay-panel-comments-drawer"] .overflow-y-auto');
             if (!panel) return false;

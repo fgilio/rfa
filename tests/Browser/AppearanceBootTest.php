@@ -14,7 +14,7 @@ test('restores the selected appearance before Flux paints a cold page', function
     JS);
 
     $page->refresh();
-    $page->page()->waitForFunction(<<<'JS'
+    $page->assertScript(<<<'JS'
         document.documentElement.classList.contains('dark')
             && localStorage.getItem('flux.appearance') === 'dark'
             && document.cookie.includes('rfa_appearance=dark')

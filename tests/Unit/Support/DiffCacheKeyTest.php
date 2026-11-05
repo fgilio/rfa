@@ -22,6 +22,13 @@ test('for is deterministic and varies by project, file, context, and review sett
         ->and($a)->not->toBe($f);
 });
 
+test('updated highlighters do not reuse previous highlighted output', function (string $prefix) {
+    $oldKey = $prefix.hash('xxh128', '1:HEAD..working:m0:file-a');
+    Cache::put($oldKey, 'old highlighted HTML', 60);
+
+    expect(Cache::get(DiffCacheKey::for(1, 'file-a', 'm0')))->toBeNull();
+})->with(['rfa_diff_v13_', 'rfa_diff_v14_']);
+
 test('forget clears every variant of a file diff', function () {
     foreach (DiffCacheKey::VARIANTS as $variant) {
         Cache::put(DiffCacheKey::for(7, 'file-x', 'm0', 'HEAD..working'.$variant), 'stale', 60);

@@ -17,7 +17,7 @@ test('the global help shortcut survives a Livewire navigation', function () {
     $hasHelpBinding = "Alpine.store('keymap').bindings.has('?')";
 
     // Registered on the initial page load.
-    $page->page()->waitForFunction($hasHelpBinding);
+    $page->assertScript($hasHelpBinding);
     expect($page->page()->evaluate($hasHelpBinding))->toBeTrue();
 
     // SPA-navigate to a commit page; the binding is cleared on navigating and
@@ -25,6 +25,6 @@ test('the global help shortcut survives a Livewire navigation', function () {
     $page->page()->evaluate("Livewire.navigate('".$this->projectUrl().'/c/'.$this->commitHashes[1]."')");
     $page->page()->getByTestId('commit-context-bar')->waitFor();
 
-    $page->page()->waitForFunction($hasHelpBinding);
+    $page->assertScript($hasHelpBinding);
     expect($page->page()->evaluate($hasHelpBinding))->toBeTrue();
 });

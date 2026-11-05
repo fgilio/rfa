@@ -5,9 +5,7 @@ beforeEach(function () {
 });
 
 /**
- * Poll the clipboard text captured by a `copy-to-clipboard` window listener.
- * Bulk copy is a server round-trip, and the Pest-browser waitForFunction is a
- * single evaluate (not a poll), so wait from PHP for the dispatched event.
+ * Bulk copy dispatches its clipboard event after the server round-trip.
  */
 function waitForCopiedText($page, float $timeoutSec = 5.0): ?string
 {
@@ -321,6 +319,8 @@ test('marking a file flips its sidebar button to the reviewed state via the isla
     $page->page()->getByRole('checkbox', ['name' => 'Reviewed'])->first()->click();
 
     $page->page()->getByRole('button', ['name' => 'Un-mark as reviewed'])->first()->waitFor(['state' => 'visible']);
+
+    expect($page->page()->getByRole('button', ['name' => 'Un-mark as reviewed'])->count())->toBeGreaterThan(0);
 });
 
 test('marking a file reveals the Hide reviewed toggle', function () {
@@ -334,6 +334,8 @@ test('marking a file reveals the Hide reviewed toggle', function () {
 
     // The mark refreshes the island, which renders the toggle into view.
     $page->page()->getByRole('button', ['name' => 'Hide reviewed'])->waitFor(['state' => 'visible']);
+
+    expect($page->page()->getByRole('button', ['name' => 'Hide reviewed'])->count())->toBe(1);
 });
 
 test('checked reviewed checkbox keeps its check glyph visible in dark mode', function () {
@@ -468,8 +470,7 @@ test('sidebar copy paths trigger left-click copies relative paths', function () 
 
     $page->page()->getByTestId('sidebar-copy-paths-trigger')->click();
 
-    // Bulk copy is a server round-trip now. The Pest-browser waitForFunction is a
-    // single evaluate, not a poll, so poll the captured text from PHP instead.
+    // Bulk copy is a server round-trip now. Poll the dispatched clipboard text from PHP.
     $result = waitForCopiedText($page);
     expect($result)->not->toBeNull();
     expect(explode("\n", $result))->toEqualCanonicalizing(['hello.php', 'utils.php', 'config.php']);

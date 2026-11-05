@@ -18,7 +18,7 @@ test('j and k move the active file selection between visible files', function ()
 
     // The visible file list is hydrated client-side from a data attribute, so
     // wait for it before reading the ordered ids the shortcuts navigate.
-    $page->page()->waitForFunction(<<<'JS'
+    $page->assertScript(<<<'JS'
         () => {
             const root = document.querySelector('[data-testid="review-component"]');
             if (!root) return false;
@@ -39,10 +39,10 @@ test('j and k move the active file selection between visible files', function ()
     expect(array_search($initial, $ids, true))->toBe(0);
 
     $page->page()->locator('body')->press('j');
-    $page->page()->waitForFunction(activeFileExpression().' === '.json_encode($ids[1]));
+    $page->assertScript(activeFileExpression().' === '.json_encode($ids[1]));
 
     $page->page()->locator('body')->press('k');
-    $page->page()->waitForFunction(activeFileExpression().' === '.json_encode($initial));
+    $page->assertScript(activeFileExpression().' === '.json_encode($initial));
 
     expect($page->page()->evaluate(activeFileExpression()))->toBe($initial);
 });
@@ -52,7 +52,7 @@ test('k holds at the first file and does not wrap', function () {
 
     $page->page()->getByTestId('review-component')->first()->waitFor();
 
-    $page->page()->waitForFunction(<<<'JS'
+    $page->assertScript(<<<'JS'
         () => {
             const root = document.querySelector('[data-testid="review-component"]');
             if (!root) return false;
@@ -75,7 +75,7 @@ test('j and k recover to an end when no visible file is active', function () {
 
     $page->page()->getByTestId('review-component')->first()->waitFor();
 
-    $page->page()->waitForFunction(<<<'JS'
+    $page->assertScript(<<<'JS'
         () => {
             const root = document.querySelector('[data-testid="review-component"]');
             if (!root) return false;
@@ -95,10 +95,12 @@ test('j and k recover to an end when no visible file is active', function () {
     // Selection points at a file that is no longer visible: k recovers to the last entry.
     $page->page()->evaluate($clearActive);
     $page->page()->locator('body')->press('k');
-    $page->page()->waitForFunction(activeFileExpression().' === '.json_encode($last));
+    $page->assertScript(activeFileExpression().' === '.json_encode($last));
 
     // ...and j recovers to the first entry.
     $page->page()->evaluate($clearActive);
     $page->page()->locator('body')->press('j');
-    $page->page()->waitForFunction(activeFileExpression().' === '.json_encode($first));
+    $page->assertScript(activeFileExpression().' === '.json_encode($first));
+
+    expect($page->page()->evaluate(activeFileExpression()))->toBe($first);
 });

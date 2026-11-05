@@ -76,6 +76,7 @@ function rfaBackgroundExpression(): string
  */
 function rfaPatchPreloadFileBridge(string $content): ?string
 {
+    $content = str_replace("import { contextBridge, ipcRenderer } from 'electron';", 'import { ipcRenderer, contextBridge } from "electron";', $content);
     if (str_contains($content, "exposeInMainWorld('nativeGetFilePath'")) {
         // Already bridged. The exposure is useless without webUtils on the
         // import, so a half-applied file counts as a shape change, not a hit.
@@ -387,6 +388,13 @@ JS;
  */
 function rfaPatchServerOptimize(string $content): ?string
 {
+    $content = str_replace([
+        'if (shouldOptimize()) {',
+        "const result = callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings);",
+    ], [
+        'if (shouldOptimize(store)) {',
+        "let result = callPhpSync(['artisan', 'optimize'], phpOptions, phpIniSettings);",
+    ], $content);
     $optimizeFind = <<<'JS'
         if (shouldOptimize(store)) {
             console.log('Caching view and routes...');
@@ -764,6 +772,7 @@ JS;
  */
 function rfaPatchSplashWindow(string $content): ?string
 {
+    $content = str_replace("import { app, powerMonitor, session } from 'electron';", 'import { app, session, powerMonitor } from "electron";', $content);
     // 1. Pull BrowserWindow + nativeTheme into the electron import so the splash
     //    can create a window and tint it to the OS light/dark appearance.
     $importFind = 'import { app, session, powerMonitor } from "electron";';
@@ -1056,6 +1065,14 @@ JS;
  */
 function rfaPatchPhpExtraction(string $content): ?string
 {
+    if (str_contains($content, 'await new Promise((resolve, reject) => {')
+        && str_contains($content, 'pipeline(readStream, writeStream)')
+        && str_contains($content, '.then(() => fs.promises.chmod(binaryPath, 0o755))')
+        && str_contains($content, "zipfile.on('error', reject)")
+        && str_contains($content, 'process.exitCode = 1;')) {
+        return $content;
+    }
+
     $importFind = 'import unzip from "yauzl";';
     $importReplace = 'import { inflateRawSync } from "zlib"; // [rfa php extraction]';
     $blockFind = <<<'JS'
@@ -1175,6 +1192,14 @@ JS;
  */
 function rfaPatchPhpBuildWait(string $content): ?string
 {
+    if (str_contains($content, 'await new Promise((resolve, reject) => {')
+        && str_contains($content, "spawn(process.execPath, ['php.js',")
+        && str_contains($content, "php.on('error', reject)")
+        && str_contains($content, "php.on('close', (code, signal)")
+        && str_contains($content, 'if (code === 0)')) {
+        return $content;
+    }
+
     $importFind = "import { exec } from 'child_process';";
     $importReplace = "import { execFileSync } from 'child_process'; // [rfa php build wait]";
     $callFind = '        exec(`node php.js --${targetOs} --${arch}`);';
@@ -1216,6 +1241,7 @@ function rfaPatchPhpBuildWait(string $content): ?string
  */
 function rfaPatchEarlyPhpBoot(string $content): ?string
 {
+    $content = str_replace("notifyLaravel('booted')", 'notifyLaravel("booted")', $content);
     $importFind = 'import Store from "electron-store"; // [rfa preflight cache]';
     $importMarker = 'import { Worker } from "worker_threads"; // [rfa early php]';
     $importReplace = $importFind."\n".$importMarker;
@@ -1407,6 +1433,7 @@ JS;
  */
 function rfaPatchServerWorkers(string $content): ?string
 {
+    $content = str_replace("            env,\n        }, phpIniSettings);", "            env\n        }, phpIniSettings);", $content);
     $find = <<<'JS'
         const phpServer = callPhp(['-S', `127.0.0.1:${phpPort}`, serverPath], {
             cwd: cwd,
@@ -1447,6 +1474,13 @@ JS;
  */
 function rfaPatchLaunchTimeline(string $content): ?string
 {
+    $content = str_replace([
+        "import { resolve } from 'path';",
+        "notifyLaravel('booted')",
+    ], [
+        'import { resolve } from "path";',
+        'notifyLaravel("booted")',
+    ], $content);
     $importFind = 'import { resolve } from "path";';
     $importReplace = <<<'JS'
 import { resolve, join } from "path"; // [rfa launch timeline]
@@ -1618,6 +1652,13 @@ JS;
  */
 function rfaPatchLaunchTimelineServer(string $content): ?string
 {
+    $content = str_replace([
+        "const result = callPhpSync(['artisan', 'migrate', '--force'], phpOptions, phpIniSettings);",
+        "console.log('PHP Server started on port: ', port);",
+    ], [
+        "let result = callPhpSync(['artisan', 'migrate', '--force'], phpOptions, phpIniSettings);",
+        'console.log("PHP Server started on port: ", port);',
+    ], $content);
     $edits = [
         [
             "            let result = callPhpSync(['artisan', 'migrate', '--force'], phpOptions, phpIniSettings);\n",
@@ -1704,6 +1745,11 @@ JS;
     });
 JS;
 
+    if (str_contains($content, 'parseZoomFactor(zoomFactor)')) {
+        $loadFind = str_replace('parseFloat(zoomFactor)', 'parseZoomFactor(zoomFactor)', $loadFind);
+        $loadReplace = str_replace('parseFloat(zoomFactor)', 'parseZoomFactor(zoomFactor)', $loadReplace);
+    }
+
     if (str_contains($content, $openFind) && ! str_contains($content, $openReplace)) {
         $content = str_replace($openFind, $openReplace, $content);
     }
@@ -1771,6 +1817,20 @@ JS;
  */
 function rfaPatchLazyUpdaterApi(string $content): ?string
 {
+    $content = str_replace(<<<'JS'
+import electronUpdater from 'electron-updater';
+import express from 'express';
+import { notifyLaravel } from '../utils.js';
+const { autoUpdater } = electronUpdater;
+const router = express.Router();
+JS, <<<'JS'
+import express from "express";
+import electronUpdater from 'electron-updater';
+const { autoUpdater } = electronUpdater;
+import { notifyLaravel } from "../utils.js";
+const router = express.Router();
+JS, $content);
+    $content = str_replace("autoUpdater.addListener('checking-for-update', () => {", 'autoUpdater.addListener("checking-for-update", () => {', $content);
     $headFind = <<<'JS'
 import express from "express";
 import electronUpdater from 'electron-updater';
@@ -1838,6 +1898,16 @@ JS;
  */
 function rfaPatchLazyContextMenu(string $content): ?string
 {
+    $content = str_replace(<<<'JS'
+import contextMenu from 'electron-context-menu';
+import express from 'express';
+import { compileMenu } from './helper/index.js';
+JS, <<<'JS'
+import express from "express";
+import { compileMenu } from "./helper/index.js";
+import contextMenu from "electron-context-menu";
+JS, $content);
+    $content = str_replace('prepend: () => {', 'prepend: (defaultActions, parameters, browserWindow) => {', $content);
     $importFind = <<<'JS'
 import { compileMenu } from "./helper/index.js";
 import contextMenu from "electron-context-menu";
@@ -2105,6 +2175,56 @@ function rfaPatchWarmOnSpawn(string $content): ?string
     return str_replace($find, $replace, $content);
 }
 
+function rfaPatchEarlyBootstrapEntry(string $content): ?string
+{
+    $find = <<<'JS'
+let splashWindow;
+
+app.whenReady().then(() => {
+    try {
+        splashWindow = createSplash(appPath, import.meta.dirname);
+    } catch (error) {
+        console.error('Error creating splash screen:', error);
+    }
+
+    NativePHP.bootstrap(app, defaultIcon, phpBinary, certificate, appPath);
+});
+
+app.on('browser-window-created', (event, window) => {
+    if (splashWindow && window !== splashWindow) {
+        window.webContents.on('did-navigate', (evt, url) => {
+            if (url.startsWith('http://127.0.0.1') || url.startsWith('http://localhost')) {
+                if (splashWindow) {
+                    splashWindow.close();
+                    splashWindow = null;
+                }
+            }
+        });
+    }
+});
+JS;
+    $replace = <<<'JS'
+// [rfa early bootstrap] PHP starts while Electron prepares its first window.
+NativePHP.bootstrap(app, defaultIcon, phpBinary, certificate, appPath);
+JS;
+
+    if (str_contains($content, $find)) {
+        $content = str_replace("import { createSplash } from './splash.js';\n", '', $content);
+
+        return str_replace($find, $replace, $content);
+    }
+
+    if (str_contains($content, '[rfa early bootstrap]')) {
+        return str_contains($content, "\nNativePHP.bootstrap(") ? $content : null;
+    }
+
+    if (str_contains($content, "\nNativePHP.bootstrap(")) {
+        return str_replace("\nNativePHP.bootstrap(", "\n// [rfa early bootstrap] PHP starts while Electron prepares its first window.\nNativePHP.bootstrap(", $content);
+    }
+
+    return null;
+}
+
 /**
  * The patch set: what has to be true of the vendored Electron plugin.
  *
@@ -2254,6 +2374,12 @@ function rfaNativePhpPatchSet(): array
             'file' => '../../src/main/index.js',
             'apply' => rfaPatchCachedShellPath(...),
             'summary' => 'login shell PATH is applied from a cache and refreshed in the background',
+        ],
+        [
+            'name' => 'early-bootstrap-entry',
+            'file' => '../../src/main/index.js',
+            'apply' => rfaPatchEarlyBootstrapEntry(...),
+            'summary' => 'entry bootstrap runs before Electron readiness and uses the RFA splash',
         ],
     ];
 }

@@ -60,3 +60,17 @@ test('release workflow derives the version in-shell to avoid template injection'
         ->toContain('version="${tag#v}"')
         ->not->toContain('--title "${{ steps.version.outputs.value }}"');
 });
+
+test('CI measures both dependency sets with the same scenario runner', function () {
+    $workflow = file_get_contents(dirname(__DIR__, 2).'/.github/workflows/ci.yml');
+    $saveRunner = strpos($workflow, 'cp app/Console/Benchmark/PerfScenarioRunner.php /tmp/rfa-perf-scenarios.php');
+    $checkoutBase = strpos($workflow, 'git checkout --force ${{ github.event.pull_request.base.sha }}');
+    $restoreRunner = strpos($workflow, 'cp /tmp/rfa-perf-scenarios.php app/Console/Benchmark/PerfScenarioRunner.php');
+    $baselineInstall = strpos($workflow, 'composer install --no-interaction --prefer-dist --no-progress', $checkoutBase);
+
+    expect($saveRunner)->not->toBeFalse()
+        ->and($restoreRunner)->not->toBeFalse()
+        ->and($saveRunner)->toBeLessThan($checkoutBase)
+        ->and($checkoutBase)->toBeLessThan($restoreRunner)
+        ->and($restoreRunner)->toBeLessThan($baselineInstall);
+});

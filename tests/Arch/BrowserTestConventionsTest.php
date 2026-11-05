@@ -72,7 +72,7 @@ test('browser tests do not wait on networkidle as a Livewire-commit barrier', fu
     // which can be BEFORE Livewire dispatches a commit POST (it goes out on a later
     // tick) and before a lazy x-intersect round-trip injects its DOM. Reading
     // persisted/async state after it races the real work. Use the commit-lifecycle
-    // hook + waitForFunction (server state) or a locator ->waitFor() (DOM), per
+    // hook + assertScript (server state) or a locator ->waitFor() (DOM), per
     // tests/Browser/CLAUDE.md. The only sanctioned networkidle is in
     // CreatesTestRepo::visitAndLoad (the initial-load settle), which is excluded here.
     expect(browserTestViolations("/->waitFor(?:Event|LoadState)\\(\\s*['\"]networkidle['\"]/"))->toBeEmpty();
@@ -109,4 +109,8 @@ test('browser tests scope a reusable diff-line-number locator to a file', functi
         '/\$\w+\s*=\s*\$\w+->page\(\)->getByTestId\(\s*[\'"]diff-line-number[\'"]\s*\)->(?:first|nth|last)\(/'
     );
     expect($violations)->toBeEmpty();
+});
+
+test('browser tests use counted retrying script assertions for conditions', function () {
+    expect(browserTestViolations('/->waitForFunction\\(/'))->toBeEmpty();
 });

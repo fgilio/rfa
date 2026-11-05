@@ -10,6 +10,8 @@ test('defaults to unified view with split toggle visible', function () {
     $page->page()->locator('[data-testid="diff-table"][data-view-mode="unified"]')->first()->waitFor();
     $page->page()->locator('[data-testid="diff-table"][data-view-mode="split"]')->first()->waitFor(['state' => 'hidden']);
     $page->page()->getByLabel('Switch to split view')->waitFor();
+
+    expect($page->page()->getByTestId('diff-table')->first()->getAttribute('data-view-mode'))->toBe('unified');
 });
 
 test('clicking the toggle switches into split layout', function () {
@@ -21,6 +23,8 @@ test('clicking the toggle switches into split layout', function () {
     $page->page()->locator('[data-testid="diff-table"][data-view-mode="split"]')->first()->waitFor();
     $page->page()->locator('[data-testid="diff-table"][data-view-mode="unified"]')->first()->waitFor(['state' => 'hidden']);
     $page->page()->getByLabel('Switch to unified view')->waitFor();
+
+    expect($page->page()->getByTestId('diff-table')->first()->getAttribute('data-view-mode'))->toBe('split');
 });
 
 test('toggle returns to unified view', function () {
@@ -33,6 +37,8 @@ test('toggle returns to unified view', function () {
 
     $page->page()->locator('[data-testid="diff-table"][data-view-mode="unified"]')->first()->waitFor();
     $page->page()->locator('[data-testid="diff-table"][data-view-mode="split"]')->first()->waitFor(['state' => 'hidden']);
+
+    expect($page->page()->getByTestId('diff-table')->first()->getAttribute('data-view-mode'))->toBe('unified');
 });
 
 test('view mode persists in localStorage across page reload', function () {

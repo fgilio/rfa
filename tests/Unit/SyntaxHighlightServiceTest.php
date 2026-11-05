@@ -4,6 +4,8 @@ use App\DTOs\DiffLine;
 use App\DTOs\Hunk;
 use App\Enums\LineType;
 use App\Services\SyntaxHighlightService;
+use Phiki\Phiki;
+use Phiki\TextMate\Engines\PcreEngine;
 
 beforeEach(function () {
     $this->service = new SyntaxHighlightService;
@@ -490,4 +492,93 @@ test('returns Hunk DTOs not arrays', function () {
 
     expect($result[0])->toBeInstanceOf(Hunk::class)
         ->and($result[0]->lines[0])->toBeInstanceOf(DiffLine::class);
+});
+
+test('Phiki can be selected for common file types without changing the default', function () {
+    $hunks = [new Hunk('', 1, 2, 1, 2, [
+        new DiffLine(LineType::Context, '<?php', 1, 1),
+        new DiffLine(LineType::Context, 'echo "café <script>&";', 2, 2),
+    ])];
+
+    $service = new SyntaxHighlightService(preferPhiki: true);
+    $result = $service->highlightHunks($hunks, 'example.php');
+
+    expect($service->lastHighlighter())->toBe('phiki')
+        ->and($service->getStyleMap())->not->toBeEmpty();
+
+    foreach ($result[0]->lines as $line) {
+        expect($line->highlightedContent)->not->toBeNull()->not->toContain('<script>')
+            ->and(html_entity_decode(strip_tags($line->highlightedContent), ENT_QUOTES | ENT_HTML5, 'UTF-8'))->toBe($line->content);
+    }
+
+    $this->service->highlightHunks($hunks, 'example.php');
+    expect($this->service->lastHighlighter())->toBe('tempest');
+});
+
+test('Phiki engines preserve diff sides, blank lines, Unicode, and theme classes', function (string $engine) {
+    $phiki = new Phiki;
+    if ($engine === 'pcre') {
+        $phiki->engine(new PcreEngine);
+    }
+    $service = new SyntaxHighlightService(preferPhiki: true, phiki: $phiki);
+    $hunks = [
+        new Hunk('', 1, 5, 1, 5, [
+            new DiffLine(LineType::Context, '<?php', 1, 1),
+            new DiffLine(LineType::Context, '/* café 😀', 2, 2),
+            new DiffLine(LineType::Remove, 'old <script> & */', 3, null),
+            new DiffLine(LineType::Add, 'new <script> & */', null, 3),
+            new DiffLine(LineType::Context, '', 4, 4),
+            new DiffLine(LineType::Context, '\t$value = "é";', 5, 5),
+        ]),
+        new Hunk('', 30, 1, 30, 1, [
+            new DiffLine(LineType::Context, 'echo "separate hunk";', 30, 30),
+        ]),
+    ];
+
+    $result = $service->highlightHunks($hunks, 'example.php');
+    expect($service->lastHighlighter())->toBe('phiki')
+        ->and($result)->toHaveCount(2)
+        ->and($service->getStyleMap())->not->toBeEmpty();
+
+    foreach ($result as $index => $hunk) {
+        expect($hunk->header)->toBe($hunks[$index]->header)
+            ->and($hunk->lines)->toHaveCount(count($hunks[$index]->lines));
+        foreach ($hunk->lines as $lineIndex => $line) {
+            $original = $hunks[$index]->lines[$lineIndex];
+            expect($line->type)->toBe($original->type)
+                ->and($line->oldLineNum)->toBe($original->oldLineNum)
+                ->and($line->newLineNum)->toBe($original->newLineNum)
+                ->and($line->highlightedContent)->not->toBeNull()->not->toContain('<script>')->not->toContain("\n")
+                ->and(html_entity_decode(strip_tags($line->highlightedContent), ENT_QUOTES | ENT_HTML5, 'UTF-8'))->toBe($original->content);
+            preg_match_all('/class="([^"]+)"/', $line->highlightedContent, $matches);
+            foreach ($matches[1] as $class) {
+                expect($service->getStyleMap()[$class])->toHaveKeys(['light', 'dark']);
+            }
+        }
+    }
+})->with(['oniguruma', 'pcre']);
+
+test('Tempest preserves per-line HTML when a heredoc contains its closing label', function () {
+    $source = [
+        '<?php',
+        '$text = <<<END',
+        'prefix END stays in the string <script> & café',
+        'END;',
+        '$after = 1;',
+    ];
+    $lines = collect($source)->map(fn (string $content, int $index): DiffLine => new DiffLine(LineType::Context, $content, $index + 1, $index + 1))->all();
+    $hunks = [new Hunk('', 1, count($lines), 1, count($lines), $lines)];
+
+    $result = $this->service->highlightHunks($hunks, 'example.php');
+
+    expect($this->service->lastHighlighter())->toBe('tempest')
+        ->and($result[0]->lines[2]->highlightedContent)->toContain('hl-injection')
+        ->and($result[0]->lines[4]->highlightedContent)->toContain('hl-variable');
+
+    foreach ($result[0]->lines as $index => $line) {
+        $html = $line->highlightedContent;
+        expect($html)->not->toBeNull()->not->toContain('<script>')->not->toContain("\n")
+            ->and(substr_count($html, '<span'))->toBe(substr_count($html, '</span>'))
+            ->and(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8'))->toBe($source[$index]);
+    }
 });

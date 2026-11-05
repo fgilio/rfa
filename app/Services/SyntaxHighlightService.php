@@ -18,13 +18,6 @@ use Throwable;
 
 use function e;
 
-// Performance notes
-//
-// Large "Show full file" diffs are sensitive to syntax highlighting time.
-// The Blade regression fixture from b0456e... has ~2,200 rendered lines:
-// Phiki took roughly 3s end-to-end, while Tempest keeps the highlighted path
-// around 70ms in the benchmark runner.
-//
 // Tempest is the primary highlighter for common review targets (Blade, PHP,
 // JS/TS, CSS, JSON, YAML, Markdown, diff). Blade files need extra handling:
 // Livewire SFCs start with a raw PHP opening/closing block, while Tempest's
@@ -182,9 +175,11 @@ class SyntaxHighlightService
 
     private string $lastHighlighter = 'none';
 
-    public function __construct()
-    {
-        $this->phiki = new Phiki;
+    public function __construct(
+        private readonly bool $preferPhiki = false,
+        ?Phiki $phiki = null,
+    ) {
+        $this->phiki = $phiki ?? new Phiki;
         $this->tempest = new TempestHighlighter;
         $this->lightTheme = $this->phiki->environment->themes->resolve(Theme::GithubLight);
         $this->darkTheme = $this->phiki->environment->themes->resolve(Theme::GithubDark);
@@ -205,7 +200,7 @@ class SyntaxHighlightService
         }
 
         $tempestLanguage = $this->resolveTempestLanguage($filePath);
-        if ($tempestLanguage !== null) {
+        if (! $this->preferPhiki && $tempestLanguage !== null) {
             $highlighted = $this->highlightWithTempest($hunks, $tempestLanguage);
 
             if ($highlighted !== null) {

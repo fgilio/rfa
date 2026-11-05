@@ -161,7 +161,7 @@ test('replies to a submitted thread in the drawer without closing it', function 
     $page->assertSee('Human drawer reply');
 
     $panel->getByPlaceholder('Filter comments...')->fill('codex-cli');
-    $page->page()->waitForFunction(<<<'JS'
+    $page->assertScript(<<<'JS'
         document.querySelector('[data-testid="overlay-panel-comments-drawer"]')
             ?.textContent?.includes('Existing agent answer')
     JS);
@@ -193,6 +193,8 @@ test('filtering expands a collapsed drawer thread when its reply matches', funct
     $matchingReply->waitFor(['state' => 'hidden']);
     $panel->getByPlaceholder('Filter comments...')->fill('needle');
     $matchingReply->waitFor(['state' => 'visible']);
+
+    $page->assertSee('Unique reply needle');
 });
 
 test('submitted comments without replies open their reply composer from the drawer body', function () {
@@ -219,4 +221,6 @@ test('submitted comments without replies open their reply composer from the draw
 
     $row->getByPlaceholder('Write a reply', false)->waitFor(['state' => 'visible']);
     $panel->waitFor(['state' => 'visible']);
+
+    expect($row->getByPlaceholder('Write a reply', false)->count())->toBe(1);
 });

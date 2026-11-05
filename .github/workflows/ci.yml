@@ -17,7 +17,7 @@ concurrency:
 
 env:
   PHP_VERSION: '8.4'
-  NODE_VERSION: '20'
+  NODE_VERSION: '24'
 
 jobs:
   lint:
@@ -190,10 +190,16 @@ jobs:
       - name: Capture baseline benchmark on main
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # Use the same scenarios for both dependency sets, including fixes
+            # to benchmark isolation introduced by the PR.
+            cp app/Console/Benchmark/PerfScenarioRunner.php /tmp/rfa-perf-scenarios.php
             git checkout --force ${{ github.event.pull_request.base.sha }}
             # Handle old src/ layout on base branch
             if [ -f src/composer.json ] && [ ! -f composer.json ]; then
               cd src
+            fi
+            if [ -f app/Console/Benchmark/PerfScenarioRunner.php ]; then
+              cp /tmp/rfa-perf-scenarios.php app/Console/Benchmark/PerfScenarioRunner.php
             fi
             # vendor/ carries the head commit's NativePHP patches. Each commit's
             # patch script only recognises stock files or its own output, so

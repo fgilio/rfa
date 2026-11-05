@@ -41,7 +41,7 @@ test('pressing ⌘R triggers the soft-refresh handler', function () {
 
     $page->page()->locator('body')->press('Meta+r');
 
-    $page->page()->waitForFunction('window.__softRefreshCalls >= 1');
+    $page->assertScript('window.__softRefreshCalls >= 1');
     expect($page->page()->evaluate('window.__softRefreshCalls'))->toBeGreaterThan(0);
     expect($page->page()->evaluate('window.__hardReloadCalls'))->toBe(0);
 });
@@ -55,7 +55,7 @@ test('pressing ⌘⇧R triggers the hard-reload handler', function () {
 
     $page->page()->locator('body')->press('Meta+Shift+r');
 
-    $page->page()->waitForFunction('window.__hardReloadCalls >= 1');
+    $page->assertScript('window.__hardReloadCalls >= 1');
     expect($page->page()->evaluate('window.__hardReloadCalls'))->toBeGreaterThan(0);
     expect($page->page()->evaluate('window.__softRefreshCalls'))->toBe(0);
 });
@@ -74,6 +74,6 @@ test('⌘R fires even while a comment input is focused', function () {
 
     $input->press('Meta+r');
 
-    $page->page()->waitForFunction('window.__softRefreshCalls >= 1');
+    $page->assertScript('window.__softRefreshCalls >= 1');
     expect($page->page()->evaluate('window.__softRefreshCalls'))->toBeGreaterThan(0);
 });

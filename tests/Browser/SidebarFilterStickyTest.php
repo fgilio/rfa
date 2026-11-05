@@ -31,12 +31,12 @@ test('sidebar filter stays at the top while its content scrolls', function (stri
         })()
     JS);
 
-    $page->page()->waitForFunction(
+    $page->assertScript(
         "document.querySelector('aside').scrollHeight > document.querySelector('aside').clientHeight"
     );
 
     $page->page()->evaluate("document.querySelector('aside').scrollTop = 1000");
-    $page->page()->waitForFunction("document.querySelector('aside').scrollTop > 0");
+    $page->assertScript("document.querySelector('aside').scrollTop > 0");
 
     $positions = $page->page()->evaluate(<<<'JS'
         (() => {

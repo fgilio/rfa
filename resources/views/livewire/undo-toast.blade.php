@@ -3,23 +3,25 @@
     x-data="{
         stack: [],
         intervalId: null,
+        now: Date.now(),
 
         get current() { return this.stack[0] ?? null },
         get visible() { return this.current !== null },
         get remaining() {
             if (!this.current) return 0;
-            return Math.max(0, Math.ceil((this.current.expiresAt - Date.now()) / 1000));
+            return Math.max(0, Math.ceil((this.current.expiresAt - this.now) / 1000));
         },
 
         push(detail) {
             const ttl = detail.ttl ?? 10;
+            this.now = Date.now();
             this.stack.unshift({
                 type: detail.type,
                 payload: detail.payload,
                 message: detail.message ?? 'Action completed',
-                createdAt: Date.now(),
+                createdAt: this.now,
                 ttl,
-                expiresAt: Date.now() + ttl * 1000,
+                expiresAt: this.now + ttl * 1000,
             });
             this.startTicker();
         },
@@ -38,8 +40,9 @@
         },
 
         tick() {
+            this.now = Date.now();
             if (!this.current) { this.stopTicker(); return; }
-            if (this.current.expiresAt > Date.now()) return;
+            if (this.current.expiresAt > this.now) return;
             this.stack.shift();
             this.refreshTopExpiry();
             if (!this.stack.length) this.stopTicker();
@@ -51,7 +54,8 @@
         refreshTopExpiry() {
             const top = this.stack[0];
             if (!top) return;
-            top.expiresAt = Date.now() + top.ttl * 1000;
+            this.now = Date.now();
+            top.expiresAt = this.now + top.ttl * 1000;
         },
 
         startTicker() {

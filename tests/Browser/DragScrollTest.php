@@ -35,10 +35,8 @@ test('dragging toward viewport bottom auto-scrolls and extends selection', funct
 
     // Wait for auto-scroll to advance
     $threshold = $initialScroll + 50;
-    $page->page()->waitForFunction(
+    $page->assertScript(
         "window.scrollY > {$threshold}",
-        null,
-        ['timeout' => 3000],
     );
 
     // End drag
@@ -74,7 +72,7 @@ test('auto-scroll stops when cursor returns to safe zone', function () {
     ");
 
     // Let scroll start
-    $page->page()->waitForFunction('window.scrollY > 50', null, ['timeout' => 3000]);
+    $page->assertScript('window.scrollY > 50');
 
     // Move cursor back to safe zone (middle of viewport)
     $page->script("

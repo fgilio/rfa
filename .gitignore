@@ -13,6 +13,7 @@
 /.phpunit.cache
 /.perf/
 /.vscode
+/.vitest/
 /.zed
 /analytics.jsonl
 /auth.json
