@@ -28,6 +28,39 @@ test('release workflow pre-creates the draft before building', function () {
     expect($preCreatePosition)->toBeLessThan($buildPosition);
 });
 
+test('release workflow finds an existing draft by tag name on a re-run', function () {
+    $workflow = file_get_contents(dirname(__DIR__, 2).'/.github/workflows/release.yml');
+
+    // `gh release view <tag>` cannot see an untagged draft, so a re-run would
+    // create a second draft and fail the duplicate check.
+    expect($workflow)
+        ->toContain('select(.tag_name == $tag)] | length\')')
+        ->not->toContain('gh release view "$tag"');
+});
+
+test('release workflow fails the build step when native:build produced no artifacts', function () {
+    $workflow = file_get_contents(dirname(__DIR__, 2).'/.github/workflows/release.yml');
+
+    $buildPosition = strpos($workflow, 'native:build mac arm64 --publish');
+    $artifactCheckPosition = strpos($workflow, 'native:build did not produce');
+    $verifyPosition = strpos($workflow, 'Verify release artifacts');
+
+    expect($artifactCheckPosition)->not->toBeFalse()
+        ->and($artifactCheckPosition)->toBeGreaterThan($buildPosition)
+        ->and($artifactCheckPosition)->toBeLessThan($verifyPosition);
+});
+
+test('release workflow installs Electron dependencies with retries before building', function () {
+    $workflow = file_get_contents(dirname(__DIR__, 2).'/.github/workflows/release.yml');
+
+    $installPosition = strpos($workflow, 'name: Install Electron dependencies');
+    $buildPosition = strpos($workflow, 'native:build mac arm64 --publish');
+
+    expect($workflow)->toContain('for attempt in 1 2 3; do')
+        ->and($installPosition)->not->toBeFalse()
+        ->and($installPosition)->toBeLessThan($buildPosition);
+});
+
 test('release workflow verifies one release with exactly the expected artifacts', function () {
     $workflow = file_get_contents(dirname(__DIR__, 2).'/.github/workflows/release.yml');
 
