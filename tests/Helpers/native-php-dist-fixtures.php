@@ -319,6 +319,16 @@ autoUpdater.addListener("checking-for-update", () => {
         event: `\\Native\\Desktop\\Events\\AutoUpdater\\CheckingForUpdate`,
     });
 });
+autoUpdater.addListener('error', (error) => {
+    notifyLaravel('events', {
+        event: `\\Native\\Desktop\\Events\\AutoUpdater\\Error`,
+        payload: {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+        },
+    });
+});
 autoUpdater.addListener("update-downloaded", (event) => {
     notifyLaravel("events", {
         event: `\\Native\\Desktop\\Events\\AutoUpdater\\UpdateDownloaded`,

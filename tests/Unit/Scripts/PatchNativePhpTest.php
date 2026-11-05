@@ -942,13 +942,40 @@ test('lazy updater api: requires electron-updater on first use and forwards even
         ->toContain('rfaAutoUpdater().quitAndInstall();')
         ->toContain("function rfaForwardUpdaterEvents(autoUpdater) {\n    autoUpdater.addListener(\"checking-for-update\", () => {")
         ->toContain("            version: event.version,\n            },\n        });\n    });\n}\nexport default router;")
-        ->and(substr_count($content, 'autoUpdater.addListener('))->toBe(2);
+        ->and(substr_count($content, 'autoUpdater.addListener('))->toBe(3);
 });
 
 test('lazy updater api: is idempotent', function () {
     $patched = rfaPatchLazyUpdaterApi(stockAutoUpdaterApi());
 
     expect(rfaPatchLazyUpdaterApi($patched))->toBe($patched);
+});
+
+test('updater check retry: reports a shape change when the error listener or the router end is missing', function () {
+    $routed = (string) rfaPatchLazyUpdaterApi(stockAutoUpdaterApi());
+
+    expect(rfaPatchUpdaterCheckRetry(stockAutoUpdaterApi()))->toBeNull()
+        ->and(rfaPatchUpdaterCheckRetry(str_replace("autoUpdater.addListener('error', (error) => {", '', $routed)))->toBeNull()
+        ->and(rfaPatchUpdaterCheckRetry(str_replace('export default router;', '', $routed)))->toBeNull();
+});
+
+test('updater check retry: routes the forwarded errors through the retry of transient check failures', function () {
+    $content = (string) rfaPatchUpdaterCheckRetry((string) rfaPatchLazyUpdaterApi(stockAutoUpdaterApi()));
+
+    expect($content)
+        ->toContain("    rfaForwardUpdaterErrors(autoUpdater, (error) => { // [rfa updater-check-retry]\n        notifyLaravel('events', {\n            event: `\\\\Native\\\\Desktop\\\\Events\\\\AutoUpdater\\\\Error`,")
+        ->toContain('const RFA_CHECK_RETRY_DELAYS = [2000, 5000, 15000];')
+        ->toContain('autoUpdater.checkForUpdates().catch(() => {});')
+        ->toEndWith("    });\n}\nexport default router;")
+        ->and(substr_count($content, "autoUpdater.addListener('error'"))->toBe(1)
+        ->and(strpos($content, 'function rfaForwardUpdaterEvents('))->toBeLessThan(strpos($content, 'function rfaForwardUpdaterErrors('));
+});
+
+test('updater check retry: leaves the lazy updater api patch idempotent and is idempotent itself', function () {
+    $content = (string) rfaPatchUpdaterCheckRetry((string) rfaPatchLazyUpdaterApi(stockAutoUpdaterApi()));
+
+    expect(rfaPatchLazyUpdaterApi($content))->toBe($content)
+        ->and(rfaPatchUpdaterCheckRetry($content))->toBe($content);
 });
 
 test('lazy context menu: reports a shape change when the install block is missing', function () {
@@ -1066,6 +1093,7 @@ test('the vendored NativePHP plugin loads its externals lazily', function () {
 
     expect(file_get_contents($dist.'/index.js'))->toContain('import { rfaAutoUpdater } from "./server/api/autoUpdater.js"; // [rfa lazy externals]')
         ->and(file_get_contents($dist.'/server/api/autoUpdater.js'))->toContain('export function rfaAutoUpdater() {')
+        ->and(file_get_contents($dist.'/server/api/autoUpdater.js'))->toContain('rfaForwardUpdaterErrors(autoUpdater, (error) => { // [rfa updater-check-retry]')
         ->and(file_get_contents($dist.'/server/api/contextMenu.js'))->toContain('import("electron-context-menu")')
         ->and(file_get_contents($dist.'/server/utils.js'))->toContain('globalThis.__rfaPreloadExternals = rfaLoadAxios;')
         ->and(file_get_contents($dist.'/server/php.js'))->toContain('globalThis.__rfaPreloadExternals?.();')
